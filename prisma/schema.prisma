@@ -1,0 +1,281 @@
+// ==========================================
+// PROCTOR SHIELD AI — Prisma Schema
+// PostgreSQL · Prisma ORM
+// ==========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- USERS & ROLES ---
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  roleName    String   @unique @map("role_name")
+  description String?
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  fullName      String   @map("full_name")
+  email         String   @unique
+  password      String
+  googleId      String?  @unique @map("google_id")
+  profileImage  String?  @map("profile_image")
+  roleId        Int      @map("role_id")
+  status        String   @default("active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  role              Role               @relation(fields: [roleId], references: [id])
+  subjects          Subject[]
+  exams             Exam[]
+  studentExams      StudentExam[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+  userSubscriptions UserSubscription[]
+
+  @@map("users")
+}
+
+// --- SUBJECT & EXAM MANAGEMENT ---
+
+model Subject {
+  id          Int      @id @default(autoincrement())
+  teacherId   String   @map("teacher_id")
+  subjectName String   @map("subject_name")
+  subjectCode String   @unique @map("subject_code")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  teacher User   @relation(fields: [teacherId], references: [id])
+  exams   Exam[]
+
+  @@map("subjects")
+}
+
+model Exam {
+  id               Int      @id @default(autoincrement())
+  subjectId        Int      @map("subject_id")
+  teacherId        String   @map("teacher_id")
+  title            String
+  description      String?
+  accessCode       String?  @unique @map("access_code")
+  isAiGenerated    Boolean  @default(false) @map("is_ai_generated")
+  sourceFilePath   String?  @map("source_file_path")
+  examType         String?  @map("exam_type")
+  duration         Int?
+  totalQuestions   Int?     @map("total_questions")
+  passingScore     Int?     @map("passing_score")
+  shuffleQuestions Boolean  @default(false) @map("shuffle_questions")
+  allowRetake      Boolean  @default(false) @map("allow_retake")
+  examStatus       String   @default("draft") @map("exam_status")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  subject      Subject       @relation(fields: [subjectId], references: [id])
+  teacher      User          @relation(fields: [teacherId], references: [id])
+  questions    Question[]
+  studentExams StudentExam[]
+
+  @@map("exams")
+}
+
+model Question {
+  id           Int      @id @default(autoincrement())
+  examId       Int      @map("exam_id")
+  questionText String   @map("question_text")
+  questionType String?  @map("question_type")
+  points       Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  exam    Exam     @relation(fields: [examId], references: [id])
+  choices Choice[]
+  answers Answer[]
+
+  @@map("questions")
+}
+
+model Choice {
+  id         Int     @id @default(autoincrement())
+  questionId Int     @map("question_id")
+  choiceText String  @map("choice_text")
+  isCorrect  Boolean @default(false) @map("is_correct")
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@map("choices")
+}
+
+// --- STUDENT EXAM FLOW ---
+
+model StudentExam {
+  id                  String   @id @default(uuid())
+  studentId           String   @map("student_id")
+  examId              Int      @map("exam_id")
+  randomSeed          String?  @map("random_seed")
+  startTime           DateTime? @map("start_time")
+  endTime             DateTime? @map("end_time")
+  score               Decimal?  @db.Decimal(5, 2)
+  remarks             String?
+  aiVerdict           String?  @map("ai_verdict")
+  cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
+  examStatus          String?  @map("exam_status")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  student    User          @relation(fields: [studentId], references: [id])
+  exam       Exam          @relation(fields: [examId], references: [id])
+  answers    Answer[]
+  violations Violation[]
+  aiAnalysis AiAnalysis?
+
+  @@map("student_exams")
+}
+
+model Answer {
+  id            BigInt  @id @default(autoincrement())
+  studentExamId String  @map("student_exam_id")
+  questionId    Int     @map("question_id")
+  answerText    String? @map("answer_text")
+  isCorrect     Boolean? @map("is_correct")
+  pointsEarned  Int?    @map("points_earned")
+
+  studentExam StudentExam @relation(fields: [studentExamId], references: [id])
+  question    Question    @relation(fields: [questionId], references: [id])
+
+  @@map("answers")
+}
+
+// --- AI PROCTORING SYSTEM ---
+
+model Violation {
+  id              BigInt    @id @default(autoincrement())
+  studentExamId   String    @map("student_exam_id")
+  violationType   String?   @map("violation_type")
+  confidenceScore Decimal?  @map("confidence_score") @db.Decimal(5, 2)
+  timestamp       DateTime
+  durationSeconds Int?      @map("duration_seconds")
+  screenshotPath  String?   @map("screenshot_path")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  studentExam   StudentExam    @relation(fields: [studentExamId], references: [id])
+  evidenceFiles EvidenceFile[]
+
+  @@map("violations")
+}
+
+model EvidenceFile {
+  id          BigInt   @id @default(autoincrement())
+  violationId BigInt   @map("violation_id")
+  fileType    String?  @map("file_type")
+  filePath    String   @map("file_path")
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+
+  violation Violation @relation(fields: [violationId], references: [id])
+
+  @@map("evidence_files")
+}
+
+model AiAnalysis {
+  id                  Int      @id @default(autoincrement())
+  studentExamId       String   @unique @map("student_exam_id")
+  totalViolations     Int      @default(0) @map("total_violations")
+  cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
+  riskLevel           String?  @map("risk_level")
+  finalVerdict        String?  @map("final_verdict")
+  aiExplanation       String?  @map("ai_explanation")
+  analyzedAt          DateTime @default(now()) @map("analyzed_at")
+
+  studentExam StudentExam @relation(fields: [studentExamId], references: [id])
+
+  @@map("ai_analysis")
+}
+
+// --- NOTIFICATIONS & LOGS ---
+
+model Notification {
+  id        BigInt   @id @default(autoincrement())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    String   @map("user_id")
+  activity  String
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
+}
+
+// --- SUBSCRIPTION SYSTEM ---
+
+model SubscriptionPlan {
+  id            Int      @id @default(autoincrement())
+  planName      String   @map("plan_name")
+  yearlyPrice   Decimal? @map("yearly_price") @db.Decimal(10, 2)
+  features      String?
+  durationDays  Int?     @map("duration_days")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  userSubscriptions UserSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model UserSubscription {
+  id                 String  @id @default(uuid())
+  userId             String  @map("user_id")
+  planId             Int     @map("plan_id")
+  startDate          DateTime @map("start_date") @db.Date
+  endDate            DateTime @map("end_date") @db.Date
+  paymentStatus      String?  @map("payment_status")
+  subscriptionStatus String?  @map("subscription_status")
+
+  user     User             @relation(fields: [userId], references: [id])
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@map("user_subscriptions")
+}
+
+model Payment {
+  id                   String    @id @default(uuid())
+  subscriptionId       String    @map("subscription_id")
+  amount               Decimal   @db.Decimal(10, 2)
+  paymentMethod        String?   @map("payment_method")
+  paymentStatus        String?   @map("payment_status")
+  transactionReference String?   @unique @map("transaction_reference")
+  paidAt               DateTime? @map("paid_at")
+
+  subscription UserSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+// --- SYSTEM SETTINGS ---
+
+model Setting {
+  id           Int      @id @default(autoincrement())
+  settingKey   String   @unique @map("setting_key")
+  settingValue String?  @map("setting_value")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
