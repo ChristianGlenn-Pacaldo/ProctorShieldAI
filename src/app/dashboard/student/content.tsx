@@ -25,10 +25,36 @@ const recentResults = [
 export default function StudentDashboardContent() {
   const [joinCode, setJoinCode] = useState("");
 
-  const handleJoinExam = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handleJoinExam = async () => {
     if (!joinCode.trim()) return;
-    // TODO: API call to validate code
-    alert(`Joining exam with code: ${joinCode}`);
+    
+    setIsLoading(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/exams/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessCode: joinCode }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessage(`✅ ${data.message}`);
+        setJoinCode("");
+        // In a real app, we might trigger a re-fetch of the exams list here
+      } else {
+        setMessage(`❌ ${data.error || "Failed to join exam"}`);
+      }
+    } catch (error) {
+      setMessage("❌ Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -52,12 +78,18 @@ export default function StudentDashboardContent() {
             />
             <button
               onClick={handleJoinExam}
-              className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20"
+              disabled={isLoading}
+              className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
             >
-              Join Exam
+              {isLoading ? "Joining..." : "Join Exam"}
             </button>
           </div>
         </div>
+        {message && (
+          <div className="mt-3 text-xs font-semibold animate-fade-in text-[var(--ink)]">
+            {message}
+          </div>
+        )}
       </div>
 
       {/* Stats */}
