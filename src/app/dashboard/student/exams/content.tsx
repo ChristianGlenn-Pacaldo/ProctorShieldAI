@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
+import Link from "next/link";
 
 export default function ExamsContent() {
   const [exams, setExams] = useState<any[]>([]);
@@ -86,7 +87,9 @@ export default function ExamsContent() {
                       </td>
                       <td className="px-5 py-3">
                         {!isCompleted ? (
-                          <button className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">Take Exam</button>
+                          <Link href={`/quiz/${e.id}`}>
+                            <button className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">Take Exam</button>
+                          </Link>
                         ) : (
                           <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors">View Result</button>
                         )}

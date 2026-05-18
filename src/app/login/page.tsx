@@ -39,7 +39,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Google Auth failed");
+        setError(data.message || "Google Auth failed");
         setIsLoading(false);
         return;
       }
@@ -78,7 +78,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Login failed");
+        setError(data.message || "Login failed");
         setIsLoading(false);
         return;
       }
@@ -125,7 +125,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Registration failed");
+        setError(data.message || "Registration failed");
         setIsLoading(false);
         return;
       }

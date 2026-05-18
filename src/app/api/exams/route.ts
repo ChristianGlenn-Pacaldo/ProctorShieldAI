@@ -59,16 +59,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized. Only teachers can create exams." }, { status: 401 });
     }
 
-    const { subjectId, title, description, duration, totalQuestions, passingScore } = await req.json();
+    const { subjectName, title, description, duration, totalQuestions, passingScore } = await req.json();
 
-    if (!subjectId || !title) {
-      return NextResponse.json({ error: "Subject ID and title are required" }, { status: 400 });
+    if (!subjectName || !title) {
+      return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
     }
 
-    // Verify the subject belongs to this teacher
-    const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
-    if (!subject || subject.teacherId !== session.userId) {
-      return NextResponse.json({ error: "Invalid subject" }, { status: 403 });
+    // Verify the teacher actually exists in the database (catches stale JWT after db reset)
+    const teacherExists = await prisma.user.findUnique({ where: { id: session.userId } });
+    if (!teacherExists) {
+      return NextResponse.json({ 
+        success: false, 
+        message: "Your session is outdated. Please log out and log back in." 
+      }, { status: 401 });
+    }
+
+    // Find or create subject
+    let subject = await prisma.subject.findFirst({
+      where: { 
+        teacherId: session.userId,
+        subjectName: { equals: subjectName, mode: "insensitive" }
+      }
+    });
+
+    if (!subject) {
+      subject = await prisma.subject.create({
+        data: {
+          teacherId: session.userId,
+          subjectName: subjectName,
+          subjectCode: `SUB-${Math.floor(1000 + Math.random() * 9000)}`
+        }
+      });
     }
 
     // Generate random 4-digit access code (e.g. PS-1234)
@@ -77,7 +98,7 @@ export async function POST(req: NextRequest) {
     const exam = await prisma.exam.create({
       data: {
         teacherId: session.userId,
-        subjectId: subjectId,
+        subjectId: subject.id,
         title,
         description,
         accessCode,

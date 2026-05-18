@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +16,8 @@ import {
   ClipboardList,
   TrendingUp,
   FileBarChart,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -104,9 +106,31 @@ export default function DashboardShell({
   avatarColor = "from-indigo-600 to-violet-600",
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState("light");
   const pathname = usePathname();
   const nav = navConfig[role] || [];
   const portal = portalConfig[role];
+
+  // Initialize Theme
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || 
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    if (savedTheme === "dark") {
+      setTheme("dark");
+      document.documentElement.classList.add("dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -218,14 +242,23 @@ export default function DashboardShell({
               </div>
             </div>
           </div>
-          {role === "teacher" && (
-            <Link
-              href="/dashboard/teacher/exams?new=true"
-              className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)]"
+              title="Toggle Theme"
             >
-              + New Exam
-            </Link>
-          )}
+              {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
+            {role === "teacher" && (
+              <Link
+                href="/dashboard/teacher/exams?new=true"
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20"
+              >
+                + New Exam
+              </Link>
+            )}
+          </div>
         </header>
 
         {/* Page Content */}

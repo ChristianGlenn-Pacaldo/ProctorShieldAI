@@ -9,21 +9,21 @@ export async function POST(req: NextRequest) {
     // Validate input
     if (!fullName || !email || !password) {
       return NextResponse.json(
-        { error: "Full name, email, and password are required" },
+        { success: false, message: "Full name, email, and password are required" },
         { status: 400 }
       );
     }
 
     if (password.length < 6) {
       return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
+        { success: false, message: "Password must be at least 6 characters" },
         { status: 400 }
       );
     }
 
     if (confirmPassword && password !== confirmPassword) {
       return NextResponse.json(
-        { error: "Passwords do not match" },
+        { success: false, message: "Passwords do not match" },
         { status: 400 }
       );
     }
@@ -35,22 +35,25 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       return NextResponse.json(
-        { error: "An account with this email already exists" },
+        { success: false, message: "An account with this email already exists" },
         { status: 409 }
       );
     }
 
     // Resolve role ID (default to "student")
     const roleName = role || "student";
-    const roleRecord = await prisma.role.findUnique({
+    let roleRecord = await prisma.role.findUnique({
       where: { roleName },
     });
 
     if (!roleRecord) {
-      return NextResponse.json(
-        { error: "Invalid role specified" },
-        { status: 400 }
-      );
+      // Auto-create role if missing
+      roleRecord = await prisma.role.create({
+        data: {
+          roleName: roleName.toLowerCase(),
+          description: `Auto-created ${roleName} role`
+        }
+      });
     }
 
     // Hash password
@@ -98,10 +101,10 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Register error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { success: false, message: error.message || "Internal server error" },
       { status: 500 }
     );
   }

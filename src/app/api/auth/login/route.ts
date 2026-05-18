@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     // Validate input
     if (!email || !password) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { success: false, message: "Email and password are required" },
         { status: 400 }
       );
     }
@@ -22,16 +22,15 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { success: false, message: "Invalid email or password" },
         { status: 401 }
       );
     }
 
-    // Verify password
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { success: false, message: "Invalid email or password" },
         { status: 401 }
       );
     }
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
     // Check if role matches (optional — if user tries to log in as wrong role)
     if (role && user.role.roleName.toLowerCase() !== role.toLowerCase()) {
       return NextResponse.json(
-        { error: `This account is registered as ${user.role.roleName}, not ${role}` },
+        { success: false, message: `This account is registered as ${user.role.roleName}, not ${role}` },
         { status: 403 }
       );
     }
@@ -47,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Check if user is suspended
     if (user.status === "suspended") {
       return NextResponse.json(
-        { error: "Your account has been suspended. Contact an administrator." },
+        { success: false, message: "Your account has been suspended. Contact an administrator." },
         { status: 403 }
       );
     }
@@ -80,10 +79,10 @@ export async function POST(req: NextRequest) {
       },
       token,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { success: false, message: error.message || "Internal server error" },
       { status: 500 }
     );
   }

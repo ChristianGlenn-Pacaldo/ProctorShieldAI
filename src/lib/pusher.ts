@@ -1,10 +1,17 @@
-import Pusher from "pusher";
+import PusherServer from "pusher";
+import PusherClient from "pusher-js";
 
-// We use process.env to hold Pusher config
-export const pusherServer = new Pusher({
-  appId: process.env.PUSHER_APP_ID || "demo_app_id",
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY || "demo_key",
-  secret: process.env.PUSHER_SECRET || "demo_secret",
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1",
+export const pusherServer = new PusherServer({
+  appId: process.env.PUSHER_APP_ID!,
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
+  secret: process.env.PUSHER_SECRET!,
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
   useTLS: true,
 });
+
+export const pusherClient = new PusherClient(
+  process.env.NEXT_PUBLIC_PUSHER_KEY!,
+  {
+    cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+  }
+);

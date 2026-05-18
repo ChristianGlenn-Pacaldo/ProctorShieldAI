@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const { credential, role } = await req.json();
 
     if (!credential) {
-      return NextResponse.json({ error: "Missing Google credential" }, { status: 400 });
+      return NextResponse.json({ success: false, message: "Missing Google credential" }, { status: 400 });
     }
 
     // Verify the Google ID Token
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
-      return NextResponse.json({ error: "Invalid Google token" }, { status: 401 });
+      return NextResponse.json({ success: false, message: "Invalid Google token" }, { status: 401 });
     }
 
     const { email, name, picture } = payload;
@@ -35,13 +35,18 @@ export async function POST(req: NextRequest) {
 
     // If user doesn't exist, create them
     if (!user) {
-      // Find the requested role in DB to attach
-      const dbRole = await prisma.role.findFirst({
+      let dbRole = await prisma.role.findFirst({
         where: { roleName: { equals: requestedRole, mode: "insensitive" } },
       });
 
       if (!dbRole) {
-        return NextResponse.json({ error: "Internal error: Role not found in DB" }, { status: 500 });
+        // Auto-create role if missing
+        dbRole = await prisma.role.create({
+          data: {
+            roleName: requestedRole.toLowerCase(),
+            description: `Auto-created ${requestedRole} role`
+          }
+        });
       }
 
       user = await prisma.user.create({
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // Check suspension
     if (user.status === "suspended") {
-      return NextResponse.json({ error: "Account suspended" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "Account suspended" }, { status: 403 });
     }
 
     // Create custom JWT session
@@ -88,10 +93,10 @@ export async function POST(req: NextRequest) {
       },
       token,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Google Auth error:", error);
     return NextResponse.json(
-      { error: "Google authentication failed" },
+      { success: false, message: error.message || "Google authentication failed" },
       { status: 500 }
     );
   }
