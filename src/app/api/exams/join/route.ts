@@ -15,6 +15,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
     }
 
+    // Verify the student actually exists in the database (catches stale JWT after db reset)
+    const studentExists = await prisma.user.findUnique({ where: { id: session.userId } });
+    if (!studentExists) {
+      return NextResponse.json({ 
+        error: "Your session is outdated. Please log out and log back in." 
+      }, { status: 401 });
+    }
+
     // Find the exam by access code
     const exam = await prisma.exam.findUnique({
       where: { accessCode: accessCode.trim().toUpperCase() },

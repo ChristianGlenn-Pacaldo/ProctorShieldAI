@@ -25,6 +25,30 @@ export default function TeacherExamsPage() {
   const [aiTopic, setAiTopic] = useState("");
   const [isAiGenerating, setIsAiGenerating] = useState(false);
 
+  // Manage Exam Modal State
+  const [manageExam, setManageExam] = useState<any | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const toggleExamStatus = async (exam: any) => {
+    setIsUpdatingStatus(true);
+    const newStatus = exam.examStatus === "active" ? "draft" : "active";
+    try {
+      const res = await fetch(`/api/exams/${exam.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examStatus: newStatus })
+      });
+      if (res.ok) {
+        setManageExam({ ...exam, examStatus: newStatus });
+        fetchExams(); // refresh list
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const handleAiGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiTopic) return;
@@ -171,7 +195,7 @@ export default function TeacherExamsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors">Manage</button>
+                      <button onClick={() => setManageExam(e)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] hover:text-indigo-500 transition-all">Manage</button>
                     </td>
                   </tr>
                 ))}
@@ -279,6 +303,69 @@ export default function TeacherExamsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE EXAM MODAL */}
+      {manageExam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)]">
+              <h2 className="text-lg font-bold text-[var(--ink)]">Manage Exam</h2>
+              <button onClick={() => setManageExam(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageExam.title}</h3>
+                <p className="text-sm text-[var(--muted)]">{manageExam.subject?.subjectName || "No Subject"}</p>
+              </div>
+
+              <div className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl p-4 flex flex-col items-center justify-center space-y-2">
+                <span className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest">Share this code with students</span>
+                <div className="flex items-center gap-3">
+                  <code className="text-2xl font-mono font-bold text-indigo-500 tracking-wider">
+                    {manageExam.accessCode}
+                  </code>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(manageExam.accessCode);
+                      alert("Join code copied to clipboard!");
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-400 rounded-lg transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-[var(--border)] rounded-xl p-3">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Questions</div>
+                  <div className="text-lg font-semibold text-[var(--ink)]">{manageExam.totalQuestions}</div>
+                </div>
+                <div className="border border-[var(--border)] rounded-xl p-3">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Duration</div>
+                  <div className="text-lg font-semibold text-[var(--ink)]">{manageExam.duration} mins</div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] flex justify-between items-center">
+                <div className="text-sm text-[var(--muted)] font-medium">Exam Status:</div>
+                <button
+                  onClick={() => toggleExamStatus(manageExam)}
+                  disabled={isUpdatingStatus}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                    manageExam.examStatus === "active" 
+                      ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
+                      : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                  }`}
+                >
+                  {isUpdatingStatus ? "Updating..." : manageExam.examStatus === "active" ? "Set to Draft" : "Make Active"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
