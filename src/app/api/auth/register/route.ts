@@ -88,6 +88,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Broadcast activity to admin
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "register",
+        userId: user.id,
+        fullName: user.fullName,
+        role: user.role.roleName,
+        activity: `New ${user.role.roleName} account created`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast activity to admin:", e);
+    }
+
     return NextResponse.json(
       {
         success: true,

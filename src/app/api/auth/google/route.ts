@@ -84,6 +84,36 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
     });
 
+    // Set user online in database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isOnline: true },
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        activity: `Logged in via Google as ${user.role.roleName}`,
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+      },
+    });
+
+    // Broadcast activity to admin
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "login",
+        userId: user.id,
+        fullName: user.fullName,
+        role: user.role.roleName,
+        activity: `Logged in via Google as ${user.role.roleName}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast Google login to admin:", e);
+    }
+
     return NextResponse.json({
       success: true,
       user: {
