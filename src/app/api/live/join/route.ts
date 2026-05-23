@@ -37,6 +37,20 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
+    // Broadcast student-joined event to admin
+    try {
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "exam-join",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: "student",
+        activity: `${session.fullName} joined exam: ${exam.title}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast join to admin:", e);
+    }
+
     return NextResponse.json({ success: true, teacherId: exam.teacherId });
   } catch (error) {
     console.error("Live join error:", error);

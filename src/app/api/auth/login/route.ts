@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyPassword, setSessionCookie } from "@/lib/auth";
+import { pusherServer } from "@/lib/pusher";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,6 +60,12 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
     });
 
+    // Set user online in database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isOnline: true },
+    });
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -67,6 +74,20 @@ export async function POST(req: NextRequest) {
         ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       },
     });
+
+    // Broadcast activity to admin
+    try {
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "login",
+        userId: user.id,
+        fullName: user.fullName,
+        role: user.role.roleName,
+        activity: `Logged in as ${user.role.roleName}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast activity to admin:", e);
+    }
 
     return NextResponse.json({
       success: true,

@@ -31,6 +31,7 @@ model User {
   profileImage  String?  @map("profile_image")
   roleId        Int      @map("role_id")
   status        String   @default("active")
+  isOnline      Boolean  @default(false) @map("is_online")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
 

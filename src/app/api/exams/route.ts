@@ -118,6 +118,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Broadcast exam creation to admin
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "exam-created",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: "teacher",
+        activity: `Created exam: ${title}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast exam creation to admin:", e);
+    }
+
     return NextResponse.json({ success: true, exam }, { status: 201 });
   } catch (error) {
     console.error("Create exam error:", error);
