@@ -54,6 +54,20 @@ export async function POST(req: NextRequest) {
       timestamp: violation.timestamp,
     });
 
+    // Broadcast violation event to admin
+    try {
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "violation",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: "student",
+        activity: `Violation (${violationType}) flagged for ${session.fullName} on ${studentExam.exam.title}`,
+        timestamp: violation.timestamp.toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast violation to admin:", e);
+    }
+
     return NextResponse.json({ success: true, violation });
 
   } catch (error) {
