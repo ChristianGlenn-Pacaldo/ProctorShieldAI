@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
+import { logDebug } from "@/lib/debug-logger";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
+    logDebug(`POST /api/live/join: session=${JSON.stringify(session)}`);
     if (!session || session.role !== "student") {
+      logDebug(`POST /api/live/join: Unauthorized role=${session?.role}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -49,11 +52,14 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       console.error("Failed to broadcast join to admin:", e);
+      logDebug(`POST /api/live/join: Pusher admin broadcast error: ${e}`);
     }
 
+    logDebug(`POST /api/live/join: Student ${session.fullName} successfully joined exam ${exam.title}`);
     return NextResponse.json({ success: true, teacherId: exam.teacherId });
   } catch (error) {
     console.error("Live join error:", error);
+    logDebug(`POST /api/live/join ERROR: ${error}`);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

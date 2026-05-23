@@ -1,0 +1,46 @@
+[2026-05-23T11:37:28.814Z] GET /api/live/snapshot: session={"userId":"6fe534d9-d1ae-4028-8cad-7603f587a727","email":"juan@school.edu.ph","role":"student","fullName":"juan","iat":1779536181,"exp":1780140981}
+[2026-05-23T11:37:28.816Z] GET /api/live/snapshot: Unauthorized role=student
+[2026-05-23T11:40:20.205Z] POST /api/live/join: session={"userId":"7a3e3e79-938f-41a2-a807-265a9958a3fa","email":"hanamichiy68@gmail.com","role":"student","fullName":"Hanamichi Yuri","iat":1779536408,"exp":1780141208}
+[2026-05-23T11:40:20.369Z] POST /api/live/join: Student Hanamichi Yuri successfully joined exam AI Assessment - Uploaded Document
+[2026-05-23T11:40:21.184Z] POST /api/live/snapshot: session={"userId":"7a3e3e79-938f-41a2-a807-265a9958a3fa","email":"hanamichiy68@gmail.com","role":"student","fullName":"Hanamichi Yuri","iat":1779536408,"exp":1780141208}
+[2026-05-23T11:40:21.186Z] POST /api/live/snapshot: Stored snapshot for Hanamichi Yuri (active count: 1)
+[2026-05-23T11:40:24.084Z] POST /api/live/snapshot: session={"userId":"7a3e3e79-938f-41a2-a807-265a9958a3fa","email":"hanamichiy68@gmail.com","role":"student","fullName":"Hanamichi Yuri","iat":1779536408,"exp":1780141208}
+[2026-05-23T11:40:24.086Z] POST /api/live/snapshot: Stored snapshot for Hanamichi Yuri (active count: 1)
+[2026-05-23T11:40:27.150Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:27.152Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:30.101Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:30.101Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:32.042Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:32.043Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:32.060Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:32.061Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:33.100Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:33.101Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:35.034Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:35.035Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:36.084Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:36.085Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:38.034Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:38.035Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:38.717Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:38.718Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:41.083Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:41.084Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:41.716Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:41.717Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:44.035Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:44.036Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:45.098Z] POST /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:45.099Z] POST /api/live/snapshot: Unauthorized role=teacher
+[2026-05-23T11:40:47.035Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:47.036Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:47.374Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:47.375Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:49.045Z] POST /api/live/join: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:49.046Z] POST /api/live/join: Unauthorized role=teacher
+[2026-05-23T11:40:50.448Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:50.449Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-05-23T11:40:54.103Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:54.104Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-05-23T11:40:56.371Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779536426,"exp":1780141226}
+[2026-05-23T11:40:56.372Z] GET /api/live/snapshot: Returning 0 active snapshots

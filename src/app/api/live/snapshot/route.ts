@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { logDebug } from "@/lib/debug-logger";
 
 // In-memory snapshot store: studentName -> { snapshot, examTitle, updatedAt }
 // This avoids Pusher's 10KB limit entirely
@@ -9,7 +10,7 @@ const snapshotStore = new Map<string, {
   examTitle: string;
   examId: number;
   updatedAt: number;
-}>();
+ }>();
 
 // Make it available globally so other routes can access it
 (globalThis as any).__snapshotStore = (globalThis as any).__snapshotStore || snapshotStore;
@@ -22,13 +23,16 @@ function getStore() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
+    logDebug(`POST /api/live/snapshot: session=${JSON.stringify(session)}`);
     if (!session || session.role !== "student") {
+      logDebug(`POST /api/live/snapshot: Unauthorized role=${session?.role}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { snapshot, examId, examTitle } = await req.json();
 
     if (!snapshot) {
+      logDebug("POST /api/live/snapshot: Missing snapshot data");
       return NextResponse.json({ error: "No snapshot" }, { status: 400 });
     }
 
@@ -40,18 +44,21 @@ export async function POST(req: NextRequest) {
       examId: Number(examId),
       updatedAt: Date.now(),
     });
+    logDebug(`POST /api/live/snapshot: Stored snapshot for ${session.fullName} (active count: ${store.size})`);
 
     // Clean up stale entries older than 2 minutes
     const now = Date.now();
     for (const [key, val] of store.entries()) {
       if (now - val.updatedAt > 120000) {
         store.delete(key);
+        logDebug(`POST /api/live/snapshot: Cleaned up stale snapshot for ${key}`);
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Snapshot upload error:", error);
+    logDebug(`POST /api/live/snapshot ERROR: ${error}`);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -60,7 +67,9 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
+    logDebug(`GET /api/live/snapshot: session=${JSON.stringify(session)}`);
     if (!session || session.role !== "teacher") {
+      logDebug(`GET /api/live/snapshot: Unauthorized role=${session?.role}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -79,10 +88,12 @@ export async function GET(req: NextRequest) {
         });
       }
     }
+    logDebug(`GET /api/live/snapshot: Returning ${snapshots.length} active snapshots`);
 
     return NextResponse.json({ snapshots });
   } catch (error) {
     console.error("Snapshot fetch error:", error);
+    logDebug(`GET /api/live/snapshot ERROR: ${error}`);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

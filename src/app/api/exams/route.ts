@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
-      return NextResponse.json({ error: "Unauthorized. Only teachers can create exams." }, { status: 401 });
+      const currentRole = session?.role ? ` (you are logged in as ${session.role})` : "";
+      return NextResponse.json({ error: `Unauthorized. Only teachers can create exams${currentRole}.` }, { status: 401 });
     }
 
     const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions } = await req.json();

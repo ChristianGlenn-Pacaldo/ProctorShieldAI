@@ -7,7 +7,8 @@ export async function POST(req: NextRequest) {
     const session = await getSession();
     console.log("DEBUG: EXAMS JOIN SESSION:", session);
     if (!session || !session.role || session.role.toLowerCase() !== "student") {
-      return NextResponse.json({ error: "Unauthorized. Only students can join exams." }, { status: 401 });
+      const currentRole = session?.role ? ` (you are logged in as ${session.role})` : "";
+      return NextResponse.json({ error: `Unauthorized. Only students can join exams${currentRole}.` }, { status: 401 });
     }
 
     const { accessCode } = await req.json();
