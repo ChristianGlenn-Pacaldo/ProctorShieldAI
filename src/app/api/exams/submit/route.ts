@@ -149,6 +149,16 @@ Return ONLY the valid JSON object.`;
         score: score,
         timestamp: new Date().toISOString(),
       });
+
+      // Broadcast to admin dashboard
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "exam-submit",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: "student",
+        activity: `Exam completed: ${studentExam.exam.title} by ${session.fullName}`,
+        timestamp: new Date().toISOString(),
+      });
     } catch (pusherErr) {
       console.error("Pusher submit broadcast error:", pusherErr);
     }
