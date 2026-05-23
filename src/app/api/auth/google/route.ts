@@ -60,6 +60,14 @@ export async function POST(req: NextRequest) {
         include: { role: true },
       });
     } else {
+      // Check if role matches (if user tries to log in as wrong role)
+      if (role && user.role.roleName.toLowerCase() !== role.toLowerCase()) {
+        return NextResponse.json(
+          { success: false, message: `This Google account is registered as ${user.role.roleName}, not ${role}` },
+          { status: 403 }
+        );
+      }
+
       // If user exists, update their name and profile picture to sync with their current Google profile
       user = await prisma.user.update({
         where: { id: user.id },

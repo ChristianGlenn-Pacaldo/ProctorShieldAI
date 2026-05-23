@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { examId } = await req.json();
+    const { examId, answers } = await req.json();
     if (!examId) {
       return NextResponse.json({ error: "examId is required" }, { status: 400 });
     }
@@ -32,8 +32,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Exam session not found" }, { status: 404 });
     }
 
-    // 2. Generate a random score if not graded (since this is a demo exam page)
-    const score = Math.floor(75 + Math.random() * 25); // 75% to 100%
+    // 2. Dynamic Grading and Saving Answers
+    const dbQuestions = await prisma.question.findMany({
+      where: { examId: Number(examId) },
+      include: { choices: true }
+    });
+
+    let score = 0;
+    if (dbQuestions.length > 0) {
+      let totalPoints = 0;
+      let earnedPoints = 0;
+      for (const q of dbQuestions) {
+        totalPoints += q.points;
+        const submitted = answers?.find((a: any) => a.questionId === q.id);
+        const correctChoice = q.choices.find(c => c.isCorrect);
+        const isCorrect = submitted && correctChoice && submitted.choiceId === correctChoice.id;
+        if (isCorrect) {
+          earnedPoints += q.points;
+        }
+      }
+      score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+
+      // Save student answers to the database
+      if (answers && answers.length > 0) {
+        try {
+          await prisma.answer.deleteMany({
+            where: { studentExamId: studentExam.id }
+          });
+
+          await prisma.answer.createMany({
+            data: answers.map((a: any) => {
+              const q = dbQuestions.find(dq => dq.id === a.questionId);
+              const correctChoice = q?.choices.find(c => c.isCorrect);
+              const isCorrect = q && correctChoice && a.choiceId === correctChoice.id;
+              return {
+                studentExamId: studentExam.id,
+                questionId: a.questionId,
+                pointsEarned: isCorrect ? q.points : 0,
+                isCorrect: isCorrect,
+                answerText: String(a.choiceId)
+              };
+            })
+          });
+        } catch (err) {
+          console.error("Failed to save student answers:", err);
+        }
+      }
+    } else {
+      // Fallback for legacy/mock exams
+      score = Math.floor(75 + Math.random() * 25);
+    }
 
     // 3. AI Verdict Logic (Gemini with Robust Fallback)
     const violations = studentExam.violations;

@@ -22,22 +22,64 @@ export default function QuizRoom() {
   const violationCountRef = useRef(0); // track count without re-render dependency issues
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Dynamic Exam States
+  const [exam, setExam] = useState<any>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loadingQuiz, setLoadingQuiz] = useState(true);
+  const [quizError, setQuizError] = useState("");
+  const [answersState, setAnswersState] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    const loadQuiz = async () => {
+      try {
+        const res = await fetch(`/api/exams/${examId}`);
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setExam(data.exam);
+          setQuestions(data.questions);
+          if (data.exam.duration) {
+            setTimeLeft(data.exam.duration * 60);
+          }
+        } else {
+          setQuizError(data.error || "Failed to load quiz");
+        }
+      } catch (err) {
+        setQuizError("Network error loading quiz");
+      } finally {
+        setLoadingQuiz(false);
+      }
+    };
+    loadQuiz();
+  }, [examId]);
+
+  const handleSelectChoice = (questionId: number, choiceId: number) => {
+    setAnswersState(prev => ({
+      ...prev,
+      [questionId]: choiceId
+    }));
+  };
+
   // ── Submit exam to backend ────────────────────────────
   const submitExam = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
+      const payloadAnswers = Object.entries(answersState).map(([qId, cId]) => ({
+        questionId: parseInt(qId),
+        choiceId: cId
+      }));
+
       await fetch("/api/exams/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examId }),
+        body: JSON.stringify({ examId, answers: payloadAnswers }),
       });
     } catch (err) {
       console.error("Failed to submit exam:", err);
     } finally {
       router.push("/dashboard/student");
     }
-  }, [examId, router, isSubmitting]);
+  }, [examId, router, isSubmitting, answersState]);
 
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
@@ -284,26 +326,48 @@ export default function QuizRoom() {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
         <div className="bg-[#111] p-8 rounded-2xl border border-gray-800 max-w-lg w-full text-center">
-          <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Camera className="w-8 h-8 text-indigo-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Proctoring Initialization</h1>
-          <p className="text-gray-400 mb-8">
-            This exam is monitored by ProctorShield AI. Your camera and screen activity will be recorded and analyzed in real-time.
-          </p>
-          <div className="space-y-3 text-left mb-8 bg-[#1a1a1a] p-4 rounded-xl text-sm text-gray-300">
-            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Do not leave the browser window or switch tabs.</p>
-            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Copying, pasting, and screenshots are strictly prohibited.</p>
-            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Cellphones and other devices are not allowed in the frame.</p>
-            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Keep your face visible and facing the screen at all times.</p>
-            <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Exam will auto-terminate after 3 violations.</p>
-          </div>
-          <button
-            onClick={() => setHasStarted(true)}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-          >
-            I Understand, Start Exam
-          </button>
+          {loadingQuiz ? (
+            <div className="py-20 text-gray-400">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p>Loading exam configuration...</p>
+            </div>
+          ) : quizError ? (
+            <div className="py-10 text-red-400 space-y-4">
+              <AlertTriangle className="w-12 h-12 text-red-500 mx-auto" />
+              <p className="font-bold text-lg">Failed to Load Exam</p>
+              <p className="text-sm">{quizError}</p>
+              <button 
+                onClick={() => router.push("/dashboard/student")}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all"
+              >
+                Go Back to Dashboard
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Camera className="w-8 h-8 text-indigo-500" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">{exam?.title || "Proctoring Initialization"}</h1>
+              <p className="text-indigo-400 font-semibold mb-2">{exam?.subject?.subjectName}</p>
+              <p className="text-gray-400 mb-8 text-sm leading-relaxed">
+                {exam?.description || "This exam is monitored by ProctorShield AI. Your camera and screen activity will be recorded and analyzed in real-time."}
+              </p>
+              <div className="space-y-3 text-left mb-8 bg-[#1a1a1a] p-4 rounded-xl text-xs text-gray-300">
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Do not leave the browser window or switch tabs.</p>
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Copying, pasting, and screenshots are strictly prohibited.</p>
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Cellphones and other devices are not allowed in the frame.</p>
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Keep your face visible and facing the screen at all times.</p>
+                <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Exam will auto-terminate after 3 violations.</p>
+              </div>
+              <button
+                onClick={() => setHasStarted(true)}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+              >
+                I Understand, Start Exam
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -317,8 +381,8 @@ export default function QuizRoom() {
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-800">
             <div>
-              <h1 className="text-2xl font-bold">Midterm Examination</h1>
-              <p className="text-gray-400 text-sm">Computer Science 101</p>
+              <h1 className="text-2xl font-bold">{exam?.title || "Active Exam"}</h1>
+              <p className="text-gray-400 text-sm">{exam?.subject?.subjectName || "Loading..."}</p>
             </div>
             <div className="text-right">
               <div className={`text-xl font-mono ${timeLeft < 300 ? 'text-red-400 animate-pulse' : 'text-indigo-400'}`}>
@@ -328,29 +392,55 @@ export default function QuizRoom() {
             </div>
           </div>
 
-          {/* Sample Questions */}
-          {[
-            { q: "1. What is the primary purpose of a React useEffect hook?", opts: ["To render HTML", "To manage side effects in functional components", "To create a global state store", "To handle routing"] },
-            { q: "2. Which data structure uses LIFO (Last In, First Out)?", opts: ["Queue", "Stack", "Linked List", "Tree"] },
-            { q: "3. What does SQL stand for?", opts: ["Structured Query Language", "Simple Query Logic", "Standard Query Listing", "Sequential Query Language"] },
-          ].map((item, qi) => (
-            <div key={qi} className="bg-[#111] p-6 rounded-2xl border border-gray-800 mb-4">
-              <h3 className="font-semibold text-lg mb-4">{item.q}</h3>
-              <div className="space-y-3">
-                {item.opts.map((opt, i) => (
-                  <label key={i} className="flex items-center p-3 rounded-xl border border-gray-800 hover:border-indigo-500 hover:bg-indigo-500/5 cursor-pointer transition-all">
-                    <input type="radio" name={`q${qi}`} className="text-indigo-500 bg-black border-gray-700 mr-3" />
-                    <span className="text-sm">{opt}</span>
-                  </label>
-                ))}
-              </div>
+          {/* Dynamic Questions */}
+          {loadingQuiz ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+              <p>Loading questions...</p>
             </div>
-          ))}
+          ) : quizError ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center text-red-400">
+              <p className="font-bold text-lg mb-2">Error</p>
+              <p>{quizError}</p>
+            </div>
+          ) : questions.length === 0 ? (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6 text-center text-amber-500">
+              <p className="font-bold text-lg mb-2">No Questions Available</p>
+              <p>No questions have been configured for this assessment.</p>
+            </div>
+          ) : (
+            questions.map((q, qi) => (
+              <div key={q.id} className="bg-[#111] p-6 rounded-2xl border border-gray-800 mb-4 animate-fade-in">
+                <h3 className="font-semibold text-lg mb-4">{qi + 1}. {q.questionText}</h3>
+                <div className="space-y-3">
+                  {q.choices.map((choice: any) => (
+                    <label 
+                      key={choice.id} 
+                      className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${
+                        answersState[q.id] === choice.id 
+                          ? 'border-indigo-500 bg-indigo-500/10' 
+                          : 'border-gray-800 hover:border-indigo-500/50 hover:bg-indigo-500/5'
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name={`q-${q.id}`} 
+                        checked={answersState[q.id] === choice.id}
+                        onChange={() => handleSelectChoice(q.id, choice.id)}
+                        className="text-indigo-500 bg-black border-gray-700 mr-3 focus:ring-0" 
+                      />
+                      <span className="text-sm">{choice.choiceText}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
 
           <div className="flex justify-end mt-8 pb-8">
             <button
               onClick={submitExam}
-              disabled={isSubmitting}
+              disabled={isSubmitting || loadingQuiz || !!quizError}
               className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
             >
               {isSubmitting ? "Submitting..." : "Submit Exam"}

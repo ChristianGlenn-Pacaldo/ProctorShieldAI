@@ -69,7 +69,13 @@ export default function AdminLoginPage() {
         return;
       }
 
-      window.location.href = "/dashboard/admin";
+      const role = data.user.role;
+      if (role === "admin") {
+        window.location.href = "/dashboard/admin";
+      } else {
+        setError(`Access Denied: This portal is restricted to administrators.`);
+        setIsLoading(false);
+      }
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized. Only teachers can create exams." }, { status: 401 });
     }
 
-    const { subjectName, title, description, duration, totalQuestions, passingScore } = await req.json();
+    const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions } = await req.json();
 
     if (!subjectName || !title) {
       return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
@@ -103,9 +103,23 @@ export async function POST(req: NextRequest) {
         description,
         accessCode,
         duration: duration || 60,
-        totalQuestions: totalQuestions || 10,
+        totalQuestions: totalQuestions || (questions ? questions.length : 10),
         passingScore: passingScore || 50,
         examStatus: "draft",
+        shuffleQuestions: shuffleQuestions || false,
+        questions: questions && questions.length > 0 ? {
+          create: questions.map((q: any) => ({
+            questionText: q.questionText,
+            questionType: q.questionType || "multiple_choice",
+            points: q.points || 1,
+            choices: {
+              create: q.choices.map((c: any) => ({
+                choiceText: c.choiceText,
+                isCorrect: c.isCorrect || false
+              }))
+            }
+          }))
+        } : undefined
       },
     });
 

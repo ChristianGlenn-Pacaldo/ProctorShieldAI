@@ -44,12 +44,11 @@ export default function TeacherLoginPage() {
 
       // Redirect based on role
       const role = data.user.role;
-      if (role === "admin") {
-        window.location.href = "/dashboard/admin";
-      } else if (role === "teacher") {
+      if (role === "teacher") {
         window.location.href = "/dashboard/teacher";
       } else {
-        window.location.href = "/dashboard/student";
+        setError(`Access Denied: This portal is restricted to teachers. Your account is registered as ${role.toUpperCase()}.`);
+        setIsLoading(false);
       }
     } catch {
       setError("Network error connecting to Google Auth.");
@@ -83,12 +82,11 @@ export default function TeacherLoginPage() {
 
       // Redirect based on role
       const role = data.user.role;
-      if (role === "admin") {
-        window.location.href = "/dashboard/admin";
-      } else if (role === "teacher") {
+      if (role === "teacher") {
         window.location.href = "/dashboard/teacher";
       } else {
-        window.location.href = "/dashboard/student";
+        setError(`Access Denied: This portal is restricted to teachers. Your account is registered as ${role.toUpperCase()}.`);
+        setIsLoading(false);
       }
     } catch {
       setError("Network error. Please try again.");

@@ -44,12 +44,11 @@ export default function StudentLoginPage() {
 
       // Redirect based on role
       const role = data.user.role;
-      if (role === "admin") {
-        window.location.href = "/dashboard/admin";
-      } else if (role === "teacher") {
-        window.location.href = "/dashboard/teacher";
-      } else {
+      if (role === "student") {
         window.location.href = "/dashboard/student";
+      } else {
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setIsLoading(false);
       }
     } catch {
       setError("Network error connecting to Google Auth.");
@@ -83,12 +82,11 @@ export default function StudentLoginPage() {
 
       // Redirect based on role
       const role = data.user.role;
-      if (role === "admin") {
-        window.location.href = "/dashboard/admin";
-      } else if (role === "teacher") {
-        window.location.href = "/dashboard/teacher";
-      } else {
+      if (role === "student") {
         window.location.href = "/dashboard/student";
+      } else {
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setIsLoading(false);
       }
     } catch {
       setError("Network error. Please try again.");

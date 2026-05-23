@@ -5,7 +5,8 @@ import { getSession } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "student") {
+    console.log("DEBUG: EXAMS JOIN SESSION:", session);
+    if (!session || !session.role || session.role.toLowerCase() !== "student") {
       return NextResponse.json({ error: "Unauthorized. Only students can join exams." }, { status: 401 });
     }
 
