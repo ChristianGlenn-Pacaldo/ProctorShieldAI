@@ -153,7 +153,7 @@ export default function LandingPage() {
               href="/login"
               className="px-6 py-4 text-base font-semibold text-white/50 border border-white/10 rounded-xl hover:bg-white/5 transition-all flex items-center gap-2"
             >
-              Watch Demo <ArrowRight className="w-4 h-4" />
+              Learn More <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-2xl mx-auto">
@@ -334,13 +334,13 @@ export default function LandingPage() {
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link
-            href="/login"
+            href="/login/student"
             className="px-8 py-4 text-base font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/30"
           >
             🎓 Start as Student
           </Link>
           <Link
-            href="/login"
+            href="/login/teacher"
             className="px-6 py-4 text-base font-semibold text-white/50 border border-white/10 rounded-xl hover:bg-white/5 transition-all"
           >
             👩‍🏫 Start as Teacher

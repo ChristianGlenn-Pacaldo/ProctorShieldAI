@@ -1,15 +1,9 @@
-import DashboardShell from "@/components/dashboard-shell";
 import TeacherDashboardContent from "./content";
+import { getSession } from "@/lib/auth";
 
-export default function TeacherDashboardPage() {
-  return (
-    <DashboardShell
-      role="teacher"
-      userName="Sir Ramos"
-      userAvatar="SR"
-      avatarColor="from-violet-600 to-indigo-600"
-    >
-      <TeacherDashboardContent />
-    </DashboardShell>
-  );
+export default async function TeacherDashboardPage() {
+  const session = await getSession();
+  const userId = session?.userId || "unknown";
+
+  return <TeacherDashboardContent teacherId={userId} />;
 }

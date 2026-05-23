@@ -20,6 +20,24 @@ export default function QuizRoom() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const violationCountRef = useRef(0); // track count without re-render dependency issues
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ── Submit exam to backend ────────────────────────────
+  const submitExam = useCallback(async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await fetch("/api/exams/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examId }),
+      });
+    } catch (err) {
+      console.error("Failed to submit exam:", err);
+    } finally {
+      router.push("/dashboard/student");
+    }
+  }, [examId, router, isSubmitting]);
 
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
@@ -42,6 +60,8 @@ export default function QuizRoom() {
     setViolationCount(newCount);
 
     try {
+      const snapshot = captureSnapshot();
+
       await fetch("/api/live/violation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,6 +69,7 @@ export default function QuizRoom() {
           examId,
           violationType: type,
           confidenceScore: 100,
+          snapshot: snapshot || undefined,
         }),
       });
 
@@ -58,12 +79,12 @@ export default function QuizRoom() {
         alert("⚠️ WARNING (2/3): Second violation — " + type.replace(/_/g, " ") + ". One more violation and your exam will be automatically submitted.");
       } else if (newCount >= 3) {
         alert("🚫 FINAL (3/3): Maximum violations reached. Your exam is being automatically terminated and submitted.");
-        router.push("/dashboard/student");
+        submitExam();
       }
     } catch (err) {
       console.error("Failed to report violation:", err);
     }
-  }, [examId, router]);
+  }, [examId, submitExam, captureSnapshot]);
 
   // ── Notify teacher that student joined (lightweight, no image) ──
   const notifyTeacherJoined = useCallback(async () => {
@@ -192,14 +213,14 @@ export default function QuizRoom() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push("/dashboard/student");
+          submitExam();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [hasStarted, router]);
+  }, [hasStarted, submitExam]);
 
   // ── Anti-Cheat Event Listeners ──
   useEffect(() => {
@@ -328,10 +349,11 @@ export default function QuizRoom() {
 
           <div className="flex justify-end mt-8 pb-8">
             <button
-              onClick={() => router.push("/dashboard/student")}
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20"
+              onClick={submitExam}
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
             >
-              Submit Exam
+              {isSubmitting ? "Submitting..." : "Submit Exam"}
             </button>
           </div>
         </div>

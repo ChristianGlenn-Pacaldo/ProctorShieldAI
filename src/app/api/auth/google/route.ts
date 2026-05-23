@@ -60,13 +60,15 @@ export async function POST(req: NextRequest) {
         include: { role: true },
       });
     } else {
-      // If user exists, optionally update profile picture if none exists
-      if (!user.profileImage && picture) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { profileImage: picture },
-        });
-      }
+      // If user exists, update their name and profile picture to sync with their current Google profile
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          fullName: name || user.fullName,
+          profileImage: picture || user.profileImage,
+        },
+        include: { role: true },
+      });
     }
 
     // Check suspension

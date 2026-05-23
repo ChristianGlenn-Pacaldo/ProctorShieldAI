@@ -1,10 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SettingsContent() {
   const [instructorReg, setInstructorReg] = useState(true);
   const [strictEnforce, setStrictEnforce] = useState(false);
+  const [user, setUser] = useState<{ fullName: string; email: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.user) {
+          setUser({
+            fullName: data.user.fullName,
+            email: data.user.email,
+          });
+        }
+      })
+      .catch((err) => console.error("Failed to load session:", err));
+  }, []);
+
+  const name = user?.fullName || "Admin User";
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <div className="animate-fade-in grid lg:grid-cols-2 gap-4">
@@ -15,9 +38,9 @@ export default function SettingsContent() {
         </div>
         <div className="p-8 text-center">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-3xl font-extrabold text-white mx-auto mb-4">
-            AD
+            {initials || "AD"}
           </div>
-          <h3 className="text-lg font-bold text-[var(--ink)] mb-1">System Admin</h3>
+          <h3 className="text-lg font-bold text-[var(--ink)] mb-1">{name}</h3>
           <p className="text-sm text-[var(--muted)] mb-6">ProctorShield Administration</p>
           <button className="w-full py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">
             Save Changes

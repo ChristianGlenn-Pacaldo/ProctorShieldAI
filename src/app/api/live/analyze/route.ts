@@ -65,7 +65,7 @@ Return ONLY the JSON array, nothing else.`,
     let violations: string[] = [];
     try {
       // Try to extract JSON from the response
-      const jsonMatch = text.match(/\[.*\]/s);
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         violations = JSON.parse(jsonMatch[0]);
       }

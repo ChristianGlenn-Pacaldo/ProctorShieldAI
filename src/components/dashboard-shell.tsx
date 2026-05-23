@@ -60,7 +60,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/teacher" },
         { label: "My Exams", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/teacher/exams" },
-        { label: "Live Monitor", icon: <Radio className="w-4 h-4" />, href: "/dashboard/teacher/monitor", badge: "2" },
+        { label: "Live Monitor", icon: <Radio className="w-4 h-4" />, href: "/dashboard/teacher/monitor" },
         { label: "Evidence Replay", icon: <Camera className="w-4 h-4" />, href: "/dashboard/teacher/evidence" },
         { label: "AI Reports", icon: <Brain className="w-4 h-4" />, href: "/dashboard/teacher/reports" },
       ],
@@ -77,7 +77,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       section: "Overview",
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/admin" },
-        { label: "Users", icon: <FileText className="w-4 h-4" />, href: "/dashboard/admin/users", badge: "248" },
+        { label: "Users", icon: <FileText className="w-4 h-4" />, href: "/dashboard/admin/users" },
         { label: "All Exams", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/admin/exams" },
       ],
     },

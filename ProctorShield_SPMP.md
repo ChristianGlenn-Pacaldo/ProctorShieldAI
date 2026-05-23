@@ -2,135 +2,193 @@
 
 ---
 
-<div align="center">
-
 # ProctorShield AI
 ### An AI-Powered Online Examination & Remote Proctoring System
 
-**Submitted for Capstone / Thesis Defense**
-
-**Date:** May 19, 2026  
+**Document Version:** 2.0.0  
+**Date:** May 23, 2026  
 **Course:** Capstone Project / Software Engineering  
-**Prepared By:** Christian Glenn Pacaldo (and Group Members)  
-**Instructor / Panel:** [Insert Instructor/Panel Names]  
-**Institution:** [Insert University/School Name]  
+**Prepared For:** University Academic Board / Computer Science Department  
+**Prepared By:** Christian Glenn Pacaldo & Team  
+**Institution:** ChristianGlenn-Pacaldo/ProctorShieldAI Team  
 
-</div>
+---
+
+## 1. Title Page & Document Control
+
+### Document Identification
+*   **Project Title:** ProctorShield AI
+*   **System Subtitle:** An AI-Powered Online Examination & Remote Proctoring System
+*   **Classification:** Technical Documentation / Software Project Management Plan (SPMP)
+*   **Repository URI:** [ProctorShieldAI Repo](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai)
+
+### Document History
+| Version | Date | Description | Author(s) |
+| :--- | :--- | :--- | :--- |
+| 1.0.0 | May 19, 2026 | Initial draft for Capstone proposal. | Christian Glenn Pacaldo |
+| 2.0.0 | May 23, 2026 | Comprehensive academic restructuring; added risk matrices, cost, team roles, AI parameters, and technical architecture details. | System Agent / Lead Architect |
 
 ---
 
 ## 2. Table of Contents
-
-1. [Title Page](#1-title-page)
+1. [Title Page & Document Control](#1-title-page--document-control)
 2. [Table of Contents](#2-table-of-contents)
 3. [Introduction](#3-introduction)
-4. [System Overview](#4-system-overview)
-5. [Technology Stack](#5-technology-stack)
-6. [Software Development Methodology](#6-software-development-methodology)
-7. [System Architecture](#7-system-architecture)
-8. [Project Structure](#8-project-structure)
-9. [Database Design](#9-database-design)
-10. [Authentication System](#10-authentication-system)
-11. [API Reference](#11-api-reference)
-12. [Frontend Pages Documentation](#12-frontend-pages-documentation)
-13. [AI Proctoring System](#13-ai-proctoring-system)
-14. [Real-Time Monitoring Architecture](#14-real-time-monitoring-architecture)
-15. [Anti-Cheat System](#15-anti-cheat-system)
-16. [Environment Configuration](#16-environment-configuration)
-17. [Setup and Installation Guide](#17-setup-and-installation-guide)
-18. [Demo Accounts](#18-demo-accounts)
-19. [Testing Strategy](#19-testing-strategy)
-20. [Security Measures](#20-security-measures)
-21. [Known Limitations](#21-known-limitations)
-22. [Future Improvements](#22-future-improvements)
-23. [Conclusion](#23-conclusion)
+4. [Purpose of the System](#4-purpose-of-the-system)
+5. [Scope](#5-scope)
+6. [Objectives](#6-objectives)
+7. [Stakeholders](#7-stakeholders)
+8. [Project Organization](#8-project-organization)
+9. [Project Management Process](#9-project-management-process)
+10. [Software Development Methodology](#10-software-development-methodology)
+11. [Technical Architecture](#11-technical-architecture)
+12. [Database Design Overview](#12-database-design-overview)
+13. [Functional Requirements](#13-functional-requirements)
+14. [Non-Functional Requirements](#14-non-functional-requirements)
+15. [Security and Privacy Plan](#15-security-and-privacy-plan)
+16. [AI Integration Plan](#16-ai-integration-plan)
+17. [Risk Management Plan](#17-risk-management-plan)
+18. [Testing and QA Plan](#18-testing-and-qa-plan)
+19. [Deployment Plan](#19-deployment-plan)
+20. [Maintenance Plan](#20-maintenance-plan)
+21. [Timeline and Milestones](#21-timeline-and-milestones)
+22. [Cost Estimation](#22-cost-estimation)
+23. [Team Responsibilities](#23-team-responsibilities)
+24. [Conclusion & Appendices](#24-conclusion--appendices)
 
 ---
 
 ## 3. Introduction
 
 ### Project Background
-The rapid shift towards remote learning and online education has exposed a critical vulnerability in modern assessment methods: maintaining academic integrity outside the traditional classroom. Unsupervised online exams are highly susceptible to cheating, including unauthorized device usage, proxy test-takers, and information sharing.
+The rapid, structural shift of global education systems towards online classrooms, hybrid studies, and remote testing has highlighted a critical vulnerability: the preservation of academic integrity in non-invigilated spaces. Traditional assessments taken outside institutional computer labs suffer high vulnerability to external resources, secondary device usage, tab switching, and proxy test-taking.
 
 ### Problem Statement
-Existing proctoring solutions are often prohibitively expensive, require invasive software installations, or rely on retroactive manual reviews of recorded videos. There is a need for a lightweight, browser-based, and cost-effective proctoring system that leverages artificial intelligence to detect and flag academic dishonesty in real-time.
-
-### Objectives
-1. To develop a fully functional, browser-based online examination portal.
-2. To integrate Google Gemini Vision AI for real-time detection of suspicious examinee behavior (e.g., looking away, multiple faces, device usage).
-3. To implement strict browser-level constraints preventing unauthorized actions (e.g., tab switching, copy-pasting, screen capturing).
-4. To provide a live monitoring dashboard for educators to oversee ongoing examinations.
-
-### Scope
-The system encompasses three primary modules: a Student Portal for taking exams, a Teacher Portal for exam creation and live monitoring, and an Admin Portal for system oversight. The AI analysis focuses strictly on visual data captured via webcam and browser interaction events.
+Existing online proctoring solutions are plagued by high deployment costs, complex desktop-level agent installations that pose operating system vulnerabilities, or heavy reliance on human invigilators who must perform tedious, manual reviews of hours of recorded feeds. There is a critical academic and industry need for a lightweight, web-based, platform-independent solution that automates cheating detection in real-time using modern artificial intelligence models, without requiring root-access browser plugins or intrusive local software.
 
 ### Significance of the Study
-This project demonstrates the viable application of advanced multimodal Large Language Models (LLMs) like Gemini Vision in educational technology, proving that robust, scalable, and non-invasive proctoring can be achieved entirely within a standard web browser without requiring dedicated desktop applications.
+This project demonstrates the integration of advanced multimodal Large Language Models (LLMs) like Google Gemini and low-latency websocket notification engines into a standardized web application. The study proves that high-fidelity remote proctoring can be implemented entirely in a standard browser environment using standard API endpoints, minimizing privacy risks and overhead.
 
 ---
 
-## 4. System Overview
-
-**ProctorShield AI** is an intelligent online examination platform designed to detect suspicious behavior during exams and assist educators in monitoring students remotely. 
-
-### Role-Based Portals
-*   **Teacher Portal:** Empowers educators to create exams, generate access codes, monitor active test-takers in real-time, and review automated AI violation reports.
-*   **Student Portal:** A secure testing environment where examinees enter access codes, consent to monitoring, and complete assessments under strict browser and AI oversight.
-*   **Admin Portal:** A centralized management interface for overseeing all users, examining system analytics, and configuring platform-wide settings.
-
-### Core Capabilities
-*   **AI-Powered Cheating Detection:** Continuous webcam frame analysis using Gemini Vision.
-*   **Real-Time Exam Monitoring:** Live snapshot broadcasting to the Teacher Dashboard.
-*   **Browser Security:** Hardened testing environment enforcing fullscreen, blocking copy/paste, and detecting tab switches.
-*   **Automated Violation Flagging:** A strict 3-strike system that automatically terminates exams upon repeated offenses.
-
-### High-Level Workflow
-1. Teacher creates an exam and shares the generated Access Code.
-2. Student logs in, enters the code, grants webcam permissions, and begins the exam.
-3. The system captures webcam frames every 3 seconds for the Teacher's live view, and every 20 seconds for AI analysis.
-4. If a violation is detected (AI or browser-based), the student receives a strike, and a WebSocket event alerts the teacher.
-5. Upon completion or forced termination, an AI-generated integrity report is finalized.
+## 4. Purpose of the System
+The purpose of **ProctorShield AI** is to offer a comprehensive, low-cost, and scalable online examination platform equipped with automated real-time proctoring. The system aims to:
+*   Empower academic institutions to conduct remote examinations with high confidence in the integrity of student scores.
+*   Provide instructors with a real-time monitoring dashboard displaying aggregated analytics and visual snapshots of ongoing exam sessions.
+*   Minimize invigilator fatigue by employing AI to filter, analyze, and flag suspicious student behaviors (looking away, device usage, absent face, or multiple faces) during the exam.
+*   Enforce absolute client-side browser restrictions to lock down the exam room interface and prevent standard digital copying behaviors.
 
 ---
 
-## 5. Technology Stack
+## 5. Scope
+The scope of ProctorShield AI is bounded by three major role-based portals and a specialized AI examination engine:
 
-The project utilizes a modern, serverless-oriented stack optimized for performance, type safety, and real-time capabilities.
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │                        ProctorShield AI                      │
+  ├──────────────────┬───────────────────┬──────────────────────┤
+  │  Student Portal  │  Teacher Portal   │     Admin Portal     │
+  ├──────────────────┼───────────────────┼──────────────────────┤
+  │ - Secure Exam Rm │ - Exam Creator    │ - User Audit Log     │
+  │ - Webcam Stream  │ - Live Monitoring │ - Suspensions        │
+  │ - AI Diagnoses   │ - Integrity Audit │ - System Config      │
+  └──────────────────┴───────────────────┴──────────────────────┘
+```
 
-| Layer | Technology | Version | Purpose | Why it was chosen |
-| :--- | :--- | :--- | :--- | :--- |
-| **Frontend Framework** | Next.js (App Router) | 16.2.6 | Full-stack React framework | Provides seamless hybrid rendering (SSR/CSR) and unified routing. |
-| **Language** | TypeScript | 5.x | Static typing | Reduces runtime errors and improves developer experience. |
-| **Styling** | Tailwind CSS | 4.x | Utility-first CSS | Accelerates UI development with consistent design tokens. |
-| **Backend Runtime** | Node.js (Next.js API Routes) | 18+ | Server-side logic | Eliminates the need for a separate Express server, unifying the codebase. |
-| **Database** | PostgreSQL (NeonDB) | 15+ | Relational data storage | Serverless, highly scalable, and integrates perfectly with Prisma. |
-| **ORM** | Prisma | 7.8.0 | Database interaction | Ensures type-safe queries and simplifies schema migrations. |
-| **Authentication** | Custom JWT + bcrypt | 9.0.3 / 3.0.3 | Secure session management | Stateless, scalable authentication using HTTP-only cookies. |
-| **OAuth** | @react-oauth/google | 0.13.5 | Google Sign-In | Streamlines user onboarding and leverages existing Google accounts. |
-| **Real-Time Engine** | Pusher Channels | 5.3.3 | WebSocket event broadcasting | Provides reliable, low-latency messaging for live alerts. |
-| **AI Vision Engine** | Google Gemini 2.0 Flash | 2.2.0 | Multimodal analysis | Offers state-of-the-art image analysis with high efficiency. |
+### In Scope
+1.  **Student Portal:** Entering exams via access codes, webcam verification, answering multiple-choice questions (MCQs), receiving client warnings, and submitting exams under secure lockouts.
+2.  **Teacher Portal:** Creating custom exams, generating access codes, utilizing Gemini to auto-generate questions, monitoring live video snapshot feeds, and viewing final integrity reports.
+3.  **Admin Portal:** Centralized user management (activating/suspending users), viewing system logs, and altering global settings.
+4.  **AI Proctoring Pipeline:** Base64 webcam frame upload, image formatting, server-side Gemini API querying, response parsing, and Pusher notification broadcasting.
 
----
-
-## 6. Software Development Methodology
-
-The project was developed using the **Agile Scrum Methodology**, enabling iterative development and continuous feedback adaptation.
-
-*   **Sprint Planning:** The project was divided into two-week sprints, prioritizing core functionalities (Authentication → Exam Engine → AI Proctoring → Real-Time Monitoring).
-*   **Development Workflow:** 
-    1. Requirement Analysis
-    2. UI/UX Prototyping
-    3. API Design & Database Schema Definition
-    4. Implementation (Frontend + Backend)
-    5. Integration & Testing
-*   **Version Control:** Git/GitHub was utilized with a feature-branch workflow (`main`, `dev`, `feature/*`).
-*   **Testing Workflow:** Continuous manual testing during development, specifically focusing on edge cases in webcam capture and browser event listeners.
+### Out of Scope
+*   **WebRTC Continuous Video Streaming:** Due to expensive STUN/TURN server requirements, continuous video streaming is replaced by high-frequency 3-second REST snapshot uploads.
+*   **OS-Level System Locking:** Blocking software like Snipping Tool or external hardware capture cards is out of scope due to browser sandbox limits.
 
 ---
 
-## 7. System Architecture
+## 6. Objectives
+The quantifiable metrics and targets for the ProctorShield AI implementation include:
+*   **AI Detection Accuracy:** Maintain a $>95\%$ True Positive rate for explicit violations like `device_detected` and `no_face`.
+*   **Alert Latency:** Ensure websocket-based violation alerts are delivered to the Teacher's Dashboard in under $1.5\text{ seconds}$ from server recognition.
+*   **Polling Latency:** Student camera snapshots must upload and render on the teacher grid within $3.0\text{ seconds}$ average latency.
+*   **System Availability:** Ensure $99.9\%$ uptime for the core examination API to prevent network-based student dropouts.
+*   **False Positive Mitigation:** Employ a "fail-open" policy where any network or API failures regarding the AI model do not disrupt or terminate the student's exam.
 
-The architecture follows a monolithic serverless pattern where Next.js handles both the frontend React components and the backend API routes, communicating with external managed services.
+---
+
+## 7. Stakeholders
+
+| Stakeholder Group | Description | Primary Interest |
+| :--- | :--- | :--- |
+| **Examinees (Students)** | Enrolled students completing assessments remotely. | Smooth, non-intrusive UI; clear feedback on connection status; data privacy preservation. |
+| **Educators (Teachers)** | Instructors setting up exams and evaluating student submissions. | Simple exam generation; robust, real-time alerts; automated, reliable cheating detection records. |
+| **Administrators (Admins)** | Institutional IT personnel managing the system instance. | Clean system logs; simple user suspension tools; system stability; secure credential management. |
+| **Academic Integrity Boards** | School committees evaluating cheating disputes. | Forensic audit trails; timestamped image evidence of violations; transparent AI explanation logs. |
+| **System Developers** | Software engineers maintaining the Next.js platform. | Type safety; structured database migrations; clear API contracts; cost-efficient cloud resource usage. |
+
+---
+
+## 8. Project Organization
+The ProctorShield AI project is structured under a flat Agile product organization:
+
+```mermaid
+graph TD
+    PM[Project Manager / Scrum Master] --> Arch[Lead Full-Stack Architect]
+    PM --> QA[QA & Security Engineer]
+    Arch --> Dev[Software Engineers]
+    Arch --> AIEng[AI Integration Specialist]
+```
+
+*   **Scrum Master/PM:** Enforces process timelines, schedules sprint reviews, and clears external dependencies.
+*   **Lead Architect:** Directs tech-stack implementation, designs the database models, and oversees code integrations.
+*   **Development Team:** Writes React components, builds API controllers, and maintains styling systems.
+*   **AI/Data Engineer:** Manages prompt optimizations, handles image encoding schemes, and ensures API security.
+*   **QA & Security Engineer:** Audits client security lockouts, conducts network latency checks, and performs credential validation audits.
+
+---
+
+## 9. Project Management Process
+The project utilizes the **Agile Scrum Framework** to manage tasks, schedules, and deliverables. 
+
+### Scrum Ceremonies
+*   **Sprint Planning (Bi-Weekly):** Define the Sprint Goal, select items from the Product Backlog, and estimate tasks in Story Points.
+*   **Daily Standup (15 Mins):** Discuss work completed yesterday, plans for today, and any blockages.
+*   **Sprint Review (End of Sprint):** Demonstrate working modules (e.g., student camera uploads, teacher alert feeds) to stakeholders for feedback.
+*   **Sprint Retrospective (End of Sprint):** Assess team performance and identify process improvements.
+
+### Collaboration Tools
+*   **Version Control:** Git on GitHub with a branch workflow (`main` protection, `dev` integration, `feature/*` development).
+*   **Task Board:** Jira for sprint backlogs, bug tracking, and milestone burn-down charts.
+*   **Communications:** Slack for team updates, combined with automated webhook feeds from GitHub repository commits.
+
+---
+
+## 10. Software Development Methodology
+The Software Development Life Cycle (SDLC) is implemented iteratively across six phases:
+
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │                      SDLC Iterative Phases                  │
+  ├──────────────┬──────────────┬──────────────┬────────────────┤
+  │ 1. Proposal  │ 2. Schema    │ 3. API & AI  │ 4. Client lock │
+  │    & Scope   │    Design    │    Engines   │    & UI Dash   │
+  ├──────────────┴──────────────┼──────────────┴────────────────┤
+  │ 5. System Integration       │ 6. QA, Security & Launch       │
+  └─────────────────────────────┴───────────────────────────────┘
+```
+
+1.  **Requirement Analysis & Prototyping:** Mapping user portals and defining API parameters.
+2.  **Database & Schema Modeling:** Drafting the schema, modeling the tables, and setting constraints inside [schema.prisma](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/prisma/schema.prisma).
+3.  **Core API and AI Prototyping:** Implementing server-side route logic to interface with the Google Gemini API.
+4.  **UI & Secure Client Integration:** Building dashboard portals and adding browser event listeners.
+5.  **Integration & WebSockets Tuning:** Tuning Pusher configurations, optimizing base64 serialization, and verifying state synchronizations.
+6.  **Security Audit, QA & Release:** Verifying database indexing performance, validating token-cookie protections, and deploying database seeds.
+
+---
+
+## 11. Technical Architecture
+The system employs a serverless-centric architecture. Next.js coordinates both the frontend React client and the backend serverless endpoints, which communicate with managed Postgres and WebSocket platforms.
 
 ```mermaid
 graph TD
@@ -155,9 +213,9 @@ graph TD
 
     UI -->|HTTP POST/GET| AUTH_API
     UI -->|HTTP POST/GET| EXAM_API
-    UI -->|HTTP GET Poll (3s)| LIVE_API
-    CAM -->|HTTP POST (3s)| LIVE_API
-    CAM -->|HTTP POST (20s)| LIVE_API
+    UI -->|HTTP GET Poll 3s| LIVE_API
+    CAM -->|HTTP POST 3s| LIVE_API
+    CAM -->|HTTP POST 20s| LIVE_API
 
     AUTH_API <-->|Prisma ORM| DB
     EXAM_API <-->|Prisma ORM| DB
@@ -167,359 +225,322 @@ graph TD
     LIVE_API <-->|Store/Retrieve| MEM
 ```
 
-### Layer Breakdown
-*   **Frontend Layer:** React components managing state, rendering UI, and enforcing DOM-level restrictions (blocking right-click, listening to visibility changes).
-*   **Backend Layer:** Next.js API routes acting as RESTful endpoints, validating requests, and executing business logic.
-*   **Authentication Layer:** JWT generation, payload verification, and HTTP-only cookie management.
-*   **AI Detection Layer:** Server-side proxy that formats webcam base64 strings and prompts the Gemini API, returning parsed violation arrays.
-*   **Database Layer:** Prisma ORM interfacing with NeonDB PostgreSQL.
-*   **Real-Time Layer:** A hybrid approach using REST polling for heavy image payloads and Pusher WebSockets for lightweight instant alerts.
+### Architectural Component Justifications
+*   **Next.js (App Router):** Combines Server-Side Rendering (SSR) for static dashboard pages with API endpoints in the same repository, eliminating separate server maintenance overhead.
+*   **Neon DB (PostgreSQL):** A serverless PostgreSQL instance allowing autoscaling connection pooling, vital for high-concurrency exam starts.
+*   **Pusher Channels:** Eliminates WebRTC signaling complex setups, utilizing secure, low-latency WebSocket infrastructure without requiring a persistent Node WebSocket server.
+*   **Google Gemini API:** Uses `gemini-2.0-flash` for high-speed, cost-effective visual prompt execution.
 
 ---
 
-## 8. Project Structure
+## 12. Database Design Overview
+The database uses a relational model managed by the Prisma client. It consists of 15 structured models mapping role privileges, exams, question sheets, student attempts, cheating logs, and billing.
 
-```text
-proctorshieldai/
-├── prisma/
-│   ├── schema.prisma          # Defines 15 database models and relationships
-│   └── seed.ts                # Database population script for demo accounts
-├── src/
-│   ├── app/
-│   │   ├── globals.css        # Tailwind directives and CSS variables
-│   │   ├── layout.tsx         # Root HTML layout and providers
-│   │   ├── page.tsx           # Landing/Marketing page
-│   │   ├── login/
-│   │   │   └── page.tsx       # Unified login and registration interface
-│   │   ├── admin/
-│   │   │   └── login/         # Dedicated administrator login portal
-│   │   ├── dashboard/
-│   │   │   ├── admin/         # Admin portal (Users, System Analytics)
-│   │   │   ├── student/       # Student portal (My Exams, Results)
-│   │   │   └── teacher/       # Teacher portal (Exam Creation, Live Monitor)
-│   │   ├── quiz/
-│   │   │   └── [id]/          # Secure testing room environment (Core Proctoring logic)
-│   │   └── api/
-│   │       ├── auth/          # Endpoints: login, register, logout, google, session
-│   │       ├── exams/         # Endpoints: CRUD operations, join logic
-│   │       └── live/          # Endpoints: analyze (AI), snapshot (polling), violation
-│   ├── components/
-│   │   └── dashboard-shell.tsx# Reusable layout shell for all role dashboards
-│   └── lib/
-│       ├── auth.ts            # JWT signing, verification, and bcrypt hashing utilities
-│       ├── prisma.ts          # Global Prisma client instantiation
-│       └── pusher.ts          # Pusher server configuration
-├── .env                       # Environment secrets (ignored in Git)
-├── next.config.mjs            # Next.js build configuration
-└── package.json               # Dependency management
-```
-
----
-
-## 9. Database Design
-
-The system relies on a relational database architecture managed via Prisma, containing 15 distinct models.
-
-### Entity Relationship Diagram (ERD)
+### Entity Relationship Diagram
 
 ```mermaid
 erDiagram
+    Role ||--o{ User : "contains"
+    User ||--o{ Subject : "manages"
     User ||--o{ Exam : "creates"
     User ||--o{ StudentExam : "takes"
-    User }|--|| Role : "has"
+    User ||--o{ Notification : "reads"
+    User ||--o{ ActivityLog : "logs"
+    User ||--o{ UserSubscription : "buys"
+    
+    Subject ||--o{ Exam : "has"
+    
     Exam ||--o{ Question : "contains"
     Exam ||--o{ StudentExam : "enrolls"
-    Question ||--o{ Choice : "has options"
-    StudentExam ||--o{ Answer : "submits"
-    StudentExam ||--o{ Violation : "triggers"
-    StudentExam ||--|| AiAnalysis : "receives"
-
-    User {
-        String id PK
-        String email UK
-        String password
-        Int roleId FK
-    }
-    Exam {
-        Int id PK
-        String title
-        String accessCode UK
-        String examStatus
-        String teacherId FK
-    }
-    StudentExam {
-        String id PK
-        String studentId FK
-        Int examId FK
-        Decimal score
-        String examStatus
-    }
-    Violation {
-        BigInt id PK
-        String studentExamId FK
-        String violationType
-        DateTime timestamp
-    }
-```
-
-### Key Models & Relationships
-*   **User & Role (1:M):** Users are assigned specific roles (Admin, Teacher, Student) determining their dashboard access.
-*   **Exam & Question (1:M):** An exam acts as a container for multiple questions.
-*   **Exam & StudentExam (1:M):** Represents the enrollment and state of a student taking a specific exam.
-*   **StudentExam & Violation (1:M):** Tracks individual infractions (e.g., `looking_away`, `tab_switch`) linked to a specific exam attempt.
-*   **StudentExam & AiAnalysis (1:1):** Stores the final summary verdict generated by Gemini AI upon exam completion.
-
-### Constraints
-*   `accessCode` in the `Exam` model is `UNIQUE` to prevent enrollment collisions.
-*   Foreign keys utilize referential integrity to ensure `Violations` cannot exist without a valid `StudentExam`.
-
----
-
-## 10. Authentication System
-
-The application utilizes a custom JWT-based authentication system backed by bcrypt password hashing, bypassing NextAuth for granular control.
-
-### Security Mechanisms
-1.  **bcrypt Hashing:** Passwords are hashed with 12 salt rounds before database insertion.
-2.  **JWT (JSON Web Tokens):** Issued upon successful login containing non-sensitive payload (`userId`, `role`, `email`).
-3.  **HTTP-Only Cookies:** Tokens are stored in secure cookies (`ps_session`) that are inaccessible to client-side JavaScript, mitigating XSS attacks.
-4.  **Google OAuth:** Utilizes `@react-oauth/google` to exchange Google credentials for internal JWT sessions.
-
-### Login Flow Sequence
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as /api/auth/login
-    participant DB as NeonDB
     
-    Client->>API: POST /login {email, password}
-    API->>DB: SELECT * FROM User WHERE email = ?
-    DB-->>API: Returns User (with hash)
-    API->>API: bcrypt.compare(password, hash)
-    alt Invalid
-        API-->>Client: 401 Unauthorized
-    else Valid
-        API->>API: jwt.sign(payload, secret)
-        API->>Client: 200 OK + Set-Cookie (HttpOnly)
-        Client->>Client: Redirect to /dashboard/{role}
-    end
+    Question ||--o{ Choice : "has options"
+    Question ||--o{ Answer : "submits"
+    
+    StudentExam ||--o{ Answer : "stores"
+    StudentExam ||--o{ Violation : "triggers"
+    StudentExam ||--|| AiAnalysis : "analyzes"
+    
+    Violation ||--o{ EvidenceFile : "proves"
+    SubscriptionPlan ||--o{ UserSubscription : "defines"
+    UserSubscription ||--o{ Payment : "charges"
 ```
+
+### Core Database Model Directory
+The model fields correspond to [schema.prisma](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/prisma/schema.prisma):
+1.  **Role:** Defines system access (`student`, `teacher`, `admin`).
+2.  **User:** Stores secure credentials, Google OAuth sub-keys, and status strings (`active`, `suspended`).
+3.  **Subject:** Represents a course managed by a teacher (e.g., CS101).
+4.  **Exam:** Contains access codes, duration parameters, passing score limits, and draft/active status metrics.
+5.  **Question & Choice:** Standard structures for multiple-choice quiz questions.
+6.  **StudentExam:** Main junction table tracking student progress, start/end timestamps, final grades, and overall AI verdicts.
+7.  **Answer:** Records choices made by students for each question in an exam attempt.
+8.  **Violation:** Stores raw metrics for an infraction (type, duration, confidence, timestamp).
+9.  **EvidenceFile:** Stores files (e.g., screenshots) validating a recorded violation.
+10. **AiAnalysis:** Saves the final, detailed Gemini-generated summary review containing risk levels (`low`, `medium`, `high`) and natural language rationale.
+11. **Notification:** Handles in-app notifications for users.
+12. **ActivityLog:** Audit log recording system events, administrative changes, and user login IP addresses.
+13. **SubscriptionPlan & UserSubscription:** Configures subscription levels (e.g., Free vs. Premium tiers).
+14. **Payment:** Tracks transaction references and payment status configurations.
+15. **Setting:** System settings storage (`strict_ai_enforcement`, `max_violations_before_lock`).
 
 ---
 
-## 11. API Reference
+## 13. Functional Requirements
 
-The system exposes RESTful endpoints via Next.js API Routes.
+### 13.1 Student Portal Functions
+*   **Authentication:** Access accounts using standard credentials or secure Google Sign-In.
+*   **Exam Access:** Enlist in an examination by providing a valid, teacher-provided 7-digit access code (e.g., `PS-8821`).
+*   **Environment Check:** Enforce a hardware permissions wizard confirming webcam stream accessibility before starting.
+*   **Secure Testing Interface:**
+    *   Lock down copy/paste, right-clicks, and text selection.
+    *   Prompt warning dialogs upon visibility-state losses (tab-switches).
+    *   Submit the exam automatically if the student reaches 3 violations.
 
-| Endpoint | Method | Role | Description | Payload / Query |
+### 13.2 Teacher Portal Functions
+*   **Exam Builder:** Create and customize exam parameters (time limits, point distributions, shuffling options).
+*   **AI Question Generator:** Auto-create multiple-choice exams by sending a text topic or a PDF/image syllabus file directly to Gemini.
+*   **Live Monitor Command Center:**
+    *   Observe a live grid of student webcam snapshots that refreshes every 3 seconds.
+    *   Receive instant, flashing alerts when students commit infractions.
+*   **Integrity Reports:** Inspect students' final AI summaries, complete with violation histories, confidence scores, and risk ratings.
+
+### 13.3 Administrator Portal Functions
+*   **User Management:** Central list of all registered accounts. Ability to suspend users (e.g., students caught cheating).
+*   **Auditing:** Review chronological IP logs of all exams created, login events, and database actions.
+
+---
+
+## 14. Non-Functional Requirements
+
+### 14.1 Performance & Latency
+*   **WebSocket Propagation:** Pusher event alerts must reach the client monitor in under $1.5\text{ seconds}$.
+*   **Snapshot Polling Cycle:** Server-side snapshot updates must load on the teacher dashboard grid in under $3.0\text{ seconds}$ average.
+*   **API Response Time:** Authentication and exam status endpoints must resolve in under $150\text{ms}$.
+
+### 14.2 Reliability & Fault Tolerance
+*   **Fail-Open AI Policy:** If the Gemini Vision API experiences an outage, rate limit, or network block, the student's exam must proceed uninterrupted. The system will skip AI analysis for that interval and log no visual violations, preventing unfair student penalization.
+*   **Stateless Recovery:** If the client browser crashes, the student can log back in and resume the exam within the remaining time limit, keeping their previous answers intact in the database.
+
+### 14.3 Accessibility
+*   The exam user interface must use high-contrast color palettes and support keyboard navigation for selecting answers.
+
+---
+
+## 15. Security and Privacy Plan
+
+### 15.1 Authentication and Sessions
+*   **Password Hashing:** Implemented with `bcryptjs` using 12 salt rounds inside [auth.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/lib/auth.ts).
+*   **Session Storage:** Stateless JWT session cookies named `ps_session` set with the following security attributes:
+    *   `HttpOnly`: Inaccessible to client-side scripts, protecting sessions against Cross-Site Scripting (XSS).
+    *   `Secure`: Enforced to only transmit over encrypted HTTPS connections.
+    *   `SameSite=Lax`: Standard CSRF protection for cross-site cookie transmission.
+
+### 15.2 Database Security
+*   **SQL Injection Prevention:** Implemented via the Prisma ORM, which automatically parameterizes all queries.
+*   **Role-Based Access Control (RBAC):** Middleware checks session JWT claims to enforce server-side API restrictions (e.g., student role cannot call teacher/admin routes).
+
+### 15.3 Webcam Data Privacy
+*   **No Video Streaming Storage:** To protect privacy and control database costs, ProctorShield AI does not save long video recordings to server storage.
+*   **Transient Snapshots:** Webcam images are kept in server memory (`globalThis.Map`) for live monitoring and automatically deleted after 30 seconds.
+*   **Violation Evidence:** Only images associated with an explicit violation are persisted to cloud storage. This reduces security exposure and simplifies GDPR and FERPA educational compliance.
+
+---
+
+## 16. AI Integration Plan
+
+### 16.1 Vision Proctoring Pipeline
+The visual proctoring system relies on a serverless proxy pipeline routing base64-encoded JPEGs to the Google Gemini API.
+
+```
+  Student Webcam      Next.js Server Proxy       Google Gemini API
+  ┌────────────┐      ┌──────────────────┐      ┌──────────────────┐
+  │ 320x240    │      │ Strip base64     │      │ Parse image &    │
+  │ JPEG frame ├─────►│ prefix & format  ├─────►│ run proctoring   │
+  │ every 20s  │      │ system prompt    │      │ system prompt    │
+  └────────────┘      └────────┬─────────┘      └────────┬─────────┘
+                               │                         │
+                               │  JSON Violation Array   │
+                               ◄─────────────────────────┘
+```
+
+#### The Prompt Design
+The payload is routed to model `gemini-2.0-flash` in [route.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/app/api/live/analyze/route.ts) with a system prompt instructing the model to return a structured JSON array containing only the following violation keys:
+*   `no_face`: No face is present in the frame.
+*   `multiple_faces`: Multiple people are visible.
+*   `looking_away`: Gaze is significantly turned off-screen.
+*   `device_detected`: Cellphone, tablet, or secondary monitor is in view.
+
+```typescript
+const response = await ai.models.generateContent({
+  model: "gemini-2.0-flash",
+  contents: [
+    { inlineData: { mimeType: "image/jpeg", data: base64Data } },
+    { text: "System prompt instructions for violation logging..." }
+  ]
+});
+```
+
+To limit costs and API rate limits, the proctoring analysis executes at 20-second intervals per student.
+
+### 16.2 AI Exam Generation
+Teachers can use the exam generation utility in [create/route.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/app/api/ai/create/route.ts):
+*   **Inputs:** Supports text topics or base64-encoded PDF/syllabus screenshots.
+*   **API Model:** Utilizes `gemini-2.5-flash` with the API configuration `responseMimeType: "application/json"`.
+*   **Output:** Returns a structured list of multiple-choice questions matching this schema:
+    ```json
+    [
+      {
+        "questionText": "What is...",
+        "choices": [
+          { "choiceText": "Option A", "isCorrect": false },
+          { "choiceText": "Option B", "isCorrect": true }
+        ]
+      }
+    ]
+    ```
+
+---
+
+## 17. Risk Management Plan
+
+| Risk Description | Category | Impact | Likelihood | Mitigation Plan |
 | :--- | :--- | :--- | :--- | :--- |
-| `/api/auth/login` | POST | Public | Authenticates user and sets session cookie. | `{ email, password, role }` |
-| `/api/auth/register` | POST | Public | Creates a new user account. | `{ fullName, email, password, role }` |
-| `/api/auth/google` | POST | Public | Authenticates via Google credential token. | `{ credential, role }` |
-| `/api/auth/logout` | POST | Any | Clears the `ps_session` cookie. | None |
-| `/api/auth/session` | GET | Any | Returns current decoded JWT payload. | None |
-| `/api/exams` | GET | Any | Lists exams based on user role. | None |
-| `/api/exams` | POST | Teacher | Creates a new exam and generates Access Code. | `{ title, subjectName, duration }` |
-| `/api/exams/join` | POST | Student | Enrolls student in exam via code. | `{ accessCode }` |
-| `/api/exams/[id]` | PUT | Teacher | Updates exam status (e.g., draft to active). | `{ examStatus }` |
-| `/api/live/join` | POST | Student | Broadcasts 'student-joined' via Pusher. | `{ examId, examTitle }` |
-| `/api/live/snapshot` | POST | Student | Uploads current webcam frame to server. | `{ snapshot (base64) }` |
-| `/api/live/snapshot` | GET | Teacher | Polls active student snapshots. | `?examId=123` |
-| `/api/live/analyze` | POST | Student | Sends frame to Gemini Vision for cheating check. | `{ snapshot (base64) }` |
-| `/api/live/violation` | POST | Student | Records violation and broadcasts alert. | `{ examId, violationType }` |
+| **Gemini API Rate Limiting** | Technical | High | Medium | Execute AI proctoring checks every 20 seconds instead of continuous streams. Fall back to a "fail-open" state if rate limits (HTTP 429) are reached. |
+| **Webcam False Positives** | Operational | High | Low | Instruct Gemini to only report clear, high-confidence violations. Allow teachers to manually review the image logs to override incorrect AI assessments. |
+| **Client-Side Bypass (OS Level)** | Technical | Medium | High | Recommend deploying the student portal inside a locked browser utility or Electron kiosk app in future phases to block OS-level tools like Snipping Tool. |
+| **Connection Disruptions** | Environmental | High | Medium | Implement local caching of inputs. If connection drops, allow students to reconnect and resume the exam within the remaining time. |
+| **Data Privacy Violations** | Compliance | Critical | Low | Minimize data storage. Webcam snapshots are kept in-memory and deleted after 30 seconds unless a violation is detected. |
 
 ---
 
-## 12. Frontend Pages Documentation
+## 18. Testing and QA Plan
 
-### Teacher Dashboard (`/dashboard/teacher`)
-*   **Overview (`/`):** Displays aggregated statistics (Total Exams, Active Students).
-*   **Manage Exams (`/exams`):** Interface for creating assessments. Features a modal to toggle exam availability and copy joining codes.
-*   **Live Monitor (`/monitor`):** The core proctoring command center. Renders a responsive grid of student webcams updating in real-time, accompanied by live violation alert toasts.
-
-### Student Dashboard (`/dashboard/student`)
-*   **Overview (`/`):** Displays upcoming assessments and historical performance.
-*   **My Exams (`/exams`):** Allows students to input a Teacher-provided Access Code to enroll and launch the secure testing environment.
-*   **Quiz Room (`/quiz/[id]`):** The secure exam interface. Enforces fullscreen, prevents tab switching, blocks keyboard shortcuts, and renders the webcam preview alongside AI diagnostic health indicators.
-
-### Admin Dashboard (`/dashboard/admin`)
-*   **Overview (`/`):** System-wide metrics.
-*   **User Management (`/users`):** Ability to suspend accounts or reset passwords.
-*   **System Logs (`/logs`):** Audit trail of all login and exam creation events for security compliance.
-
----
-
-## 13. AI Proctoring System
-
-The AI proctoring engine leverages Google's **Gemini 2.0 Flash Vision API** to analyze visual data without requiring heavy client-side machine learning models (like TensorFlow.js).
-
-### Workflow
-1.  **Capture:** The client captures a 320x240 JPEG frame from the `<video>` element every 20 seconds.
-2.  **Transmission:** The base64 image is sent to `/api/live/analyze`.
-3.  **Prompt Engineering:** The server strips metadata and sends the image to Gemini with a highly constrained system prompt instructing it to identify exactly four states: `no_face`, `multiple_faces`, `looking_away`, `device_detected`.
-4.  **Parsing:** Gemini responds with a JSON array string (e.g., `["looking_away", "device_detected"]`).
-5.  **Action:** The server parses the response; if violations exist, it triggers the violation logging pipeline.
-
-### Detection Pipeline Diagram
-
-```mermaid
-sequenceDiagram
-    participant Canvas as Browser Canvas
-    participant API as Next.js API
-    participant Gemini as Gemini Vision API
-    participant DB as Prisma/NeonDB
-
-    Canvas->>API: POST Base64 Frame (every 20s)
-    API->>Gemini: Request: Image + "Find cheating" Prompt
-    Gemini-->>API: Response: `["device_detected"]`
-    API-->>Canvas: { violations: ["device_detected"] }
-    Canvas->>API: POST /api/live/violation
-    API->>DB: INSERT INTO Violation
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │                       Testing Workflow                      │
+  ├──────────────────┬───────────────────┬──────────────────────┤
+  │   Unit Tests     │ Integration Tests │  Security Auditing   │
+  ├──────────────────┼───────────────────┼──────────────────────┤
+  │ - JWT signing    │ - Join Exam Flow  │ - XSS payload tests  │
+  │ - bcrypt hash    │ - MCQ Save Flow   │ - Middleware bypass  │
+  │ - Prompt schemas │ - Snapshot Poll   │ - Browser lockout    │
+  └──────────────────┴───────────────────┴──────────────────────┘
 ```
 
----
+### 18.1 Unit Testing
+*   Verify key utility files including [auth.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/lib/auth.ts) and [prisma.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/lib/prisma.ts).
+*   Test JWT signature verification, payload structures, and hashing behavior.
 
-## 14. Real-Time Monitoring Architecture
+### 18.2 Integration Testing
+*   Verify the exam lifecycle: Student joins via access code $\rightarrow$ starts camera $\rightarrow$ answers questions $\rightarrow$ submits responses $\rightarrow$ logs score.
+*   Simulate concurrent student snapshot uploads to test database performance and server memory stability.
 
-Designing the real-time monitoring system required overcoming strict architectural constraints related to WebSocket payload limits.
-
-### The Pusher Payload Bottleneck
-Initially, webcam frames (base64 strings) were broadcast directly via Pusher WebSockets. However, Pusher enforces a strict **10KB payload limit** per message. Base64 JPEGs (even compressed) average 15KB - 30KB. This resulted in silent message drops and `HTTP 413 Payload Too Large` errors.
-
-### The Hybrid Solution
-To bypass WebSocket limits while maintaining real-time performance, the system utilizes a dual-transport architecture:
-
-1.  **REST Polling (Heavy Data):** Students HTTP POST snapshots to `/api/live/snapshot`, which stores them in an ephemeral server-side Node.js `globalThis.Map`. Teachers HTTP GET poll this endpoint every 3 seconds to fetch the image grid.
-2.  **Pusher WebSockets (Light Data):** Reserved strictly for instantaneous alerts (`student-joined`, `new-violation`). These payloads contain only strings and IDs (< 1KB), ensuring instantaneous, error-free delivery.
+### 18.3 AI Integrity & Bypass Testing
+*   **Infraction Testing:** Actively test the AI proctoring system with simulated infractions (holding up phones, hiding faces, looking away) to verify Gemini's detection.
+*   **Bypass Testing:** Attempt bypass techniques (e.g., right-clicking, using F12 developer tools, taking screenshots) to confirm browser lockouts work as expected.
 
 ---
 
-## 15. Anti-Cheat System
+## 19. Deployment Plan
 
-The system employs a defense-in-depth approach, combining deterministic browser constraints with probabilistic AI analysis.
+### 19.1 Hosting Stack
+*   **Frontend & API Runtime:** Vercel serverless platform.
+*   **Database:** Neon serverless PostgreSQL instance.
+*   **WebSockets:** Pusher Channels cluster.
 
-### Browser-Level Security (Deterministic)
-*   **Visibility API:** Listens to `document.visibilitychange`. If the user switches tabs or minimizes the window, a `tab_switch` violation is instantly logged.
-*   **Clipboard Blocking:** `copy`, `cut`, and `paste` events are intercepted via `e.preventDefault()`.
-*   **Context Menu Blocking:** Right-click is disabled to prevent inspecting elements or copying text.
-*   **Keyboard Interception:** `keydown` events are monitored. Key combinations like `PrintScreen`, `F12`, `Ctrl+C`, `Ctrl+V`, and `Ctrl+P` are neutralized and logged as `attempted_screenshot`.
-
-### AI-Level Detection (Probabilistic)
-Driven by Gemini Vision, checking specifically for:
-*   **No Face:** Examinee has left the testing area.
-*   **Multiple Faces:** Unauthorized assistance is present.
-*   **Looking Away:** Gaze is fixed off-screen (e.g., reading notes).
-*   **Device Detected:** Cellphones, tablets, or secondary monitors are visible.
-
-### 3-Strike Auto-Termination
-The client maintains a `violationCountRef`. 
-*   **Strike 1 & 2:** Triggers aggressive on-screen warnings.
-*   **Strike 3:** Automatically submits the exam, logs a final failure state, and forcefully redirects the user back to the dashboard.
-
----
-
-## 16. Environment Configuration
-
-The application requires specific environment variables to function correctly.
-
-| Variable Name | Purpose | Example Value |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | NeonDB connection string. | `postgresql://user:pass@host/db?sslmode=verify-full` |
-| `NEXTAUTH_SECRET` | Secret key used to sign JWT session cookies. | `super-secret-key-2025` |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Identifier for Google OAuth Login. | `12345.apps.googleusercontent.com` |
-| `GEMINI_API_KEY` | Authentication for Google Gemini API. | `AIzaSyB...` |
-| `PUSHER_APP_ID` | Pusher Channels application ID. | `1819234` |
-| `NEXT_PUBLIC_PUSHER_KEY` | Public key for client-side Pusher connection. | `a1b2c3d4` |
-| `PUSHER_SECRET` | Private key for server-side event broadcasting. | `x9y8z7` |
-| `NEXT_PUBLIC_PUSHER_CLUSTER` | Datacenter region for Pusher. | `ap1` |
-
----
-
-## 17. Setup and Installation Guide
-
-Follow these steps to deploy the system in a local development environment.
-
-**Step 1: Clone the Repository**
-```bash
-git clone https://github.com/yourusername/proctorshieldai.git
-cd proctorshieldai
+### 19.2 Continuous Integration & Continuous Deployment (CI/CD)
+```
+  Local Git Push ────► GitHub Actions Run ────► Vercel Auto-deploy
+  (main branch)        - Lint & Type Check      - Live Production
+                       - Run Prisma format
 ```
 
-**Step 2: Install Dependencies**
-```bash
-npm install
-```
-
-**Step 3: Configure Environment**
-Create a `.env` file in the root directory and populate it with the variables outlined in Section 16.
-
-**Step 4: Database Migration & Seeding**
-Push the Prisma schema to the PostgreSQL database and populate it with demo accounts.
-```bash
-npx prisma db push
-npm run db:seed
-```
-
-**Step 5: Run Development Server**
-```bash
-npm run dev
-```
-Navigate to `http://localhost:3000` in a web browser.
+*   **GitHub Actions:** Automatically runs code style checks and checks for syntax compilation issues on code push.
+*   **Vercel Build:** Runs Next.js build scripts and deploys preview links for feature branches, and updates production upon merge to `main`.
 
 ---
 
-## 18. Demo Accounts
-
-The database seed script generates the following pre-configured accounts for testing purposes:
-
-| Role | Email | Password |
-| :--- | :--- | :--- |
-| **Admin** | `admin@proctorshield.com` | `admin123` |
-| **Teacher** | `cynth@proctorshield.com` | `password123` |
-| **Student** | `christian@proctorshield.com` | `password123` |
+## 20. Maintenance Plan
+*   **Database Archiving:** Monthly scripts migrate old logs and violation records older than 90 days to cold storage, keeping database costs and size under control.
+*   **API Token Rotation:** Rotate Gemini API keys, NextAuth session keys, and Pusher credentials every 90 days.
+*   **Dependency Management:** Monitor npm package updates for next, react, and tailwind to install security patches.
+*   **Error Monitoring:** Monitor error rates on endpoints like `/api/live/analyze` to detect rate limiting or service degradation issues.
 
 ---
 
-## 19. Testing Strategy
+## 21. Timeline and Milestones
 
-*   **Unit Testing:** Core utilities like password hashing (`bcrypt`), JWT signing, and API response formatting were tested in isolation.
-*   **Integration Testing:** End-to-end flows, such as creating an exam, joining via code, and submitting answers, were validated against the database.
-*   **AI Detection Testing:** Evaluated by actively attempting to cheat (holding phones, hiding faces, adding people to the frame) to measure Gemini Vision's accuracy and prompt adherence.
-*   **Browser Security Testing:** Verified by attempting standard bypass techniques (F12, PrintScreen, Alt-Tab) on Chrome, Edge, and Firefox.
-
----
-
-## 20. Security Measures
-
-1.  **Authentication Security:** Stateless JWTs eliminate server-side session hijacking vulnerabilities.
-2.  **Cookie Security:** Tokens are stored with `HttpOnly` and `SameSite=Lax` attributes, immunizing the session against Cross-Site Scripting (XSS).
-3.  **SQL Injection Prevention:** The use of Prisma ORM parametrizes all database queries automatically, preventing SQL injection.
-4.  **Fail-Open AI Policy:** If the Gemini API fails or rate-limits, the system defaults to assuming no violations, preventing unfair student penalization due to network errors.
-
----
-
-## 21. Known Limitations
-
-As a thesis/capstone prototype, the system exhibits several accepted limitations:
-1.  **AI Rate Limits (Cost):** Google Gemini free tier restricts usage to ~15 requests per minute. Consequently, AI analysis is restricted to 20-second intervals per student to prevent 429 Resource Exhausted errors.
-2.  **Snapshot vs. Streaming:** Teachers view a grid of snapshots updating every 3 seconds rather than smooth 30fps video. Implementing true WebRTC was deemed out of scope due to STUN/TURN server requirements.
-3.  **OS-Level Bypasses:** While JavaScript successfully blocks `PrintScreen`, it cannot block OS-level tools like the Windows Snipping Tool (Win+Shift+S) or hardware capture cards.
-4.  **Ephemeral Memory Storage:** Server-side snapshots are stored in memory (`globalThis.Map`). If the Next.js process restarts, active snapshots are cleared (requiring a 3-second wait to regenerate).
+### Milestone Schedule
+*   **Milestone 1 (Sprint 1 - Weeks 1-2): Proposal & Schema Design**
+    *   *Deliverables:* Finalized SPMP, completed database model schemas, database initialization scripts.
+*   **Milestone 2 (Sprint 2 - Weeks 3-4): Authentication & Exam Creation APIs**
+    *   *Deliverables:* Secure login/registration flows, Google OAuth integration, exam creation wizard, access code generator.
+*   **Milestone 3 (Sprint 3 - Weeks 5-6): Secure Exam Client**
+    *   *Deliverables:* Lockdown exam portal with visibility tracking and keyboard shortcut blocking.
+*   **Milestone 4 (Sprint 4 - Weeks 7-8): AI Proctoring Pipeline**
+    *   *Deliverables:* Base64 upload logic, Gemini Vision integration, violation categorization engine.
+*   **Milestone 5 (Sprint 5 - Weeks 9-10): Teacher Live Monitor**
+    *   *Deliverables:* Real-time dashboard grid showing student snapshots, websocket-based violation warnings.
+*   **Milestone 6 (Sprint 6 - Weeks 11-12): QA & Deployment**
+    *   *Deliverables:* Security auditing, load testing, production deployment on Vercel.
 
 ---
 
-## 22. Future Improvements
+## 22. Cost Estimation
+This budget outlines estimated monthly operational costs for running ProctorShield AI:
 
-1.  **Redis Integration:** Migrating snapshot storage from in-memory maps to a Redis cache to ensure persistence across serverless edge functions.
-2.  **WebRTC Video Streaming:** Upgrading the live monitor from 3-second snapshot polling to peer-to-peer WebRTC video streaming.
-3.  **Audio Monitoring:** Integrating microphone analysis to detect whispering or background conversations.
-4.  **Secure Browser App:** Packaging the frontend in an Electron application to enforce OS-level lockdown (kiosk mode), completely mitigating dual-monitor or external application cheating.
+| Service | Category | Metric | Estimated Cost (PHP/mo) | Justification |
+| :--- | :--- | :--- | :--- | :--- |
+| **Vercel Hosting** | Compute | Serverless API runtime | ₱1,150.00 | Professional tier for custom domains and serverless execution timeouts. |
+| **Neon PostgreSQL** | Database | Storage and compute | ₱850.00 | Serverless DB pricing based on active connection load. |
+| **Pusher Channels** | WebSockets | Daily WebSocket messages | ₱2,800.00 | Startup tier allowing up to 1 million messages/day and 1,000 concurrent sessions. |
+| **Google Gemini API** | AI | Tokens per image request | ₱5,700.00 | Calculated for 100 students completing four 1-hour exams monthly (~20s intervals). |
+| **Domain Registration**| Networking| Yearly domain license | ₱80.00 | Standard .edu or .com domain registration. |
+| **Total Monthly Cost** | | | **₱10,580.00** | Budget for a departmental proctoring setup. |
 
 ---
 
-## 23. Conclusion
+## 23. Team Responsibilities
 
-**ProctorShield AI** successfully demonstrates the integration of modern web technologies and advanced multimodal AI to create a robust, accessible online examination platform. By combining strict deterministic browser controls with probabilistic AI analysis, the system provides a comprehensive deterrent against academic dishonesty. The architectural shift to hybrid REST-polling and WebSocket broadcasting ensures stability at scale, making this project a viable blueprint for next-generation educational software.
+### Christian Glenn Pacaldo — Lead Full-Stack Architect
+*   **Focus:** Next.js application routes, database model setup, page navigation.
+*   **Responsibilities:** Prisma integration, backend APIs, page rendering, session configurations.
+
+### Team Member A — Security & Constraints Specialist
+*   **Focus:** Browser security constraints.
+*   **Responsibilities:** Custom JavaScript event listeners to disable copy/paste, detect tab switching, and block shortcuts.
+
+### Team Member B — AI & Real-Time Engineer
+*   **Focus:** Google Gemini integrations, Pusher websocket setups.
+*   **Responsibilities:** Base64 conversion pipelines, prompt engineering, live snapshot monitoring.
+
+### Team Member C — Quality Assurance Analyst
+*   **Focus:** Testing and deployment pipelines.
+*   **Responsibilities:** Test script execution, performance audits, Vercel deployments.
 
 ---
+
+## 24. Conclusion & Appendices
+
+### Conclusion
+**ProctorShield AI** provides an accessible, cost-effective, and robust remote proctoring solution by combining browser-level security checks with Gemini Vision analysis. The system's hybrid architecture bypasses websocket payload limits to deliver real-time webcam monitoring without complex client-side setups, proving the viability of web-based proctoring for modern education.
+
+---
+
+### Appendix A: Pre-Configured Demo Accounts
+The following test credentials can be generated using [seed.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/prisma/seed.ts):
+
+| System Role | Username / Email | Password | Access Privileges |
+| :--- | :--- | :--- | :--- |
+| **System Admin** | `admin@proctorshield.ai` | `admin123` | Total platform access; logs; user suspensions. |
+| **Teacher** | `teacher@demo.com` | `teacher123` | Exam creation; live monitoring; AI reports. |
+| **Student** | `student@demo.com` | `student123` | Join exams; submit answers; view grades. |
+
+---
+
+### Appendix B: Simulated Access Codes
+Use these codes within the student portal to join mock exam sessions:
+*   `PS-8821`: CS101 Midterm exam (Status: Active)
+*   `PS-7412`: CS101 Quiz 2 on arrays and loops (Status: Completed)
+*   `PS-3047`: Technical Writing Finals (Status: Draft)
+*   `PS-5519`: Calculus II Quiz 3 (Status: Draft)

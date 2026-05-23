@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { examId, violationType, confidenceScore } = await req.json();
+    const { examId, violationType, confidenceScore, snapshot } = await req.json();
 
     if (!examId || !violationType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         confidenceScore: confidenceScore || 100,
         timestamp: new Date(),
         durationSeconds: 5,
+        screenshotPath: snapshot || null,
       },
     });
 

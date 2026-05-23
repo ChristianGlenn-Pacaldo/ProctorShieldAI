@@ -1,9 +1,9 @@
-import DashboardShell from "@/components/dashboard-shell";
 import EvidenceContent from "./content";
-export default function Page() {
-  return (
-    <DashboardShell role="teacher" userName="Sir Ramos" userAvatar="SR" avatarColor="from-violet-600 to-indigo-600">
-      <EvidenceContent />
-    </DashboardShell>
-  );
+import { getSession } from "@/lib/auth";
+
+export default async function Page() {
+  const session = await getSession();
+  const userId = session?.userId || "unknown";
+
+  return <EvidenceContent teacherId={userId} />;
 }

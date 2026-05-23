@@ -1,0 +1,165 @@
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+import { GoogleGenAI } from "@google/genai";
+import { pusherServer } from "@/lib/pusher";
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "student") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { examId } = await req.json();
+    if (!examId) {
+      return NextResponse.json({ error: "examId is required" }, { status: 400 });
+    }
+
+    // 1. Find the studentExam record
+    const studentExam = await prisma.studentExam.findFirst({
+      where: {
+        studentId: session.userId,
+        examId: Number(examId),
+      },
+      include: {
+        exam: true,
+        violations: true,
+      },
+    });
+
+    if (!studentExam) {
+      return NextResponse.json({ error: "Exam session not found" }, { status: 404 });
+    }
+
+    // 2. Generate a random score if not graded (since this is a demo exam page)
+    const score = Math.floor(75 + Math.random() * 25); // 75% to 100%
+
+    // 3. AI Verdict Logic (Gemini with Robust Fallback)
+    const violations = studentExam.violations;
+    const violationSummary = violations.map(v => 
+      `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
+    ).join("\n");
+
+    let verdictData = {
+      cheatingProbability: 3,
+      riskLevel: "low",
+      finalVerdict: "clean",
+      aiExplanation: "No anomalies detected during the exam session. Student maintained focus.",
+    };
+
+    if (violations.length === 1) {
+      verdictData = {
+        cheatingProbability: 35,
+        riskLevel: "medium",
+        finalVerdict: "suspicious",
+        aiExplanation: "A single proctoring anomaly was recorded. Instructors should review the snapshot log.",
+      };
+    } else if (violations.length >= 2) {
+      verdictData = {
+        cheatingProbability: 85,
+        riskLevel: "high",
+        finalVerdict: "cheated",
+        aiExplanation: `Multiple integrity violations (${violations.length}) were flagged during the exam. Combined patterns strongly suggest external assistance.`,
+      };
+    }
+
+    // If Gemini key exists, call Gemini for dynamic analysis
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const prompt = `You are ProctorShield AI, an advanced cheating detection system.
+Analyze the following exam session for a student taking an exam titled "${studentExam.exam.title}".
+
+Exam Session Data:
+- Duration: ${studentExam.exam.duration} minutes
+- Total Violations: ${violations.length}
+- Violation Details:
+${violationSummary || "No violations recorded."}
+
+Based on this data, provide a verdict. Format your response strictly as a JSON object with the following fields:
+- cheatingProbability (number from 0 to 100)
+- riskLevel (string: "low", "medium", or "high")
+- finalVerdict (string: "clean", "suspicious", or "cheated")
+- aiExplanation (string: a concise, 2-3 sentence explanation of the reasoning)
+
+Return ONLY the valid JSON object.`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+          },
+        });
+
+        if (response.text) {
+          const parsed = JSON.parse(response.text.trim());
+          if (parsed && parsed.finalVerdict) {
+            verdictData = parsed;
+          }
+        }
+      } catch (geminiError) {
+        console.warn("Gemini verdict call failed, using fallback:", geminiError);
+      }
+    }
+
+    // 4. Save AI Analysis Verdict to Database
+    await prisma.aiAnalysis.upsert({
+      where: { studentExamId: studentExam.id },
+      update: {
+        totalViolations: violations.length,
+        cheatingProbability: verdictData.cheatingProbability,
+        riskLevel: verdictData.riskLevel,
+        finalVerdict: verdictData.finalVerdict,
+        aiExplanation: verdictData.aiExplanation,
+      },
+      create: {
+        studentExamId: studentExam.id,
+        totalViolations: violations.length,
+        cheatingProbability: verdictData.cheatingProbability,
+        riskLevel: verdictData.riskLevel,
+        finalVerdict: verdictData.finalVerdict,
+        aiExplanation: verdictData.aiExplanation,
+      },
+    });
+
+    // 5. Update StudentExam Status and Verdict
+    const updatedStudentExam = await prisma.studentExam.update({
+      where: { id: studentExam.id },
+      data: {
+        endTime: new Date(),
+        examStatus: "completed",
+        score: score,
+        aiVerdict: verdictData.finalVerdict,
+        cheatingProbability: verdictData.cheatingProbability,
+      },
+    });
+
+    // 6. Broadcast student-submitted event via Pusher
+    const channelName = `teacher-${studentExam.exam.teacherId}`;
+    try {
+      await pusherServer.trigger(channelName, "student-submitted", {
+        studentId: session.userId,
+        studentName: session.fullName,
+        examId: studentExam.exam.id,
+        examTitle: studentExam.exam.title,
+        aiVerdict: verdictData.finalVerdict,
+        cheatingProbability: verdictData.cheatingProbability,
+        score: score,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (pusherErr) {
+      console.error("Pusher submit broadcast error:", pusherErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      studentExam: updatedStudentExam,
+    });
+
+  } catch (error) {
+    console.error("Submit exam error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

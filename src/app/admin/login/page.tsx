@@ -6,13 +6,37 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          role: "admin",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Invalid admin credentials");
+        setIsLoading(false);
+        return;
+      }
+
       window.location.href = "/dashboard/admin";
-    }, 1500);
+    } catch {
+      setError("Network error. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -27,6 +51,12 @@ export default function AdminLoginPage() {
             Restricted to authorized system administrators only
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 animate-fade-in text-center">
+            ⚠ {error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -67,11 +97,6 @@ export default function AdminLoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 p-3 rounded-xl bg-red-600/[0.07] border border-red-500/15 text-center">
-          <p className="text-[11px] text-white/35 leading-relaxed">
-            <strong className="text-white/50">Demo:</strong> admin@proctorshield.ai / admin123
-          </p>
-        </div>
       </div>
     </div>
   );
