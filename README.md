@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ ProctorShield AI — AI-Powered Proctoring System
 
-## Getting Started
+ProctorShield AI is a modern Next.js application that provides real-time AI-powered exam monitoring, webcam snapshot logs, and automated cheating analysis reports using Gemini Vision AI.
 
-First, run the development server:
+---
 
+## 🚀 Getting Started (Classmate Setup Guide)
+
+Follow these steps to set up and run the project locally on your machine:
+
+### 1. Clone & Install Dependencies
+First, clone the repository and navigate into the project directory:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/ChristianGlenn-Pacaldo/ProctorShieldAI.git
+cd ProctorShieldAI
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Install the required npm packages:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2. Configure Environment Variables
+Environment files (`.env`) are ignored by Git for security. You must create your own:
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+   *(On Windows Command Prompt, run: `copy .env.example .env`)*
+   *(On Windows PowerShell, run: `copy .env.example .env`)*
+2. Open the new `.env` file and verify the variables.
+3. **Important:** Add a valid Gemini API key to `GEMINI_API_KEY=""`. Get a free key from [Google AI Studio](https://aistudio.google.com/).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Initialize the Database
+This application uses **Prisma ORM** with **PostgreSQL**. To set up your database schema and create default roles (student, teacher, admin) and demo accounts:
 
-## Learn More
+1. Generate the Prisma client:
+   ```bash
+   npx prisma generate
+   ```
+2. Sync the database schema (creates the database tables):
+   ```bash
+   npx prisma db push
+   ```
+3. Seed the database (essential for creating default roles and demo users):
+   ```bash
+   npm run db:seed
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Start the Application
+Now you can start the development server:
+```bash
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 👥 Demo Logins (Created during Seeding)
+Once you seed the database, you can log in immediately using these pre-configured accounts:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+* **Student Portal:**
+  * Email: `student@demo.com`
+  * Password: `student123`
+* **Teacher Portal:**
+  * Email: `teacher@demo.com`
+  * Password: `teacher123`
+* **Admin Portal:**
+  * Email: `admin@proctorshield.ai`
+  * Password: `admin123`
