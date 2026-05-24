@@ -35,6 +35,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid access code. Exam not found." }, { status: 404 });
     }
 
+    if (exam.examStatus === "draft") {
+      return NextResponse.json({ error: "This exam is not yet active." }, { status: 403 });
+    }
+
+    if (exam.examStatus === "ended") {
+      return NextResponse.json({ error: "This exam has already ended and is no longer accepting submissions." }, { status: 403 });
+    }
+
     // Check if the student has already joined this exam
     const existingEnrollment = await prisma.studentExam.findFirst({
       where: {

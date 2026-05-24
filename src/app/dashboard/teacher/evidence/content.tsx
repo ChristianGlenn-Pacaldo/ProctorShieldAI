@@ -19,6 +19,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const fetchEvidence = async () => {
     try {
@@ -97,6 +98,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                   onClick={(event) => {
                     event.stopPropagation();
                     setSelectedEvidence(e);
+                    setIsFullscreen(true);
                   }}
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all ${e.btnClass}`}
                 >
@@ -117,13 +119,23 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
         <div className="p-5 text-center min-h-[300px] flex flex-col justify-between">
           {selectedEvidence ? (
             <div className="space-y-4">
-              <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden border border-[var(--border)] flex items-center justify-center text-white text-sm">
+              <div 
+                className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden border border-[var(--border)] flex items-center justify-center text-white text-sm cursor-pointer group"
+                onClick={() => {
+                  if (selectedEvidence.screenshotPath) setIsFullscreen(true);
+                }}
+              >
                 {selectedEvidence.screenshotPath ? (
-                  <img
-                    src={selectedEvidence.screenshotPath}
-                    alt={`Evidence: ${selectedEvidence.name}`}
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img
+                      src={selectedEvidence.screenshotPath}
+                      alt={`Evidence: ${selectedEvidence.name}`}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="bg-black/60 px-3 py-1.5 rounded-lg text-xs font-bold tracking-widest backdrop-blur-sm">CLICK TO ENLARGE</span>
+                    </div>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-[var(--muted2)]">
                     <Camera className="w-12 h-12" />
@@ -177,6 +189,62 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
           )}
         </div>
       </div>
+      {/* FULLSCREEN REPLAY MODAL */}
+      {isFullscreen && selectedEvidence && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4 lg:p-8"
+          onClick={() => setIsFullscreen(false)}
+        >
+          <div 
+            className="w-full max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col max-h-[95vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a] shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-indigo-400" />
+                  Evidence Replay — {selectedEvidence.name}
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">{selectedEvidence.event}</p>
+              </div>
+              <button 
+                onClick={() => setIsFullscreen(false)} 
+                className="p-2 text-gray-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 bg-black flex items-center justify-center p-4 overflow-hidden relative min-h-[50vh]">
+              {selectedEvidence.screenshotPath ? (
+                <img
+                  src={selectedEvidence.screenshotPath}
+                  alt={`Evidence: ${selectedEvidence.name}`}
+                  className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
+                />
+              ) : (
+                <p className="text-gray-500">No snapshot available</p>
+              )}
+            </div>
+            
+            <div className="p-4 bg-[#0a0a0a] border-t border-gray-800 shrink-0 flex justify-end gap-3">
+              <button 
+                onClick={handleDownload}
+                disabled={!selectedEvidence.screenshotPath}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" /> Download
+              </button>
+              <button 
+                onClick={() => setIsFullscreen(false)} 
+                className="px-5 py-2.5 bg-[#222] hover:bg-[#333] text-white border border-gray-700 rounded-xl font-bold text-sm transition-colors"
+              >
+                Close Replay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

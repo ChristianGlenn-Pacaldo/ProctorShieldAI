@@ -252,17 +252,17 @@ export default function QuizRoom() {
   useEffect(() => {
     if (!hasStarted) return;
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          submitExam();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [hasStarted, submitExam]);
+  }, [hasStarted]);
+
+  // ── Auto Submit on Time Up ──
+  useEffect(() => {
+    if (hasStarted && timeLeft === 0 && !isSubmitting) {
+      submitExam();
+    }
+  }, [hasStarted, timeLeft, isSubmitting, submitExam]);
 
   // ── Anti-Cheat Event Listeners ──
   useEffect(() => {

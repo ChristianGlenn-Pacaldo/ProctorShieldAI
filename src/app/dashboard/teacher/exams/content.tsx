@@ -109,6 +109,44 @@ export default function TeacherExamsPage() {
     }
   };
 
+  const endExam = async (exam: any) => {
+    if (!confirm("Are you sure you want to end this exam? Students will no longer be able to join.")) return;
+    setIsUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/exams/${exam.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examStatus: "ended" })
+      });
+      if (res.ok) {
+        setManageExam({ ...exam, examStatus: "ended" });
+        fetchExams();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const updateExamDuration = async (exam: any, newDuration: string) => {
+    const durationInt = parseInt(newDuration);
+    if (isNaN(durationInt) || durationInt === exam.duration || durationInt < 1) return;
+    try {
+      const res = await fetch(`/api/exams/${exam.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duration: durationInt })
+      });
+      if (res.ok) {
+        setManageExam({ ...exam, duration: durationInt });
+        fetchExams(); // refresh list
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleCapture = () => {
     if (!videoRef.current) return;
     const canvas = document.createElement("canvas");
@@ -336,6 +374,7 @@ export default function TeacherExamsPage() {
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                         e.examStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' : 
+                        e.examStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
                         e.examStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' : 
                         'bg-slate-500/15 text-slate-400'
                       }`}>
@@ -564,16 +603,21 @@ export default function TeacherExamsPage() {
         </div>
       )}
 
-      {/* MANAGE EXAM MODAL */}
       {manageExam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)]">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setManageExam(null)}
+        >
+          <div 
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
               <h2 className="text-lg font-bold text-[var(--ink)]">Manage Exam</h2>
-              <button onClick={() => setManageExam(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
+              <button onClick={() => setManageExam(null)} className="p-2 -mr-2 text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto">
               <div>
                 <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageExam.title}</h3>
                 <p className="text-sm text-[var(--muted)]">{manageExam.subject?.subjectName || "No Subject"}</p>
@@ -603,8 +647,21 @@ export default function TeacherExamsPage() {
                   <div className="text-lg font-semibold text-[var(--ink)]">{manageExam.totalQuestions}</div>
                 </div>
                 <div className="border border-[var(--border)] rounded-xl p-3">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Duration</div>
-                  <div className="text-lg font-semibold text-[var(--ink)]">{manageExam.duration} mins</div>
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase mb-1">Duration (mins)</div>
+                  <input 
+                    type="number" 
+                    min="1"
+                    className="w-full px-2 py-1.5 bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-lg font-semibold text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
+                    defaultValue={manageExam.duration}
+                    onBlur={(e) => updateExamDuration(manageExam, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        updateExamDuration(manageExam, e.currentTarget.value);
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <div className="text-[10px] text-[var(--muted)] mt-1">Press Enter or click away to save</div>
                 </div>
               </div>
 
@@ -641,20 +698,34 @@ export default function TeacherExamsPage() {
                 </div>
               )}
 
-              <div className="pt-2 border-t border-[var(--border)] flex justify-between items-center">
+              <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
                 <div className="text-sm text-[var(--muted)] font-medium">Exam Status:</div>
-                <button
-                  onClick={() => toggleExamStatus(manageExam)}
-                  disabled={isUpdatingStatus}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                    manageExam.examStatus === "active" 
-                      ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
-                      : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                  }`}
-                >
-                  {isUpdatingStatus ? "Updating..." : manageExam.examStatus === "active" ? "Set to Draft" : "Make Active"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleExamStatus(manageExam)}
+                    disabled={isUpdatingStatus || manageExam.examStatus === "ended"}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                      manageExam.examStatus === "active" 
+                        ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
+                        : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                    } disabled:opacity-50`}
+                  >
+                    {isUpdatingStatus ? "Updating..." : manageExam.examStatus === "active" ? "Set to Draft" : manageExam.examStatus === "ended" ? "Ended" : "Make Active"}
+                  </button>
+                  <button
+                    onClick={() => endExam(manageExam)}
+                    disabled={isUpdatingStatus || manageExam.examStatus === "ended"}
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  >
+                    End Exam
+                  </button>
+                </div>
               </div>
+            </div>
+            <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex justify-end">
+              <button onClick={() => setManageExam(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
+                Close
+              </button>
             </div>
           </div>
         </div>

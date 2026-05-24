@@ -68,6 +68,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "You are not enrolled in this exam" }, { status: 403 });
       }
 
+      if (exam.examStatus === "draft") {
+        return NextResponse.json({ error: "This exam is not yet active." }, { status: 403 });
+      }
+
+      if (exam.examStatus === "ended") {
+        return NextResponse.json({ error: "This exam has already ended." }, { status: 403 });
+      }
+
       if (exam.shuffleQuestions) {
         // Shuffle questions deterministically using the student's unique studentExam.id
         questions = shuffleArray(exam.questions, studentExam.id);
@@ -136,6 +144,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id: examId },
       data: {
         examStatus: body.examStatus !== undefined ? body.examStatus : existingExam.examStatus,
+        duration: body.duration !== undefined ? parseInt(body.duration) : existingExam.duration,
       },
     });
 
