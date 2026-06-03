@@ -56,6 +56,8 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
     { type: "Looking Away", count: 0, pct: 0, color: "bg-indigo-500" },
     { type: "Device Detected", count: 0, pct: 0, color: "bg-cyan-500" },
     { type: "Screenshot/Copy", count: 0, pct: 0, color: "bg-rose-500" },
+    { type: "Audio Anomaly", count: 0, pct: 0, color: "bg-orange-500" },
+    { type: "Window Resized", count: 0, pct: 0, color: "bg-yellow-500" },
   ]);
 
   const [recentVerdicts, setRecentVerdicts] = useState<RecentVerdict[]>([]);
@@ -150,6 +152,8 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
           device_detected: "Device Detected",
           phone_detected: "Device Detected",
           attempted_screenshot: "Screenshot/Copy",
+          audio_anomaly: "Audio Anomaly",
+          window_resize: "Window Resized",
         };
 
         const displayType = typeMapping[data.violationType] || "Tab Switching";
@@ -179,6 +183,8 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
             if (data.violationType === "tab_switch") statusText = "⚠ Tab Switch";
             if (data.violationType === "device_detected") statusText = "📱 Device Detected";
             if (data.violationType === "attempted_screenshot") statusText = "📸 Screenshot/Copy";
+            if (data.violationType === "audio_anomaly") statusText = "🎙 Audio Anomaly";
+            if (data.violationType === "window_resize") statusText = "📐 Window Resized";
 
             const trustColor =
               newTrust > 75

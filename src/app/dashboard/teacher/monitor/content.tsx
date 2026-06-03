@@ -80,6 +80,8 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         if (data.violationType === "tab_switch") statusText = "⚠ Tab Switch";
         if (data.violationType === "device_detected") statusText = "📱 Device Detected";
         if (data.violationType === "attempted_screenshot") statusText = "📸 Screenshot/Copy";
+        if (data.violationType === "audio_anomaly") statusText = "🎙 Audio Anomaly";
+        if (data.violationType === "window_resize") statusText = "📐 Window Resized";
 
         const violationFeed: Feed = {
           id: data.studentName + Date.now(),

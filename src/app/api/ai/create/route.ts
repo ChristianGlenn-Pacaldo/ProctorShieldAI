@@ -24,11 +24,16 @@ export async function POST(req: NextRequest) {
       prompt += `The topic is: "${topic}". `;
     }
 
-    prompt += `Generate ${numQuestions || 5} multiple-choice questions based on the material. 
-    Format your response as a valid JSON array where each object has:
-    - questionText (string)
-    - choices (array of 4 objects, each with 'choiceText' (string) and 'isCorrect' (boolean))
-    Ensure exactly one choice is correct per question. Return ONLY the raw JSON array. Do not use markdown backticks around the json.`;
+    prompt += `Generate ${numQuestions || 5} multiple-choice questions based on the material.
+    Also, detect a suitable exam title, subject name (like "Mathematics", "Biology", "Computer Science", etc.), and a short description from the material content.
+    Format your response as a valid JSON object with the following fields:
+    - detectedTitle: a short, specific title for the exam based on the content (e.g. "Algebra Quiz", "Cell division Test")
+    - detectedSubject: a single subject category (e.g. "Mathematics", "Science", "History", "Literature", "General Knowledge")
+    - detectedDescription: a brief summary of what the exam covers
+    - questions: an array of questions, where each question has:
+      - questionText (string)
+      - choices (array of 4 objects, each with 'choiceText' (string) and 'isCorrect' (boolean))
+    Ensure exactly one choice is correct per question. Return ONLY the raw JSON object. Do not use markdown backticks around the json.`;
 
     const contents = [];
     if (imageBase64) {
@@ -54,15 +59,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Since we requested JSON mimeType, response.text should be valid JSON
-    let generatedQuestions = [];
+    let aiData: any = {};
     try {
-      generatedQuestions = JSON.parse(response.text);
+      aiData = JSON.parse(response.text);
     } catch (parseError) {
       console.error("Failed to parse Gemini output:", response.text);
       return NextResponse.json({ error: "Invalid format returned by AI" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, questions: generatedQuestions });
+    const generatedQuestions = aiData.questions || [];
+    const detectedTitle = aiData.detectedTitle || "";
+    const detectedSubject = aiData.detectedSubject || "";
+    const detectedDescription = aiData.detectedDescription || "";
+
+    return NextResponse.json({
+      success: true,
+      questions: generatedQuestions,
+      detectedTitle,
+      detectedSubject,
+      detectedDescription
+    });
 
   } catch (error) {
     console.error("AI Create error:", error);

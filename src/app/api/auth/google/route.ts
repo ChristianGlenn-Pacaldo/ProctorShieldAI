@@ -60,20 +60,31 @@ export async function POST(req: NextRequest) {
         include: { role: true },
       });
     } else {
-      // Check if role matches (if user tries to log in as wrong role)
+      // If user exists, update their role if they are logging into a different portal role
+      let targetRoleId = user.roleId;
       if (role && user.role.roleName.toLowerCase() !== role.toLowerCase()) {
-        return NextResponse.json(
-          { success: false, message: `This Google account is registered as ${user.role.roleName}, not ${role}` },
-          { status: 403 }
-        );
+        let dbRole = await prisma.role.findFirst({
+          where: { roleName: { equals: role, mode: "insensitive" } },
+        });
+
+        if (!dbRole) {
+          dbRole = await prisma.role.create({
+            data: {
+              roleName: role.toLowerCase(),
+              description: `Auto-created ${role} role`
+            }
+          });
+        }
+        targetRoleId = dbRole.id;
       }
 
-      // If user exists, update their name and profile picture to sync with their current Google profile
+      // Update their name, profile picture, and roleId to sync
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
           fullName: name || user.fullName,
           profileImage: picture || user.profileImage,
+          roleId: targetRoleId,
         },
         include: { role: true },
       });

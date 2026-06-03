@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
       "Looking Away": 0,
       "Device Detected": 0,
       "Screenshot/Copy": 0,
+      "Audio Anomaly": 0,
+      "Window Resized": 0,
     };
 
     studentExams.forEach((se) => {
@@ -83,6 +85,10 @@ export async function GET(req: NextRequest) {
           violationCounts["Device Detected"]++;
         } else if (type === "attempted_screenshot") {
           violationCounts["Screenshot/Copy"]++;
+        } else if (type === "audio_anomaly") {
+          violationCounts["Audio Anomaly"]++;
+        } else if (type === "window_resize") {
+          violationCounts["Window Resized"]++;
         }
       });
     });
@@ -95,6 +101,8 @@ export async function GET(req: NextRequest) {
       "Looking Away": "bg-indigo-500",
       "Device Detected": "bg-cyan-500",
       "Screenshot/Copy": "bg-rose-500",
+      "Audio Anomaly": "bg-orange-500",
+      "Window Resized": "bg-yellow-500",
     };
 
     const violationsBreakdown = Object.entries(violationCounts).map(([type, count]) => ({
@@ -130,6 +138,10 @@ export async function GET(req: NextRequest) {
               ? "Device"
               : type === "attempted_screenshot"
               ? "Screenshot"
+              : type === "audio_anomaly"
+              ? "Audio"
+              : type === "window_resize"
+              ? "Resize"
               : type;
           counts[shortType] = (counts[shortType] || 0) + 1;
         });

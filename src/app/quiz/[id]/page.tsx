@@ -21,6 +21,8 @@ export default function QuizRoom() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const violationCountRef = useRef(0); // track count without re-render dependency issues
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isReportingRef = useRef(false);
+  const isAlertingRef = useRef(false);
 
   // Dynamic Exam States
   const [exam, setExam] = useState<any>(null);
@@ -87,16 +89,19 @@ export default function QuizRoom() {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     // Good quality for AI analysis AND teacher viewing
-    canvas.width = 320;
-    canvas.height = 240;
+    canvas.width = 640;
+    canvas.height = 480;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, 320, 240);
-    return canvas.toDataURL("image/jpeg", 0.7);
+    ctx.drawImage(video, 0, 0, 640, 480);
+    return canvas.toDataURL("image/jpeg", 0.85);
   }, []);
 
   // ── Report violation to server (with 3-strike auto-termination) ──
   const reportViolation = useCallback(async (type: string) => {
+    if (isReportingRef.current) return;
+    isReportingRef.current = true;
+
     const newCount = violationCountRef.current + 1;
     violationCountRef.current = newCount;
     setViolationCount(newCount);
@@ -115,6 +120,7 @@ export default function QuizRoom() {
         }),
       });
 
+      isAlertingRef.current = true;
       if (newCount === 1) {
         alert("⚠️ WARNING (1/3): Violation detected — " + type.replace(/_/g, " ") + ". Continuing this behavior will terminate your exam.");
       } else if (newCount === 2) {
@@ -123,8 +129,11 @@ export default function QuizRoom() {
         alert("🚫 FINAL (3/3): Maximum violations reached. Your exam is being automatically terminated and submitted.");
         submitExam();
       }
+      isAlertingRef.current = false;
     } catch (err) {
       console.error("Failed to report violation:", err);
+    } finally {
+      isReportingRef.current = false;
     }
   }, [examId, submitExam, captureSnapshot]);
 
@@ -206,10 +215,35 @@ export default function QuizRoom() {
 
     let snapshotInterval: NodeJS.Timeout;
     let aiInterval: NodeJS.Timeout;
+    let audioInterval: NodeJS.Timeout;
+    let audioContext: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let microphone: MediaStreamAudioSourceNode | null = null;
 
-    navigator.mediaDevices
-      .getUserMedia({ video: { width: 640, height: 480 }, audio: false })
-      .then((stream) => {
+    const startMedia = async () => {
+      try {
+        // Try getting both video and audio
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+          audio: true,
+        });
+        return { stream, audioActive: true };
+      } catch (err) {
+        console.warn("Failed to get audio stream, falling back to video only:", err);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+            audio: false,
+          });
+          return { stream, audioActive: false };
+        } catch (videoErr) {
+          throw videoErr;
+        }
+      }
+    };
+
+    startMedia()
+      .then(({ stream, audioActive }) => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           setCameraActive(true);
@@ -232,6 +266,50 @@ export default function QuizRoom() {
             }
           }, 20000);
         }, 5000);
+
+        // Set up client-side audio analysis
+        if (audioActive) {
+          try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            audioContext = new AudioContextClass();
+            analyser = audioContext.createAnalyser();
+            microphone = audioContext.createMediaStreamSource(stream);
+            microphone.connect(analyser);
+            analyser.fftSize = 256;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            let violationConsecutiveCount = 0;
+
+            audioInterval = setInterval(() => {
+              if (violationCountRef.current >= 3 || isAlertingRef.current || isReportingRef.current) return;
+              if (!analyser) return;
+
+              analyser.getByteTimeDomainData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < bufferLength; i++) {
+                const float = (dataArray[i] - 128) / 128;
+                sum += float * float;
+              }
+              const rms = Math.sqrt(sum / bufferLength);
+
+              // RMS threshold of 0.08 indicates moderate background noise or speech.
+              if (rms > 0.08) {
+                violationConsecutiveCount++;
+                if (violationConsecutiveCount >= 4) { // speech or loud noise sustained for 2 seconds (4 * 500ms)
+                  reportViolation("audio_anomaly");
+                  violationConsecutiveCount = 0;
+                }
+              } else {
+                if (violationConsecutiveCount > 0) {
+                  violationConsecutiveCount--;
+                }
+              }
+            }, 500);
+          } catch (e) {
+            console.error("Failed to initialize audio analyzer:", e);
+          }
+        }
       })
       .catch((err) => {
         console.error("Camera access denied:", err);
@@ -245,8 +323,12 @@ export default function QuizRoom() {
       }
       if (snapshotInterval) clearInterval(snapshotInterval);
       if (aiInterval) clearInterval(aiInterval);
+      if (audioInterval) clearInterval(audioInterval);
+      if (audioContext) {
+        audioContext.close().catch(console.error);
+      }
     };
-  }, [hasStarted, notifyTeacherJoined, uploadSnapshot, analyzeFrame]);
+  }, [hasStarted, notifyTeacherJoined, uploadSnapshot, analyzeFrame, reportViolation]);
 
   // ── Countdown Timer ──
   useEffect(() => {
@@ -269,8 +351,20 @@ export default function QuizRoom() {
     if (!hasStarted) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden && violationCountRef.current < 3) {
+      if (document.hidden && violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
         reportViolation("tab_switch");
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
+        reportViolation("tab_switch");
+      }
+    };
+
+    const handleResize = () => {
+      if (violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
+        reportViolation("window_resize");
       }
     };
 
@@ -289,7 +383,7 @@ export default function QuizRoom() {
         e.key === "F12"
       ) {
         e.preventDefault();
-        if (violationCountRef.current < 3) {
+        if (violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
           reportViolation("attempted_screenshot");
         }
       }
@@ -299,6 +393,8 @@ export default function QuizRoom() {
     const preventSelect = (e: Event) => e.preventDefault();
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("resize", handleResize);
     document.addEventListener("copy", preventCopy);
     document.addEventListener("cut", preventCopy as any);
     document.addEventListener("contextmenu", preventContextMenu);
@@ -307,6 +403,8 @@ export default function QuizRoom() {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("resize", handleResize);
       document.removeEventListener("copy", preventCopy);
       document.removeEventListener("cut", preventCopy as any);
       document.removeEventListener("contextmenu", preventContextMenu);

@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
         device_detected: "Device Detected",
         phone_detected: "Device Detected",
         attempted_screenshot: "Screenshot/Copy",
+        audio_anomaly: "Audio Anomaly",
+        window_resize: "Window Resized",
       };
 
       const displayType = typeMapping[v.violationType || ""] || "Violation";
@@ -67,9 +69,12 @@ export async function GET(req: NextRequest) {
       let bg = "bg-red-50 dark:bg-red-500/5 border-l-2 border-red-500";
       let btnClass = "bg-red-500 text-white hover:bg-red-600";
       
-      if (v.violationType === "looking_away" || v.violationType === "tab_switch") {
+      if (v.violationType === "looking_away" || v.violationType === "tab_switch" || v.violationType === "window_resize") {
         bg = "bg-amber-50 dark:bg-amber-500/5 border-l-2 border-amber-500";
         btnClass = "bg-amber-500 text-white hover:bg-amber-600";
+      } else if (v.violationType === "audio_anomaly") {
+        bg = "bg-orange-50 dark:bg-orange-500/5 border-l-2 border-orange-500";
+        btnClass = "bg-orange-500 text-white hover:bg-orange-600";
       }
 
       return {

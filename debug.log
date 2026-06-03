@@ -352,3 +352,393 @@
 [2026-05-24T05:38:38.159Z] GET /api/live/snapshot: Returning 0 active snapshots
 [2026-05-24T05:38:40.323Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1779599397,"exp":1780204197}
 [2026-05-24T05:38:40.324Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T08:57:27.096Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:27.975Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam AI Assessment - Uploaded Document
+[2026-06-03T08:57:28.535Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:28.539Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:31.382Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:31.385Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:34.358Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:34.360Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:37.357Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:37.359Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:40.353Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:40.355Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:43.062Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:43.760Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam AI Assessment - Uploaded Document
+[2026-06-03T08:57:44.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:44.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:46.440Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:46.441Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:46.474Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:46.475Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:47.608Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:47.611Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:49.460Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:49.462Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:50.600Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:50.603Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:52.897Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:52.899Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:53.577Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:53.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:55.450Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:55.452Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:56.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:56.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:57:58.464Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:57:58.466Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:57:59.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:57:59.596Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:01.471Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:01.472Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:02.585Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:02.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:04.462Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:04.463Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:05.595Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:05.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:07.462Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:07.463Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:08.602Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:08.606Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:10.921Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:10.922Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:11.578Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:11.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:13.906Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:13.906Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:16.422Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:16.730Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam AI Assessment - Uploaded Document
+[2026-06-03T08:58:16.913Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:16.915Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:17.940Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T08:58:17.943Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T08:58:19.912Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:19.914Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:22.527Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:22.528Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T08:58:25.460Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T08:58:25.461Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:17:28.180Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:28.556Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam Example
+[2026-06-03T09:17:29.676Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:29.678Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:32.595Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:32.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:35.598Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:35.600Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:38.586Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:38.588Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:41.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:41.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:44.607Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:44.608Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:47.591Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:47.593Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:50.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:50.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:53.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:53.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:56.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:56.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:17:59.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:17:59.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:02.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:02.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:05.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:05.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:08.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:08.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:11.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:11.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:14.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:14.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:17.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:17.582Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:20.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:20.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:23.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:23.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:26.589Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:26.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:29.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:29.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:32.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:32.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:35.592Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:35.593Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:38.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:38.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:41.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:41.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:44.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:44.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:47.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:47.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:50.586Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:50.587Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:53.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:53.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:56.592Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:56.594Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:18:59.579Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:18:59.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:02.579Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:02.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:05.578Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:05.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:08.578Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:08.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:11.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:11.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:14.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:14.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:17.579Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:17.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:20.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:20.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:23.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:23.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:26.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:26.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:29.592Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:29.593Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:32.601Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:32.603Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:35.607Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:35.609Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:38.586Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:38.587Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:41.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:41.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:44.596Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:44.598Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:47.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:47.595Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:50.589Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:50.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:53.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:53.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:56.596Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:56.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:19:59.607Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:19:59.609Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:02.600Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:02.601Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:05.595Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:05.596Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:08.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:08.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:11.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:11.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:14.594Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:14.596Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:17.597Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:17.599Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:20.602Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:20.603Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:23.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:23.594Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:26.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:26.594Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:29.587Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:29.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:32.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:32.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:35.595Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:35.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:38.595Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:38.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:41.594Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:41.595Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:44.592Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:44.594Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:47.603Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:47.605Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:50.605Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:50.608Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:53.596Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:53.598Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:56.589Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:56.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:20:59.585Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:20:59.587Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:02.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:02.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:05.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:05.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:08.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:08.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:11.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:11.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:14.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:14.595Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:17.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:17.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:20.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:20.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:23.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:23.587Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:26.579Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:26.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:29.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:29.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:32.591Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:32.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:35.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:35.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:38.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:38.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:41.587Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:41.588Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:44.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:44.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:47.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:47.590Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:50.585Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:50.587Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:53.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:53.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:56.585Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:56.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:21:59.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:21:59.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:02.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:02.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:05.599Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:05.601Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:08.592Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:08.594Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:11.587Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:11.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:14.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:14.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:17.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:17.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:20.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:20.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:23.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:23.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:26.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:26.582Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:29.586Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:29.588Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:32.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:32.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:35.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:35.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:38.600Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:38.601Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:41.578Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:41.579Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:44.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:44.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:47.591Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:47.593Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:50.585Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:50.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:53.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:53.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:56.586Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:56.588Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:22:59.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:22:59.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:02.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:02.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:05.584Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:05.586Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:08.589Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:08.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:11.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:11.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:14.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:14.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:17.587Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:17.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:20.591Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:20.593Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:23.597Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:23.599Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:26.590Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:26.592Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:29.593Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:29.595Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:32.594Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:32.597Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:35.583Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:35.585Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:38.578Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:38.580Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:41.582Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:41.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:44.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:44.584Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:47.581Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:47.583Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:50.587Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:50.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:53.608Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:53.610Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:56.588Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:56.589Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:23:59.606Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:23:59.608Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:24:02.589Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:24:02.591Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:24:05.580Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:24:05.581Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:26:29.872Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:26:29.957Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:26:29.959Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:26:30.510Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam Example
+[2026-06-03T09:26:31.988Z] POST /api/live/join: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:26:32.169Z] POST /api/live/join: Student Christian Pacaldo successfully joined exam Example
+[2026-06-03T09:26:33.517Z] POST /api/live/snapshot: session={"userId":"7314faea-4ce8-4de2-9029-54d25e1eef14","email":"pacaldochristian53@gmail.com","role":"student","fullName":"Christian Pacaldo","iat":1780474169,"exp":1781078969}
+[2026-06-03T09:26:33.519Z] POST /api/live/snapshot: Stored snapshot for Christian Pacaldo (active count: 1)
+[2026-06-03T09:26:41.075Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:41.076Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:41.104Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:41.105Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:43.821Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:43.822Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:46.704Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:46.705Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:46.733Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:46.735Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:57.372Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:57.373Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:57.393Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:57.393Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:26:58.490Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:26:58.490Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:27:01.900Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:01.900Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:27:03.276Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:03.277Z] GET /api/live/snapshot: Returning 1 active snapshots
+[2026-06-03T09:27:06.277Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:06.278Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:09.904Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:09.905Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:12.894Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:12.895Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:15.908Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:15.909Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:18.898Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:18.899Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:21.916Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:21.917Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:24.903Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:24.904Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:27.916Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:27.917Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:30.282Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:30.285Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:31.455Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:31.456Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:34.902Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:34.903Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:43.591Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:43.592Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-06-03T09:27:43.623Z] GET /api/live/snapshot: session={"userId":"8d1601d7-c66c-414c-acb6-de03bf43ca7f","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1780474069,"exp":1781078869}
+[2026-06-03T09:27:43.624Z] GET /api/live/snapshot: Returning 0 active snapshots

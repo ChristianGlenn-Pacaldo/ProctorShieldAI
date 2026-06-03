@@ -154,3 +154,120 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getSession();
+    if (!session || (session.role !== "teacher" && session.role !== "admin")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const examId = parseInt(id);
+
+    const existingExam = await prisma.exam.findUnique({
+      where: { id: examId },
+    });
+
+    if (!existingExam) {
+      return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    }
+
+    // Only the teacher who created the exam or an admin can delete it
+    if (session.role !== "admin" && existingExam.teacherId !== session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Perform cascade delete in a transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Get questions
+      const questions = await tx.question.findMany({
+        where: { examId },
+        select: { id: true }
+      });
+      const questionIds = questions.map(q => q.id);
+
+      // 2. Get student exams
+      const studentExams = await tx.studentExam.findMany({
+        where: { examId },
+        select: { id: true }
+      });
+      const studentExamIds = studentExams.map(se => se.id);
+
+      if (studentExamIds.length > 0) {
+        // Get violations to delete evidence files first
+        const violations = await tx.violation.findMany({
+          where: { studentExamId: { in: studentExamIds } },
+          select: { id: true }
+        });
+        const violationIds = violations.map(v => v.id);
+
+        if (violationIds.length > 0) {
+          await tx.evidenceFile.deleteMany({
+            where: { violationId: { in: violationIds } }
+          });
+        }
+
+        await tx.violation.deleteMany({
+          where: { studentExamId: { in: studentExamIds } }
+        });
+
+        await tx.aiAnalysis.deleteMany({
+          where: { studentExamId: { in: studentExamIds } }
+        });
+
+        await tx.answer.deleteMany({
+          where: { studentExamId: { in: studentExamIds } }
+        });
+
+        await tx.studentExam.deleteMany({
+          where: { id: { in: studentExamIds } }
+        });
+      }
+
+      if (questionIds.length > 0) {
+        await tx.choice.deleteMany({
+          where: { questionId: { in: questionIds } }
+        });
+
+        await tx.question.deleteMany({
+          where: { examId }
+        });
+      }
+
+      // Finally, delete the exam itself
+      await tx.exam.delete({
+        where: { id: examId }
+      });
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: session.userId,
+        activity: `Deleted exam: ${existingExam.title}`,
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+      },
+    });
+
+    // Broadcast exam deletion to admin
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "exam-deleted",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: session.role,
+        activity: `Deleted exam: ${existingExam.title}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast exam deletion to admin:", e);
+    }
+
+    return NextResponse.json({ success: true, message: "Exam deleted successfully" });
+  } catch (error) {
+    console.error("Delete exam error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
