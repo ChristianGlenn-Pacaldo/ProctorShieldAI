@@ -21,19 +21,15 @@ export async function POST(req: NextRequest) {
     const base64Data = snapshot.replace(/^data:image\/\w+;base64,/, "");
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [
         {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: base64Data,
-              },
-            },
-            {
-              text: `You are a strict online exam proctoring AI system. Analyze this webcam image of a student taking an exam. Check for these violations ONLY:
+          inlineData: {
+            data: base64Data,
+            mimeType: "image/jpeg",
+          },
+        },
+        `You are a strict online exam proctoring AI system. Analyze this webcam image of a student taking an exam. Check for these violations ONLY:
 
 1. "no_face" - No human face is visible in the frame at all
 2. "multiple_faces" - More than one person/face is visible
@@ -52,10 +48,7 @@ Respond with ONLY a valid JSON array of violation type strings. Examples:
 - Nobody in frame: ["no_face"]
 - Two people visible: ["multiple_faces"]
 
-Return ONLY the JSON array, nothing else.`,
-            },
-          ],
-        },
+Return ONLY the JSON array, nothing else.`
       ],
     });
 

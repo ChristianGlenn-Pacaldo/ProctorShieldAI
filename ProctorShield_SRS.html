@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProctorShield AI - SRS</title>
+  <!-- GitHub Markdown CSS for perfect formatting -->
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+  <style>
+    body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 45px;
+    }
+
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 45px;
+    }
+
+    @media (max-width: 767px) {
+      .markdown-body {
+        padding: 15px;
+      }
+    }
+
+    /* Page breaks for printing */
+    @media print {
+      body {
+        max-width: 100%;
+        padding: 0;
+        margin: 0;
+      }
+
+      h2,
+      h3 {
+        page-break-after: avoid;
+      }
+
+      table,
+      img,
+      pre {
+        page-break-inside: avoid;
+      }
+
+      .markdown-body {
+        padding: 20px !important;
+      }
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+
+<body class="markdown-body">
+  <div id="content">Loading SRS Document...</div>
+
+  <!-- Marked.js for Markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Mermaid.js for drawing diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+  <script>
+    // Initialize Mermaid
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+    // Fetch the markdown file locally
+    fetch('./ProctorShield_SRS.md')
+      .then(response => response.text())
+      .then(text => {
+        // Configure marked to handle mermaid code blocks
+        const renderer = new marked.Renderer();
+        const originalCodeRenderer = renderer.code.bind(renderer);
+
+        renderer.code = function (code, language, isEscaped) {
+          if (language === 'mermaid') {
+            return `<div class="mermaid">${code}</div>`;
+          }
+          if (language === 'carousel') {
+            // Basic fallback for carousel - just stack the images
+            const cleanedCode = code.replace(/<!-- slide -->/g, '<hr style="border: 1px dashed #ccc; my-4;" />');
+             return `<div class="carousel-container">${marked.parse(cleanedCode)}</div>`;
+          }
+          return originalCodeRenderer(code, language, isEscaped);
+        };
+
+        marked.setOptions({ renderer: renderer });
+
+        // Render Markdown to HTML
+        document.getElementById('content').innerHTML = marked.parse(text);
+
+        // Render Mermaid Diagrams
+        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+      })
+      .catch(err => {
+        document.getElementById('content').innerHTML = "Error loading document: Make sure you open this file via a local server (like Live Server) or the browser allows local file access.";
+        console.error(err);
+      });
+  </script>
+</body>
+
+</html>

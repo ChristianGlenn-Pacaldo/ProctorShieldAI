@@ -23,6 +23,7 @@ export default function QuizRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isReportingRef = useRef(false);
   const isAlertingRef = useRef(false);
+  const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
 
   // Dynamic Exam States
   const [exam, setExam] = useState<any>(null);
@@ -122,14 +123,17 @@ export default function QuizRoom() {
 
       isAlertingRef.current = true;
       if (newCount === 1) {
-        alert("⚠️ WARNING (1/3): Violation detected — " + type.replace(/_/g, " ") + ". Continuing this behavior will terminate your exam.");
+        setWarningModal({ show: true, message: "⚠️ WARNING (1/3): Violation detected — " + type.replace(/_/g, " ") + ". Continuing this behavior will terminate your exam.", isFinal: false });
       } else if (newCount === 2) {
-        alert("⚠️ WARNING (2/3): Second violation — " + type.replace(/_/g, " ") + ". One more violation and your exam will be automatically submitted.");
+        setWarningModal({ show: true, message: "⚠️ WARNING (2/3): Second violation — " + type.replace(/_/g, " ") + ". One more violation and your exam will be automatically submitted.", isFinal: false });
       } else if (newCount >= 3) {
-        alert("🚫 FINAL (3/3): Maximum violations reached. Your exam is being automatically terminated and submitted.");
-        submitExam();
+        setWarningModal({ show: true, message: "🚫 FINAL (3/3): Maximum violations reached. Your exam is being automatically terminated and submitted.", isFinal: true });
+        setTimeout(() => {
+          setWarningModal({ show: false, message: "", isFinal: false });
+          isAlertingRef.current = false;
+          submitExam();
+        }, 3000);
       }
-      isAlertingRef.current = false;
     } catch (err) {
       console.error("Failed to report violation:", err);
     } finally {
@@ -474,6 +478,28 @@ export default function QuizRoom() {
   // ─── ACTIVE EXAM SCREEN ──────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col md:flex-row">
+      {/* Warning Modal */}
+      {warningModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] border border-red-500/50 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl shadow-red-500/20 animate-fade-in">
+            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">Violation Detected</h3>
+            <p className="text-gray-300 mb-6 text-sm">{warningModal.message}</p>
+            {!warningModal.isFinal && (
+              <button
+                onClick={() => {
+                  setWarningModal({ show: false, message: "", isFinal: false });
+                  isAlertingRef.current = false;
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all"
+              >
+                I Understand, Continue Exam
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* LEFT: Exam Content */}
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-3xl mx-auto">
