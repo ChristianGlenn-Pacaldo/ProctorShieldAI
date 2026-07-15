@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
           exam: {
             include: { subject: true, teacher: true },
           },
+          aiAnalysis: true,
         },
         orderBy: { createdAt: "desc" },
       });

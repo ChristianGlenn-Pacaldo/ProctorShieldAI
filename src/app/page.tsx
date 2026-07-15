@@ -330,7 +330,7 @@ export default function LandingPage() {
           Ready to make your exams cheat-proof?
         </h2>
         <p className="text-white/40 text-base mt-4 mb-10">
-          Join 200+ schools already using Proctor Shield AI.
+          What are you waiting for? Join ProctorShield-AI now!
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link

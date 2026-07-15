@@ -29,24 +29,21 @@ export async function POST(req: NextRequest) {
             mimeType: "image/jpeg",
           },
         },
-        `You are a strict online exam proctoring AI system. Analyze this webcam image of a student taking an exam. Check for these violations ONLY:
+        `You are a strict online exam proctoring AI system. Analyze this webcam image of a student taking an exam. 
+Your ONLY task is to check for unauthorized devices.
 
-1. "no_face" - No human face is visible in the frame at all
-2. "multiple_faces" - More than one person/face is visible
-3. "looking_away" - The person is clearly looking far away from the screen (turned head significantly to the side or looking up/down away from monitor)
-4. "device_detected" - A cellphone, tablet, second laptop, or any electronic device other than the exam computer is visible in the frame
+Check for this violation ONLY:
+1. "device_detected" - A cellphone, tablet, second laptop, smart watch, or any electronic device other than the exam computer is visible in the frame.
 
 IMPORTANT RULES:
 - Only report clear, obvious violations. Do NOT report false positives.
-- A person looking slightly off-center is NOT "looking_away". They must be clearly turned away.
+- A person holding a pen or scratching their face is NOT a device.
 - Only report "device_detected" if you can clearly see a phone, tablet, or other device.
-- If the person is facing the camera normally with no issues, return an empty array.
+- If no devices are visible, return an empty array.
 
 Respond with ONLY a valid JSON array of violation type strings. Examples:
-- No violations: []
-- Face turned away with phone visible: ["looking_away", "device_detected"]
-- Nobody in frame: ["no_face"]
-- Two people visible: ["multiple_faces"]
+- No devices: []
+- Phone visible: ["device_detected"]
 
 Return ONLY the JSON array, nothing else.`
       ],

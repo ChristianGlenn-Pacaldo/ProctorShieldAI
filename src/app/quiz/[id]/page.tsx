@@ -25,12 +25,14 @@ export default function QuizRoom() {
   const isAlertingRef = useRef(false);
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
 
-  // Dynamic Exam States
   const [exam, setExam] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [quizError, setQuizError] = useState("");
   const [answersState, setAnswersState] = useState<Record<number, number>>({});
+  const [studentExamStatus, setStudentExamStatus] = useState<string>("");
+  const [studentExamId, setStudentExamId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -40,6 +42,9 @@ export default function QuizRoom() {
         if (res.ok && data.success) {
           setExam(data.exam);
           setQuestions(data.questions);
+          setStudentExamStatus(data.studentExamStatus || "");
+          setStudentExamId(data.studentExamId || null);
+          setUserId(data.userId || "");
           if (data.exam.duration) {
             setTimeLeft(data.exam.duration * 60);
           }
@@ -54,6 +59,43 @@ export default function QuizRoom() {
     };
     loadQuiz();
   }, [examId]);
+
+  // Handle pusher lobby real-time updates
+  useEffect(() => {
+    if (!examId || !userId) return;
+
+    let pusherClient: any;
+    
+    import("pusher-js").then((Pusher) => {
+      pusherClient = new Pusher.default(process.env.NEXT_PUBLIC_PUSHER_KEY || "fb3c896eec50e6435f08", {
+        cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1",
+      });
+
+      // Subscribe to exam channel to know when exam starts
+      const examChannel = pusherClient.subscribe(`exam-${examId}`);
+      examChannel.bind("exam-started", () => {
+        setExam(prev => prev ? { ...prev, examStatus: "in_progress" } : prev);
+      });
+
+      // Subscribe to student channel to know approval status
+      const studentChannel = pusherClient.subscribe(`student-${userId}`);
+      studentChannel.bind("approval-status", (data: any) => {
+        if (data.examId === parseInt(examId)) {
+          setStudentExamStatus(data.status);
+          if (data.status === "rejected") {
+            setQuizError("Your request to join late was rejected by the teacher.");
+          }
+        }
+      });
+    });
+
+    return () => {
+      if (pusherClient) {
+        pusherClient.unsubscribe(`exam-${examId}`);
+        pusherClient.unsubscribe(`student-${userId}`);
+      }
+    };
+  }, [examId, userId]);
 
   const handleSelectChoice = (questionId: number, choiceId: number) => {
     setAnswersState(prev => ({
@@ -185,23 +227,13 @@ export default function QuizRoom() {
       const data = await res.json();
       const violations: string[] = data.violations || [];
 
-      // Update AI diagnostic display
+      // Update AI diagnostic display for Devices (since face-api handles the rest)
       if (violations.length === 0) {
-        setAiStatus("All Clear");
-        setFaceStatus("Detected ✓");
-        setGazeStatus("Focused ✓");
         setDeviceStatus("None ✓");
       } else {
-        setAiStatus("⚠ Issue Detected");
-        if (violations.includes("no_face")) setFaceStatus("Not Detected ✗");
-        else if (violations.includes("multiple_faces")) setFaceStatus("Multiple ✗");
-        else setFaceStatus("Detected ✓");
-
-        if (violations.includes("looking_away")) setGazeStatus("Looking Away ✗");
-        else setGazeStatus("Focused ✓");
-
-        if (violations.includes("device_detected")) setDeviceStatus("Phone Found ✗");
-        else setDeviceStatus("None ✓");
+        if (violations.includes("device_detected")) {
+          setDeviceStatus("Phone Found ✗");
+        }
       }
 
       // Report the FIRST violation found (one at a time to avoid spam)
@@ -246,8 +278,10 @@ export default function QuizRoom() {
       }
     };
 
+    let faceApiInterval: NodeJS.Timeout;
+    
     startMedia()
-      .then(({ stream, audioActive }) => {
+      .then(async ({ stream, audioActive }) => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           setCameraActive(true);
@@ -261,14 +295,85 @@ export default function QuizRoom() {
           uploadSnapshot();
         }, 3000);
 
-        // Run AI analysis every 20 seconds (to stay within Gemini free tier rate limits)
+        // Load face-api models
+        try {
+          const faceapi = await import("@vladmandic/face-api");
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('/models')
+          ]);
+          
+          let noFaceFrames = 0;
+          let multipleFacesFrames = 0;
+          let lookingAwayFrames = 0;
+
+          // Run face tracking every 500ms
+          faceApiInterval = setInterval(async () => {
+            if (!videoRef.current || isAlertingRef.current || isReportingRef.current || violationCountRef.current >= 3) return;
+            
+            const detections = await faceapi.detectAllFaces(
+              videoRef.current,
+              new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+            ).withFaceLandmarks();
+            
+            if (detections.length === 0) {
+              noFaceFrames++;
+              if (noFaceFrames > 6) { // 3 seconds
+                reportViolation("no_face");
+                noFaceFrames = 0;
+              }
+              setFaceStatus("Not Detected ✗");
+            } else if (detections.length > 1) {
+              multipleFacesFrames++;
+              if (multipleFacesFrames > 4) { // 2 seconds
+                reportViolation("multiple_faces");
+                multipleFacesFrames = 0;
+              }
+              setFaceStatus("Multiple ✗");
+            } else {
+              noFaceFrames = 0;
+              multipleFacesFrames = 0;
+              setFaceStatus("Detected ✓");
+              
+              // Nose tracking for head movement
+              const landmarks = detections[0].landmarks;
+              const nose = landmarks.getNose()[0];
+              const jawline = landmarks.getJawOutline();
+              
+              const leftJaw = jawline[0];
+              const rightJaw = jawline[16];
+              
+              const faceWidth = rightJaw.x - leftJaw.x;
+              const noseToLeft = nose.x - leftJaw.x;
+              const noseRatio = noseToLeft / faceWidth;
+              
+              // If nose ratio is extreme, user is looking away
+              if (noseRatio < 0.25 || noseRatio > 0.75) {
+                lookingAwayFrames++;
+                if (lookingAwayFrames > 6) { // 3 seconds
+                  reportViolation("looking_away");
+                  lookingAwayFrames = 0;
+                }
+                setGazeStatus("Looking Away ✗");
+              } else {
+                lookingAwayFrames = 0;
+                setGazeStatus("Focused ✓");
+              }
+            }
+          }, 500);
+
+        } catch (err) {
+          console.error("Failed to load face-api:", err);
+        }
+
+        // Run Gemini AI analysis every 25 seconds for Device Detection only (so we avoid rate limits)
         setTimeout(() => {
           analyzeFrame(); // First analysis after 5 seconds
           aiInterval = setInterval(() => {
             if (violationCountRef.current < 3) {
               analyzeFrame();
             }
-          }, 20000);
+          }, 25000);
         }, 5000);
 
         // Set up client-side audio analysis
@@ -328,6 +433,7 @@ export default function QuizRoom() {
       if (snapshotInterval) clearInterval(snapshotInterval);
       if (aiInterval) clearInterval(aiInterval);
       if (audioInterval) clearInterval(audioInterval);
+      if (faceApiInterval) clearInterval(faceApiInterval);
       if (audioContext) {
         audioContext.close().catch(console.error);
       }
@@ -462,12 +568,24 @@ export default function QuizRoom() {
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Keep your face visible and facing the screen at all times.</p>
                 <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Exam will auto-terminate after 3 violations.</p>
               </div>
-              <button
-                onClick={() => setHasStarted(true)}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-              >
-                I Understand, Start Exam
-              </button>
+              {studentExamStatus === "pending_approval" ? (
+                <button disabled className="w-full py-3 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Waiting for Teacher Approval...
+                </button>
+              ) : exam?.examStatus === "active" ? (
+                <button disabled className="w-full py-3 bg-indigo-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Waiting for Teacher to Start...
+                </button>
+              ) : (
+                <button
+                  onClick={() => setHasStarted(true)}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                >
+                  I Understand, Start Exam
+                </button>
+              )}
             </>
           )}
         </div>

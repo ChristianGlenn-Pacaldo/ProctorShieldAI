@@ -54,10 +54,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     let questions = exam.questions;
+    let studentExam = null;
 
     // Check permissions and apply shuffling/stripping for students
     if (session.role === "student") {
-      const studentExam = await prisma.studentExam.findFirst({
+      studentExam = await prisma.studentExam.findFirst({
         where: {
           studentId: session.userId,
           examId: exam.id
@@ -90,6 +91,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({
       success: true,
+      userId: session.userId,
+      studentExamStatus: session.role === "student" ? studentExam?.examStatus : undefined,
+      studentExamId: session.role === "student" ? studentExam?.id : undefined,
       exam: {
         id: exam.id,
         title: exam.title,
@@ -98,6 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         totalQuestions: exam.totalQuestions,
         passingScore: exam.passingScore,
         shuffleQuestions: exam.shuffleQuestions,
+        examStatus: exam.examStatus,
         subject: exam.subject,
       },
       questions: questions.map(q => ({

@@ -23,7 +23,7 @@ export default function StudentLoginPage() {
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setError("");
     setIsLoading(true);
-    
+
     try {
       const res = await fetch("/api/auth/google", {
         method: "POST",
@@ -134,7 +134,7 @@ export default function StudentLoginPage() {
   };
 
   const features = [
-    { icon: <Target className="w-5 h-5" />, title: "99% Accurate Face Detection", sub: "Real-time monitoring with face-api.js" },
+    { icon: <Target className="w-5 h-5" />, title: "99% Accurate Face Detection", sub: "Real-time monitoring" },
     { icon: <Camera className="w-5 h-5" />, title: "Automatic Evidence Capture", sub: "Screenshots on every violation event" },
     { icon: <Brain className="w-5 h-5" />, title: "Gemini AI Verdict", sub: "Intelligent cheating analysis report" },
     { icon: <Lock className="w-5 h-5" />, title: "Role-based Access Control", sub: "Secure, individual student dashboards" },
@@ -185,21 +185,19 @@ export default function StudentLoginPage() {
             <div className="flex gap-0.5 bg-white/5 p-1 rounded-xl mb-6">
               <button
                 onClick={() => { setActivePanel("login"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                  activePanel === "login"
+                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "login"
                     ? "bg-indigo-600/20 text-indigo-300"
                     : "text-white/35 hover:text-white/50"
-                }`}
+                  }`}
               >
                 Sign In
               </button>
               <button
                 onClick={() => { setActivePanel("register"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                  activePanel === "register"
+                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "register"
                     ? "bg-indigo-600/20 text-indigo-300"
                     : "text-white/35 hover:text-white/50"
-                }`}
+                  }`}
               >
                 Create Account
               </button>
@@ -219,7 +217,7 @@ export default function StudentLoginPage() {
                 <p className="text-sm text-white/35 mb-6">
                   Sign in to access your proctored exams
                 </p>
-                
+
                 {/* Real Google Button */}
                 <div className="mb-4 flex justify-center w-full">
                   <GoogleLogin

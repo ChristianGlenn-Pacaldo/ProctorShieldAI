@@ -19,12 +19,44 @@ interface Feed {
 export default function LiveMonitorContent({ teacherId }: { teacherId: string }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [totalViolations, setTotalViolations] = useState(0);
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
   const feedsRef = useRef<Feed[]>([]);
 
   // Keep ref in sync
   useEffect(() => {
     feedsRef.current = feeds;
   }, [feeds]);
+
+  const handleApprove = async (studentExamId: number, action: "accept" | "reject") => {
+    try {
+      const res = await fetch("/api/exams/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentExamId, action }),
+      });
+      if (res.ok) {
+        setPendingApprovals(prev => prev.filter(p => p.studentExamId !== studentExamId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRetakeApprove = async (studentExamId: number, action: "accept" | "reject") => {
+    try {
+      const res = await fetch("/api/exams/retake/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentExamId, action }),
+      });
+      if (res.ok) {
+        setPendingRetakes(prev => prev.filter(p => p.studentExamId !== studentExamId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // ── Pusher for lightweight join/violation events ──
   useEffect(() => {
@@ -36,6 +68,26 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     );
 
     const channel = pusher.subscribe(`teacher-${teacherId}`);
+
+    // Late join request
+    channel.bind("late-join-request", (data: any) => {
+      console.log("Late join request:", data);
+      setPendingApprovals((prev) => {
+        // Prevent duplicates
+        if (prev.find(p => p.studentExamId === data.studentExamId)) return prev;
+        return [...prev, data];
+      });
+    });
+
+    // Retake request
+    channel.bind("retake-request", (data: any) => {
+      console.log("Retake request:", data);
+      setPendingRetakes((prev) => {
+        // Prevent duplicates
+        if (prev.find(p => p.studentExamId === data.studentExamId)) return prev;
+        return [...prev, data];
+      });
+    });
 
     // Student joined (lightweight, no snapshot)
     channel.bind("student-joined", (data: any) => {
@@ -182,6 +234,54 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* Pending Approvals */}
+      {pendingApprovals.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
+          <h3 className="text-sm font-bold text-amber-500 mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            Late Join Requests ({pendingApprovals.length})
+          </h3>
+          <div className="space-y-2">
+            {pendingApprovals.map(req => (
+              <div key={req.studentExamId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+                <div>
+                  <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">wants to join "{req.examTitle}" late</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleApprove(req.studentExamId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
+                  <button onClick={() => handleApprove(req.studentExamId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-lg shadow-emerald-600/20">Accept</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Retake Requests */}
+      {pendingRetakes.length > 0 && (
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 mb-4">
+          <h3 className="text-sm font-bold text-rose-500 mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+            Retake Requests ({pendingRetakes.length})
+          </h3>
+          <div className="space-y-2">
+            {pendingRetakes.map(req => (
+              <div key={req.studentExamId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+                <div>
+                  <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">requested to retake "{req.examTitle}"</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleRetakeApprove(req.studentExamId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
+                  <button onClick={() => handleRetakeApprove(req.studentExamId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-600/20">Accept</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] px-5 py-4">

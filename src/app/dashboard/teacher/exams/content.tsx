@@ -466,6 +466,7 @@ export default function TeacherExamsPage() {
                     <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.totalQuestions}</td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                        e.examStatus === 'in_progress' ? 'bg-blue-500/15 text-blue-600' :
                         e.examStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' : 
                         e.examStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
                         e.examStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' : 
@@ -474,8 +475,24 @@ export default function TeacherExamsPage() {
                         {e.examStatus.toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 flex gap-2">
                       <button onClick={() => setManageExam(e)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] hover:text-indigo-500 transition-all">Manage</button>
+                      {e.examStatus === 'active' && (
+                        <button 
+                          onClick={async () => {
+                            if (!confirm(`Are you sure you want to start "${e.title}"? Students in the lobby will immediately enter the exam.`)) return;
+                            try {
+                              const res = await fetch(`/api/exams/${e.id}/start`, { method: "POST" });
+                              if (res.ok) fetchExams();
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20"
+                        >
+                          Start
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

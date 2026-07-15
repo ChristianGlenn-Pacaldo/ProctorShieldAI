@@ -55,14 +55,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You have already joined this exam." }, { status: 409 });
     }
 
+    // Determine initial status based on exam status
+    const isLateJoin = exam.examStatus === "in_progress";
+    const initialStudentExamStatus = isLateJoin ? "pending_approval" : "enrolled";
+
     // Enroll student
     const studentExam = await prisma.studentExam.create({
       data: {
         studentId: session.userId,
         examId: exam.id,
-        examStatus: "enrolled",
+        examStatus: initialStudentExamStatus,
       },
     });
+
+    // Notify teacher via Pusher if this is a late join
+    if (isLateJoin) {
+      try {
+        const { pusherServer } = await import("@/lib/pusher");
+        await pusherServer.trigger(`teacher-${exam.teacherId}`, "late-join-request", {
+          studentExamId: studentExam.id,
+          studentName: session.fullName,
+          examTitle: exam.title,
+          examId: exam.id,
+        });
+      } catch (e) {
+        console.error("Failed to trigger late join push event:", e);
+      }
+    }
 
     // Log activity
     await prisma.activityLog.create({

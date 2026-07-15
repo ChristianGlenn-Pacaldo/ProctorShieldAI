@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import Link from "next/link";
+import ResultModal from "@/components/student/ResultModal";
 
 export default function ExamsContent() {
   const [exams, setExams] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedResult, setSelectedResult] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchExams = async () => {
@@ -69,7 +71,7 @@ export default function ExamsContent() {
               <tbody className="divide-y divide-[var(--border)]">
                 {filtered.map((enrollment) => {
                   const e = enrollment.exam;
-                  const isCompleted = enrollment.examStatus === "completed";
+                  const isCompleted = ["completed", "ended", "rejected", "pending_retake"].includes(enrollment.examStatus);
                   return (
                     <tr key={enrollment.id} className="hover:bg-[var(--surface2)] transition-colors">
                       <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title}</td>
@@ -91,7 +93,12 @@ export default function ExamsContent() {
                             <button className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">Take Exam</button>
                           </Link>
                         ) : (
-                          <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors">View Result</button>
+                          <button 
+                            onClick={() => setSelectedResult(enrollment)}
+                            className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors"
+                          >
+                            View Result
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -102,6 +109,12 @@ export default function ExamsContent() {
           )}
         </div>
       </div>
+      
+      <ResultModal 
+        isOpen={!!selectedResult} 
+        onClose={() => setSelectedResult(null)} 
+        result={selectedResult} 
+      />
     </div>
   );
 }
