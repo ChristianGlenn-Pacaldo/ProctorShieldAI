@@ -3,16 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Sparkles, Camera, Upload, Trash, Check } from "lucide-react";
 
-export default function TeacherExamsPage() {
-  const [exams, setExams] = useState<any[]>([]);
+export default function TeacherQuizzesPage() {
+  const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Exam Creation Modal State
+  // Quiz Creation Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
-  const [newExamForm, setNewExamForm] = useState({
+  const [newQuizForm, setNewQuizForm] = useState({
     title: "",
     subjectName: "",
     description: "",
@@ -32,9 +32,9 @@ export default function TeacherExamsPage() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Manage Exam Modal State
-  const [manageExam, setManageExam] = useState<any | null>(null);
-  const [manageExamDetails, setManageExamDetails] = useState<any>(null);
+  // Manage Quiz Modal State
+  const [manageQuiz, setManageQuiz] = useState<any | null>(null);
+  const [manageQuizDetails, setManageQuizDetails] = useState<any>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -67,41 +67,41 @@ export default function TeacherExamsPage() {
     };
   }, [isAiModalOpen, activeTab, capturedImage]);
 
-  // Load exam details (questions/choices) when managing an exam
+  // Load quiz details (questions/choices) when managing an quiz
   useEffect(() => {
-    if (!manageExam) {
-      setManageExamDetails(null);
+    if (!manageQuiz) {
+      setManageQuizDetails(null);
       return;
     }
     const fetchDetails = async () => {
       try {
-        const res = await fetch(`/api/exams/${manageExam.id}`);
+        const res = await fetch(`/api/quizzes/${manageQuiz.id}`);
         const data = await res.json();
         if (res.ok && data.success) {
-          setManageExamDetails({
-            ...data.exam,
+          setManageQuizDetails({
+            ...data.quiz,
             questions: data.questions
           });
         }
       } catch (err) {
-        console.error("Failed to fetch exam details:", err);
+        console.error("Failed to fetch quiz details:", err);
       }
     };
     fetchDetails();
-  }, [manageExam]);
+  }, [manageQuiz]);
 
-  const toggleExamStatus = async (exam: any) => {
+  const toggleQuizStatus = async (quiz: any) => {
     setIsUpdatingStatus(true);
-    const newStatus = exam.examStatus === "active" ? "draft" : "active";
+    const newStatus = quiz.quizStatus === "active" ? "draft" : "active";
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
+      const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examStatus: newStatus })
+        body: JSON.stringify({ quizStatus: newStatus })
       });
       if (res.ok) {
-        setManageExam({ ...exam, examStatus: newStatus });
-        fetchExams(); // refresh list
+        setManageQuiz({ ...quiz, quizStatus: newStatus });
+        fetchQuizzes(); // refresh list
       }
     } catch (err) {
       console.error(err);
@@ -110,18 +110,18 @@ export default function TeacherExamsPage() {
     }
   };
 
-  const endExam = async (exam: any) => {
-    if (!confirm("Are you sure you want to end this exam? Students will no longer be able to join.")) return;
+  const endQuiz = async (quiz: any) => {
+    if (!confirm("Are you sure you want to end this quiz? Students will no longer be able to join.")) return;
     setIsUpdatingStatus(true);
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
+      const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examStatus: "ended" })
+        body: JSON.stringify({ quizStatus: "ended" })
       });
       if (res.ok) {
-        setManageExam({ ...exam, examStatus: "ended" });
-        fetchExams();
+        setManageQuiz({ ...quiz, quizStatus: "ended" });
+        fetchQuizzes();
       }
     } catch (err) {
       console.error(err);
@@ -130,41 +130,41 @@ export default function TeacherExamsPage() {
     }
   };
 
-  const updateExamDuration = async (exam: any, newDuration: string) => {
+  const updateQuizDuration = async (quiz: any, newDuration: string) => {
     const durationInt = parseInt(newDuration);
-    if (isNaN(durationInt) || durationInt === exam.duration || durationInt < 1) return;
+    if (isNaN(durationInt) || durationInt === quiz.duration || durationInt < 1) return;
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
+      const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ duration: durationInt })
       });
       if (res.ok) {
-        setManageExam({ ...exam, duration: durationInt });
-        fetchExams(); // refresh list
+        setManageQuiz({ ...quiz, duration: durationInt });
+        fetchQuizzes(); // refresh list
       }
     } catch (err) {
       console.error(err);
     }
   };
 
-  const deleteExam = async (exam: any) => {
-    if (!confirm(`Are you sure you want to permanently delete "${exam.title}"?\n\nThis will permanently delete all questions, choices, student attempts, and violation evidence associated with it. This action cannot be undone.`)) return;
+  const deleteQuiz = async (quiz: any) => {
+    if (!confirm(`Are you sure you want to permanently delete "${quiz.title}"?\n\nThis will permanently delete all questions, choices, student attempts, and violation evidence associated with it. This action cannot be undone.`)) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
+      const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "DELETE"
       });
       if (res.ok) {
-        setManageExam(null);
-        fetchExams();
+        setManageQuiz(null);
+        fetchQuizzes();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to delete exam");
+        alert(data.error || "Failed to delete quiz");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to delete exam. Please check your connection.");
+      alert("Failed to delete quiz. Please check your connection.");
     } finally {
       setIsDeleting(false);
     }
@@ -213,9 +213,9 @@ export default function TeacherExamsPage() {
     setAiGeneratedQuestions(updated);
   };
 
-  const openNewExamModal = () => {
+  const openNewQuizModal = () => {
     setAiGeneratedQuestions([]);
-    setNewExamForm({
+    setNewQuizForm({
       title: "",
       subjectName: "",
       description: "",
@@ -231,7 +231,7 @@ export default function TeacherExamsPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("new") === "true") {
-        openNewExamModal();
+        openNewQuizModal();
         const url = new URL(window.location.href);
         url.searchParams.delete("new");
         window.history.replaceState({}, "", url.pathname);
@@ -318,10 +318,10 @@ export default function TeacherExamsPage() {
       setAiGeneratedQuestions(data.questions);
 
       const displayTopic = activeTab === "text" ? aiTopic : (activeTab === "upload" ? "Uploaded Document" : "Captured Document");
-      setNewExamForm({
+      setNewQuizForm({
         title: data.detectedTitle || `AI Assessment - ${displayTopic.slice(0, 30)}`,
         subjectName: data.detectedSubject || (activeTab === "text" ? aiTopic.slice(0, 30) : "AI Generated"),
-        description: data.detectedDescription || `This exam was auto-generated by ProctorShield AI based on: ${displayTopic}.`,
+        description: data.detectedDescription || `This quiz was auto-generated by ProctorShield AI based on: ${displayTopic}.`,
         duration: 60,
         totalQuestions: data.questions.length,
         shuffleQuestions: true
@@ -343,36 +343,36 @@ export default function TeacherExamsPage() {
     }
   };
 
-  const fetchExams = async () => {
+  const fetchQuizzes = async () => {
     try {
-      const res = await fetch("/api/exams");
+      const res = await fetch("/api/quizzes");
       if (res.ok) {
         const data = await res.json();
-        setExams(data.exams);
+        setQuizzes(data.quizzes);
       }
     } catch (error) {
-      console.error("Failed to fetch exams", error);
+      console.error("Failed to fetch quizzes", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch exams from our backend API
+  // Fetch quizzes from our backend API
   useEffect(() => {
-    fetchExams();
+    fetchQuizzes();
   }, []);
 
-  const handleCreateExam = async (e: React.FormEvent) => {
+  const handleCreateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
     setIsCreating(true);
 
     try {
-      const res = await fetch("/api/exams", {
+      const res = await fetch("/api/quizzes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...newExamForm,
+          ...newQuizForm,
           totalQuestions: aiGeneratedQuestions.length,
           questions: aiGeneratedQuestions
         }),
@@ -381,15 +381,15 @@ export default function TeacherExamsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setCreateError(data.message || data.error || "Failed to create exam");
+        setCreateError(data.details || data.message || data.error || "Failed to create quiz");
         setIsCreating(false);
         return;
       }
 
-      // Success! Close modal, reset form, refresh exams
+      // Success! Close modal, reset form, refresh quizzes
       setIsCreateModalOpen(false);
       setAiGeneratedQuestions([]);
-      setNewExamForm({
+      setNewQuizForm({
         title: "",
         subjectName: "",
         description: "",
@@ -397,7 +397,7 @@ export default function TeacherExamsPage() {
         totalQuestions: 10,
         shuffleQuestions: true
       });
-      fetchExams();
+      fetchQuizzes();
     } catch (err) {
       setCreateError("Network error. Please try again.");
     } finally {
@@ -405,20 +405,20 @@ export default function TeacherExamsPage() {
     }
   };
 
-  const filtered = exams.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()));
+  const filtered = quizzes.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="animate-fade-in">
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">📝 My Created Exams</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)]">📝 My Created Quizzes</h3>
           <div className="flex gap-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search exams..."
+                placeholder="Search quizzes..."
                 className="w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
               />
             </div>
@@ -428,9 +428,9 @@ export default function TeacherExamsPage() {
               <Sparkles className="w-3.5 h-3.5" /> AI Create
             </button>
             <button 
-              onClick={openNewExamModal}
+              onClick={openNewQuizModal}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all">
-              <Plus className="w-3.5 h-3.5" /> New Exam
+              <Plus className="w-3.5 h-3.5" /> New Quiz
             </button>
           </div>
         </div>
@@ -443,13 +443,13 @@ export default function TeacherExamsPage() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-[var(--muted)]">
               <span className="text-2xl mb-2">📄</span>
-              <p className="text-sm font-semibold">No exams found</p>
+              <p className="text-sm font-semibold">No quizzes found</p>
             </div>
           ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Exam Title", "Subject", "Join Code", "Questions", "Status", "Actions"].map((h) => (
+                  {["Quiz Title", "Subject", "Join Code", "Questions", "Status", "Actions"].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -466,24 +466,24 @@ export default function TeacherExamsPage() {
                     <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.totalQuestions}</td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        e.examStatus === 'in_progress' ? 'bg-blue-500/15 text-blue-600' :
-                        e.examStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' : 
-                        e.examStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
-                        e.examStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' : 
+                        e.quizStatus === 'in_progress' ? 'bg-blue-500/15 text-blue-600' :
+                        e.quizStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' : 
+                        e.quizStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
+                        e.quizStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' : 
                         'bg-slate-500/15 text-slate-400'
                       }`}>
-                        {e.examStatus.toUpperCase()}
+                        {e.quizStatus.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-5 py-3 flex gap-2">
-                      <button onClick={() => setManageExam(e)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] hover:text-indigo-500 transition-all">Manage</button>
-                      {e.examStatus === 'active' && (
+                      <button onClick={() => setManageQuiz(e)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] hover:text-indigo-500 transition-all">Manage</button>
+                      {e.quizStatus === 'active' && (
                         <button 
                           onClick={async () => {
-                            if (!confirm(`Are you sure you want to start "${e.title}"? Students in the lobby will immediately enter the exam.`)) return;
+                            if (!confirm(`Are you sure you want to start "${e.title}"? Students in the lobby will immediately enter the quiz.`)) return;
                             try {
-                              const res = await fetch(`/api/exams/${e.id}/start`, { method: "POST" });
-                              if (res.ok) fetchExams();
+                              const res = await fetch(`/api/quizzes/${e.id}/start`, { method: "POST" });
+                              if (res.ok) fetchQuizzes();
                             } catch (err) {
                               console.error(err);
                             }
@@ -502,16 +502,16 @@ export default function TeacherExamsPage() {
         </div>
       </div>
 
-      {/* CREATE EXAM MODAL */}
+      {/* CREATE QUIZ MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
-              <h2 className="text-lg font-bold text-[var(--ink)]">Create New Exam</h2>
+              <h2 className="text-lg font-bold text-[var(--ink)]">Create New Quiz</h2>
               <button onClick={() => setIsCreateModalOpen(false)} className="text-[var(--muted)] hover:text-white transition-colors">✕</button>
             </div>
             
-            <form onSubmit={handleCreateExam} className="flex-1 flex flex-col min-h-0">
+            <form onSubmit={handleCreateQuiz} className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {createError && (
                   <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
@@ -522,33 +522,33 @@ export default function TeacherExamsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left Column: Metadata (5/12 grid span) */}
                   <div className="lg:col-span-5 space-y-4">
-                    <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">Exam Settings</h3>
+                    <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">Quiz Settings</h3>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Exam Title *</label>
-                      <input required type="text" value={newExamForm.title} onChange={e => setNewExamForm({...newExamForm, title: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Midterm Examination" />
+                      <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Quiz Title *</label>
+                      <input required type="text" value={newQuizForm.title} onChange={e => setNewQuizForm({...newQuizForm, title: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Midterm Quizination" />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Subject Name *</label>
-                      <input required type="text" value={newExamForm.subjectName} onChange={e => setNewExamForm({...newExamForm, subjectName: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Computer Science 101" />
+                      <input required type="text" value={newQuizForm.subjectName} onChange={e => setNewQuizForm({...newQuizForm, subjectName: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Computer Science 101" />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Description</label>
-                      <textarea value={newExamForm.description} onChange={e => setNewExamForm({...newExamForm, description: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 min-h-[80px]" placeholder="Optional description..." />
+                      <textarea value={newQuizForm.description} onChange={e => setNewQuizForm({...newQuizForm, description: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 min-h-[80px]" placeholder="Optional description..." />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Duration (mins)</label>
-                      <input required type="number" min="5" value={newExamForm.duration} onChange={e => setNewExamForm({...newExamForm, duration: parseInt(e.target.value)})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" />
+                      <input required type="number" min="5" value={newQuizForm.duration} onChange={e => setNewQuizForm({...newQuizForm, duration: parseInt(e.target.value)})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" />
                     </div>
 
                     <div className="flex items-center gap-2 py-1">
                       <input 
                         type="checkbox" 
                         id="shuffleQuestions"
-                        checked={newExamForm.shuffleQuestions} 
-                        onChange={e => setNewExamForm({...newExamForm, shuffleQuestions: e.target.checked})}
+                        checked={newQuizForm.shuffleQuestions} 
+                        onChange={e => setNewQuizForm({...newQuizForm, shuffleQuestions: e.target.checked})}
                         className="w-4 h-4 rounded bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 text-indigo-600 focus:ring-0 cursor-pointer" 
                       />
                       <label htmlFor="shuffleQuestions" className="text-xs font-semibold text-[var(--ink)] cursor-pointer select-none">
@@ -647,7 +647,7 @@ export default function TeacherExamsPage() {
               <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex gap-3">
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-2 rounded-lg font-semibold text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#222] transition-all">Cancel</button>
                 <button type="submit" disabled={isCreating} className="flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50">
-                  {isCreating ? "Creating..." : "Create Exam"}
+                  {isCreating ? "Creating..." : "Create Quiz"}
                 </button>
               </div>
             </form>
@@ -700,12 +700,12 @@ export default function TeacherExamsPage() {
             
             <form onSubmit={handleAiGenerate} className="p-6 space-y-4 relative z-10">
               <p className="text-xs text-[var(--muted)] mb-4 leading-relaxed">
-                Provide a topic description, upload a document page, or use your webcam to capture questions. ProctorShield AI will instantly structure and generate your exam.
+                Provide a topic description, upload a document page, or use your webcam to capture questions. ProctorShield AI will instantly structure and generate your quiz.
               </p>
 
               {activeTab === "text" && (
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Exam Topic / Subject *</label>
+                  <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Quiz Topic / Subject *</label>
                   <textarea 
                     required 
                     value={aiTopic} 
@@ -800,35 +800,35 @@ export default function TeacherExamsPage() {
         </div>
       )}
 
-      {manageExam && (
+      {manageQuiz && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setManageExam(null)}
+          onClick={() => setManageQuiz(null)}
         >
           <div 
             className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
-              <h2 className="text-lg font-bold text-[var(--ink)]">Manage Exam</h2>
-              <button onClick={() => setManageExam(null)} className="p-2 -mr-2 text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
+              <h2 className="text-lg font-bold text-[var(--ink)]">Manage Quiz</h2>
+              <button onClick={() => setManageQuiz(null)} className="p-2 -mr-2 text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
             </div>
             
             <div className="p-6 space-y-6 overflow-y-auto">
               <div>
-                <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageExam.title}</h3>
-                <p className="text-sm text-[var(--muted)]">{manageExam.subject?.subjectName || "No Subject"}</p>
+                <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageQuiz.title}</h3>
+                <p className="text-sm text-[var(--muted)]">{manageQuiz.subject?.subjectName || "No Subject"}</p>
               </div>
 
               <div className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl p-4 flex flex-col items-center justify-center space-y-2">
                 <span className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest">Share this code with students</span>
                 <div className="flex items-center gap-3">
                   <code className="text-2xl font-mono font-bold text-indigo-500 tracking-wider">
-                    {manageExam.accessCode}
+                    {manageQuiz.accessCode}
                   </code>
                   <button 
                     onClick={() => {
-                      navigator.clipboard.writeText(manageExam.accessCode);
+                      navigator.clipboard.writeText(manageQuiz.accessCode);
                       alert("Join code copied to clipboard!");
                     }}
                     className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-400 rounded-lg transition-colors"
@@ -841,7 +841,7 @@ export default function TeacherExamsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="border border-[var(--border)] rounded-xl p-3">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Questions</div>
-                  <div className="text-lg font-semibold text-[var(--ink)]">{manageExam.totalQuestions}</div>
+                  <div className="text-lg font-semibold text-[var(--ink)]">{manageQuiz.totalQuestions}</div>
                 </div>
                 <div className="border border-[var(--border)] rounded-xl p-3">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase mb-1">Duration (mins)</div>
@@ -849,11 +849,11 @@ export default function TeacherExamsPage() {
                     type="number" 
                     min="1"
                     className="w-full px-2 py-1.5 bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-lg font-semibold text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
-                    defaultValue={manageExam.duration}
-                    onBlur={(e) => updateExamDuration(manageExam, e.target.value)}
+                    defaultValue={manageQuiz.duration}
+                    onBlur={(e) => updateQuizDuration(manageQuiz, e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        updateExamDuration(manageExam, e.currentTarget.value);
+                        updateQuizDuration(manageQuiz, e.currentTarget.value);
                         e.currentTarget.blur();
                       }
                     }}
@@ -863,16 +863,16 @@ export default function TeacherExamsPage() {
               </div>
 
               {/* Display questions and choices with correct answer highlighted */}
-              {manageExamDetails ? (
+              {manageQuizDetails ? (
                 <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 border-t border-[var(--border)] pt-4">
                   <h4 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
                     <span>Generated Questions</span>
                     <span className="text-[10px] bg-indigo-500/10 text-indigo-500 px-2 py-0.5 rounded-full normal-case font-semibold">
-                      {manageExamDetails.shuffleQuestions ? 'Shuffled' : 'Standard'}
+                      {manageQuizDetails.shuffleQuestions ? 'Shuffled' : 'Standard'}
                     </span>
                   </h4>
-                  {manageExamDetails.questions && manageExamDetails.questions.length > 0 ? (
-                    manageExamDetails.questions.map((q: any, qi: number) => (
+                  {manageQuizDetails.questions && manageQuizDetails.questions.length > 0 ? (
+                    manageQuizDetails.questions.map((q: any, qi: number) => (
                       <div key={q.id} className="p-3 bg-[var(--surface2)] border border-[var(--border)] rounded-xl text-xs space-y-1.5">
                         <div className="font-bold text-[var(--ink)]">{qi + 1}. {q.questionText}</div>
                         <div className="grid grid-cols-2 gap-2 pl-2">
@@ -886,7 +886,7 @@ export default function TeacherExamsPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-xs text-[var(--muted)] italic">No questions found for this exam.</div>
+                    <div className="text-xs text-[var(--muted)] italic">No questions found for this quiz.</div>
                   )}
                 </div>
               ) : (
@@ -896,38 +896,38 @@ export default function TeacherExamsPage() {
               )}
 
               <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
-                <div className="text-sm text-[var(--muted)] font-medium">Exam Status:</div>
+                <div className="text-sm text-[var(--muted)] font-medium">Quiz Status:</div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => toggleExamStatus(manageExam)}
-                    disabled={isUpdatingStatus || manageExam.examStatus === "ended"}
+                    onClick={() => toggleQuizStatus(manageQuiz)}
+                    disabled={isUpdatingStatus || manageQuiz.quizStatus === "ended"}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                      manageExam.examStatus === "active" 
+                      manageQuiz.quizStatus === "active" 
                         ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
                         : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
                     } disabled:opacity-50`}
                   >
-                    {isUpdatingStatus ? "Updating..." : manageExam.examStatus === "active" ? "Set to Draft" : manageExam.examStatus === "ended" ? "Ended" : "Make Active"}
+                    {isUpdatingStatus ? "Updating..." : manageQuiz.quizStatus === "active" ? "Set to Draft" : manageQuiz.quizStatus === "ended" ? "Ended" : "Make Active"}
                   </button>
                   <button
-                    onClick={() => endExam(manageExam)}
-                    disabled={isUpdatingStatus || manageExam.examStatus === "ended"}
+                    onClick={() => endQuiz(manageQuiz)}
+                    disabled={isUpdatingStatus || manageQuiz.quizStatus === "ended"}
                     className="px-4 py-2 rounded-lg text-xs font-bold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
                   >
-                    End Exam
+                    End Quiz
                   </button>
                 </div>
               </div>
             </div>
             <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex justify-between items-center">
               <button
-                onClick={() => deleteExam(manageExam)}
+                onClick={() => deleteQuiz(manageQuiz)}
                 disabled={isDeleting}
                 className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-all shadow-md shadow-red-600/20 flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Trash className="w-3.5 h-3.5" /> {isDeleting ? "Deleting..." : "Delete Exam"}
+                <Trash className="w-3.5 h-3.5" /> {isDeleting ? "Deleting..." : "Delete Quiz"}
               </button>
-              <button onClick={() => setManageExam(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
+              <button onClick={() => setManageQuiz(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
                 Close
               </button>
             </div>

@@ -37,13 +37,27 @@ model User {
 
   role              Role               @relation(fields: [roleId], references: [id])
   subjects          Subject[]
-  exams             Exam[]
-  studentExams      StudentExam[]
+  quizzes           Quiz[]
+  studentQuizzes    StudentQuiz[]
   notifications     Notification[]
   activityLogs      ActivityLog[]
   userSubscriptions UserSubscription[]
+  otpCodes          OtpCode[]
 
   @@map("users")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  code      String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_codes")
 }
 
 // --- SUBJECT & EXAM MANAGEMENT ---
@@ -57,12 +71,12 @@ model Subject {
   createdAt   DateTime @default(now()) @map("created_at")
 
   teacher User   @relation(fields: [teacherId], references: [id])
-  exams   Exam[]
+  quizzes Quiz[]
 
   @@map("subjects")
 }
 
-model Exam {
+model Quiz {
   id               Int      @id @default(autoincrement())
   subjectId        Int      @map("subject_id")
   teacherId        String   @map("teacher_id")
@@ -71,32 +85,32 @@ model Exam {
   accessCode       String?  @unique @map("access_code")
   isAiGenerated    Boolean  @default(false) @map("is_ai_generated")
   sourceFilePath   String?  @map("source_file_path")
-  examType         String?  @map("exam_type")
+  quizType         String?  @map("quiz_type")
   duration         Int?
   totalQuestions   Int?     @map("total_questions")
   passingScore     Int?     @map("passing_score")
   shuffleQuestions Boolean  @default(false) @map("shuffle_questions")
   allowRetake      Boolean  @default(false) @map("allow_retake")
-  examStatus       String   @default("draft") @map("exam_status")
+  quizStatus       String   @default("draft") @map("quiz_status")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  subject      Subject       @relation(fields: [subjectId], references: [id])
-  teacher      User          @relation(fields: [teacherId], references: [id])
-  questions    Question[]
-  studentExams StudentExam[]
+  subject        Subject       @relation(fields: [subjectId], references: [id])
+  teacher        User          @relation(fields: [teacherId], references: [id])
+  questions      Question[]
+  studentQuizzes StudentQuiz[]
 
-  @@map("exams")
+  @@map("quizzes")
 }
 
 model Question {
   id           Int      @id @default(autoincrement())
-  examId       Int      @map("exam_id")
+  quizId       Int      @map("quiz_id")
   questionText String   @map("question_text")
   questionType String?  @map("question_type")
   points       Int      @default(1)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  exam    Exam     @relation(fields: [examId], references: [id])
+  quiz    Quiz     @relation(fields: [quizId], references: [id])
   choices Choice[]
   answers Answer[]
 
@@ -114,12 +128,12 @@ model Choice {
   @@map("choices")
 }
 
-// --- STUDENT EXAM FLOW ---
+// --- STUDENT QUIZ FLOW ---
 
-model StudentExam {
+model StudentQuiz {
   id                  String   @id @default(uuid())
   studentId           String   @map("student_id")
-  examId              Int      @map("exam_id")
+  quizId              Int      @map("quiz_id")
   randomSeed          String?  @map("random_seed")
   startTime           DateTime? @map("start_time")
   endTime             DateTime? @map("end_time")
@@ -127,27 +141,27 @@ model StudentExam {
   remarks             String?
   aiVerdict           String?  @map("ai_verdict")
   cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
-  examStatus          String?  @map("exam_status")
+  quizStatus          String?  @map("quiz_status")
   createdAt           DateTime @default(now()) @map("created_at")
 
   student    User          @relation(fields: [studentId], references: [id])
-  exam       Exam          @relation(fields: [examId], references: [id])
+  quiz       Quiz          @relation(fields: [quizId], references: [id])
   answers    Answer[]
   violations Violation[]
   aiAnalysis AiAnalysis?
 
-  @@map("student_exams")
+  @@map("student_quizzes")
 }
 
 model Answer {
   id            BigInt  @id @default(autoincrement())
-  studentExamId String  @map("student_exam_id")
+  studentQuizId String  @map("student_quiz_id")
   questionId    Int     @map("question_id")
   answerText    String? @map("answer_text")
   isCorrect     Boolean? @map("is_correct")
   pointsEarned  Int?    @map("points_earned")
 
-  studentExam StudentExam @relation(fields: [studentExamId], references: [id])
+  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id])
   question    Question    @relation(fields: [questionId], references: [id])
 
   @@map("answers")
@@ -157,7 +171,7 @@ model Answer {
 
 model Violation {
   id              BigInt    @id @default(autoincrement())
-  studentExamId   String    @map("student_exam_id")
+  studentQuizId   String    @map("student_quiz_id")
   violationType   String?   @map("violation_type")
   confidenceScore Decimal?  @map("confidence_score") @db.Decimal(5, 2)
   timestamp       DateTime
@@ -165,7 +179,7 @@ model Violation {
   screenshotPath  String?   @map("screenshot_path")
   createdAt       DateTime  @default(now()) @map("created_at")
 
-  studentExam   StudentExam    @relation(fields: [studentExamId], references: [id])
+  studentQuiz   StudentQuiz    @relation(fields: [studentQuizId], references: [id])
   evidenceFiles EvidenceFile[]
 
   @@map("violations")
@@ -185,7 +199,7 @@ model EvidenceFile {
 
 model AiAnalysis {
   id                  Int      @id @default(autoincrement())
-  studentExamId       String   @unique @map("student_exam_id")
+  studentQuizId       String   @unique @map("student_quiz_id")
   totalViolations     Int      @default(0) @map("total_violations")
   cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
   riskLevel           String?  @map("risk_level")
@@ -193,7 +207,7 @@ model AiAnalysis {
   aiExplanation       String?  @map("ai_explanation")
   analyzedAt          DateTime @default(now()) @map("analyzed_at")
 
-  studentExam StudentExam @relation(fields: [studentExamId], references: [id])
+  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id])
 
   @@map("ai_analysis")
 }

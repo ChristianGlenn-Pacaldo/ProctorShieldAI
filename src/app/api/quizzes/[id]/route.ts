@@ -35,10 +35,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const { id } = await params;
-    const examId = parseInt(id);
+    const quizId = parseInt(id);
 
-    const exam = await prisma.exam.findUnique({
-      where: { id: examId },
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
       include: {
         subject: true,
         questions: {
@@ -49,42 +49,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     });
 
-    if (!exam) {
-      return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (!quiz) {
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
-    let questions = exam.questions;
-    let studentExam = null;
+    let questions = quiz.questions;
+    let studentQuiz: Awaited<ReturnType<typeof prisma.studentQuiz.findFirst>> = null;
 
     // Check permissions and apply shuffling/stripping for students
     if (session.role === "student") {
-      studentExam = await prisma.studentExam.findFirst({
+      studentQuiz = await prisma.studentQuiz.findFirst({
         where: {
           studentId: session.userId,
-          examId: exam.id
+          quizId: quiz.id
         }
       });
 
-      if (!studentExam) {
-        return NextResponse.json({ error: "You are not enrolled in this exam" }, { status: 403 });
+      if (!studentQuiz) {
+        return NextResponse.json({ error: "You are not enrolled in this quiz" }, { status: 403 });
       }
 
-      if (exam.examStatus === "draft") {
-        return NextResponse.json({ error: "This exam is not yet active." }, { status: 403 });
+      if (quiz.quizStatus === "draft") {
+        return NextResponse.json({ error: "This quiz is not yet active." }, { status: 403 });
       }
 
-      if (exam.examStatus === "ended") {
-        return NextResponse.json({ error: "This exam has already ended." }, { status: 403 });
+      if (quiz.quizStatus === "ended") {
+        return NextResponse.json({ error: "This quiz has already ended." }, { status: 403 });
       }
 
-      if (exam.shuffleQuestions) {
-        // Shuffle questions deterministically using the student's unique studentExam.id
-        questions = shuffleArray(exam.questions, studentExam.id);
+      if (quiz.shuffleQuestions) {
+        // Shuffle questions deterministically using the student's unique studentQuiz.id
+        questions = shuffleArray(quiz.questions, studentQuiz.id);
         
         // Also shuffle choices for each question deterministically
         questions = questions.map((q) => ({
           ...q,
-          choices: shuffleArray(q.choices, `${studentExam.id}-${q.id}`)
+          choices: shuffleArray(q.choices, `${studentQuiz!.id}-${q.id}`)
         }));
       }
     }
@@ -92,18 +92,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({
       success: true,
       userId: session.userId,
-      studentExamStatus: session.role === "student" ? studentExam?.examStatus : undefined,
-      studentExamId: session.role === "student" ? studentExam?.id : undefined,
-      exam: {
-        id: exam.id,
-        title: exam.title,
-        description: exam.description,
-        duration: exam.duration,
-        totalQuestions: exam.totalQuestions,
-        passingScore: exam.passingScore,
-        shuffleQuestions: exam.shuffleQuestions,
-        examStatus: exam.examStatus,
-        subject: exam.subject,
+      studentQuizStatus: session.role === "student" ? studentQuiz?.quizStatus : undefined,
+      studentQuizId: session.role === "student" ? studentQuiz?.id : undefined,
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        duration: quiz.duration,
+        totalQuestions: quiz.totalQuestions,
+        passingScore: quiz.passingScore,
+        shuffleQuestions: quiz.shuffleQuestions,
+        quizStatus: quiz.quizStatus,
+        subject: quiz.subject,
       },
       questions: questions.map(q => ({
         id: q.id,
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
   } catch (error) {
-    console.error("Get exam details error:", error);
+    console.error("Get quiz details error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -134,28 +134,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const { id } = await params;
-    const examId = parseInt(id);
+    const quizId = parseInt(id);
     const body = await req.json();
 
-    const existingExam = await prisma.exam.findUnique({
-      where: { id: examId },
+    const existingQuiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
     });
 
-    if (!existingExam || existingExam.teacherId !== session.userId) {
-      return NextResponse.json({ error: "Exam not found or unauthorized" }, { status: 404 });
+    if (!existingQuiz || existingQuiz.teacherId !== session.userId) {
+      return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
     }
 
-    const updatedExam = await prisma.exam.update({
-      where: { id: examId },
+    const updatedQuiz = await prisma.quiz.update({
+      where: { id: quizId },
       data: {
-        examStatus: body.examStatus !== undefined ? body.examStatus : existingExam.examStatus,
-        duration: body.duration !== undefined ? parseInt(body.duration) : existingExam.duration,
+        quizStatus: body.quizStatus !== undefined ? body.quizStatus : existingQuiz.quizStatus,
+        duration: body.duration !== undefined ? parseInt(body.duration) : existingQuiz.duration,
       },
     });
 
-    return NextResponse.json({ success: true, exam: updatedExam });
+    return NextResponse.json({ success: true, quiz: updatedQuiz });
   } catch (error) {
-    console.error("Update exam error:", error);
+    console.error("Update quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -168,18 +168,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     const { id } = await params;
-    const examId = parseInt(id);
+    const quizId = parseInt(id);
 
-    const existingExam = await prisma.exam.findUnique({
-      where: { id: examId },
+    const existingQuiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
     });
 
-    if (!existingExam) {
-      return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (!existingQuiz) {
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
-    // Only the teacher who created the exam or an admin can delete it
-    if (session.role !== "admin" && existingExam.teacherId !== session.userId) {
+    // Only the teacher who created the quiz or an admin can delete it
+    if (session.role !== "admin" && existingQuiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -187,22 +187,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.$transaction(async (tx) => {
       // 1. Get questions
       const questions = await tx.question.findMany({
-        where: { examId },
+        where: { quizId },
         select: { id: true }
       });
       const questionIds = questions.map(q => q.id);
 
-      // 2. Get student exams
-      const studentExams = await tx.studentExam.findMany({
-        where: { examId },
+      // 2. Get student quizzes
+      const studentQuizzes = await tx.studentQuiz.findMany({
+        where: { quizId },
         select: { id: true }
       });
-      const studentExamIds = studentExams.map(se => se.id);
+      const studentQuizIds = studentQuizzes.map(se => se.id);
 
-      if (studentExamIds.length > 0) {
+      if (studentQuizIds.length > 0) {
         // Get violations to delete evidence files first
         const violations = await tx.violation.findMany({
-          where: { studentExamId: { in: studentExamIds } },
+          where: { studentQuizId: { in: studentQuizIds } },
           select: { id: true }
         });
         const violationIds = violations.map(v => v.id);
@@ -214,19 +214,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         }
 
         await tx.violation.deleteMany({
-          where: { studentExamId: { in: studentExamIds } }
+          where: { studentQuizId: { in: studentQuizIds } }
         });
 
         await tx.aiAnalysis.deleteMany({
-          where: { studentExamId: { in: studentExamIds } }
+          where: { studentQuizId: { in: studentQuizIds } }
         });
 
         await tx.answer.deleteMany({
-          where: { studentExamId: { in: studentExamIds } }
+          where: { studentQuizId: { in: studentQuizIds } }
         });
 
-        await tx.studentExam.deleteMany({
-          where: { id: { in: studentExamIds } }
+        await tx.studentQuiz.deleteMany({
+          where: { id: { in: studentQuizIds } }
         });
       }
 
@@ -236,13 +236,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         });
 
         await tx.question.deleteMany({
-          where: { examId }
+          where: { quizId }
         });
       }
 
-      // Finally, delete the exam itself
-      await tx.exam.delete({
-        where: { id: examId }
+      // Finally, delete the quiz itself
+      await tx.quiz.delete({
+        where: { id: quizId }
       });
     });
 
@@ -250,29 +250,29 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.activityLog.create({
       data: {
         userId: session.userId,
-        activity: `Deleted exam: ${existingExam.title}`,
+        activity: `Deleted quiz: ${existingQuiz.title}`,
         ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       },
     });
 
-    // Broadcast exam deletion to admin
+    // Broadcast quiz deletion to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
       await pusherServer.trigger("admin-dashboard", "activity", {
-        type: "exam-deleted",
+        type: "quiz-deleted",
         userId: session.userId,
         fullName: session.fullName,
         role: session.role,
-        activity: `Deleted exam: ${existingExam.title}`,
+        activity: `Deleted quiz: ${existingQuiz.title}`,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
-      console.error("Failed to broadcast exam deletion to admin:", e);
+      console.error("Failed to broadcast quiz deletion to admin:", e);
     }
 
-    return NextResponse.json({ success: true, message: "Exam deleted successfully" });
+    return NextResponse.json({ success: true, message: "Quiz deleted successfully" });
   } catch (error) {
-    console.error("Delete exam error:", error);
+    console.error("Delete quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

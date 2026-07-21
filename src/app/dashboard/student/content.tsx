@@ -4,14 +4,14 @@ import { useState, useEffect } from "react";
 import { FileText, CheckCircle2, BarChart3, Shield } from "lucide-react";
 import Link from "next/link";
 
-interface StudentExam {
+interface StudentQuiz {
   id: string;
   score: number | null;
-  examStatus: string | null;
+  quizStatus: string | null;
   cheatingProbability: number | null;
   aiVerdict: string | null;
   createdAt: string;
-  exam: {
+  quiz: {
     id: number;
     title: string;
     duration: number | null;
@@ -29,35 +29,35 @@ export default function StudentDashboardContent() {
   const [joinCode, setJoinCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [studentExams, setStudentExams] = useState<StudentExam[]>([]);
+  const [studentQuizzes, setStudentQuizzes] = useState<StudentQuiz[]>([]);
   const [isFetching, setIsFetching] = useState(true);
 
-  const fetchExams = async () => {
+  const fetchQuizzes = async () => {
     try {
-      const res = await fetch("/api/exams");
+      const res = await fetch("/api/quizzes");
       if (res.ok) {
         const data = await res.json();
-        setStudentExams(data.exams || []);
+        setStudentQuizzes(data.quizzes || []);
       }
     } catch (error) {
-      console.error("Failed to fetch exams:", error);
+      console.error("Failed to fetch quizzes:", error);
     } finally {
       setIsFetching(false);
     }
   };
 
   useEffect(() => {
-    fetchExams();
+    fetchQuizzes();
   }, []);
 
-  const handleJoinExam = async () => {
+  const handleJoinQuiz = async () => {
     if (!joinCode.trim()) return;
     
     setIsLoading(true);
     setMessage("");
 
     try {
-      const res = await fetch("/api/exams/join", {
+      const res = await fetch("/api/quizzes/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessCode: joinCode }),
@@ -66,11 +66,11 @@ export default function StudentDashboardContent() {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage(`✅ ${data.message || "Successfully joined exam"}`);
+        setMessage(`✅ ${data.message || "Successfully joined quiz"}`);
         setJoinCode("");
-        fetchExams(); // Refresh lists
+        fetchQuizzes(); // Refresh lists
       } else {
-        setMessage(`❌ ${data.error || "Failed to join exam"}`);
+        setMessage(`❌ ${data.error || "Failed to join quiz"}`);
       }
     } catch (error) {
       setMessage("❌ Network error. Please try again.");
@@ -80,8 +80,8 @@ export default function StudentDashboardContent() {
   };
 
   // Compute Dynamic Stats
-  const completed = studentExams.filter((se) => se.examStatus === "completed");
-  const upcoming = studentExams.filter((se) => se.examStatus !== "completed");
+  const completed = studentQuizzes.filter((se) => se.quizStatus === "completed");
+  const upcoming = studentQuizzes.filter((se) => se.quizStatus !== "completed");
 
   const completedCount = completed.length;
   const upcomingCount = upcoming.length;
@@ -99,19 +99,19 @@ export default function StudentDashboardContent() {
   }
 
   const stats = [
-    { label: "Upcoming Exams", value: upcomingCount, icon: <FileText className="w-5 h-5" />, color: "bg-indigo-500/10 text-indigo-500" },
-    { label: "Completed Exams", value: completedCount, icon: <CheckCircle2 className="w-5 h-5" />, color: "bg-emerald-500/10 text-emerald-500" },
+    { label: "Upcoming Quizzes", value: upcomingCount, icon: <FileText className="w-5 h-5" />, color: "bg-indigo-500/10 text-indigo-500" },
+    { label: "Completed Quizzes", value: completedCount, icon: <CheckCircle2 className="w-5 h-5" />, color: "bg-emerald-500/10 text-emerald-500" },
     { label: "Average Score", value: completedCount > 0 ? `${avgScore}%` : "0%", icon: <BarChart3 className="w-5 h-5" />, color: "bg-amber-500/10 text-amber-500" },
     { label: "Trust Score", value: completedCount > 0 ? `${avgTrust}%` : "100%", icon: <Shield className="w-5 h-5" />, color: "bg-violet-500/10 text-violet-500" },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Join Exam Box */}
+      {/* Join Quiz Box */}
       <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-600/10 to-violet-600/10 border border-indigo-500/30">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h3 className="font-bold text-indigo-600 mb-1">Join an Exam</h3>
+            <h3 className="font-bold text-indigo-600 mb-1">Join an Quiz</h3>
             <p className="text-xs text-[var(--muted)]">
               Enter the code provided by your instructor to start your proctored session.
             </p>
@@ -125,11 +125,11 @@ export default function StudentDashboardContent() {
               className="w-36 px-4 py-2.5 text-center font-bold tracking-widest text-sm rounded-xl bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
             />
             <button
-              onClick={handleJoinExam}
+              onClick={handleJoinQuiz}
               disabled={isLoading}
               className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
             >
-              {isLoading ? "Joining..." : "Join Exam"}
+              {isLoading ? "Joining..." : "Join Quiz"}
             </button>
           </div>
         </div>
@@ -156,23 +156,23 @@ export default function StudentDashboardContent() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* Upcoming Exams */}
+        {/* Upcoming Quizzes */}
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)]">📝 Upcoming Exams</h3>
+            <h3 className="text-sm font-bold text-[var(--ink)]">📝 Upcoming Quizzes</h3>
           </div>
           <div className="divide-y divide-[var(--border)]">
             {isFetching ? (
-              <p className="p-5 text-xs text-[var(--muted)] animate-pulse">Loading exams...</p>
+              <p className="p-5 text-xs text-[var(--muted)] animate-pulse">Loading quizzes...</p>
             ) : upcoming.length === 0 ? (
-              <p className="p-5 text-xs text-[var(--muted)] italic">No upcoming exams. Join one using the code box above.</p>
+              <p className="p-5 text-xs text-[var(--muted)] italic">No upcoming quizzes. Join one using the code box above.</p>
             ) : (
               upcoming.map((se) => (
                 <div key={se.id} className="flex items-center justify-between px-5 py-3.5">
                   <div>
-                    <div className="text-sm font-semibold text-[var(--ink)]">{se.exam.title}</div>
+                    <div className="text-sm font-semibold text-[var(--ink)]">{se.quiz.title}</div>
                     <div className="text-xs text-[var(--muted)]">
-                      {se.exam.duration ? `${se.exam.duration} mins` : "Standard Timer"} · {se.exam.subject.subjectName}
+                      {se.quiz.duration ? `${se.quiz.duration} mins` : "Standard Timer"} · {se.quiz.subject.subjectName}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -180,10 +180,10 @@ export default function StudentDashboardContent() {
                       Live Now
                     </span>
                     <Link
-                      href={`/quiz/${se.exam.id}`}
+                      href={`/quiz/${se.quiz.id}`}
                       className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all"
                     >
-                      Take Exam
+                      Take Quiz
                     </Link>
                   </div>
                 </div>
@@ -201,7 +201,7 @@ export default function StudentDashboardContent() {
             {isFetching ? (
               <p className="p-5 text-xs text-[var(--muted)] animate-pulse">Loading results...</p>
             ) : completed.length === 0 ? (
-              <p className="p-5 text-xs text-[var(--muted)] italic">No completed exams yet.</p>
+              <p className="p-5 text-xs text-[var(--muted)] italic">No completed quizzes yet.</p>
             ) : (
               completed.map((se) => {
                 const isClean = se.aiVerdict === "clean";
@@ -216,8 +216,8 @@ export default function StudentDashboardContent() {
                 return (
                   <div key={se.id} className="flex items-center justify-between px-5 py-3.5">
                     <div>
-                      <div className="text-sm font-semibold text-[var(--ink)]">{se.exam.title}</div>
-                      <div className="text-xs text-[var(--muted)]">{se.exam.subject.subjectName}</div>
+                      <div className="text-sm font-semibold text-[var(--ink)]">{se.quiz.title}</div>
+                      <div className="text-xs text-[var(--muted)]">{se.quiz.subject.subjectName}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-[var(--ink)]">{se.score}%</span>

@@ -18,7 +18,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--surface2)]">
-          <h2 className="text-lg font-bold text-[var(--ink)]">Exam Result Details</h2>
+          <h2 className="text-lg font-bold text-[var(--ink)]">Quiz Result Details</h2>
           <button 
             onClick={onClose}
             className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--border)] hover:text-[var(--ink)] transition-colors"
@@ -31,7 +31,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         <div className="p-6 overflow-y-auto custom-scrollbar">
           
           <div className="mb-6 text-center">
-            <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{result.exam?.title || "Unknown Exam"}</h3>
+            <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{result.quiz?.title || "Unknown Quiz"}</h3>
             <p className="text-sm text-[var(--muted)]">
               Taken on {new Date(result.createdAt).toLocaleDateString()}
             </p>
@@ -100,17 +100,17 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         
         {/* Footer */}
         <div className="px-6 py-4 border-t border-[var(--border)] bg-[var(--surface2)] flex justify-end gap-3">
-          {result.examStatus !== "pending_retake" ? (
+          {result.quizStatus !== "pending_retake" ? (
             <button 
               onClick={async (e) => {
                 const btn = e.currentTarget;
                 btn.disabled = true;
                 btn.innerText = "Requesting...";
                 try {
-                  const res = await fetch("/api/exams/retake", {
+                  const res = await fetch("/api/quizzes/retake", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ studentExamId: result.id })
+                    body: JSON.stringify({ studentQuizId: result.id })
                   });
                   if (res.ok) {
                     btn.innerText = "Requested ✓";

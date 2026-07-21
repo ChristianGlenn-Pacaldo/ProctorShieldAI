@@ -29,11 +29,11 @@ export async function POST(req: NextRequest) {
             mimeType: "image/jpeg",
           },
         },
-        `You are a strict online exam proctoring AI system. Analyze this webcam image of a student taking an exam. 
+        `You are a strict online quiz proctoring AI system. Analyze this webcam image of a student taking an quiz. 
 Your ONLY task is to check for unauthorized devices.
 
 Check for this violation ONLY:
-1. "device_detected" - A cellphone, tablet, second laptop, smart watch, or any electronic device other than the exam computer is visible in the frame.
+1. "device_detected" - A cellphone, tablet, second laptop, smart watch, or any electronic device other than the quiz computer is visible in the frame.
 
 IMPORTANT RULES:
 - Only report clear, obvious violations. Do NOT report false positives.
@@ -41,7 +41,7 @@ IMPORTANT RULES:
 - Only report "device_detected" if you can clearly see a phone, tablet, or other device.
 - If no devices are visible, return an empty array.
 
-Respond with ONLY a valid JSON array of violation type strings. Examples:
+Respond with ONLY a valid JSON array of violation type strings. Quizples:
 - No devices: []
 - Phone visible: ["device_detected"]
 

@@ -20,6 +20,10 @@ export default function StudentLoginPage() {
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
 
+  // MFA State
+  const [mfaState, setMfaState] = useState({ isPending: false, userId: "", email: "", role: "" });
+  const [otpCode, setOtpCode] = useState("");
+
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setError("");
     setIsLoading(true);
@@ -42,7 +46,19 @@ export default function StudentLoginPage() {
         return;
       }
 
-      // Redirect based on role
+      // Check if MFA is required
+      if (data.requiresMfa) {
+        setMfaState({
+          isPending: true,
+          userId: data.userId,
+          email: data.email,
+          role: data.role
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Fallback for regular login (should not happen with our update)
       const role = data.user.role;
       if (role === "student") {
         window.location.href = "/dashboard/student";
@@ -133,6 +149,42 @@ export default function StudentLoginPage() {
     }
   };
 
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: mfaState.userId,
+          otpCode: otpCode,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Verification failed");
+        setIsLoading(false);
+        return;
+      }
+
+      const role = data.user.role;
+      if (role === "student") {
+        window.location.href = "/dashboard/student";
+      } else {
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setIsLoading(false);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
   const features = [
     { icon: <Target className="w-5 h-5" />, title: "99% Accurate Face Detection", sub: "Real-time monitoring" },
     { icon: <Camera className="w-5 h-5" />, title: "Automatic Evidence Capture", sub: "Screenshots on every violation event" },
@@ -152,7 +204,7 @@ export default function StudentLoginPage() {
               Student Portal
             </h1>
             <p className="text-sm text-white/40 leading-relaxed mb-10 max-w-md">
-              Access your exams in a secure environment. ProctorShield AI monitors proctored sessions, records evidence, and analyzes logs automatically.
+              Access your quizzes in a secure environment. ProctorShield AI monitors proctored sessions, records evidence, and analyzes logs automatically.
             </p>
             <div className="space-y-5">
               {features.map((f) => (
@@ -210,12 +262,62 @@ export default function StudentLoginPage() {
               </div>
             )}
 
-            {/* ── LOGIN FORM ──────────────────────── */}
-            {activePanel === "login" && (
+            {/* ── MFA OTP FORM ──────────────────────── */}
+            {mfaState.isPending ? (
+              <div className="animate-fade-in">
+                <h2 className="text-xl font-bold text-white mb-1">Verify Your Identity</h2>
+                <p className="text-sm text-white/35 mb-6">
+                  We sent a 6-digit verification code to <strong className="text-white">{mfaState.email}</strong>.
+                </p>
+
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">
+                      Verification Code
+                    </label>
+                    <input
+                      type="text"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      placeholder="Enter 6-digit code"
+                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-all text-center tracking-[0.5em]"
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpCode.length !== 6}
+                    className="w-full py-3.5 rounded-xl bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Verifying...
+                      </span>
+                    ) : (
+                      "Verify & Sign In"
+                    )}
+                  </button>
+                </form>
+                <p className="text-center text-xs text-white/25 mt-5">
+                  Didn't receive the email? Check your spam folder or{" "}
+                  <button
+                    onClick={() => { setMfaState({ isPending: false, userId: "", email: "", role: "" }); setOtpCode(""); }}
+                    className="text-indigo-400 font-semibold hover:text-indigo-300"
+                  >
+                    go back
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* ── LOGIN FORM ──────────────────────── */}
+                {activePanel === "login" && (
               <div className="animate-fade-in">
                 <h2 className="text-xl font-bold text-white mb-1">Student Sign In</h2>
                 <p className="text-sm text-white/35 mb-6">
-                  Sign in to access your proctored exams
+                  Sign in to access your proctored quizzes
                 </p>
 
                 {/* Real Google Button */}
@@ -391,6 +493,8 @@ export default function StudentLoginPage() {
                   </button>
                 </p>
               </div>
+            )}
+            </>
             )}
           </div>
         </div>

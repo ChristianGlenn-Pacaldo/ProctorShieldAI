@@ -44,7 +44,7 @@ export default function ReportsContent() {
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : bars.length === 0 ? (
-             <div className="text-center text-[var(--muted)] text-sm py-4">No exam data available yet.</div>
+             <div className="text-center text-[var(--muted)] text-sm py-4">No quiz data available yet.</div>
           ) : (
             bars.map((b) => (
               <div key={b.label} className="flex items-center gap-3">

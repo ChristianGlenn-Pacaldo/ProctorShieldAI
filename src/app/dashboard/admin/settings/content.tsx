@@ -72,7 +72,7 @@ export default function SettingsContent() {
             <div className="flex items-center justify-between py-3">
               <div>
                 <div className="text-sm font-medium text-[var(--ink)]">Strict AI Enforcements</div>
-                <div className="text-xs text-[var(--muted)]">Force lock exams on high severity violations</div>
+                <div className="text-xs text-[var(--muted)]">Force lock quizzes on high severity violations</div>
               </div>
               <button onClick={() => setStrictEnforce(!strictEnforce)} className={`w-10 h-6 rounded-full transition-all ${strictEnforce ? "bg-indigo-600" : "bg-[var(--muted2)]"}`}>
                 <span className={`block w-4 h-4 bg-white rounded-full transition-transform mx-1 ${strictEnforce ? "translate-x-4" : ""}`} />

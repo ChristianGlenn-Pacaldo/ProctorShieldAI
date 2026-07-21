@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Proctor Shield AI — AI-Powered Online Proctoring",
   description:
     "AI proctoring that detects cheating in real-time, captures evidence automatically, and delivers an intelligent verdict.",
-  keywords: ["proctoring", "AI", "exam", "cheating detection", "online exam"],
+  keywords: ["proctoring", "AI", "quiz", "cheating detection", "online quiz"],
 };
 
 export default function RootLayout({

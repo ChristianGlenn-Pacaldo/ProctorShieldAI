@@ -33,7 +33,7 @@ interface ViolationBreakdownItem {
 
 interface RecentVerdict {
   name: string;
-  exam: string;
+  quiz: string;
   violations: string[];
   verdict: string;
   verdictClass: string;
@@ -42,7 +42,7 @@ interface RecentVerdict {
 
 export default function TeacherDashboardContent({ teacherId }: { teacherId: string }) {
   const [stats, setStats] = useState({
-    totalExams: 0,
+    totalQuizzes: 0,
     studentsMonitored: 0,
     totalViolations: 0,
     flaggedStudents: 0,
@@ -223,9 +223,9 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       });
     });
 
-    // Student Submitted / Exam Complete Event
+    // Student Submitted / Quiz Complete Event
     channel.bind("student-submitted", (data: any) => {
-      console.log("Student completed exam on dashboard:", data);
+      console.log("Student completed quiz on dashboard:", data);
 
       // Remove from live view list
       setLiveStudents((prev) => prev.filter((s) => s.name !== data.studentName));
@@ -242,8 +242,8 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
 
   const statCards: StatCard[] = [
     {
-      label: "Total Exams",
-      value: stats.totalExams,
+      label: "Total Quizzes",
+      value: stats.totalQuizzes,
       icon: <FileText className="w-5 h-5" />,
       color: "bg-indigo-500/10 text-indigo-500",
     },
@@ -270,7 +270,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
   const filteredVerdicts = recentVerdicts.filter(
     (v) =>
       v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.exam.toLowerCase().includes(searchQuery.toLowerCase())
+      v.quiz.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -307,7 +307,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
                 <span className="text-xl mb-1">📹</span>
                 <p className="text-xs font-semibold">No active proctored sessions</p>
                 <p className="text-[10px] text-[var(--muted2)] mt-0.5">
-                  Students taking an exam will appear here in real-time
+                  Students taking an quiz will appear here in real-time
                 </p>
               </div>
             ) : (
@@ -384,7 +384,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
           ) : filteredVerdicts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)] text-center">
               <span className="text-xl mb-1.5">🎓</span>
-              <p className="text-xs font-semibold">No recent exam submissions</p>
+              <p className="text-xs font-semibold">No recent quiz submissions</p>
               <p className="text-[10px] text-[var(--muted2)] mt-0.5">
                 Completed student sessions will be displayed here immediately
               </p>
@@ -393,7 +393,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Student", "Exam", "Violations Summary", "AI Verdict", "Score", "Action"].map((h) => (
+                  {["Student", "Quiz", "Violations Summary", "AI Verdict", "Score", "Action"].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">
                       {h}
                     </th>
@@ -404,7 +404,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
                 {filteredVerdicts.map((v, i) => (
                   <tr key={v.name + i} className="hover:bg-[var(--surface2)] transition-colors">
                     <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{v.name}</td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{v.exam}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{v.quiz}</td>
                     <td className="px-5 py-3">
                       {v.violations.length > 0 ? (
                         <div className="flex gap-1.5 flex-wrap">

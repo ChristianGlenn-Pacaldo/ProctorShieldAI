@@ -2,7 +2,7 @@
 
 const reports = [
   {
-    exam: "MATH201 Quiz 2 (May 2, 2025)",
+    quiz: "MATH201 Quiz 2 (May 2, 2025)",
     verdict: "⚠ Suspicious",
     verdictClass: "bg-amber-500/15 text-amber-600",
     desc: "The system flagged some unusual activities during this session. Your instructor has been notified for manual review.",
@@ -12,7 +12,7 @@ const reports = [
     ],
   },
   {
-    exam: "CS101 Quiz 2 (May 5, 2025)",
+    quiz: "CS101 Quiz 2 (May 5, 2025)",
     verdict: "✓ Clean",
     verdictClass: "bg-emerald-500/15 text-emerald-600",
     desc: "No anomalies detected. Great job maintaining an optimal testing environment!",
@@ -39,9 +39,9 @@ export default function ReportsContent() {
 
           {/* Report Cards */}
           {reports.map((r) => (
-            <div key={r.exam} className="p-4 rounded-xl border border-[var(--border)]">
+            <div key={r.quiz} className="p-4 rounded-xl border border-[var(--border)]">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-semibold text-[var(--ink)]">{r.exam}</div>
+                <div className="text-sm font-semibold text-[var(--ink)]">{r.quiz}</div>
                 <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${r.verdictClass}`}>{r.verdict}</span>
               </div>
               <p className="text-xs text-[var(--muted)] mb-3 leading-relaxed">{r.desc}</p>

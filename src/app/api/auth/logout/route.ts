@@ -10,32 +10,32 @@ export async function POST(req: NextRequest) {
         where: { id: session.userId }
       });
 
-      if (dbUser && dbUser.password === "GOOGLE_AUTH_NO_PASSWORD") {
-        // Cascade delete Google user from database on logout
+      if (dbUser) {
+        // Cascade delete user from database on logout to keep it clean
         await prisma.$transaction(async (tx) => {
           // A. Deletion of teacher-related data
-          const exams = await tx.exam.findMany({
+          const quizzes = await tx.quiz.findMany({
             where: { teacherId: session.userId },
             select: { id: true }
           });
-          const examIds = exams.map(e => e.id);
+          const quizIds = quizzes.map(e => e.id);
 
-          if (examIds.length > 0) {
+          if (quizIds.length > 0) {
             const questions = await tx.question.findMany({
-              where: { examId: { in: examIds } },
+              where: { quizId: { in: quizIds } },
               select: { id: true }
             });
             const questionIds = questions.map(q => q.id);
 
-            const studentExams = await tx.studentExam.findMany({
-              where: { examId: { in: examIds } },
+            const studentQuizzes = await tx.studentQuiz.findMany({
+              where: { quizId: { in: quizIds } },
               select: { id: true }
             });
-            const studentExamIds = studentExams.map(se => se.id);
+            const studentQuizIds = studentQuizzes.map(se => se.id);
 
-            if (studentExamIds.length > 0) {
+            if (studentQuizIds.length > 0) {
               const violations = await tx.violation.findMany({
-                where: { studentExamId: { in: studentExamIds } },
+                where: { studentQuizId: { in: studentQuizIds } },
                 select: { id: true }
               });
               const violationIds = violations.map(v => v.id);
@@ -47,19 +47,19 @@ export async function POST(req: NextRequest) {
               }
 
               await tx.violation.deleteMany({
-                where: { studentExamId: { in: studentExamIds } }
+                where: { studentQuizId: { in: studentQuizIds } }
               });
 
               await tx.aiAnalysis.deleteMany({
-                where: { studentExamId: { in: studentExamIds } }
+                where: { studentQuizId: { in: studentQuizIds } }
               });
 
               await tx.answer.deleteMany({
-                where: { studentExamId: { in: studentExamIds } }
+                where: { studentQuizId: { in: studentQuizIds } }
               });
 
-              await tx.studentExam.deleteMany({
-                where: { id: { in: studentExamIds } }
+              await tx.studentQuiz.deleteMany({
+                where: { id: { in: studentQuizIds } }
               });
             }
 
@@ -69,11 +69,11 @@ export async function POST(req: NextRequest) {
               });
 
               await tx.question.deleteMany({
-                where: { examId: { in: examIds } }
+                where: { quizId: { in: quizIds } }
               });
             }
 
-            await tx.exam.deleteMany({
+            await tx.quiz.deleteMany({
               where: { teacherId: session.userId }
             });
           }
@@ -84,15 +84,15 @@ export async function POST(req: NextRequest) {
           });
 
           // B. Deletion of student-related data
-          const studentExamsAsStudent = await tx.studentExam.findMany({
+          const studentQuizzesAsStudent = await tx.studentQuiz.findMany({
             where: { studentId: session.userId },
             select: { id: true }
           });
-          const studentExamIdsAsStudent = studentExamsAsStudent.map(se => se.id);
+          const studentQuizIdsAsStudent = studentQuizzesAsStudent.map(se => se.id);
 
-          if (studentExamIdsAsStudent.length > 0) {
+          if (studentQuizIdsAsStudent.length > 0) {
             const violations = await tx.violation.findMany({
-              where: { studentExamId: { in: studentExamIdsAsStudent } },
+              where: { studentQuizId: { in: studentQuizIdsAsStudent } },
               select: { id: true }
             });
             const violationIds = violations.map(v => v.id);
@@ -104,18 +104,18 @@ export async function POST(req: NextRequest) {
             }
 
             await tx.violation.deleteMany({
-              where: { studentExamId: { in: studentExamIdsAsStudent } }
+              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
             });
 
             await tx.aiAnalysis.deleteMany({
-              where: { studentExamId: { in: studentExamIdsAsStudent } }
+              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
             });
 
             await tx.answer.deleteMany({
-              where: { studentExamId: { in: studentExamIdsAsStudent } }
+              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
             });
 
-            await tx.studentExam.deleteMany({
+            await tx.studentQuiz.deleteMany({
               where: { studentId: session.userId }
             });
           }
@@ -150,20 +150,6 @@ export async function POST(req: NextRequest) {
             where: { id: session.userId }
           });
         });
-      } else {
-        // Regular user: set offline and log logout activity
-        await prisma.user.update({
-          where: { id: session.userId },
-          data: { isOnline: false },
-        });
-
-        await prisma.activityLog.create({
-          data: {
-            userId: session.userId,
-            activity: `Logged out as ${session.role}`,
-            ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-          },
-        });
       }
 
       // Broadcast activity to admin
@@ -174,7 +160,7 @@ export async function POST(req: NextRequest) {
           userId: session.userId,
           fullName: session.fullName,
           role: session.role,
-          activity: `Logged out as ${session.role} ${dbUser && dbUser.password === "GOOGLE_AUTH_NO_PASSWORD" ? "(Google Account Cleaned Up)" : ""}`,
+          activity: `Logged out as ${session.role} (Account Cleaned Up)`,
           timestamp: new Date().toISOString(),
         });
       } catch (pusherErr) {

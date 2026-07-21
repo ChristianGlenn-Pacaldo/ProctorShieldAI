@@ -10,45 +10,45 @@ export async function GET(req: NextRequest) {
     }
 
     if (session.role === "teacher") {
-      // Teachers get the exams they created
-      const exams = await prisma.exam.findMany({
+      // Teachers get the quizzes they created
+      const quizzes = await prisma.quiz.findMany({
         where: { teacherId: session.userId },
         include: {
           subject: true,
-          _count: { select: { studentExams: true } },
+          _count: { select: { studentQuizzes: true } },
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, exams });
+      return NextResponse.json({ success: true, quizzes });
     } else if (session.role === "student") {
-      // Students get the exams they have joined
-      const studentExams = await prisma.studentExam.findMany({
+      // Students get the quizzes they have joined
+      const studentQuizzes = await prisma.studentQuiz.findMany({
         where: { studentId: session.userId },
         include: {
-          exam: {
+          quiz: {
             include: { subject: true, teacher: true },
           },
           aiAnalysis: true,
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, exams: studentExams });
+      return NextResponse.json({ success: true, quizzes: studentQuizzes });
     } else if (session.role === "admin") {
-      // Admins get all exams
-      const exams = await prisma.exam.findMany({
+      // Admins get all quizzes
+      const quizzes = await prisma.quiz.findMany({
         include: {
           subject: true,
           teacher: true,
-          _count: { select: { studentExams: true } },
+          _count: { select: { studentQuizzes: true } },
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, exams });
+      return NextResponse.json({ success: true, quizzes });
     }
 
     return NextResponse.json({ error: "Invalid role" }, { status: 403 });
   } catch (error) {
-    console.error("Fetch exams error:", error);
+    console.error("Fetch quizzes error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
       const currentRole = session?.role ? ` (you are logged in as ${session.role})` : "";
-      return NextResponse.json({ error: `Unauthorized. Only teachers can create exams${currentRole}.` }, { status: 401 });
+      return NextResponse.json({ error: `Unauthorized. Only teachers can create quizzes${currentRole}.` }, { status: 401 });
     }
 
     const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions } = await req.json();
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     // Generate random 4-digit access code (e.g. PS-1234)
     const accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const exam = await prisma.exam.create({
+    const quiz = await prisma.quiz.create({
       data: {
         teacherId: session.userId,
         subjectId: subject.id,
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         duration: duration || 60,
         totalQuestions: totalQuestions || (questions ? questions.length : 10),
         passingScore: passingScore || 50,
-        examStatus: "draft",
+        quizStatus: "draft",
         shuffleQuestions: shuffleQuestions || false,
         questions: questions && questions.length > 0 ? {
           create: questions.map((q: any) => ({
@@ -129,29 +129,29 @@ export async function POST(req: NextRequest) {
     await prisma.activityLog.create({
       data: {
         userId: session.userId,
-        activity: `Created exam: ${title}`,
+        activity: `Created quiz: ${title}`,
         ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       },
     });
 
-    // Broadcast exam creation to admin
+    // Broadcast quiz creation to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
       await pusherServer.trigger("admin-dashboard", "activity", {
-        type: "exam-created",
+        type: "quiz-created",
         userId: session.userId,
         fullName: session.fullName,
         role: "teacher",
-        activity: `Created exam: ${title}`,
+        activity: `Created quiz: ${title}`,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
-      console.error("Failed to broadcast exam creation to admin:", e);
+      console.error("Failed to broadcast quiz creation to admin:", e);
     }
 
-    return NextResponse.json({ success: true, exam }, { status: 201 });
-  } catch (error) {
-    console.error("Create exam error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ success: true, quiz }, { status: 201 });
+  } catch (error: any) {
+    console.error("Create quiz error:", error);
+    return NextResponse.json({ error: "Internal server error", details: error?.message || String(error) }, { status: 500 });
   }
 }

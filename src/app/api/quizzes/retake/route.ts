@@ -9,39 +9,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { studentExamId } = await req.json();
+    const { studentQuizId } = await req.json();
 
-    if (!studentExamId) {
-      return NextResponse.json({ error: "Missing studentExamId" }, { status: 400 });
+    if (!studentQuizId) {
+      return NextResponse.json({ error: "Missing studentQuizId" }, { status: 400 });
     }
 
-    const studentExam = await prisma.studentExam.findUnique({
-      where: { id: studentExamId },
-      include: { exam: true, student: true },
+    const studentQuiz = await prisma.studentQuiz.findUnique({
+      where: { id: studentQuizId },
+      include: { quiz: true, student: true },
     });
 
-    if (!studentExam || studentExam.studentId !== session.userId) {
+    if (!studentQuiz || studentQuiz.studentId !== session.userId) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 
-    if (studentExam.examStatus === "pending_retake") {
+    if (studentQuiz.quizStatus === "pending_retake") {
       return NextResponse.json({ error: "Retake already requested" }, { status: 400 });
     }
 
     // Update status to pending_retake
-    await prisma.studentExam.update({
-      where: { id: studentExamId },
-      data: { examStatus: "pending_retake" },
+    await prisma.studentQuiz.update({
+      where: { id: studentQuizId },
+      data: { quizStatus: "pending_retake" },
     });
 
     // Notify the teacher via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`teacher-${studentExam.exam.teacherId}`, "retake-request", {
-        studentExamId: studentExam.id,
-        studentName: studentExam.student.fullName,
-        examTitle: studentExam.exam.title,
-        examId: studentExam.exam.id,
+      await pusherServer.trigger(`teacher-${studentQuiz.quiz.teacherId}`, "retake-request", {
+        studentQuizId: studentQuiz.id,
+        studentName: studentQuiz.student.fullName,
+        quizTitle: studentQuiz.quiz.title,
+        quizId: studentQuiz.quiz.id,
       });
     } catch (e) {
       console.error("Failed to trigger retake request push event:", e);

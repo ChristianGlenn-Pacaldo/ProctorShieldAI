@@ -32,7 +32,7 @@ export default function LoginPortalSelector() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Student Portal</h2>
               <p className="text-sm text-white/35 leading-relaxed">
-                Access your assigned exams, complete proctored sessions, and view your detailed AI integrity and performance reports.
+                Access your assigned quizzes, complete proctored sessions, and view your detailed AI integrity and performance reports.
               </p>
             </div>
             <div className="mt-8 flex items-center gap-2 text-sm font-semibold text-indigo-400 group-hover:text-indigo-300 transition-colors">

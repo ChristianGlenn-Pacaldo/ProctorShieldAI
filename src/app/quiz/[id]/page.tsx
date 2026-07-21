@@ -6,7 +6,7 @@ import { Camera, AlertTriangle, CheckCircle } from "lucide-react";
 
 export default function QuizRoom() {
   const params = useParams();
-  const examId = params.id as string;
+  const quizId = params.id as string;
   const router = useRouter();
 
   const [hasStarted, setHasStarted] = useState(false);
@@ -24,29 +24,31 @@ export default function QuizRoom() {
   const isReportingRef = useRef(false);
   const isAlertingRef = useRef(false);
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
+  const [preWarning, setPreWarning] = useState<string | null>(null);
+  const [audioLevel, setAudioLevel] = useState(0);
 
-  const [exam, setExam] = useState<any>(null);
+  const [quiz, setQuiz] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [quizError, setQuizError] = useState("");
   const [answersState, setAnswersState] = useState<Record<number, number>>({});
-  const [studentExamStatus, setStudentExamStatus] = useState<string>("");
-  const [studentExamId, setStudentExamId] = useState<number | null>(null);
+  const [studentQuizStatus, setStudentQuizStatus] = useState<string>("");
+  const [studentQuizId, setStudentQuizId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
     const loadQuiz = async () => {
       try {
-        const res = await fetch(`/api/exams/${examId}`);
+        const res = await fetch(`/api/quizzes/${quizId}`);
         const data = await res.json();
         if (res.ok && data.success) {
-          setExam(data.exam);
+          setQuiz(data.quiz);
           setQuestions(data.questions);
-          setStudentExamStatus(data.studentExamStatus || "");
-          setStudentExamId(data.studentExamId || null);
+          setStudentQuizStatus(data.studentQuizStatus || "");
+          setStudentQuizId(data.studentQuizId || null);
           setUserId(data.userId || "");
-          if (data.exam.duration) {
-            setTimeLeft(data.exam.duration * 60);
+          if (data.quiz.duration) {
+            setTimeLeft(data.quiz.duration * 60);
           }
         } else {
           setQuizError(data.error || "Failed to load quiz");
@@ -58,11 +60,11 @@ export default function QuizRoom() {
       }
     };
     loadQuiz();
-  }, [examId]);
+  }, [quizId]);
 
   // Handle pusher lobby real-time updates
   useEffect(() => {
-    if (!examId || !userId) return;
+    if (!quizId || !userId) return;
 
     let pusherClient: any;
     
@@ -71,17 +73,17 @@ export default function QuizRoom() {
         cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1",
       });
 
-      // Subscribe to exam channel to know when exam starts
-      const examChannel = pusherClient.subscribe(`exam-${examId}`);
-      examChannel.bind("exam-started", () => {
-        setExam(prev => prev ? { ...prev, examStatus: "in_progress" } : prev);
+      // Subscribe to quiz channel to know when quiz starts
+      const quizChannel = pusherClient.subscribe(`quiz-${quizId}`);
+      quizChannel.bind("quiz-started", () => {
+        setQuiz((prev: any) => prev ? { ...prev, quizStatus: "in_progress" } : prev);
       });
 
       // Subscribe to student channel to know approval status
       const studentChannel = pusherClient.subscribe(`student-${userId}`);
       studentChannel.bind("approval-status", (data: any) => {
-        if (data.examId === parseInt(examId)) {
-          setStudentExamStatus(data.status);
+        if (data.quizId === parseInt(quizId)) {
+          setStudentQuizStatus(data.status);
           if (data.status === "rejected") {
             setQuizError("Your request to join late was rejected by the teacher.");
           }
@@ -91,21 +93,21 @@ export default function QuizRoom() {
 
     return () => {
       if (pusherClient) {
-        pusherClient.unsubscribe(`exam-${examId}`);
+        pusherClient.unsubscribe(`quiz-${quizId}`);
         pusherClient.unsubscribe(`student-${userId}`);
       }
     };
-  }, [examId, userId]);
+  }, [quizId, userId]);
 
   const handleSelectChoice = (questionId: number, choiceId: number) => {
-    setAnswersState(prev => ({
+    setAnswersState((prev: Record<number, number>) => ({
       ...prev,
       [questionId]: choiceId
     }));
   };
 
-  // ── Submit exam to backend ────────────────────────────
-  const submitExam = useCallback(async () => {
+  // ── Submit quiz to backend ────────────────────────────
+  const submitQuiz = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
@@ -114,17 +116,17 @@ export default function QuizRoom() {
         choiceId: cId
       }));
 
-      await fetch("/api/exams/submit", {
+      await fetch("/api/quizzes/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examId, answers: payloadAnswers }),
+        body: JSON.stringify({ quizId, answers: payloadAnswers }),
       });
     } catch (err) {
-      console.error("Failed to submit exam:", err);
+      console.error("Failed to submit quiz:", err);
     } finally {
       router.push("/dashboard/student");
     }
-  }, [examId, router, isSubmitting, answersState]);
+  }, [quizId, router, isSubmitting, answersState]);
 
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
@@ -156,7 +158,7 @@ export default function QuizRoom() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          examId,
+          quizId,
           violationType: type,
           confidenceScore: 100,
           snapshot: snapshot || undefined,
@@ -165,15 +167,15 @@ export default function QuizRoom() {
 
       isAlertingRef.current = true;
       if (newCount === 1) {
-        setWarningModal({ show: true, message: "⚠️ WARNING (1/3): Violation detected — " + type.replace(/_/g, " ") + ". Continuing this behavior will terminate your exam.", isFinal: false });
+        setWarningModal({ show: true, message: "⚠️ WARNING (1/3): Violation detected — " + type.replace(/_/g, " ") + ". Continuing this behavior will terminate your quiz.", isFinal: false });
       } else if (newCount === 2) {
-        setWarningModal({ show: true, message: "⚠️ WARNING (2/3): Second violation — " + type.replace(/_/g, " ") + ". One more violation and your exam will be automatically submitted.", isFinal: false });
+        setWarningModal({ show: true, message: "⚠️ WARNING (2/3): Second violation — " + type.replace(/_/g, " ") + ". One more violation and your quiz will be automatically submitted.", isFinal: false });
       } else if (newCount >= 3) {
-        setWarningModal({ show: true, message: "🚫 FINAL (3/3): Maximum violations reached. Your exam is being automatically terminated and submitted.", isFinal: true });
+        setWarningModal({ show: true, message: "🚫 FINAL (3/3): Maximum violations reached. Your quiz is being automatically terminated and submitted.", isFinal: true });
         setTimeout(() => {
           setWarningModal({ show: false, message: "", isFinal: false });
           isAlertingRef.current = false;
-          submitExam();
+          submitQuiz();
         }, 3000);
       }
     } catch (err) {
@@ -181,7 +183,7 @@ export default function QuizRoom() {
     } finally {
       isReportingRef.current = false;
     }
-  }, [examId, submitExam, captureSnapshot]);
+  }, [quizId, submitQuiz, captureSnapshot]);
 
   // ── Notify teacher that student joined (lightweight, no image) ──
   const notifyTeacherJoined = useCallback(async () => {
@@ -189,12 +191,12 @@ export default function QuizRoom() {
       await fetch("/api/live/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examId }),
+        body: JSON.stringify({ quizId }),
       });
     } catch (err) {
       console.error("Failed to notify teacher:", err);
     }
-  }, [examId]);
+  }, [quizId]);
 
   // ── Upload snapshot to server (separate from Pusher) ──
   const uploadSnapshot = useCallback(async () => {
@@ -204,12 +206,12 @@ export default function QuizRoom() {
       await fetch("/api/live/snapshot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot, examId }),
+        body: JSON.stringify({ snapshot, quizId }),
       });
     } catch (err) {
       console.error("Snapshot upload failed:", err);
     }
-  }, [captureSnapshot, examId]);
+  }, [captureSnapshot, quizId]);
 
   // ── Send frame to Gemini AI for real violation detection ──
   const analyzeFrame = useCallback(async () => {
@@ -251,6 +253,7 @@ export default function QuizRoom() {
 
     let snapshotInterval: NodeJS.Timeout;
     let aiInterval: NodeJS.Timeout;
+    let cocoInterval: NodeJS.Timeout;
     let audioInterval: NodeJS.Timeout;
     let audioContext: AudioContext | null = null;
     let analyser: AnalyserNode | null = null;
@@ -295,10 +298,17 @@ export default function QuizRoom() {
           uploadSnapshot();
         }, 3000);
 
-        // Load face-api models
+        // Load face-api models and COCO-SSD
         try {
           const faceapi = await import("@vladmandic/face-api");
-          await Promise.all([
+          const tf = await import("@tensorflow/tfjs");
+          const cocoSsd = await import("@tensorflow-models/coco-ssd");
+
+          // Ensure TF backend is ready
+          await tf.ready();
+          
+          const [cocoModel] = await Promise.all([
+            cocoSsd.load(),
             faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
             faceapi.nets.faceLandmark68Net.loadFromUri('/models')
           ]);
@@ -306,6 +316,7 @@ export default function QuizRoom() {
           let noFaceFrames = 0;
           let multipleFacesFrames = 0;
           let lookingAwayFrames = 0;
+          let phoneDetectedFrames = 0;
 
           // Run face tracking every 500ms
           faceApiInterval = setInterval(async () => {
@@ -335,32 +346,86 @@ export default function QuizRoom() {
               multipleFacesFrames = 0;
               setFaceStatus("Detected ✓");
               
-              // Nose tracking for head movement
+              // ── DIRECTIONAL HEAD TRACKING ──
               const landmarks = detections[0].landmarks;
-              const nose = landmarks.getNose()[0];
-              const jawline = landmarks.getJawOutline();
+              const leftEye = landmarks.getLeftEye()[0];
+              const rightEye = landmarks.getRightEye()[3];
+              const noseBottom = landmarks.getNose()[3]; // Tip of the nose
               
+              // Jaw sides don't move when shouting, so they are safe for Left/Right
+              const jawline = landmarks.getJawOutline();
               const leftJaw = jawline[0];
               const rightJaw = jawline[16];
               
               const faceWidth = rightJaw.x - leftJaw.x;
-              const noseToLeft = nose.x - leftJaw.x;
-              const noseRatio = noseToLeft / faceWidth;
+              const noseRatioX = (noseBottom.x - leftJaw.x) / faceWidth;
               
-              // If nose ratio is extreme, user is looking away
-              if (noseRatio < 0.25 || noseRatio > 0.75) {
+              // For Up/Down, use Eye-to-Nose distance normalized by Eye-to-Eye distance!
+              // This completely ignores the bottom jaw, so shouting will NOT affect it.
+              const eyeCenterY = (leftEye.y + rightEye.y) / 2;
+              const eyeDistance = rightEye.x - leftEye.x;
+              const noseLength = noseBottom.y - eyeCenterY;
+              const pitchRatio = noseLength / eyeDistance;
+              
+              let direction = "Focused ✓";
+              let violationReason = "";
+              
+              if (noseRatioX < 0.35) {
+                direction = "Looking Right ✗";
+                violationReason = "looking_right";
+              } else if (noseRatioX > 0.65) {
+                direction = "Looking Left ✗";
+                violationReason = "looking_left";
+              } else if (pitchRatio < 0.45) {
+                direction = "Looking Up ✗";
+                violationReason = "looking_up";
+              } else if (pitchRatio > 0.95) {
+                direction = "Looking Down ✗";
+                violationReason = "looking_down";
+              }
+              
+              setGazeStatus(direction);
+              
+              if (direction !== "Focused ✓") {
                 lookingAwayFrames++;
-                if (lookingAwayFrames > 6) { // 3 seconds
-                  reportViolation("looking_away");
-                  lookingAwayFrames = 0;
+                if (lookingAwayFrames === 3) {
+                  // Trigger Pre-warning
+                  setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
                 }
-                setGazeStatus("Looking Away ✗");
+                if (lookingAwayFrames > 8) { // ~4 seconds
+                  reportViolation(violationReason);
+                  lookingAwayFrames = 0;
+                  setPreWarning(null);
+                }
               } else {
                 lookingAwayFrames = 0;
-                setGazeStatus("Focused ✓");
+                setPreWarning(null);
               }
             }
           }, 500);
+
+          // ── COCO-SSD Object Detection ──
+          cocoInterval = setInterval(async () => {
+            if (!videoRef.current || isAlertingRef.current || isReportingRef.current || violationCountRef.current >= 3) return;
+            const predictions = await cocoModel.detect(videoRef.current);
+            const phoneDetected = predictions.some(p => p.class === "cell phone" && p.score > 0.5);
+            
+            if (phoneDetected) {
+              phoneDetectedFrames++;
+              setDeviceStatus("Phone Detected ✗");
+              if (phoneDetectedFrames === 1) {
+                setPreWarning("Unauthorized device (phone) detected in frame. Remove it immediately.");
+              }
+              if (phoneDetectedFrames >= 3) { // ~9 seconds total
+                reportViolation("device_detected");
+                phoneDetectedFrames = 0;
+                setPreWarning(null);
+              }
+            } else {
+              phoneDetectedFrames = 0;
+              setDeviceStatus("None ✓");
+            }
+          }, 3000);
 
         } catch (err) {
           console.error("Failed to load face-api:", err);
@@ -402,16 +467,23 @@ export default function QuizRoom() {
               }
               const rms = Math.sqrt(sum / bufferLength);
 
-              // RMS threshold of 0.08 indicates moderate background noise or speech.
-              if (rms > 0.08) {
+              // RMS threshold of 0.05 indicates speech/noise.
+              setAudioLevel(Math.min(100, Math.floor(rms * 1000)));
+              
+              if (rms > 0.05) {
                 violationConsecutiveCount++;
-                if (violationConsecutiveCount >= 4) { // speech or loud noise sustained for 2 seconds (4 * 500ms)
+                if (violationConsecutiveCount === 3) {
+                  setPreWarning("Audio anomaly detected. Please remain quiet.");
+                }
+                if (violationConsecutiveCount >= 6) { // sustained for 3 seconds
                   reportViolation("audio_anomaly");
                   violationConsecutiveCount = 0;
+                  setPreWarning(null);
                 }
               } else {
                 if (violationConsecutiveCount > 0) {
                   violationConsecutiveCount--;
+                  if (violationConsecutiveCount < 3) setPreWarning(null);
                 }
               }
             }, 500);
@@ -422,7 +494,7 @@ export default function QuizRoom() {
       })
       .catch((err) => {
         console.error("Camera access denied:", err);
-        alert("You must allow camera access to take this exam.");
+        alert("You must allow camera access to take this quiz.");
       });
 
     return () => {
@@ -432,6 +504,7 @@ export default function QuizRoom() {
       }
       if (snapshotInterval) clearInterval(snapshotInterval);
       if (aiInterval) clearInterval(aiInterval);
+      if (cocoInterval) clearInterval(cocoInterval);
       if (audioInterval) clearInterval(audioInterval);
       if (faceApiInterval) clearInterval(faceApiInterval);
       if (audioContext) {
@@ -444,7 +517,7 @@ export default function QuizRoom() {
   useEffect(() => {
     if (!hasStarted) return;
     const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      setTimeLeft((prev: number) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, [hasStarted]);
@@ -452,9 +525,9 @@ export default function QuizRoom() {
   // ── Auto Submit on Time Up ──
   useEffect(() => {
     if (hasStarted && timeLeft === 0 && !isSubmitting) {
-      submitExam();
+      submitQuiz();
     }
-  }, [hasStarted, timeLeft, isSubmitting, submitExam]);
+  }, [hasStarted, timeLeft, isSubmitting, submitQuiz]);
 
   // ── Anti-Cheat Event Listeners ──
   useEffect(() => {
@@ -537,12 +610,12 @@ export default function QuizRoom() {
           {loadingQuiz ? (
             <div className="py-20 text-gray-400">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p>Loading exam configuration...</p>
+              <p>Loading quiz configuration...</p>
             </div>
           ) : quizError ? (
             <div className="py-10 text-red-400 space-y-4">
               <AlertTriangle className="w-12 h-12 text-red-500 mx-auto" />
-              <p className="font-bold text-lg">Failed to Load Exam</p>
+              <p className="font-bold text-lg">Failed to Load Quiz</p>
               <p className="text-sm">{quizError}</p>
               <button 
                 onClick={() => router.push("/dashboard/student")}
@@ -556,24 +629,24 @@ export default function QuizRoom() {
               <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Camera className="w-8 h-8 text-indigo-500" />
               </div>
-              <h1 className="text-2xl font-bold text-white mb-2">{exam?.title || "Proctoring Initialization"}</h1>
-              <p className="text-indigo-400 font-semibold mb-2">{exam?.subject?.subjectName}</p>
+              <h1 className="text-2xl font-bold text-white mb-2">{quiz?.title || "Proctoring Initialization"}</h1>
+              <p className="text-indigo-400 font-semibold mb-2">{quiz?.subject?.subjectName}</p>
               <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                {exam?.description || "This exam is monitored by ProctorShield AI. Your camera and screen activity will be recorded and analyzed in real-time."}
+                {quiz?.description || "This quiz is monitored by ProctorShield AI. Your camera and screen activity will be recorded and analyzed in real-time."}
               </p>
               <div className="space-y-3 text-left mb-8 bg-[#1a1a1a] p-4 rounded-xl text-xs text-gray-300">
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Do not leave the browser window or switch tabs.</p>
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Copying, pasting, and screenshots are strictly prohibited.</p>
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Cellphones and other devices are not allowed in the frame.</p>
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Keep your face visible and facing the screen at all times.</p>
-                <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Exam will auto-terminate after 3 violations.</p>
+                <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Quiz will auto-terminate after 3 violations.</p>
               </div>
-              {studentExamStatus === "pending_approval" ? (
+              {studentQuizStatus === "pending_approval" ? (
                 <button disabled className="w-full py-3 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Waiting for Teacher Approval...
                 </button>
-              ) : exam?.examStatus === "active" ? (
+              ) : quiz?.quizStatus === "active" ? (
                 <button disabled className="w-full py-3 bg-indigo-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Waiting for Teacher to Start...
@@ -583,7 +656,7 @@ export default function QuizRoom() {
                   onClick={() => setHasStarted(true)}
                   className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
                 >
-                  I Understand, Start Exam
+                  I Understand, Start Quiz
                 </button>
               )}
             </>
@@ -593,7 +666,7 @@ export default function QuizRoom() {
     );
   }
 
-  // ─── ACTIVE EXAM SCREEN ──────────────────────────
+  // ─── ACTIVE QUIZ SCREEN ──────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col md:flex-row">
       {/* Warning Modal */}
@@ -611,20 +684,28 @@ export default function QuizRoom() {
                 }}
                 className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all"
               >
-                I Understand, Continue Exam
+                I Understand, Continue Quiz
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* LEFT: Exam Content */}
+      {/* Pre-Warning Banner */}
+      {preWarning && !warningModal.show && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500 text-black font-bold px-6 py-3 rounded-full shadow-2xl shadow-amber-500/20 flex items-center gap-2 animate-fade-in">
+          <AlertTriangle className="w-5 h-5" />
+          {preWarning}
+        </div>
+      )}
+
+      {/* LEFT: Quiz Content */}
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-800">
             <div>
-              <h1 className="text-2xl font-bold">{exam?.title || "Active Exam"}</h1>
-              <p className="text-gray-400 text-sm">{exam?.subject?.subjectName || "Loading..."}</p>
+              <h1 className="text-2xl font-bold">{quiz?.title || "Active Quiz"}</h1>
+              <p className="text-gray-400 text-sm">{quiz?.subject?.subjectName || "Loading..."}</p>
             </div>
             <div className="text-right">
               <div className={`text-xl font-mono ${timeLeft < 300 ? 'text-red-400 animate-pulse' : 'text-indigo-400'}`}>
@@ -681,11 +762,11 @@ export default function QuizRoom() {
 
           <div className="flex justify-end mt-8 pb-8">
             <button
-              onClick={submitExam}
+              onClick={submitQuiz}
               disabled={isSubmitting || loadingQuiz || !!quizError}
               className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
             >
-              {isSubmitting ? "Submitting..." : "Submit Exam"}
+              {isSubmitting ? "Submitting..." : "Submit Quiz"}
             </button>
           </div>
         </div>
@@ -730,6 +811,15 @@ export default function QuizRoom() {
             <div className="flex justify-between items-center text-xs">
               <span className="text-gray-400">Device Scan</span>
               <span className={`font-bold ${deviceStatus.includes("✓") ? "text-emerald-500" : "text-red-500"}`}>{deviceStatus}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs pt-2 border-t border-gray-800">
+              <span className="text-gray-400">Audio Level</span>
+              <div className="w-24 h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${audioLevel > 50 ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                  style={{ width: `${audioLevel}%` }} 
+                />
+              </div>
             </div>
             <div className="flex justify-between items-center text-xs pt-2 border-t border-gray-800">
               <span className="text-gray-400">AI Status</span>

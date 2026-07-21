@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { imageBase64, mimeType, topic, numQuestions } = body;
 
-    let prompt = `You are an expert exam creator. `;
+    let prompt = `You are an expert quiz creator. `;
     if (imageBase64) {
       prompt += `Analyze this image (which could be syllabus, notes, or a past quiz) and extract the key concepts. `;
     } else if (topic) {
@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
     }
 
     prompt += `Generate ${numQuestions || 5} multiple-choice questions based on the material.
-    Also, detect a suitable exam title, subject name (like "Mathematics", "Biology", "Computer Science", etc.), and a short description from the material content.
+    Also, detect a suitable quiz title, subject name (like "Mathematics", "Biology", "Computer Science", etc.), and a short description from the material content.
     Format your response as a valid JSON object with the following fields:
-    - detectedTitle: a short, specific title for the exam based on the content (e.g. "Algebra Quiz", "Cell division Test")
+    - detectedTitle: a short, specific title for the quiz based on the content (e.g. "Algebra Quiz", "Cell division Test")
     - detectedSubject: a single subject category (e.g. "Mathematics", "Science", "History", "Literature", "General Knowledge")
-    - detectedDescription: a brief summary of what the exam covers
+    - detectedDescription: a brief summary of what the quiz covers
     - questions: an array of questions, where each question has:
       - questionText (string)
       - choices (array of 4 objects, each with 'choiceText' (string) and 'isCorrect' (boolean))
@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
       detectedDescription
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Create error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
   }
 }

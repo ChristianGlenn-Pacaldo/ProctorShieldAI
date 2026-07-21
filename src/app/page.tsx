@@ -27,19 +27,19 @@ const features = [
   {
     icon: <Brain className="w-6 h-6" />,
     title: "Gemini AI Verdict",
-    desc: "After the exam, Google Gemini AI analyzes all violations and returns a cheating probability score with a detailed explanation.",
+    desc: "After the quiz, Google Gemini AI analyzes all violations and returns a cheating probability score with a detailed explanation.",
     color: "bg-amber-500/15 text-amber-400",
   },
   {
     icon: <MonitorX className="w-6 h-6" />,
     title: "Tab Switch Detection",
-    desc: "Instantly flags when students leave the exam window. Recorded with exact timestamps and confidence scores.",
+    desc: "Instantly flags when students leave the quiz window. Recorded with exact timestamps and confidence scores.",
     color: "bg-red-500/15 text-red-400",
   },
   {
     icon: <Mic className="w-6 h-6" />,
     title: "Audio Monitoring",
-    desc: "Microphone activity analysis detects suspicious background conversations or external assistance during exams.",
+    desc: "Microphone activity analysis detects suspicious background conversations or external assistance during quizzes.",
     color: "bg-violet-500/15 text-violet-400",
   },
   {
@@ -51,14 +51,14 @@ const features = [
 ];
 
 const steps = [
-  { num: "01", title: "Create & Assign", desc: "Teachers create exams with multiple question types, set timer, and enable AI proctoring in seconds." },
-  { num: "02", title: "Students Take Exam", desc: "Students accept consent, camera access is verified, and AI monitoring begins automatically." },
+  { num: "01", title: "Create & Assign", desc: "Teachers create quizzes with multiple question types, set timer, and enable AI proctoring in seconds." },
+  { num: "02", title: "Students Take Quiz", desc: "Students accept consent, camera access is verified, and AI monitoring begins automatically." },
   { num: "03", title: "AI Delivers Verdict", desc: "After submission, Gemini AI analyzes all violations and delivers a final cheating probability report." },
 ];
 
 const testimonials = [
   {
-    quote: "Proctor Shield completely changed how we run online exams. The AI verdict system saved our department hours of manual review.",
+    quote: "Proctor Shield completely changed how we run online quizzes. The AI verdict system saved our department hours of manual review.",
     name: "Dr. Maria Reyes",
     role: "Dean, University of Cebu",
     initials: "MR",
@@ -74,7 +74,7 @@ const testimonials = [
     stars: 5,
   },
   {
-    quote: "Setup was smooth, students adapted quickly, and the violation breakdown gives me confidence that our exams are fair and credible.",
+    quote: "Setup was smooth, students adapted quickly, and the violation breakdown gives me confidence that our quizzes are fair and credible.",
     name: "Ana Lim",
     role: "CS Instructor, DLSU",
     initials: "AL",
@@ -134,7 +134,7 @@ export default function LandingPage() {
             <br />
             Run{" "}
             <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
-              Honest Exams
+              Honest Quizzes
             </span>{" "}
             Online
           </h1>
@@ -159,7 +159,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-2xl mx-auto">
             {[
               { val: "98.4%", lbl: "Detection accuracy" },
-              { val: "50K+", lbl: "Exams proctored" },
+              { val: "50K+", lbl: "Quizzes proctored" },
               { val: "<1s", lbl: "Violation alert time" },
               { val: "200+", lbl: "Schools trust us" },
             ].map((s) => (
@@ -183,7 +183,7 @@ export default function LandingPage() {
           <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)]">
             Everything for secure
             <br />
-            online examinations
+            online quizinations
           </h2>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -312,7 +312,7 @@ export default function LandingPage() {
               </span>
             </div>
             <p className="text-xs text-white/35 mt-3 mb-6 leading-relaxed">
-              Full AI analysis, evidence replay, unlimited exams.
+              Full AI analysis, evidence replay, unlimited quizzes.
             </p>
             <Link
               href="/login"
@@ -327,7 +327,7 @@ export default function LandingPage() {
       {/* ── CTA ────────────────────────────────────── */}
       <section className="px-6 md:px-12 py-20 text-center bg-gradient-to-b from-indigo-600/[0.08] via-violet-600/[0.04] to-transparent border-t border-white/[0.04]">
         <h2 className="text-3xl md:text-4xl font-extrabold max-w-lg mx-auto font-[family-name:var(--font-display)]">
-          Ready to make your exams cheat-proof?
+          Ready to make your quizzes cheat-proof?
         </h2>
         <p className="text-white/40 text-base mt-4 mb-10">
           What are you waiting for? Join ProctorShield-AI now!

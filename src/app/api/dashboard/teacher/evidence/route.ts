@@ -11,24 +11,24 @@ export async function GET(req: NextRequest) {
 
     const teacherId = session.userId;
 
-    // Fetch violations for exams created by this teacher
+    // Fetch violations for quizzes created by this teacher
     const violations = await prisma.violation.findMany({
       where: {
-        studentExam: {
-          exam: {
+        studentQuiz: {
+          quiz: {
             teacherId: teacherId,
           },
         },
       },
       include: {
-        studentExam: {
+        studentQuiz: {
           include: {
             student: {
               select: {
                 fullName: true,
               },
             },
-            exam: {
+            quiz: {
               select: {
                 title: true,
               },
@@ -79,8 +79,8 @@ export async function GET(req: NextRequest) {
 
       return {
         id: v.id.toString(),
-        name: v.studentExam.student.fullName,
-        examTitle: v.studentExam.exam.title,
+        name: v.studentQuiz.student.fullName,
+        quizTitle: v.studentQuiz.quiz.title,
         event: `${displayType} · ${formattedTime}`,
         violationType: v.violationType,
         timestamp: v.timestamp,

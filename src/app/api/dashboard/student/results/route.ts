@@ -9,12 +9,12 @@ export async function GET() {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const results = await prisma.studentExam.findMany({
+    const results = await prisma.studentQuiz.findMany({
       where: {
         studentId: session.userId,
       },
       include: {
-        exam: true,
+        quiz: true,
         aiAnalysis: true,
       },
       orderBy: {
@@ -36,15 +36,15 @@ export async function DELETE() {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const exams = await prisma.studentExam.findMany({
+    const quizzes = await prisma.studentQuiz.findMany({
       where: { studentId: session.userId },
       select: { id: true }
     });
-    const examIds = exams.map(e => e.id);
+    const quizIds = quizzes.map(e => e.id);
 
-    if (examIds.length > 0) {
+    if (quizIds.length > 0) {
       const violations = await prisma.violation.findMany({
-        where: { studentExamId: { in: examIds } },
+        where: { studentQuizId: { in: quizIds } },
         select: { id: true }
       });
       const violationIds = violations.map(v => v.id);
@@ -53,10 +53,10 @@ export async function DELETE() {
         await prisma.evidenceFile.deleteMany({ where: { violationId: { in: violationIds } } });
       }
 
-      await prisma.answer.deleteMany({ where: { studentExamId: { in: examIds } } });
-      await prisma.violation.deleteMany({ where: { studentExamId: { in: examIds } } });
-      await prisma.aiAnalysis.deleteMany({ where: { studentExamId: { in: examIds } } });
-      await prisma.studentExam.deleteMany({ where: { id: { in: examIds } } });
+      await prisma.answer.deleteMany({ where: { studentQuizId: { in: quizIds } } });
+      await prisma.violation.deleteMany({ where: { studentQuizId: { in: quizIds } } });
+      await prisma.aiAnalysis.deleteMany({ where: { studentQuizId: { in: quizIds } } });
+      await prisma.studentQuiz.deleteMany({ where: { id: { in: quizIds } } });
     }
 
     return NextResponse.json({ success: true, message: "History cleared successfully" });

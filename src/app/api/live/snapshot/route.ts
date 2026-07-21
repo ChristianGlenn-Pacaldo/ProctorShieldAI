@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { logDebug } from "@/lib/debug-logger";
 
-// In-memory snapshot store: studentName -> { snapshot, examTitle, updatedAt }
+// In-memory snapshot store: studentName -> { snapshot, quizTitle, updatedAt }
 // This avoids Pusher's 10KB limit entirely
 const snapshotStore = new Map<string, {
   snapshot: string;
   studentName: string;
-  examTitle: string;
-  examId: number;
+  quizTitle: string;
+  quizId: number;
   updatedAt: number;
  }>();
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { snapshot, examId, examTitle } = await req.json();
+    const { snapshot, quizId, quizTitle } = await req.json();
 
     if (!snapshot) {
       logDebug("POST /api/live/snapshot: Missing snapshot data");
@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
     store.set(session.fullName, {
       snapshot,
       studentName: session.fullName,
-      examTitle: examTitle || "Exam",
-      examId: Number(examId),
+      quizTitle: quizTitle || "Quiz",
+      quizId: Number(quizId),
       updatedAt: Date.now(),
     });
     logDebug(`POST /api/live/snapshot: Stored snapshot for ${session.fullName} (active count: ${store.size})`);
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
       if (now - val.updatedAt < 30000) {
         snapshots.push({
           studentName: val.studentName,
-          examTitle: val.examTitle,
+          quizTitle: val.quizTitle,
           snapshot: val.snapshot,
           updatedAt: val.updatedAt,
         });

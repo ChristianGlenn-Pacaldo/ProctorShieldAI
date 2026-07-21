@@ -10,31 +10,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { examId, violationType, confidenceScore, snapshot } = await req.json();
+    const { quizId, violationType, confidenceScore, snapshot } = await req.json();
 
-    if (!examId || !violationType) {
+    if (!quizId || !violationType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Get the studentExam record
-    const studentExam = await prisma.studentExam.findFirst({
+    // Get the studentQuiz record
+    const studentQuiz = await prisma.studentQuiz.findFirst({
       where: {
         studentId: session.userId,
-        examId: Number(examId),
+        quizId: Number(quizId),
       },
       include: {
-        exam: true,
+        quiz: true,
       },
     });
 
-    if (!studentExam) {
-      return NextResponse.json({ error: "Exam session not found" }, { status: 404 });
+    if (!studentQuiz) {
+      return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
     // Record the violation in the database
     const violation = await prisma.violation.create({
       data: {
-        studentExamId: studentExam.id,
+        studentQuizId: studentQuiz.id,
         violationType: violationType,
         confidenceScore: confidenceScore || 100,
         timestamp: new Date(),
@@ -44,12 +44,12 @@ export async function POST(req: NextRequest) {
     });
 
     // Broadcast the violation to the teacher via Pusher
-    // We use the teacher's ID as the channel name so the teacher receives alerts for all their exams
-    const channelName = `teacher-${studentExam.exam.teacherId}`;
+    // We use the teacher's ID as the channel name so the teacher receives alerts for all their quizzes
+    const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
     
     await pusherServer.trigger(channelName, "new-violation", {
       studentName: session.fullName,
-      examTitle: studentExam.exam.title,
+      quizTitle: studentQuiz.quiz.title,
       violationType: violationType,
       timestamp: violation.timestamp,
     });
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         userId: session.userId,
         fullName: session.fullName,
         role: "student",
-        activity: `Violation (${violationType}) flagged for ${session.fullName} on ${studentExam.exam.title}`,
+        activity: `Violation (${violationType}) flagged for ${session.fullName} on ${studentQuiz.quiz.title}`,
         timestamp: violation.timestamp.toISOString(),
       });
     } catch (e) {

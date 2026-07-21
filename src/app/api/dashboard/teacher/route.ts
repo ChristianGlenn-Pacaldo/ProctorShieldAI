@@ -11,15 +11,15 @@ export async function GET(req: NextRequest) {
 
     const teacherId = session.userId;
 
-    // 1. Count total exams created by the teacher
-    const totalExams = await prisma.exam.count({
+    // 1. Count total quizzes created by the teacher
+    const totalQuizzes = await prisma.quiz.count({
       where: { teacherId },
     });
 
-    // 2. Fetch all student exam sessions for the exams of this teacher
-    const studentExams = await prisma.studentExam.findMany({
+    // 2. Fetch all student quiz sessions for the quizzes of this teacher
+    const studentQuizzes = await prisma.studentQuiz.findMany({
       where: {
-        exam: {
+        quiz: {
           teacherId,
         },
       },
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
             fullName: true,
           },
         },
-        exam: {
+        quiz: {
           select: {
             title: true,
           },
@@ -44,12 +44,12 @@ export async function GET(req: NextRequest) {
     });
 
     // 3. Compute stats
-    const uniqueStudentIds = new Set(studentExams.map((se) => se.studentId));
+    const uniqueStudentIds = new Set(studentQuizzes.map((se) => se.studentId));
     const studentsMonitored = uniqueStudentIds.size;
 
-    const totalViolations = studentExams.reduce((sum, se) => sum + se.violations.length, 0);
+    const totalViolations = studentQuizzes.reduce((sum, se) => sum + se.violations.length, 0);
 
-    const flaggedStudentsCount = studentExams.filter((se) => {
+    const flaggedStudentsCount = studentQuizzes.filter((se) => {
       const prob = se.cheatingProbability ? Number(se.cheatingProbability) : 0;
       return (
         se.aiVerdict === "cheated" ||
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
       "Window Resized": 0,
     };
 
-    studentExams.forEach((se) => {
+    studentQuizzes.forEach((se) => {
       se.violations.forEach((v) => {
         const type = v.violationType || "";
         if (type === "tab_switch" || type === "tab_switching") {
@@ -113,8 +113,8 @@ export async function GET(req: NextRequest) {
     }));
 
     // 5. Build recent verdicts
-    const recentVerdicts = studentExams
-      .filter((se) => se.examStatus === "completed")
+    const recentVerdicts = studentQuizzes
+      .filter((se) => se.quizStatus === "completed")
       .sort((a, b) => {
         const timeA = new Date(a.endTime || a.createdAt).getTime();
         const timeB = new Date(b.endTime || b.createdAt).getTime();
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
 
         return {
           name: se.student.fullName,
-          exam: se.exam.title,
+          quiz: se.quiz.title,
           violations: violationSummaryList,
           verdict: verdictText,
           verdictClass,
@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       stats: {
-        totalExams,
+        totalQuizzes,
         studentsMonitored,
         totalViolations,
         flaggedStudents: flaggedStudentsCount,

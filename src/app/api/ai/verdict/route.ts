@@ -15,37 +15,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Gemini API key is not configured" }, { status: 500 });
     }
 
-    const { studentExamId } = await req.json();
-    if (!studentExamId) {
-      return NextResponse.json({ error: "studentExamId is required" }, { status: 400 });
+    const { studentQuizId } = await req.json();
+    if (!studentQuizId) {
+      return NextResponse.json({ error: "studentQuizId is required" }, { status: 400 });
     }
 
-    // Fetch the exam session and its violations
-    const studentExam = await prisma.studentExam.findUnique({
-      where: { id: studentExamId },
+    // Fetch the quiz session and its violations
+    const studentQuiz = await prisma.studentQuiz.findUnique({
+      where: { id: studentQuizId },
       include: {
-        exam: true,
+        quiz: true,
         violations: true,
       },
     });
 
-    if (!studentExam) {
-      return NextResponse.json({ error: "Exam session not found" }, { status: 404 });
+    if (!studentQuiz) {
+      return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     // Prepare the violation summary for the AI
-    const violations = studentExam.violations;
-    const violationSummary = violations.map(v => 
+    const violations = studentQuiz.violations;
+    const violationSummary = violations.map((v: { violationType: string | null; confidenceScore: any; timestamp: Date }) => 
       `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
     ).join("\n");
 
     const prompt = `You are ProctorShield AI, an advanced cheating detection system.
-    Analyze the following exam session for a student taking an exam titled "${studentExam.exam.title}".
+    Analyze the following quiz session for a student taking an quiz titled "${studentQuiz.quiz.title}".
     
-    Exam Session Data:
-    - Duration: ${studentExam.exam.duration} minutes
+    Quiz Session Data:
+    - Duration: ${studentQuiz.quiz.duration} minutes
     - Total Violations: ${violations.length}
     - Violation Details:
     ${violationSummary || "No violations recorded."}
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Save the verdict in the database
     const aiAnalysis = await prisma.aiAnalysis.upsert({
-      where: { studentExamId },
+      where: { studentQuizId },
       update: {
         totalViolations: violations.length,
         cheatingProbability: verdictData.cheatingProbability,
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
         aiExplanation: verdictData.aiExplanation,
       },
       create: {
-        studentExamId,
+        studentQuizId,
         totalViolations: violations.length,
         cheatingProbability: verdictData.cheatingProbability,
         riskLevel: verdictData.riskLevel,
@@ -97,9 +97,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Update the studentExam status
-    await prisma.studentExam.update({
-      where: { id: studentExamId },
+    // Update the studentQuiz status
+    await prisma.studentQuiz.update({
+      where: { id: studentQuizId },
       data: {
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,

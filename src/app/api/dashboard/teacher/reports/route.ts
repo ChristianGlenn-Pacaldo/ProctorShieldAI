@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
 
     const teacherId = session.userId;
 
-    // Fetch all student exam sessions for this teacher
-    const studentExams = await prisma.studentExam.findMany({
+    // Fetch all student quiz sessions for this teacher
+    const studentQuizzes = await prisma.studentQuiz.findMany({
       where: {
-        exam: {
+        quiz: {
           teacherId: teacherId,
         },
       },
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     let suspicious = 0;
     let highRisk = 0;
 
-    studentExams.forEach((se) => {
+    studentQuizzes.forEach((se) => {
       const vCount = se.violations.length;
       if (vCount === 0) {
         clean++;

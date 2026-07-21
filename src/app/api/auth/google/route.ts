@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import prisma from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
+import { sendOtpEmail } from "@/lib/email";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
@@ -95,54 +96,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Account suspended" }, { status: 403 });
     }
 
-    // Create custom JWT session
-    const token = await setSessionCookie({
-      userId: user.id,
-      email: user.email,
-      role: user.role.roleName.toLowerCase(),
-      fullName: user.fullName,
-    });
+    // ── MULTI-FACTOR AUTHENTICATION (MFA) ──
+    
+    // Generate a 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Set user online in database
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { isOnline: true },
-    });
-
-    // Log activity
-    await prisma.activityLog.create({
+    // Store OTP in database
+    await prisma.otpCode.create({
       data: {
         userId: user.id,
-        activity: `Logged in via Google as ${user.role.roleName}`,
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
+        code: otpCode,
+        expiresAt: expiresAt,
+      }
     });
 
-    // Broadcast activity to admin
-    try {
-      const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
-        type: "login",
-        userId: user.id,
-        fullName: user.fullName,
-        role: user.role.roleName,
-        activity: `Logged in via Google as ${user.role.roleName}`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.error("Failed to broadcast Google login to admin:", e);
-    }
+    // Send email asynchronously (don't await so we don't block the response)
+    sendOtpEmail(user.email, otpCode);
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role.roleName.toLowerCase(),
-        profileImage: user.profileImage,
-      },
-      token,
+      requiresMfa: true,
+      userId: user.id,
+      email: user.email,
+      role: user.role.roleName.toLowerCase()
     });
   } catch (error: any) {
     console.error("Google Auth error:", error);

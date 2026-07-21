@@ -6,7 +6,7 @@ import { Camera, AlertCircle, PlayCircle, Download } from "lucide-react";
 interface EvidenceItem {
   id: string;
   name: string;
-  examTitle: string;
+  quizTitle: string;
   event: string;
   violationType: string | null;
   timestamp: string;
@@ -75,7 +75,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               <AlertCircle className="w-10 h-10 mb-3 text-[var(--muted2)]" />
               <p className="text-sm font-semibold">No proctoring violations recorded</p>
               <p className="text-xs text-[var(--muted2)] mt-0.5">
-                Violations caught during student exams will appear here as evidence logs.
+                Violations caught during student quizzes will appear here as evidence logs.
               </p>
             </div>
           ) : (
@@ -91,7 +91,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               >
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{e.name}</div>
-                  <div className="text-xs font-semibold text-[var(--muted)] mt-0.5">{e.examTitle}</div>
+                  <div className="text-xs font-semibold text-[var(--muted)] mt-0.5">{e.quizTitle}</div>
                   <div className="text-[10px] text-[var(--muted)] mt-1">{e.event}</div>
                 </div>
                 <button
@@ -154,8 +154,8 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                   <span className="text-sm font-bold text-[var(--ink)]">{selectedEvidence.name}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
-                  <span className="text-xs font-bold text-[var(--muted)] uppercase">Exam</span>
-                  <span className="text-xs font-semibold text-[var(--ink)] truncate max-w-[200px]">{selectedEvidence.examTitle}</span>
+                  <span className="text-xs font-bold text-[var(--muted)] uppercase">Quiz</span>
+                  <span className="text-xs font-semibold text-[var(--ink)] truncate max-w-[200px]">{selectedEvidence.quizTitle}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
                   <span className="text-xs font-bold text-[var(--muted)] uppercase">Incident Details</span>

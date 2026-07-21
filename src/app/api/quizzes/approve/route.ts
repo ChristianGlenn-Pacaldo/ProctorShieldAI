@@ -9,38 +9,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { studentExamId, action } = await req.json();
+    const { studentQuizId, action } = await req.json();
 
-    if (!studentExamId || !["accept", "reject"].includes(action)) {
+    if (!studentQuizId || !["accept", "reject"].includes(action)) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
-    const studentExam = await prisma.studentExam.findUnique({
-      where: { id: studentExamId },
-      include: { exam: true },
+    const studentQuiz = await prisma.studentQuiz.findUnique({
+      where: { id: studentQuizId },
+      include: { quiz: true },
     });
 
-    if (!studentExam || studentExam.exam.teacherId !== session.userId) {
-      return NextResponse.json({ error: "Student exam not found or unauthorized" }, { status: 404 });
+    if (!studentQuiz || studentQuiz.quiz.teacherId !== session.userId) {
+      return NextResponse.json({ error: "Student quiz not found or unauthorized" }, { status: 404 });
     }
 
-    if (studentExam.examStatus !== "pending_approval") {
+    if (studentQuiz.quizStatus !== "pending_approval") {
       return NextResponse.json({ error: "Student is not pending approval" }, { status: 400 });
     }
 
     const newStatus = action === "accept" ? "enrolled" : "rejected";
 
-    await prisma.studentExam.update({
-      where: { id: studentExamId },
-      data: { examStatus: newStatus },
+    await prisma.studentQuiz.update({
+      where: { id: studentQuizId },
+      data: { quizStatus: newStatus },
     });
 
     // Notify the specific student
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`student-${studentExam.studentId}`, "approval-status", {
+      await pusherServer.trigger(`student-${studentQuiz.studentId}`, "approval-status", {
         status: newStatus,
-        examId: studentExam.examId,
+        quizId: studentQuiz.quizId,
       });
     } catch (e) {
       console.error("Failed to trigger approval push event:", e);

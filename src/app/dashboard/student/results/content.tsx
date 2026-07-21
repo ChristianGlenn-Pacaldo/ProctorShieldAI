@@ -29,7 +29,7 @@ export default function ResultsContent() {
   };
 
   const handleClearHistory = async () => {
-    if (!confirm("Are you sure you want to completely delete your exam history? This action cannot be undone.")) return;
+    if (!confirm("Are you sure you want to completely delete your quiz history? This action cannot be undone.")) return;
     
     try {
       const res = await fetch("/api/dashboard/student/results", {
@@ -59,7 +59,7 @@ export default function ResultsContent() {
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="text-2xl font-extrabold text-[var(--ink)]">{results.length}</div>
-          <div className="text-xs text-[var(--muted)]">Exams Taken</div>
+          <div className="text-xs text-[var(--muted)]">Quizzes Taken</div>
         </div>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
@@ -86,7 +86,7 @@ export default function ResultsContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["Exam", "Date Taken", "Score", "AI Verdict", "Details"].map((h) => (
+                {["Quiz", "Date Taken", "Score", "AI Verdict", "Details"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -98,7 +98,7 @@ export default function ResultsContent() {
                 </tr>
               ) : results.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-[var(--muted)]">No exam history found.</td>
+                  <td colSpan={5} className="px-5 py-8 text-center text-[var(--muted)]">No quiz history found.</td>
                 </tr>
               ) : (
                 results.map((r) => {
@@ -106,7 +106,7 @@ export default function ResultsContent() {
                   const verdictClass = isClean ? "bg-emerald-500/15 text-emerald-600" : "bg-rose-500/15 text-rose-600";
                   return (
                     <tr key={r.id} className="hover:bg-[var(--surface2)] transition-colors">
-                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.exam?.title || "Unknown Exam"}</td>
+                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.quiz?.title || "Unknown Quiz"}</td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{new Date(r.createdAt).toLocaleDateString()}</td>
                       <td className="px-5 py-3 text-sm font-bold text-[var(--ink)]">{r.score ? `${r.score}%` : "N/A"}</td>
                       <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${verdictClass}`}>{r.aiVerdict || "Pending"}</span></td>

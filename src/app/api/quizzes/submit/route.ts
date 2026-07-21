@@ -11,30 +11,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { examId, answers } = await req.json();
-    if (!examId) {
-      return NextResponse.json({ error: "examId is required" }, { status: 400 });
+    const { quizId, answers } = await req.json();
+    if (!quizId) {
+      return NextResponse.json({ error: "quizId is required" }, { status: 400 });
     }
 
-    // 1. Find the studentExam record
-    const studentExam = await prisma.studentExam.findFirst({
+    // 1. Find the studentQuiz record
+    const studentQuiz = await prisma.studentQuiz.findFirst({
       where: {
         studentId: session.userId,
-        examId: Number(examId),
+        quizId: Number(quizId),
       },
       include: {
-        exam: true,
+        quiz: true,
         violations: true,
       },
     });
 
-    if (!studentExam) {
-      return NextResponse.json({ error: "Exam session not found" }, { status: 404 });
+    if (!studentQuiz) {
+      return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
     // 2. Dynamic Grading and Saving Answers
     const dbQuestions = await prisma.question.findMany({
-      where: { examId: Number(examId) },
+      where: { quizId: Number(quizId) },
       include: { choices: true }
     });
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       if (answers && answers.length > 0) {
         try {
           await prisma.answer.deleteMany({
-            where: { studentExamId: studentExam.id }
+            where: { studentQuizId: studentQuiz.id }
           });
 
           await prisma.answer.createMany({
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
               const correctChoice = q?.choices.find(c => c.isCorrect);
               const isCorrect = q && correctChoice && a.choiceId === correctChoice.id;
               return {
-                studentExamId: studentExam.id,
+                studentQuizId: studentQuiz.id,
                 questionId: a.questionId,
                 pointsEarned: isCorrect ? q.points : 0,
                 isCorrect: isCorrect,
@@ -79,12 +79,12 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      // Fallback for legacy/mock exams
+      // Fallback for legacy/mock quizzes
       score = Math.floor(75 + Math.random() * 25);
     }
 
     // 3. AI Verdict Logic (Gemini with Robust Fallback)
-    const violations = studentExam.violations;
+    const violations = studentQuiz.violations;
     const violationSummary = violations.map(v => 
       `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
     ).join("\n");
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       cheatingProbability: 3,
       riskLevel: "low",
       finalVerdict: "clean",
-      aiExplanation: "No anomalies detected during the exam session. Student maintained focus.",
+      aiExplanation: "No anomalies detected during the quiz session. Student maintained focus.",
     };
 
     if (violations.length === 1) {
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         cheatingProbability: 85,
         riskLevel: "high",
         finalVerdict: "cheated",
-        aiExplanation: `Multiple integrity violations (${violations.length}) were flagged during the exam. Combined patterns strongly suggest external assistance.`,
+        aiExplanation: `Multiple integrity violations (${violations.length}) were flagged during the quiz. Combined patterns strongly suggest external assistance.`,
       };
     }
 
@@ -117,10 +117,10 @@ export async function POST(req: NextRequest) {
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const prompt = `You are ProctorShield AI, an advanced cheating detection system.
-Analyze the following exam session for a student taking an exam titled "${studentExam.exam.title}".
+Analyze the following quiz session for a student taking an quiz titled "${studentQuiz.quiz.title}".
 
-Exam Session Data:
-- Duration: ${studentExam.exam.duration} minutes
+Quiz Session Data:
+- Duration: ${studentQuiz.quiz.duration} minutes
 - Total Violations: ${violations.length}
 - Violation Details:
 ${violationSummary || "No violations recorded."}
@@ -154,7 +154,7 @@ Return ONLY the valid JSON object.`;
 
     // 4. Save AI Analysis Verdict to Database
     await prisma.aiAnalysis.upsert({
-      where: { studentExamId: studentExam.id },
+      where: { studentQuizId: studentQuiz.id },
       update: {
         totalViolations: violations.length,
         cheatingProbability: verdictData.cheatingProbability,
@@ -163,7 +163,7 @@ Return ONLY the valid JSON object.`;
         aiExplanation: verdictData.aiExplanation,
       },
       create: {
-        studentExamId: studentExam.id,
+        studentQuizId: studentQuiz.id,
         totalViolations: violations.length,
         cheatingProbability: verdictData.cheatingProbability,
         riskLevel: verdictData.riskLevel,
@@ -172,12 +172,12 @@ Return ONLY the valid JSON object.`;
       },
     });
 
-    // 5. Update StudentExam Status and Verdict
-    const updatedStudentExam = await prisma.studentExam.update({
-      where: { id: studentExam.id },
+    // 5. Update StudentQuiz Status and Verdict
+    const updatedStudentQuiz = await prisma.studentQuiz.update({
+      where: { id: studentQuiz.id },
       data: {
         endTime: new Date(),
-        examStatus: "completed",
+        quizStatus: "completed",
         score: score,
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
@@ -185,13 +185,13 @@ Return ONLY the valid JSON object.`;
     });
 
     // 6. Broadcast student-submitted event via Pusher
-    const channelName = `teacher-${studentExam.exam.teacherId}`;
+    const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
     try {
       await pusherServer.trigger(channelName, "student-submitted", {
         studentId: session.userId,
         studentName: session.fullName,
-        examId: studentExam.exam.id,
-        examTitle: studentExam.exam.title,
+        quizId: studentQuiz.quiz.id,
+        quizTitle: studentQuiz.quiz.title,
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
         score: score,
@@ -200,11 +200,11 @@ Return ONLY the valid JSON object.`;
 
       // Broadcast to admin dashboard
       await pusherServer.trigger("admin-dashboard", "activity", {
-        type: "exam-submit",
+        type: "quiz-submit",
         userId: session.userId,
         fullName: session.fullName,
         role: "student",
-        activity: `Exam completed: ${studentExam.exam.title} by ${session.fullName}`,
+        activity: `Quiz completed: ${studentQuiz.quiz.title} by ${session.fullName}`,
         timestamp: new Date().toISOString(),
       });
     } catch (pusherErr) {
@@ -213,11 +213,11 @@ Return ONLY the valid JSON object.`;
 
     return NextResponse.json({
       success: true,
-      studentExam: updatedStudentExam,
+      studentQuiz: updatedStudentQuiz,
     });
 
   } catch (error) {
-    console.error("Submit exam error:", error);
+    console.error("Submit quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

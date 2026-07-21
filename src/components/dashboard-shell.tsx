@@ -42,7 +42,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       section: "Main",
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/student" },
-        { label: "My Exams", icon: <FileText className="w-4 h-4" />, href: "/dashboard/student/exams" },
+        { label: "My Quizzes", icon: <FileText className="w-4 h-4" />, href: "/dashboard/student/quizzes" },
         { label: "Results", icon: <TrendingUp className="w-4 h-4" />, href: "/dashboard/student/results" },
         { label: "AI Reports", icon: <FileBarChart className="w-4 h-4" />, href: "/dashboard/student/reports" },
       ],
@@ -59,7 +59,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       section: "Main",
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/teacher" },
-        { label: "My Exams", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/teacher/exams" },
+        { label: "My Quizzes", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/teacher/quizzes" },
         { label: "Live Monitor", icon: <Radio className="w-4 h-4" />, href: "/dashboard/teacher/monitor" },
         { label: "Evidence Replay", icon: <Camera className="w-4 h-4" />, href: "/dashboard/teacher/evidence" },
         { label: "AI Reports", icon: <Brain className="w-4 h-4" />, href: "/dashboard/teacher/reports" },
@@ -78,7 +78,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/admin" },
         { label: "Users", icon: <FileText className="w-4 h-4" />, href: "/dashboard/admin/users" },
-        { label: "All Exams", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/admin/exams" },
+        { label: "All Quizzes", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/admin/quizzes" },
       ],
     },
     {
@@ -252,10 +252,10 @@ export default function DashboardShell({
             </button>
             {role === "teacher" && (
               <Link
-                href="/dashboard/teacher/exams?new=true"
+                href="/dashboard/teacher/quizzes?new=true"
                 className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20"
               >
-                + New Exam
+                + New Quiz
               </Link>
             )}
           </div>

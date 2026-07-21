@@ -9,14 +9,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 1. Fetch counts for stats (Active Sessions, Active Exams, Active Violations, AI Flags)
+    // 1. Fetch counts for stats (Active Sessions, Active Quizzes, Active Violations, AI Flags)
     const activeSessions = await prisma.user.count({
       where: { isOnline: true },
     });
 
-    const activeExams = await prisma.studentExam.count({
+    const activeQuizzes = await prisma.studentQuiz.count({
       where: {
-        examStatus: {
+        quizStatus: {
           not: "completed",
         },
       },
@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
 
     const activeViolations = await prisma.violation.count({
       where: {
-        studentExam: {
-          examStatus: {
+        studentQuiz: {
+          quizStatus: {
             not: "completed",
           },
         },
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
       success: true,
       stats: {
         totalUsers: activeSessions,       // Mapped to Active Sessions
-        totalExams: activeExams,          // Mapped to Exams In-Progress
+        totalQuizzes: activeQuizzes,          // Mapped to Quizzes In-Progress
         totalViolations: activeViolations, // Mapped to Violations (Live)
         aiVerdictsToday: aiFlags,          // Mapped to AI Flags
       },
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
         { label: "Admins Online", value: onlineAdmins, pct: Math.round((onlineAdmins / totalOnlineCalculated) * 100), color: "bg-rose-500" },
       ],
       activityBars: [
-        { label: "Exams In-Progress", value: activeExams, pct: activeExams > 0 ? 100 : 0, color: "bg-emerald-500" },
+        { label: "Quizzes In-Progress", value: activeQuizzes, pct: activeQuizzes > 0 ? 100 : 0, color: "bg-emerald-500" },
         { label: "Active Violations", value: activeViolations, pct: activeViolations > 0 ? 100 : 0, color: "bg-red-500" },
       ],
       activities: [], // Return empty array to start the live activities feed clean

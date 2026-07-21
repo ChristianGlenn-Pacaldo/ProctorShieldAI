@@ -13,41 +13,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { examId } = await req.json();
+    const { quizId } = await req.json();
 
-    if (!examId) {
-      return NextResponse.json({ error: "Missing examId" }, { status: 400 });
+    if (!quizId) {
+      return NextResponse.json({ error: "Missing quizId" }, { status: 400 });
     }
 
-    // Find the exam to get the teacherId
-    const exam = await prisma.exam.findUnique({
-      where: { id: Number(examId) },
+    // Find the quiz to get the teacherId
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: Number(quizId) },
     });
 
-    if (!exam) {
-      return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (!quiz) {
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
     // Broadcast lightweight "student-joined" event to the teacher's channel
     // NO snapshot data here — snapshots go through /api/live/snapshot instead
-    const channelName = `teacher-${exam.teacherId}`;
+    const channelName = `teacher-${quiz.teacherId}`;
 
     await pusherServer.trigger(channelName, "student-joined", {
       studentId: session.userId,
       studentName: session.fullName,
-      examId: exam.id,
-      examTitle: exam.title,
+      quizId: quiz.id,
+      quizTitle: quiz.title,
       timestamp: new Date().toISOString(),
     });
 
     // Broadcast student-joined event to admin
     try {
       await pusherServer.trigger("admin-dashboard", "activity", {
-        type: "exam-join",
+        type: "quiz-join",
         userId: session.userId,
         fullName: session.fullName,
         role: "student",
-        activity: `${session.fullName} joined exam: ${exam.title}`,
+        activity: `${session.fullName} joined quiz: ${quiz.title}`,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
       logDebug(`POST /api/live/join: Pusher admin broadcast error: ${e}`);
     }
 
-    logDebug(`POST /api/live/join: Student ${session.fullName} successfully joined exam ${exam.title}`);
-    return NextResponse.json({ success: true, teacherId: exam.teacherId });
+    logDebug(`POST /api/live/join: Student ${session.fullName} successfully joined quiz ${quiz.title}`);
+    return NextResponse.json({ success: true, teacherId: quiz.teacherId });
   } catch (error) {
     console.error("Live join error:", error);
     logDebug(`POST /api/live/join ERROR: ${error}`);

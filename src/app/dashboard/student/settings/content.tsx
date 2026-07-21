@@ -76,7 +76,7 @@ export default function SettingsContent() {
             <div className="flex items-center justify-between py-3">
               <div>
                 <div className="text-sm font-medium text-[var(--ink)]">Email Notifications</div>
-                <div className="text-xs text-[var(--muted)]">Receive exam reminders via email</div>
+                <div className="text-xs text-[var(--muted)]">Receive quiz reminders via email</div>
               </div>
               <button onClick={() => setEmailNotif(!emailNotif)} className={`w-10 h-6 rounded-full transition-all ${emailNotif ? "bg-indigo-600" : "bg-[var(--muted2)]"}`}>
                 <span className={`block w-4 h-4 bg-white rounded-full transition-transform mx-1 ${emailNotif ? "translate-x-4" : ""}`} />

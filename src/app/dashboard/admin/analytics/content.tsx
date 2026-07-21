@@ -17,7 +17,7 @@ export default function AnalyticsContent() {
             <span className="text-xs font-bold text-[var(--ink)] w-8 text-right">+42</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--muted)] w-36 shrink-0">Exams Created (May)</span>
+            <span className="text-xs text-[var(--muted)] w-36 shrink-0">Quizzes Created (May)</span>
             <div className="flex-1 h-2.5 bg-[var(--surface2)] rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 rounded-full" style={{ width: "65%" }} />
             </div>
@@ -33,7 +33,7 @@ export default function AnalyticsContent() {
         </div>
         <div className="p-5">
           <div className="text-4xl font-extrabold text-[var(--ink)] mb-2">18.4%</div>
-          <p className="text-sm text-[var(--muted)] mb-5">Percentage of total exams requiring AI flagging this month.</p>
+          <p className="text-sm text-[var(--muted)] mb-5">Percentage of total quizzes requiring AI flagging this month.</p>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <span className="text-xs text-[var(--muted)] w-28 shrink-0">Clean Sessions</span>

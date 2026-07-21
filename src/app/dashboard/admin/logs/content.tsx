@@ -1,9 +1,9 @@
 "use client";
 
 const logs = [
-  { time: "14:23:45 today", event: "Object Detected: Phone", severity: "High", severityClass: "bg-red-500/15 text-red-500", student: "Ethan Reyes", examId: "EX-1044", rowBg: "bg-red-50 dark:bg-red-500/5" },
-  { time: "14:31:12 today", event: "Multiple Faces Detected", severity: "Medium", severityClass: "bg-amber-500/15 text-amber-600", student: "Carlo Mendoza", examId: "EX-1044", rowBg: "bg-amber-50 dark:bg-amber-500/5" },
-  { time: "09:15:00 yesterday", event: "Tab Switched", severity: "Medium", severityClass: "bg-amber-500/15 text-amber-600", student: "Maria Santos", examId: "EX-1042", rowBg: "" },
+  { time: "14:23:45 today", event: "Object Detected: Phone", severity: "High", severityClass: "bg-red-500/15 text-red-500", student: "Ethan Reyes", quizId: "EX-1044", rowBg: "bg-red-50 dark:bg-red-500/5" },
+  { time: "14:31:12 today", event: "Multiple Faces Detected", severity: "Medium", severityClass: "bg-amber-500/15 text-amber-600", student: "Carlo Mendoza", quizId: "EX-1044", rowBg: "bg-amber-50 dark:bg-amber-500/5" },
+  { time: "09:15:00 yesterday", event: "Tab Switched", severity: "Medium", severityClass: "bg-amber-500/15 text-amber-600", student: "Maria Santos", quizId: "EX-1042", rowBg: "" },
 ];
 
 export default function LogsContent() {
@@ -18,7 +18,7 @@ export default function LogsContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["Timestamp", "Event Type", "Severity", "Student", "Exam ID"].map((h) => (
+                {["Timestamp", "Event Type", "Severity", "Student", "Quiz ID"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -30,7 +30,7 @@ export default function LogsContent() {
                   <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]">{l.event}</td>
                   <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${l.severityClass}`}>{l.severity}</span></td>
                   <td className="px-5 py-3 text-sm text-[var(--ink)]">{l.student}</td>
-                  <td className="px-5 py-3 text-sm text-[var(--muted)] font-mono">{l.examId}</td>
+                  <td className="px-5 py-3 text-sm text-[var(--muted)] font-mono">{l.quizId}</td>
                 </tr>
               ))}
             </tbody>

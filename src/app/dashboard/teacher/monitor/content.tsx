@@ -6,7 +6,7 @@ import PusherClient from "pusher-js";
 interface Feed {
   id: string;
   name: string;
-  examTitle: string;
+  quizTitle: string;
   status: string;
   statusColor: string;
   border: string;
@@ -28,30 +28,30 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     feedsRef.current = feeds;
   }, [feeds]);
 
-  const handleApprove = async (studentExamId: number, action: "accept" | "reject") => {
+  const handleApprove = async (studentQuizId: number, action: "accept" | "reject") => {
     try {
-      const res = await fetch("/api/exams/approve", {
+      const res = await fetch("/api/quizzes/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentExamId, action }),
+        body: JSON.stringify({ studentQuizId, action }),
       });
       if (res.ok) {
-        setPendingApprovals(prev => prev.filter(p => p.studentExamId !== studentExamId));
+        setPendingApprovals(prev => prev.filter(p => p.studentQuizId !== studentQuizId));
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleRetakeApprove = async (studentExamId: number, action: "accept" | "reject") => {
+  const handleRetakeApprove = async (studentQuizId: number, action: "accept" | "reject") => {
     try {
-      const res = await fetch("/api/exams/retake/approve", {
+      const res = await fetch("/api/quizzes/retake/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentExamId, action }),
+        body: JSON.stringify({ studentQuizId, action }),
       });
       if (res.ok) {
-        setPendingRetakes(prev => prev.filter(p => p.studentExamId !== studentExamId));
+        setPendingRetakes(prev => prev.filter(p => p.studentQuizId !== studentQuizId));
       }
     } catch (e) {
       console.error(e);
@@ -74,7 +74,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       console.log("Late join request:", data);
       setPendingApprovals((prev) => {
         // Prevent duplicates
-        if (prev.find(p => p.studentExamId === data.studentExamId)) return prev;
+        if (prev.find(p => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
@@ -84,7 +84,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       console.log("Retake request:", data);
       setPendingRetakes((prev) => {
         // Prevent duplicates
-        if (prev.find(p => p.studentExamId === data.studentExamId)) return prev;
+        if (prev.find(p => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
@@ -104,7 +104,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           {
             id: data.studentId || data.studentName + Date.now(),
             name: data.studentName,
-            examTitle: data.examTitle || "Exam",
+            quizTitle: data.quizTitle || "Quiz",
             status: "✓ Active",
             statusColor: "text-emerald-500",
             border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
@@ -138,7 +138,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         const violationFeed: Feed = {
           id: data.studentName + Date.now(),
           name: data.studentName,
-          examTitle: data.examTitle || "Exam",
+          quizTitle: data.quizTitle || "Quiz",
           status: statusText,
           statusColor: "text-red-500",
           border: "border-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.3)] animate-pulse",
@@ -206,7 +206,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                 updated.push({
                   id: snap.studentName + Date.now(),
                   name: snap.studentName,
-                  examTitle: snap.examTitle || "Exam",
+                  quizTitle: snap.quizTitle || "Quiz",
                   status: "✓ Active",
                   statusColor: "text-emerald-500",
                   border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
@@ -243,14 +243,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           </h3>
           <div className="space-y-2">
             {pendingApprovals.map(req => (
-              <div key={req.studentExamId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+              <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
-                  <div className="text-xs text-[var(--muted)]">wants to join "{req.examTitle}" late</div>
+                  <div className="text-xs text-[var(--muted)]">wants to join "{req.quizTitle}" late</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleApprove(req.studentExamId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
-                  <button onClick={() => handleApprove(req.studentExamId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-lg shadow-emerald-600/20">Accept</button>
+                  <button onClick={() => handleApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
+                  <button onClick={() => handleApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-lg shadow-emerald-600/20">Accept</button>
                 </div>
               </div>
             ))}
@@ -267,14 +267,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           </h3>
           <div className="space-y-2">
             {pendingRetakes.map(req => (
-              <div key={req.studentExamId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+              <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
-                  <div className="text-xs text-[var(--muted)]">requested to retake "{req.examTitle}"</div>
+                  <div className="text-xs text-[var(--muted)]">requested to retake "{req.quizTitle}"</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleRetakeApprove(req.studentExamId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
-                  <button onClick={() => handleRetakeApprove(req.studentExamId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-600/20">Accept</button>
+                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
+                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-600/20">Accept</button>
                 </div>
               </div>
             ))}
@@ -316,7 +316,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
               <div className="col-span-full h-40 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-xl text-[var(--muted)]">
                 <span className="text-3xl mb-3">📹</span>
                 <p className="text-sm font-semibold mb-1">Waiting for active test sessions...</p>
-                <p className="text-xs text-[var(--muted)]">Students will appear here when they start an exam</p>
+                <p className="text-xs text-[var(--muted)]">Students will appear here when they start an quiz</p>
               </div>
             ) : (
               feeds.map((f) => (
@@ -353,7 +353,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                       <span className="text-[var(--ink)] truncate">{f.name}</span>
                       <span className={`${f.statusColor} whitespace-nowrap`}>{f.status}</span>
                     </div>
-                    <div className="text-[10px] text-[var(--muted)] mt-0.5">{f.examTitle}</div>
+                    <div className="text-[10px] text-[var(--muted)] mt-0.5">{f.quizTitle}</div>
                   </div>
                 </div>
               ))

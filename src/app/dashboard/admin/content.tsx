@@ -35,7 +35,7 @@ const activityColors: Record<string, string> = {
 export default function AdminDashboardContent() {
   const [stats, setStats] = useState({
     totalUsers: 0, // Mapped to Active Sessions
-    totalExams: 0, // Mapped to Exams In-Progress
+    totalQuizzes: 0, // Mapped to Quizzes In-Progress
     totalViolations: 0, // Mapped to Violations (Live)
     aiVerdictsToday: 0, // Mapped to AI Flags
   });
@@ -46,7 +46,7 @@ export default function AdminDashboardContent() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch initial dashboard metrics from database (online users, active exams)
+  // Fetch initial dashboard metrics from database (online users, active quizzes)
   const fetchDashboardData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
@@ -101,13 +101,13 @@ export default function AdminDashboardContent() {
         } else if (data.type === "violation") {
           icon = "🚨";
           type = "danger";
-        } else if (data.type === "exam-submit") {
+        } else if (data.type === "quiz-submit") {
           icon = "✅";
           type = "success";
-        } else if (data.type === "exam-created") {
+        } else if (data.type === "quiz-created") {
           icon = "📝";
           type = "success";
-        } else if (data.type === "exam-join") {
+        } else if (data.type === "quiz-join") {
           icon = "🎯";
           type = "info";
         }
@@ -136,7 +136,7 @@ export default function AdminDashboardContent() {
 
   const statCards = [
     { label: "Active Sessions", value: stats.totalUsers, icon: <Users className="w-5 h-5" />, color: "bg-indigo-500/10 text-indigo-500" },
-    { label: "Exams In-Progress", value: stats.totalExams, icon: <FileText className="w-5 h-5" />, color: "bg-emerald-500/10 text-emerald-500" },
+    { label: "Quizzes In-Progress", value: stats.totalQuizzes, icon: <FileText className="w-5 h-5" />, color: "bg-emerald-500/10 text-emerald-500" },
     { label: "Violations (Live)", value: stats.totalViolations, icon: <AlertTriangle className="w-5 h-5" />, color: "bg-red-500/10 text-red-500" },
     { label: "AI Flags", value: stats.aiVerdictsToday, icon: <Brain className="w-5 h-5" />, color: "bg-violet-500/10 text-violet-500" },
   ];
@@ -221,7 +221,7 @@ export default function AdminDashboardContent() {
                 <span className="text-xl mb-1">📋</span>
                 <p className="text-xs font-semibold">No platform activity yet</p>
                 <p className="text-[10px] text-[var(--muted2)] mt-0.5">
-                  User registrations, logins, and exam metrics will appear here in real-time
+                  User registrations, logins, and quiz metrics will appear here in real-time
                 </p>
               </div>
             ) : (

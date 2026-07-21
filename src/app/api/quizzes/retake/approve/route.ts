@@ -9,50 +9,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { studentExamId, action } = await req.json();
+    const { studentQuizId, action } = await req.json();
 
-    if (!studentExamId || !["accept", "reject"].includes(action)) {
+    if (!studentQuizId || !["accept", "reject"].includes(action)) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
-    const studentExam = await prisma.studentExam.findUnique({
-      where: { id: studentExamId },
-      include: { exam: true },
+    const studentQuiz = await prisma.studentQuiz.findUnique({
+      where: { id: studentQuizId },
+      include: { quiz: true },
     });
 
-    if (!studentExam || studentExam.exam.teacherId !== session.userId) {
+    if (!studentQuiz || studentQuiz.quiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 
     if (action === "accept") {
       // 1. Delete all previous answers
-      await prisma.studentAnswer.deleteMany({
-        where: { studentExamId: studentExamId },
+      await prisma.answer.deleteMany({
+        where: { studentQuizId: studentQuizId },
       });
 
       // 2. Delete all previous violations
-      await prisma.studentViolation.deleteMany({
-        where: { studentExamId: studentExamId },
+      await prisma.violation.deleteMany({
+        where: { studentQuizId: studentQuizId },
       });
 
-      // 3. Reset the student exam status so they can take it again
-      await prisma.studentExam.update({
-        where: { id: studentExamId },
+      // 3. Delete previous AI analysis if it exists
+      await prisma.aiAnalysis.deleteMany({
+        where: { studentQuizId: studentQuizId },
+      });
+
+      // 4. Reset the student quiz status so they can take it again
+      await prisma.studentQuiz.update({
+        where: { id: studentQuizId },
         data: {
-          examStatus: "enrolled",
+          quizStatus: "enrolled",
           score: null,
           aiVerdict: null,
-          aiAnalysis: null,
-          submittedAt: null,
-          endedAt: null,
+          cheatingProbability: null,
+          startTime: null,
+          endTime: null,
         },
       });
     } else {
       // Rejecting the retake request means it stays ended
-      await prisma.studentExam.update({
-        where: { id: studentExamId },
+      await prisma.studentQuiz.update({
+        where: { id: studentQuizId },
         data: {
-          examStatus: "ended",
+          quizStatus: "ended",
         },
       });
     }
@@ -60,8 +65,8 @@ export async function POST(req: NextRequest) {
     // Notify student of the decision
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`student-${studentExam.studentId}`, "retake-decision", {
-        examId: studentExam.examId,
+      await pusherServer.trigger(`student-${studentQuiz.studentId}`, "retake-decision", {
+        quizId: studentQuiz.quizId,
         action: action
       });
     } catch (e) {
