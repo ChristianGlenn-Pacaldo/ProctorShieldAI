@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Sparkles, Camera, Upload, Trash, Check } from "lucide-react";
 
-export default function TeacherQuizzesPage() {
+export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boolean }) {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -310,9 +310,17 @@ export default function TeacherQuizzesPage() {
         body: JSON.stringify(body)
       });
 
+      if (res.status === 403) {
+        if (confirm("You need an active ProctorShield AI Pro subscription to use this feature.\n\nClick OK to upgrade your plan via GCash or Card.")) {
+          window.location.href = "/dashboard/teacher/billing";
+        }
+        setIsAiGenerating(false);
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "AI generation failed");
+        throw new Error(data.error || data.message || "AI generation failed");
       }
 
       setAiGeneratedQuestions(data.questions);
@@ -423,7 +431,15 @@ export default function TeacherQuizzesPage() {
               />
             </div>
             <button 
-              onClick={() => setIsAiModalOpen(true)}
+              onClick={() => {
+                if (!isSubscribed) {
+                  if (confirm("You need an active AI Pro Subscription to use this feature. Would you like to upgrade now?")) {
+                    window.location.href = "/dashboard/teacher/billing";
+                  }
+                  return;
+                }
+                setIsAiModalOpen(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-violet-500/30 text-violet-500 hover:bg-violet-500/10 transition-all">
               <Sparkles className="w-3.5 h-3.5" /> AI Create
             </button>

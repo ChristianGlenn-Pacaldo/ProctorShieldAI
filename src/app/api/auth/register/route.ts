@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
       include: { role: true },
     });
 
-    // Create session
-    const token = await setSessionCookie({
+    // Create session (sets HttpOnly cookie — token is NOT returned in body for security)
+    await setSessionCookie({
       userId: user.id,
       email: user.email,
       role: user.role.roleName.toLowerCase(),
@@ -112,14 +112,13 @@ export async function POST(req: NextRequest) {
           email: user.email,
           role: user.role.roleName.toLowerCase(),
         },
-        token,
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Register error:", error);
     return NextResponse.json(
-      { success: false, message: error.message || "Internal server error" },
+      { success: false, message: "An unexpected error occurred. Please try again." },
       { status: 500 }
     );
   }

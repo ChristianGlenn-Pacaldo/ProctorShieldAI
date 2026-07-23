@@ -22,6 +22,9 @@ interface UserItem {
   roleClass: string;
   status: string;
   statusClass: string;
+  isOnline: boolean;
+  subscription: string;
+  subClass: string;
   joined: string;
 }
 
@@ -165,7 +168,7 @@ export default function AdminDashboardContent() {
         {/* Platform Analytics */}
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)]">📈 Platform Analytics (Online)</h3>
+            <h3 className="text-sm font-bold text-[var(--ink)]">📈 Platform Demographics</h3>
           </div>
           <div className="p-5 space-y-4">
             {platformBars.length === 0 && isLoading ? (
@@ -239,19 +242,19 @@ export default function AdminDashboardContent() {
         </div>
       </div>
 
-      {/* Online Users */}
+      {/* All Platform Users */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">👥 Online Users</h3>
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-600">
-            {users.length} online
+          <h3 className="text-sm font-bold text-[var(--ink)]">👥 Platform Users</h3>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600">
+            {users.length} registered
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["User", "Email", "Role", "Status", "Joined", "Actions"].map((h) => (
+                {["User", "Email", "Role", "Subscription", "Status", "Joined", "Actions"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -259,22 +262,26 @@ export default function AdminDashboardContent() {
             <tbody className="divide-y divide-[var(--border)]">
               {isLoading && users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={7} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">
-                    No users currently online.
+                  <td colSpan={7} className="text-center py-8 text-xs text-[var(--muted)]">
+                    No users registered yet.
                   </td>
                 </tr>
               ) : (
                 users.map((u) => (
                   <tr key={u.id} className="hover:bg-[var(--surface2)] transition-colors animate-fade-in">
-                    <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{u.name}</td>
+                    <td className="px-5 py-3 flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-[var(--border)]"}`} title={u.isOnline ? "Online" : "Offline"} />
+                      <span className="text-sm font-semibold text-[var(--ink)]">{u.name}</span>
+                    </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.roleClass}`}>{u.role}</span></td>
+                    <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.subClass}`}>{u.subscription}</span></td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>{u.status}</span></td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3 flex gap-2">

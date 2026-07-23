@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    console.log("DEBUG: QUIZS JOIN SESSION:", session);
     if (!session || !session.role || session.role.toLowerCase() !== "student") {
       const currentRole = session?.role ? ` (you are logged in as ${session.role})` : "";
       return NextResponse.json({ error: `Unauthorized. Only students can join quizzes${currentRole}.` }, { status: 401 });

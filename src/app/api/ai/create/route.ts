@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { getSession } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +12,22 @@ export async function POST(req: NextRequest) {
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: "Gemini API key is not configured" }, { status: 500 });
+    }
+
+    // ── SUBSCRIPTION CHECK ──
+    const activeSub = await prisma.userSubscription.findFirst({
+      where: {
+        userId: session.userId,
+        subscriptionStatus: "active",
+        endDate: { gt: new Date() } // Must not be expired
+      }
+    });
+
+    if (!activeSub) {
+      return NextResponse.json({ 
+        error: "Subscription Required", 
+        message: "You need an active ProctorShield AI Pro subscription to use the AI Quiz Generator." 
+      }, { status: 403 });
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -80,8 +97,8 @@ export async function POST(req: NextRequest) {
       detectedDescription
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Create error:", error);
-    return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
+    return NextResponse.json({ error: "Failed to generate questions. Please try again." }, { status: 500 });
   }
 }

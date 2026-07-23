@@ -69,8 +69,9 @@ Return ONLY the JSON array, nothing else.`
     violations = violations.filter((v: string) => validTypes.includes(v));
 
     return NextResponse.json({ violations });
-  } catch (error: any) {
-    console.error("AI analysis error:", error?.message || error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("AI analysis error:", errMsg);
     // On error, return no violations (fail-open to avoid false positives)
     return NextResponse.json({ violations: [] });
   }

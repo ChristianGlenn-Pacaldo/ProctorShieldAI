@@ -58,14 +58,8 @@ export default function StudentLoginPage() {
         return;
       }
 
-      // Fallback for regular login (should not happen with our update)
-      const role = data.user.role;
-      if (role === "student") {
-        window.location.href = "/dashboard/student";
-      } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      // This block is a fallback in case MFA is bypassed (not standard)
+      window.location.href = `/dashboard/${data.role || data.user?.role}`;
     } catch {
       setError("Network error connecting to Google Auth.");
       setIsLoading(false);
@@ -96,14 +90,9 @@ export default function StudentLoginPage() {
         return;
       }
 
-      // Redirect based on role
-      const role = data.user.role;
-      if (role === "student") {
-        window.location.href = "/dashboard/student";
-      } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      // Universal redirect based on role
+      const role = data.user?.role || data.role;
+      window.location.href = `/dashboard/${role}`;
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);
@@ -172,13 +161,8 @@ export default function StudentLoginPage() {
         return;
       }
 
-      const role = data.user.role;
-      if (role === "student") {
-        window.location.href = "/dashboard/student";
-      } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      const role = data.user?.role || data.role;
+      window.location.href = `/dashboard/${role}`;
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);
@@ -329,6 +313,7 @@ export default function StudentLoginPage() {
                     size="large"
                     text="signin_with"
                     shape="rectangular"
+                    prompt="select_account"
                   />
                 </div>
 

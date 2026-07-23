@@ -18,6 +18,7 @@ import {
   FileBarChart,
   Sun,
   Moon,
+  CreditCard,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -68,6 +69,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
     {
       section: "Account",
       items: [
+        { label: "Billing & Plan", icon: <CreditCard className="w-4 h-4" />, href: "/dashboard/teacher/billing" },
         { label: "Settings", icon: <Settings className="w-4 h-4" />, href: "/dashboard/teacher/settings" },
       ],
     },
@@ -133,7 +135,11 @@ export default function DashboardShell({
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: user.role }),
+    });
     window.location.href = "/login";
   };
 
