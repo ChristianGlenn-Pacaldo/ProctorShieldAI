@@ -315,7 +315,6 @@ export default function TeacherLoginPage() {
                     size="large"
                     text="signin_with"
                     shape="rectangular"
-                    prompt="select_account"
                   />
                 </div>
 

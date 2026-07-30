@@ -313,7 +313,6 @@ export default function StudentLoginPage() {
                     size="large"
                     text="signin_with"
                     shape="rectangular"
-                    prompt="select_account"
                   />
                 </div>
 

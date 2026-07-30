@@ -23,6 +23,7 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
 
   // AI Modal State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<"text" | "upload" | "webcam">("text");
@@ -433,9 +434,7 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
             <button 
               onClick={() => {
                 if (!isSubscribed) {
-                  if (confirm("You need an active AI Pro Subscription to use this feature. Would you like to upgrade now?")) {
-                    window.location.href = "/dashboard/teacher/billing";
-                  }
+                  setIsUpgradeModalOpen(true);
                   return;
                 }
                 setIsAiModalOpen(true);
@@ -946,6 +945,37 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
               <button onClick={() => setManageQuiz(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── UPGRADE REQUIRED MODAL ────────────────────────────────── */}
+      {isUpgradeModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl scale-in">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-violet-500/30">
+                <Sparkles className="w-8 h-8 text-violet-500" />
+              </div>
+              <h3 className="text-xl font-bold text-[var(--ink)] mb-2">Upgrade Required</h3>
+              <p className="text-sm text-[var(--muted)] mb-6 leading-relaxed">
+                Unlock the power of AI to automatically generate questions, analyze images, and build quizzes in seconds.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsUpgradeModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] transition-all"
+                >
+                  Maybe Later
+                </button>
+                <button
+                  onClick={() => window.location.href = "/dashboard/teacher/billing"}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all"
+                >
+                  View Plans
+                </button>
+              </div>
             </div>
           </div>
         </div>

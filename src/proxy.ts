@@ -116,7 +116,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
 // ── Middleware Handler ────────────────────────────────────────────
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── 1. Skip static assets and Next.js internals ──

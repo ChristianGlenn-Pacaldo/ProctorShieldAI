@@ -138,7 +138,7 @@ export default function DashboardShell({
     await fetch("/api/auth/logout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: user.role }),
+      body: JSON.stringify({ role: role }),
     });
     window.location.href = "/login";
   };

@@ -31,11 +31,11 @@ export async function POST(req: NextRequest) {
       });
 
       const now = new Date();
-      let newEndDate = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+      let newEndDate = new Date(now.getTime() + (plan.durationDays || 30) * 24 * 60 * 60 * 1000);
 
       if (userSub) {
         if (userSub.endDate > now) {
-          newEndDate = new Date(userSub.endDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+          newEndDate = new Date(userSub.endDate.getTime() + (plan.durationDays || 30) * 24 * 60 * 60 * 1000);
         }
         userSub = await tx.userSubscription.update({
           where: { id: userSub.id },
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       await tx.activityLog.create({
         data: {
           userId: session.userId,
-          activity: `Subscribed to AI Pro for ${plan.durationDays} days via DEV Mock`,
+          activity: `Subscribed to AI Pro for ${plan.durationDays || 30} days via DEV Mock`,
           ipAddress: "localhost"
         }
       });

@@ -11,6 +11,8 @@ interface UserItem {
   roleClass: string;
   status: string;
   statusClass: string;
+  subscription?: string;
+  subClass?: string;
   joined: string;
 }
 
@@ -18,6 +20,11 @@ export default function UsersContent() {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Edit User Modal State
+  const [editUser, setEditUser] = useState<UserItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editSubStatus, setEditSubStatus] = useState(false);
 
   // Fetch online users from admin dashboard API
   const fetchOnlineUsers = async (silent = false) => {
@@ -124,7 +131,15 @@ export default function UsersContent() {
                     </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3 flex gap-2">
-                      <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">Edit</button>
+                      <button 
+                        onClick={() => {
+                          setEditUser(u);
+                          setEditSubStatus(u.subscription?.includes("PRO") || false);
+                        }}
+                        className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer"
+                      >
+                        Edit
+                      </button>
                       {u.status === "Suspended" ? (
                         <button className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
                       ) : (
@@ -138,6 +153,102 @@ export default function UsersContent() {
           </table>
         </div>
       </div>
+
+      {/* ── EDIT USER MODAL ────────────────────────────────────── */}
+      {editUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl scale-in flex flex-col">
+            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)]">
+              <h3 className="font-bold text-[var(--ink)]">Edit User</h3>
+              <button onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-white transition-colors">✕</button>
+            </div>
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Name</label>
+                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">
+                  {editUser.name}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Email</label>
+                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">
+                  {editUser.email}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Role</label>
+                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">
+                  {editUser.role}
+                </div>
+              </div>
+
+              {editUser.role.toLowerCase() === "teacher" && (
+                <div className="space-y-2 pt-4 border-t border-[var(--border)]">
+                  <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Subscription Status</label>
+                  <div className="flex items-center justify-between bg-[var(--surface2)] p-4 rounded-xl border border-[var(--border)]">
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--ink)]">AI Pro Subscription</h4>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">Manually grant or revoke Pro access</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer"
+                        checked={editSubStatus}
+                        onChange={(e) => setEditSubStatus(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+            </div>
+            <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] flex justify-end gap-3">
+              <button 
+                onClick={() => setEditUser(null)}
+                className="px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                disabled={isSaving}
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    const res = await fetch(`/api/dashboard/admin/users/${editUser.id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        subscriptionStatus: editSubStatus ? "active" : "expired"
+                      })
+                    });
+                    if (res.ok) {
+                      setEditUser(null);
+                      fetchOnlineUsers(true);
+                    } else {
+                      const data = await res.json().catch(() => ({}));
+                      alert("Failed to update user: " + (data.error || res.statusText));
+                    }
+                  } catch (e) {
+                    alert("Network error.");
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="px-6 py-2 rounded-lg font-bold text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSaving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

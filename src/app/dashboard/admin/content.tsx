@@ -285,7 +285,7 @@ export default function AdminDashboardContent() {
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>{u.status}</span></td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3 flex gap-2">
-                      <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">Edit</button>
+                      <a href="/dashboard/admin/users" className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">Edit</a>
                       {u.status === "Suspended" ? (
                         <button className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
                       ) : (
