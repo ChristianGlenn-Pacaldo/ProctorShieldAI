@@ -16,17 +16,178 @@ interface Feed {
   snapshot: string | null;
 }
 
+function StudentVideoFeed({ feed, teacherId }: { feed: Feed; teacherId: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hasWebRTCStream, setHasWebRTCStream] = useState(false);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+
+  useEffect(() => {
+    if (!teacherId || !feed.id) return;
+
+    let pusherClient: any;
+    const teacherChannel = `teacher-${teacherId}`;
+    const studentChannel = `student-webrtc-${feed.id}`;
+
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    };
+
+    const requestStreamFromStudent = () => {
+      fetch("/api/live/webrtc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: feed.id,
+          targetChannel: studentChannel,
+          signalType: "request-stream",
+          data: { studentId: feed.id },
+        }),
+      }).catch(() => {});
+    };
+
+    const handleWebRTCSignal = async (signalData: any) => {
+      const { senderId, signalType, data } = signalData;
+
+      // Filter signals for this specific student feed
+      if (data?.studentId && String(data.studentId) !== String(feed.id) && senderId !== String(feed.id)) {
+        return;
+      }
+
+      try {
+        if (signalType === "student-ready") {
+          requestStreamFromStudent();
+        } else if (signalType === "sdp-offer" && data?.sdp) {
+          if (pcRef.current) pcRef.current.close();
+          const pc = new RTCPeerConnection(rtcConfig);
+          pcRef.current = pc;
+
+          pc.ontrack = (event) => {
+            if (event.streams && event.streams[0] && videoRef.current) {
+              videoRef.current.srcObject = event.streams[0];
+              setHasWebRTCStream(true);
+            }
+          };
+
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              fetch("/api/live/webrtc", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  targetUserId: feed.id,
+                  targetChannel: studentChannel,
+                  signalType: "ice-candidate",
+                  data: { candidate: event.candidate, studentId: feed.id },
+                }),
+              }).catch(() => {});
+            }
+          };
+
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          await fetch("/api/live/webrtc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              targetUserId: feed.id,
+              targetChannel: studentChannel,
+              signalType: "sdp-answer",
+              data: { sdp: answer, studentId: feed.id },
+            }),
+          });
+        } else if (signalType === "ice-candidate" && data?.candidate) {
+          if (pcRef.current) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+        }
+      } catch (err) {
+        console.error("Teacher WebRTC signal error:", err);
+      }
+    };
+
+    import("pusher-js").then((Pusher) => {
+      pusherClient = new Pusher.default(
+        process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
+        { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
+      );
+
+      const channel = pusherClient.subscribe(teacherChannel);
+      channel.bind("webrtc-signal", handleWebRTCSignal);
+
+      // Trigger initial stream request
+      requestStreamFromStudent();
+    });
+
+    return () => {
+      if (pcRef.current) pcRef.current.close();
+      if (pusherClient) {
+        pusherClient.unsubscribe(teacherChannel);
+        pusherClient.disconnect();
+      }
+    };
+  }, [teacherId, feed.id]);
+
+  return (
+    <div className={`rounded-xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer`}>
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-40 flex items-center justify-center relative overflow-hidden">
+        {/* Real-Time Live WebRTC Video Stream */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover ${hasWebRTCStream ? "block" : "hidden"}`}
+        />
+
+        {/* Fallback to Snapshot or Avatar if WebRTC stream is connecting */}
+        {!hasWebRTCStream && (
+          feed.snapshot ? (
+            <img src={feed.snapshot} alt={feed.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-white">
+                {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+              </div>
+              <span className="text-[10px] text-gray-400 animate-pulse">Connecting Live Video...</span>
+            </div>
+          )
+        )}
+
+        {/* Live indicator badge */}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 bg-black/60 backdrop-blur rounded text-[9px] font-extrabold text-emerald-400 border border-emerald-500/30">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          {hasWebRTCStream ? "WEBRTC LIVE 60FPS" : feed.snapshot ? "LIVE VIDEO" : "CONNECTING"}
+        </div>
+
+        {/* Violation badge */}
+        {feed.violationCount > 0 && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 bg-red-600 rounded text-[9px] font-extrabold text-white shadow-md">
+            {feed.violationCount}/3 ⚠
+          </div>
+        )}
+      </div>
+
+      <div className="px-3 py-2.5 bg-[var(--surface2)]">
+        <div className="flex items-center justify-between text-xs font-semibold">
+          <span className="text-[var(--ink)] truncate">{feed.name}</span>
+          <span className={`${feed.statusColor} whitespace-nowrap`}>{feed.status}</span>
+        </div>
+        <div className="text-[10px] text-[var(--muted)] mt-0.5">{feed.quizTitle}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveMonitorContent({ teacherId }: { teacherId: string }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [totalViolations, setTotalViolations] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
-  const feedsRef = useRef<Feed[]>([]);
-
-  // Keep ref in sync
-  useEffect(() => {
-    feedsRef.current = feeds;
-  }, [feeds]);
 
   const handleApprove = async (studentQuizId: number, action: "accept" | "reject") => {
     try {
@@ -36,7 +197,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         body: JSON.stringify({ studentQuizId, action }),
       });
       if (res.ok) {
-        setPendingApprovals(prev => prev.filter(p => p.studentQuizId !== studentQuizId));
+        setPendingApprovals((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
       }
     } catch (e) {
       console.error(e);
@@ -51,7 +212,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         body: JSON.stringify({ studentQuizId, action }),
       });
       if (res.ok) {
-        setPendingRetakes(prev => prev.filter(p => p.studentQuizId !== studentQuizId));
+        setPendingRetakes((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
       }
     } catch (e) {
       console.error(e);
@@ -69,40 +230,33 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
     const channel = pusher.subscribe(`teacher-${teacherId}`);
 
-    // Late join request
     channel.bind("late-join-request", (data: any) => {
-      console.log("Late join request:", data);
       setPendingApprovals((prev) => {
-        // Prevent duplicates
-        if (prev.find(p => p.studentQuizId === data.studentQuizId)) return prev;
+        if (prev.find((p) => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
 
-    // Retake request
     channel.bind("retake-request", (data: any) => {
-      console.log("Retake request:", data);
       setPendingRetakes((prev) => {
-        // Prevent duplicates
-        if (prev.find(p => p.studentQuizId === data.studentQuizId)) return prev;
+        if (prev.find((p) => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
 
-    // Student joined (lightweight, no snapshot)
     channel.bind("student-joined", (data: any) => {
-      console.log("Student joined:", data);
+      const studentId = data.studentId ? String(data.studentId) : data.studentName;
       setFeeds((prev) => {
-        const exists = prev.findIndex(f => f.name === data.studentName);
+        const exists = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
         if (exists >= 0) {
           const updated = [...prev];
-          updated[exists] = { ...updated[exists], lastSeen: new Date() };
+          updated[exists] = { ...updated[exists], id: studentId, lastSeen: new Date() };
           return updated;
         }
         return [
           ...prev,
           {
-            id: data.studentId || data.studentName + Date.now(),
+            id: studentId,
             name: data.studentName,
             quizTitle: data.quizTitle || "Quiz",
             status: "✓ Active",
@@ -117,13 +271,12 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       });
     });
 
-    // Violation received
     channel.bind("new-violation", (data: any) => {
-      console.log("Violation received:", data);
       setTotalViolations((prev) => prev + 1);
+      const studentId = data.studentId ? String(data.studentId) : data.studentName;
 
       setFeeds((prev) => {
-        const existingIndex = prev.findIndex(f => f.name === data.studentName);
+        const existingIndex = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
 
         let statusText = "⚠ Alert";
         if (data.violationType === "multiple_faces") statusText = "⚠ Multiple Faces";
@@ -136,7 +289,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         if (data.violationType === "window_resize") statusText = "📐 Window Resized";
 
         const violationFeed: Feed = {
-          id: data.studentName + Date.now(),
+          id: studentId,
           name: data.studentName,
           quizTitle: data.quizTitle || "Quiz",
           status: statusText,
@@ -157,11 +310,10 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         }
       });
 
-      // Auto-reset the flashing red after 6 seconds
       setTimeout(() => {
         setFeeds((prev) =>
-          prev.map(f =>
-            f.name === data.studentName && f.statusColor === "text-red-500"
+          prev.map((f) =>
+            (f.id === studentId || f.name === data.studentName) && f.statusColor === "text-red-500"
               ? {
                   ...f,
                   statusColor: "text-amber-500",
@@ -179,7 +331,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     };
   }, [teacherId]);
 
-  // ── Poll snapshots from server every 3 seconds ──
+  // ── Poll snapshots as fallback ──
   useEffect(() => {
     if (!teacherId || teacherId === "unknown") return;
 
@@ -194,17 +346,18 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           setFeeds((prev) => {
             let updated = [...prev];
             for (const snap of snapshots) {
-              const idx = updated.findIndex(f => f.name === snap.studentName);
+              const studentId = snap.studentId ? String(snap.studentId) : snap.studentName;
+              const idx = updated.findIndex((f) => f.id === studentId || f.name === snap.studentName);
               if (idx >= 0) {
                 updated[idx] = {
                   ...updated[idx],
+                  id: studentId,
                   snapshot: snap.snapshot,
                   lastSeen: new Date(),
                 };
               } else {
-                // Student exists in snapshot store but not in feeds yet
                 updated.push({
-                  id: snap.studentName + Date.now(),
+                  id: studentId,
                   name: snap.studentName,
                   quizTitle: snap.quizTitle || "Quiz",
                   status: "✓ Active",
@@ -220,14 +373,11 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             return updated;
           });
         }
-      } catch (err) {
-        // Silently fail
-      }
+      } catch {}
     };
 
-    // Start polling
-    const interval = setInterval(pollSnapshots, 3000);
-    pollSnapshots(); // immediate first poll
+    const interval = setInterval(pollSnapshots, 1500);
+    pollSnapshots();
 
     return () => clearInterval(interval);
   }, [teacherId]);
@@ -242,11 +392,11 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             Late Join Requests ({pendingApprovals.length})
           </h3>
           <div className="space-y-2">
-            {pendingApprovals.map(req => (
+            {pendingApprovals.map((req) => (
               <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
-                  <div className="text-xs text-[var(--muted)]">wants to join "{req.quizTitle}" late</div>
+                  <div className="text-xs text-[var(--muted)]">wants to join &quot;{req.quizTitle}&quot; late</div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
@@ -266,11 +416,11 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             Retake Requests ({pendingRetakes.length})
           </h3>
           <div className="space-y-2">
-            {pendingRetakes.map(req => (
+            {pendingRetakes.map((req) => (
               <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
-                  <div className="text-xs text-[var(--muted)]">requested to retake "{req.quizTitle}"</div>
+                  <div className="text-xs text-[var(--muted)]">requested to retake &quot;{req.quizTitle}&quot;</div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleRetakeApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
@@ -296,7 +446,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Status</div>
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm font-bold text-red-500">LIVE</span>
+            <span className="text-sm font-bold text-red-500">LIVE WEBRTC VIDEO</span>
           </div>
         </div>
       </div>
@@ -304,10 +454,10 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       {/* Main Monitor Grid */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">🔴 Live Monitoring — Full View</h3>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-red-500">LIVE</span>
+          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📹 Live Video Monitoring — WebRTC Stream</h3>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">60 FPS ADAPTIVE HD</span>
           </div>
         </div>
         <div className="p-5">
@@ -315,47 +465,12 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             {feeds.length === 0 ? (
               <div className="col-span-full h-40 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-xl text-[var(--muted)]">
                 <span className="text-3xl mb-3">📹</span>
-                <p className="text-sm font-semibold mb-1">Waiting for active test sessions...</p>
-                <p className="text-xs text-[var(--muted)]">Students will appear here when they start an quiz</p>
+                <p className="text-sm font-semibold mb-1">Waiting for active student streams...</p>
+                <p className="text-xs text-[var(--muted)]">Students will appear here with live 30 FPS video feeds when they start a quiz.</p>
               </div>
             ) : (
               feeds.map((f) => (
-                <div
-                  key={f.name}
-                  className={`rounded-xl overflow-hidden border-2 ${f.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer`}
-                >
-                  {/* Camera feed */}
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-36 flex items-center justify-center relative overflow-hidden">
-                    {f.snapshot ? (
-                      <img src={f.snapshot} alt={f.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-white">
-                          {f.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
-                        </div>
-                        <span className="text-[10px] text-gray-500 animate-pulse">Loading feed...</span>
-                      </div>
-                    )}
-                    {/* Live indicator */}
-                    <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/50 backdrop-blur rounded text-[9px] font-bold text-emerald-400">
-                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                      LIVE
-                    </div>
-                    {/* Violation badge */}
-                    {f.violationCount > 0 && (
-                      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-red-500 rounded text-[9px] font-bold text-white">
-                        {f.violationCount}/3 ⚠
-                      </div>
-                    )}
-                  </div>
-                  <div className="px-3 py-2.5 bg-[var(--surface2)]">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-[var(--ink)] truncate">{f.name}</span>
-                      <span className={`${f.statusColor} whitespace-nowrap`}>{f.status}</span>
-                    </div>
-                    <div className="text-[10px] text-[var(--muted)] mt-0.5">{f.quizTitle}</div>
-                  </div>
-                </div>
+                <StudentVideoFeed key={f.id} feed={f} teacherId={teacherId} />
               ))
             )}
           </div>

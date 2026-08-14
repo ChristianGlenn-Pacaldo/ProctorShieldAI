@@ -103,6 +103,16 @@ export async function POST(req: NextRequest) {
       console.error("Failed to broadcast activity to admin:", e);
     }
 
+    // Send welcome email (non-blocking)
+    try {
+      const { sendWelcomeEmail } = await import("@/lib/email");
+      sendWelcomeEmail(user.email, user.fullName, user.role.roleName).catch((e) =>
+        console.error("Failed to send welcome email:", e)
+      );
+    } catch (e) {
+      console.error("Failed to import sendWelcomeEmail:", e);
+    }
+
     return NextResponse.json(
       {
         success: true,

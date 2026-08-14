@@ -138,10 +138,10 @@ export default function AdminDashboardContent() {
   }, []);
 
   const statCards = [
-    { label: "Active Sessions", value: stats.totalUsers, icon: <Users className="w-5 h-5" />, color: "bg-indigo-500/10 text-indigo-500" },
-    { label: "Quizzes In-Progress", value: stats.totalQuizzes, icon: <FileText className="w-5 h-5" />, color: "bg-emerald-500/10 text-emerald-500" },
-    { label: "Violations (Live)", value: stats.totalViolations, icon: <AlertTriangle className="w-5 h-5" />, color: "bg-red-500/10 text-red-500" },
-    { label: "AI Flags", value: stats.aiVerdictsToday, icon: <Brain className="w-5 h-5" />, color: "bg-violet-500/10 text-violet-500" },
+    { label: "Active Sessions", value: stats.totalUsers, icon: <Users className="w-5 h-5" />, color: "bg-blue-600/10 text-blue-600 dark:text-blue-400" },
+    { label: "Quizzes In-Progress", value: stats.totalQuizzes, icon: <FileText className="w-5 h-5" />, color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400" },
+    { label: "Violations (Live)", value: stats.totalViolations, icon: <AlertTriangle className="w-5 h-5" />, color: "bg-rose-600/10 text-rose-600 dark:text-rose-400" },
+    { label: "AI Flags", value: stats.aiVerdictsToday, icon: <Brain className="w-5 h-5" />, color: "bg-violet-600/10 text-violet-600 dark:text-violet-400" },
   ];
 
   return (
@@ -149,16 +149,16 @@ export default function AdminDashboardContent() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
+          <div key={s.label} className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5 shadow-xs">
             <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center`}>{s.icon}</div>
+              <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}>{s.icon}</div>
             </div>
             {isLoading && s.value === 0 ? (
-              <div className="h-8 w-12 bg-white/5 animate-pulse rounded-lg mt-1" />
+              <div className="h-8 w-12 bg-[var(--surface2)] animate-pulse rounded-lg mt-1" />
             ) : (
-              <div className="text-2xl font-extrabold text-[var(--ink)]">{s.value}</div>
+              <div className="text-2xl font-extrabold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{s.value}</div>
             )}
-            <div className="text-xs text-[var(--muted)] mt-0.5">{s.label}</div>
+            <div className="text-xs font-medium text-[var(--muted)] mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
@@ -166,16 +166,16 @@ export default function AdminDashboardContent() {
       {/* Platform Analytics + Recent Activity */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Platform Analytics */}
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)]">📈 Platform Demographics</h3>
+            <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📈 Platform Demographics</h3>
           </div>
           <div className="p-5 space-y-4">
             {platformBars.length === 0 && isLoading ? (
               <div className="space-y-4 py-2">
-                <div className="h-4 bg-white/5 animate-pulse rounded w-3/4" />
-                <div className="h-4 bg-white/5 animate-pulse rounded w-2/3" />
-                <div className="h-4 bg-white/5 animate-pulse rounded w-1/2" />
+                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-3/4" />
+                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-2/3" />
+                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-1/2" />
               </div>
             ) : platformBars.length === 0 ? (
               <div className="text-xs text-[var(--muted)] py-4 text-center">No online sessions active</div>
@@ -194,8 +194,8 @@ export default function AdminDashboardContent() {
             <div className="pt-4 mt-4 border-t border-[var(--border)] space-y-4">
               {activityBars.length === 0 && isLoading ? (
                 <div className="space-y-4 py-2">
-                  <div className="h-4 bg-white/5 animate-pulse rounded w-5/6" />
-                  <div className="h-4 bg-white/5 animate-pulse rounded w-4/5" />
+                  <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-5/6" />
+                  <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-4/5" />
                 </div>
               ) : (
                 activityBars.map((b) => (
@@ -213,10 +213,10 @@ export default function AdminDashboardContent() {
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[var(--ink)]">🕐 Recent Activity Feed</h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-500/15 text-indigo-400 animate-pulse">REAL-TIME</span>
+            <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🕐 Recent Activity Feed</h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600/15 text-blue-600 dark:text-blue-400 rounded-full animate-pulse">REAL-TIME</span>
           </div>
           <div className="p-5 space-y-2 max-h-[300px] overflow-y-auto">
             {activities.length === 0 ? (
@@ -243,19 +243,19 @@ export default function AdminDashboardContent() {
       </div>
 
       {/* All Platform Users */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">👥 Platform Users</h3>
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600">
+          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">👥 Platform Users</h3>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-600/15 text-blue-600 dark:text-blue-400">
             {users.length} registered
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[var(--border)]">
+              <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                 {["User", "Email", "Role", "Subscription", "Status", "Joined", "Actions"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
+                  <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -263,7 +263,7 @@ export default function AdminDashboardContent() {
               {isLoading && users.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12">
-                    <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
@@ -274,9 +274,9 @@ export default function AdminDashboardContent() {
                 </tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="hover:bg-[var(--surface2)] transition-colors animate-fade-in">
+                  <tr key={u.id} className="hover:bg-[var(--surface2)]/60 transition-colors animate-fade-in">
                     <td className="px-5 py-3 flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-[var(--border)]"}`} title={u.isOnline ? "Online" : "Offline"} />
+                      <div className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(5,150,105,0.5)]" : "bg-[var(--border)]"}`} title={u.isOnline ? "Online" : "Offline"} />
                       <span className="text-sm font-semibold text-[var(--ink)]">{u.name}</span>
                     </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
@@ -285,11 +285,11 @@ export default function AdminDashboardContent() {
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>{u.status}</span></td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3 flex gap-2">
-                      <a href="/dashboard/admin/users" className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">Edit</a>
+                      <a href="/dashboard/admin/users" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Edit</a>
                       {u.status === "Suspended" ? (
-                        <button className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
+                        <button className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer">Restore</button>
                       ) : (
-                        <button className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer">Suspend</button>
+                        <button className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer">Suspend</button>
                       )}
                     </td>
                   </tr>

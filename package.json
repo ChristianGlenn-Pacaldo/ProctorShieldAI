@@ -25,6 +25,7 @@
     "google-auth-library": "^10.6.2",
     "html-to-docx": "^1.8.0",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "markdown-it": "^14.2.0",
     "marked": "^18.0.4",

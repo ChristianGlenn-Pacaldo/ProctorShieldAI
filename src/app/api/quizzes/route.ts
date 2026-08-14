@@ -19,7 +19,47 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, quizzes });
+
+      // Fetch pending retakes for this teacher
+      const pendingRetakes = await prisma.studentQuiz.findMany({
+        where: {
+          quizStatus: "pending_retake",
+          quiz: { teacherId: session.userId },
+        },
+        include: {
+          student: { select: { fullName: true } },
+          quiz: { select: { title: true } },
+        },
+      });
+
+      // Fetch pending late-join approvals for this teacher
+      const pendingApprovals = await prisma.studentQuiz.findMany({
+        where: {
+          quizStatus: "pending_approval",
+          quiz: { teacherId: session.userId },
+        },
+        include: {
+          student: { select: { fullName: true } },
+          quiz: { select: { title: true } },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        quizzes,
+        pendingRetakes: pendingRetakes.map((pr) => ({
+          studentQuizId: pr.id,
+          studentName: pr.student.fullName,
+          quizTitle: pr.quiz.title,
+          quizId: pr.quizId,
+        })),
+        pendingApprovals: pendingApprovals.map((pa) => ({
+          studentQuizId: pa.id,
+          studentName: pa.student.fullName,
+          quizTitle: pa.quiz.title,
+          quizId: pa.quizId,
+        })),
+      });
     } else if (session.role === "student") {
       // Students get the quizzes they have joined
       const studentQuizzes = await prisma.studentQuiz.findMany({

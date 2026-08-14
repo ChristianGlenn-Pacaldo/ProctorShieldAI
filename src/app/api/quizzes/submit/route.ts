@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { GoogleGenAI } from "@google/genai";
 import { pusherServer } from "@/lib/pusher";
+import { generateGeminiWithFallback } from "@/lib/gemini";
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,26 +96,39 @@ export async function POST(req: NextRequest) {
       aiExplanation: "No anomalies detected during the quiz session. Student maintained focus.",
     };
 
-    if (violations.length === 1) {
+    if (violations.length === 0) {
       verdictData = {
-        cheatingProbability: 35,
+        cheatingProbability: 0,
+        riskLevel: "low",
+        finalVerdict: "clean",
+        aiExplanation: "No anomalies detected during the quiz session. Student maintained full focus.",
+      };
+    } else if (violations.length === 1) {
+      verdictData = {
+        cheatingProbability: 45,
         riskLevel: "medium",
         finalVerdict: "suspicious",
-        aiExplanation: "A single proctoring anomaly was recorded. Instructors should review the snapshot log.",
+        aiExplanation: "A proctoring anomaly was recorded during the session. Instructors should review evidence logs.",
       };
-    } else if (violations.length >= 2) {
+    } else if (violations.length === 2) {
       verdictData = {
         cheatingProbability: 85,
         riskLevel: "high",
         finalVerdict: "cheated",
-        aiExplanation: `Multiple integrity violations (${violations.length}) were flagged during the quiz. Combined patterns strongly suggest external assistance.`,
+        aiExplanation: `Multiple integrity violations (${violations.length}) were flagged during the quiz session.`,
+      };
+    } else if (violations.length >= 3) {
+      verdictData = {
+        cheatingProbability: 100,
+        riskLevel: "high",
+        finalVerdict: "cheated",
+        aiExplanation: `Maximum violation threshold reached (${violations.length} violations). High confidence of cheating activity.`,
       };
     }
 
     // If Gemini key exists, call Gemini for dynamic analysis
     if (process.env.GEMINI_API_KEY) {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const prompt = `You are ProctorShield AI, an advanced cheating detection system.
 Analyze the following quiz session for a student taking an quiz titled "${studentQuiz.quiz.title}".
 
@@ -133,22 +146,15 @@ Based on this data, provide a verdict. Format your response strictly as a JSON o
 
 Return ONLY the valid JSON object.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-          },
-        });
-
-        if (response.text) {
-          const parsed = JSON.parse(response.text.trim());
+        const text = await generateGeminiWithFallback(prompt, true);
+        if (text) {
+          const parsed = JSON.parse(text.trim());
           if (parsed && parsed.finalVerdict) {
             verdictData = parsed;
           }
         }
       } catch (geminiError) {
-        console.warn("Gemini verdict call failed, using fallback:", geminiError);
+        console.warn("Gemini verdict chain failed, using mathematical fallback:", geminiError);
       }
     }
 
@@ -184,9 +190,27 @@ Return ONLY the valid JSON object.`;
       },
     });
 
-    // 6. Broadcast student-submitted event via Pusher
+    // Broadcast student-submitted event via Pusher
     const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
     try {
+      // Save notification to DB for Teacher
+      await prisma.notification.create({
+        data: {
+          userId: studentQuiz.quiz.teacherId,
+          title: "Quiz Submission Received",
+          message: `${session.fullName} submitted "${studentQuiz.quiz.title}" with a score of ${score}%.`,
+        },
+      });
+
+      // Save notification to DB for Student
+      await prisma.notification.create({
+        data: {
+          userId: session.userId,
+          title: "Quiz Completed",
+          message: `You completed "${studentQuiz.quiz.title}". Score: ${score}%.`,
+        },
+      });
+
       await pusherServer.trigger(channelName, "student-submitted", {
         studentId: session.userId,
         studentName: session.fullName,

@@ -53,6 +53,12 @@ export function verifyToken(token: string): TokenPayload | null {
 export async function setSessionCookie(payload: TokenPayload) {
   const token = createToken(payload);
   const cookieStore = await cookies();
+
+  // Clear existing session cookies for all roles to prevent stale cross-role cookie conflicts
+  cookieStore.delete(`${TOKEN_PREFIX}admin`);
+  cookieStore.delete(`${TOKEN_PREFIX}teacher`);
+  cookieStore.delete(`${TOKEN_PREFIX}student`);
+
   cookieStore.set(`${TOKEN_PREFIX}${payload.role}`, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -75,6 +81,16 @@ export async function getSession(roleHint?: string): Promise<TokenPayload | null
       const activeRole = headersList.get("x-active-role");
       if (activeRole) {
         resolvedRole = activeRole;
+      } else {
+        // Deduce active role context from Referer header
+        const referer = headersList.get("referer") || "";
+        if (referer.includes("/dashboard/student") || referer.includes("/student") || referer.includes("/quiz/")) {
+          resolvedRole = "student";
+        } else if (referer.includes("/dashboard/teacher") || referer.includes("/teacher")) {
+          resolvedRole = "teacher";
+        } else if (referer.includes("/dashboard/admin") || referer.includes("/admin")) {
+          resolvedRole = "admin";
+        }
       }
     } catch {
       // Ignore if called from context where headers() isn't available
@@ -83,11 +99,14 @@ export async function getSession(roleHint?: string): Promise<TokenPayload | null
   
   if (resolvedRole) {
     const token = cookieStore.get(`${TOKEN_PREFIX}${resolvedRole}`)?.value;
-    return token ? verifyToken(token) : null;
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload) return payload;
+    }
   }
 
-  // If no hint, try to find any valid session (admin > teacher > student order)
-  const roles = ["admin", "teacher", "student"];
+  // If no hint or referer context matched, check student -> teacher -> admin
+  const roles = ["student", "teacher", "admin"];
   for (const role of roles) {
     const token = cookieStore.get(`${TOKEN_PREFIX}${role}`)?.value;
     if (token) {

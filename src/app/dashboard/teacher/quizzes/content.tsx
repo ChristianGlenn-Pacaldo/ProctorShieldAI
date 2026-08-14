@@ -352,17 +352,36 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
     }
   };
 
+  const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
+
   const fetchQuizzes = async () => {
     try {
       const res = await fetch("/api/quizzes");
       if (res.ok) {
         const data = await res.json();
-        setQuizzes(data.quizzes);
+        setQuizzes(data.quizzes || []);
+        setPendingRetakes(data.pendingRetakes || []);
       }
     } catch (error) {
       console.error("Failed to fetch quizzes", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRetakeApprove = async (studentQuizId: number, action: "accept" | "reject") => {
+    try {
+      const res = await fetch("/api/quizzes/retake/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentQuizId, action }),
+      });
+      if (res.ok) {
+        setPendingRetakes((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
+        fetchQuizzes();
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -417,7 +436,40 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
   const filtered = quizzes.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-4">
+      {/* Pending Retake Requests Banner */}
+      {pendingRetakes.length > 0 && (
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 shadow-xs">
+          <h3 className="text-sm font-bold text-rose-500 mb-3 flex items-center gap-2 font-[family-name:var(--font-display)]">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+            Pending Retake Requests ({pendingRetakes.length})
+          </h3>
+          <div className="space-y-2">
+            {pendingRetakes.map((req) => (
+              <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3.5 rounded-xl border border-[var(--border)]">
+                <div>
+                  <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">Requested to retake &quot;{req.quizTitle}&quot;</div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRetakeApprove(req.studentQuizId, "reject")}
+                    className="px-3.5 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => handleRetakeApprove(req.studentQuizId, "accept")}
+                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-md shadow-indigo-600/20"
+                  >
+                    Accept Retake
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)]">📝 My Created Quizzes</h3>

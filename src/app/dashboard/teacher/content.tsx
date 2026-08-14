@@ -245,25 +245,25 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       label: "Total Quizzes",
       value: stats.totalQuizzes,
       icon: <FileText className="w-5 h-5" />,
-      color: "bg-indigo-500/10 text-indigo-500",
+      color: "bg-blue-600/10 text-blue-600 dark:text-blue-400",
     },
     {
       label: "Students Monitored",
       value: stats.studentsMonitored,
       icon: <Users className="w-5 h-5" />,
-      color: "bg-emerald-500/10 text-emerald-500",
+      color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400",
     },
     {
       label: "Total Violations",
       value: stats.totalViolations,
       icon: <AlertTriangle className="w-5 h-5" />,
-      color: "bg-red-500/10 text-red-500",
+      color: "bg-rose-600/10 text-rose-600 dark:text-rose-400",
     },
     {
       label: "Flagged Students",
       value: stats.flaggedStudents,
       icon: <Brain className="w-5 h-5" />,
-      color: "bg-amber-500/10 text-amber-500",
+      color: "bg-amber-600/10 text-amber-600 dark:text-amber-400",
     },
   ];
 
@@ -278,14 +278,14 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
+          <div key={s.label} className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5 shadow-xs">
             <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center`}>
+              <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}>
                 {s.icon}
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-[var(--ink)]">{s.value}</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">{s.label}</div>
+            <div className="text-2xl font-extrabold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{s.value}</div>
+            <div className="text-xs font-medium text-[var(--muted)] mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
@@ -293,12 +293,12 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       {/* Live Monitor + Violations Breakdown */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Live Monitor Widget */}
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)]">🔴 Live Monitoring Feed</h3>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-red-500">LIVE</span>
+            <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🔴 Live Monitoring Feed</h3>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10">
+              <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">LIVE</span>
             </div>
           </div>
           <div className="divide-y divide-[var(--border)] min-h-[160px]">
@@ -316,7 +316,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
                   key={s.name}
                   className={`flex items-center justify-between px-5 py-3.5 transition-all ${
                     s.flagged
-                      ? "bg-red-500/5 border-l-2 border-red-500"
+                      ? "bg-rose-500/5 border-l-2 border-rose-500"
                       : s.warning
                       ? "bg-amber-500/5 border-l-2 border-amber-500"
                       : ""
@@ -329,7 +329,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
                   <strong className={`text-sm ${s.trustColor}`}>{s.trust}% Trust</strong>
                   <Link
                     href="/dashboard/teacher/monitor"
-                    className="text-xs font-bold px-3 py-1.5 bg-[var(--surface2)] text-[var(--ink)] hover:text-indigo-500 border border-[var(--border)] rounded-lg transition-all"
+                    className="text-xs font-bold px-3 py-1.5 bg-[var(--surface2)] text-[var(--ink)] hover:text-blue-600 border border-[var(--border)] rounded-lg transition-all"
                   >
                     View
                   </Link>
@@ -340,9 +340,9 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
         </div>
 
         {/* Violations Breakdown */}
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)]">📊 Violation Breakdown</h3>
+            <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📊 Violation Breakdown</h3>
           </div>
           <div className="p-5 space-y-4">
             {violationsBreakdown.map((v) => (
@@ -362,9 +362,9 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       </div>
 
       {/* AI Verdict Summary Table */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">🧠 AI Verdict Summary — Recent Submissions</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🧠 AI Verdict Summary — Recent Submissions</h3>
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
             <input
@@ -372,14 +372,14 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
               placeholder="Search students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50 w-48"
+              className="pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-blue-500 w-48"
             />
           </div>
         </div>
         <div className="overflow-x-auto min-h-[150px]">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : filteredVerdicts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)] text-center">
@@ -392,9 +392,9 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[var(--border)]">
+                <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                   {["Student", "Quiz", "Violations Summary", "AI Verdict", "Score", "Action"].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider">
                       {h}
                     </th>
                   ))}
@@ -402,14 +402,14 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {filteredVerdicts.map((v, i) => (
-                  <tr key={v.name + i} className="hover:bg-[var(--surface2)] transition-colors">
+                  <tr key={v.name + i} className="hover:bg-[var(--surface2)]/60 transition-colors">
                     <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{v.name}</td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{v.quiz}</td>
                     <td className="px-5 py-3">
                       {v.violations.length > 0 ? (
                         <div className="flex gap-1.5 flex-wrap">
                           {v.violations.map((viol) => (
-                            <span key={viol} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">
+                            <span key={viol} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
                               {viol}
                             </span>
                           ))}
@@ -427,7 +427,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
                     <td className="px-5 py-3">
                       <Link
                         href="/dashboard/teacher/evidence"
-                        className="text-xs font-bold text-indigo-500 hover:text-indigo-600 transition-colors"
+                        className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline transition-colors"
                       >
                         ▶ Evidence
                       </Link>

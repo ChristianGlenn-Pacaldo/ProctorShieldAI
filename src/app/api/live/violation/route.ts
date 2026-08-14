@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
     
     await pusherServer.trigger(channelName, "new-violation", {
+      studentId: session.userId,
       studentName: session.fullName,
       quizTitle: studentQuiz.quiz.title,
       violationType: violationType,
