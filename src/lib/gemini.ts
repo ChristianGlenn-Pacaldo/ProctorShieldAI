@@ -14,7 +14,7 @@ export async function generateGeminiWithFallback(prompt: string, jsonMode: boole
   const ai = new GoogleGenAI({ apiKey });
 
   // Priority fallback model sequence
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"];
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"];
   let lastError: any = null;
 
   for (const model of models) {

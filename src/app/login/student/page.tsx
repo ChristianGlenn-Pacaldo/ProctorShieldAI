@@ -307,14 +307,15 @@ export default function StudentLoginPage() {
                 </p>
 
                 {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full">
+                <div className="mb-4 flex justify-center w-full min-h-[44px]">
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Google Login Failed")}
+                    onError={() => setError("Google Login domain mismatch. Add this domain in Google Cloud Console.")}
                     theme="filled_black"
                     size="large"
                     text="signin_with"
                     shape="rectangular"
+                    width="320"
                   />
                 </div>
 

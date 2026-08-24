@@ -18,6 +18,7 @@ export default function QuizRoom() {
   const [gazeStatus, setGazeStatus] = useState("—");
   const [deviceStatus, setDeviceStatus] = useState("—");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -32,6 +33,7 @@ export default function QuizRoom() {
   const [preWarning, setPreWarning] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [headPos, setHeadPos] = useState({ x: 50, y: 50 });
   const [aiLogs, setAiLogs] = useState<{ id: string; text: string; time: string; isError?: boolean }[]>([
     { id: "1", text: "Head Tracking Initialized", time: "now" },
@@ -258,16 +260,27 @@ export default function QuizRoom() {
 
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
-    if (!videoRef.current || !canvasRef.current) return null;
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    // Good quality for AI analysis AND teacher viewing
-    canvas.width = 640;
-    canvas.height = 480;
+    const video = mobileVideoRef.current || videoRef.current;
+    if (!video) return null;
+    if (video.readyState < 2 && video.videoWidth === 0) return null;
+
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+    }
+
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 480;
+    canvas.width = Math.min(w, 640);
+    canvas.height = Math.min(h, 480);
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, 640, 480);
-    return canvas.toDataURL("image/jpeg", 0.85);
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.75);
+    } catch {
+      return null;
+    }
   }, []);
 
   // ── Capture 3-5 second Video Clip Evidence ──
@@ -489,8 +502,11 @@ export default function QuizRoom() {
         mediaStreamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          setCameraActive(true);
         }
+        if (mobileVideoRef.current) {
+          mobileVideoRef.current.srcObject = stream;
+        }
+        setCameraActive(true);
 
         // Notify teacher once (lightweight)
         setTimeout(() => notifyTeacherJoined(), 1500);
@@ -499,7 +515,7 @@ export default function QuizRoom() {
         uploadSnapshot();
         snapshotInterval = setInterval(() => {
           uploadSnapshot();
-        }, 3000);
+        }, 1500);
 
         // Load face-api models and COCO-SSD
         try {
@@ -524,14 +540,15 @@ export default function QuizRoom() {
 
           // ── High-Performance Unified Staggered AI Loop (450ms Alternating Ticks) ──
           faceApiInterval = setInterval(async () => {
-            if (!videoRef.current || isAlertingRef.current || isReportingRef.current || violationCountRef.current >= 3) return;
+            const activeVideo = mobileVideoRef.current || videoRef.current;
+            if (!activeVideo || isAlertingRef.current || isReportingRef.current || violationCountRef.current >= 3) return;
             
             // Stagger execution to prevent main thread blocking (CPU lag)
             if (tickCounter % 2 === 0) {
               // ── TICK 0: FACE TRACKING & 3D HEAD POSE (Input size 160 for 3x speedup) ──
               try {
                 const detections = await faceapi.detectAllFaces(
-                  videoRef.current,
+                  activeVideo,
                   new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 })
                 ).withFaceLandmarks();
 
@@ -661,11 +678,10 @@ export default function QuizRoom() {
             } else {
               // ── TICK 1: COCO-SSD SENSITIVE DEVICE DETECTOR ──
               try {
-                const predictions = await cocoModel.detect(videoRef.current);
+                const predictions = await cocoModel.detect(activeVideo);
                 const phoneDetected = predictions.some(
                   (p) =>
-                    (p.class !== "person" && p.score > 0.18) ||
-                    (["cell phone", "remote", "electronic device", "book", "laptop", "handbag", "tv", "mouse", "keyboard"].includes(p.class) && p.score > 0.15)
+                    (["cell phone", "remote", "mobile phone"].includes(p.class) && p.score > 0.58)
                 );
 
                 if (phoneDetected) {
@@ -1035,36 +1051,113 @@ export default function QuizRoom() {
       )}
 
       {/* Figma Top Header */}
-      <header className="h-20 px-8 bg-[#141724] border-b border-[#212638] flex items-center justify-between shrink-0 shadow-md">
-        <h1 className="text-2xl font-black text-white tracking-tight font-[family-name:var(--font-display)]">
-          {quiz?.title || "CS301 Midterm Exam"}
+      <header className="py-3 px-4 lg:px-8 bg-[#141724] border-b border-[#212638] flex flex-wrap items-center justify-between shrink-0 shadow-md gap-2">
+        <h1 className="text-lg lg:text-2xl font-black text-white tracking-tight font-[family-name:var(--font-display)] truncate max-w-[200px] sm:max-w-none">
+          {quiz?.title || "Proctored Exam"}
         </h1>
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+        <div className="flex items-center gap-3 lg:gap-6">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-emerald-400">AI Monitoring Active</span>
           </div>
 
-          <div className="px-6 py-2 bg-[#1b1e2e] border border-[#2d334d] rounded-2xl text-2xl font-bold font-mono text-amber-400 shadow-md tracking-wider">
+          <div className="px-3 lg:px-6 py-1.5 lg:py-2 bg-[#1b1e2e] border border-[#2d334d] rounded-2xl text-lg lg:text-2xl font-bold font-mono text-amber-400 shadow-md tracking-wider">
             {formatTime(timeLeft)}
           </div>
 
           <button
             onClick={submitQuiz}
             disabled={isSubmitting || loadingQuiz || !!quizError}
-            className="px-6 py-2.5 bg-gradient-to-r from-red-900/60 to-rose-900/60 border border-rose-700/50 hover:bg-rose-800 text-rose-200 font-bold text-sm rounded-xl transition-all shadow-md disabled:opacity-50"
+            className="px-4 lg:px-6 py-2 lg:py-2.5 bg-gradient-to-r from-red-900/60 to-rose-900/60 border border-rose-700/50 hover:bg-rose-800 text-rose-200 font-bold text-xs lg:text-sm rounded-xl transition-all shadow-md disabled:opacity-50"
           >
             {isSubmitting ? "Submitting..." : "Submit Exam"}
           </button>
         </div>
       </header>
 
+      {/* Top-level hidden canvas for universal snapshot captures */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* Figma Main Content Area */}
-      <div className="flex-1 flex overflow-hidden p-6 gap-6 max-h-[calc(100vh-80px)]">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)]">
         
-        {/* LEFT COLUMN: Figma Proctoring Controls */}
-        <div className="w-80 flex flex-col gap-4 overflow-y-auto shrink-0 pr-1">
+        {/* MOBILE ONLY: Compact Sticky Proctoring Bar */}
+        <div className="block lg:hidden bg-[#141724] border border-[#212638] rounded-2xl p-3 space-y-3 shrink-0 shadow-md">
+          <div className="flex items-center justify-between gap-3">
+            {/* Small Floating Camera Box */}
+            <div className="w-28 h-20 bg-black rounded-xl overflow-hidden relative border border-emerald-500/40 shrink-0">
+              <video ref={mobileVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/80 rounded text-[8px] font-bold text-emerald-400">
+                LIVE AI
+              </div>
+            </div>
+
+            {/* Quick Status Badges */}
+            <div className="flex-1 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Face AI:</span>
+                <span className={`font-bold ${faceStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                  {faceStatus}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Gaze:</span>
+                <span className={`font-bold ${gazeStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                  {gazeStatus.includes("✓") ? "Focused ✓" : "Away ✗"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Violations:</span>
+                <span className={`font-bold ${violationCount > 0 ? "text-red-400 font-black" : "text-emerald-400"}`}>
+                  {violationCount}/3 ⚠
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowMobileDetails(!showMobileDetails)}
+            className="w-full py-1.5 text-xs font-bold text-slate-300 bg-[#1b1f33] hover:bg-[#232844] rounded-lg border border-[#2a304e] transition-colors"
+          >
+            {showMobileDetails ? "▲ Hide AI Radar & Diagnostics" : "▼ View Full AI Radar & Diagnostics"}
+          </button>
+
+          {/* Collapsible Diagnostics for Mobile */}
+          {showMobileDetails && (
+            <div className="space-y-3 pt-2 border-t border-[#212638] animate-fade-in">
+              {/* Radar */}
+              <div className="flex flex-col items-center justify-center p-2 bg-[#0a0c13] rounded-xl border border-emerald-500/20">
+                <div className="text-[10px] font-bold text-slate-400 mb-1">HEAD DIRECTION RADAR</div>
+                <div className="relative w-32 h-32 rounded-full border border-emerald-500/30 bg-[#0a0c13] flex items-center justify-center my-1">
+                  <div className="absolute w-20 h-20 rounded-full border border-emerald-500/20" />
+                  <div className="absolute w-full h-[1px] bg-emerald-500/20" />
+                  <div className="absolute h-full w-[1px] bg-emerald-500/20" />
+                  <div
+                    className={`absolute w-3 h-3 rounded-full border-2 border-white transform -translate-x-1/2 -translate-y-1/2 ${
+                      gazeStatus.includes("✓") ? "bg-emerald-400" : "bg-red-500 animate-pulse"
+                    }`}
+                    style={{ left: `${headPos.x}%`, top: `${headPos.y}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* AI Logs */}
+              <div className="space-y-1 text-xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Recent AI Logs</div>
+                {aiLogs.slice(0, 3).map((log) => (
+                  <div key={log.id} className="flex items-center justify-between text-[11px]">
+                    <span className={log.isError ? "text-red-400 font-bold" : "text-slate-300"}>{log.text}</span>
+                    <span className="text-slate-500">{log.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP ONLY: Left Column Side Panel */}
+        <div className="hidden lg:flex w-80 flex-col gap-4 overflow-y-auto shrink-0 pr-1">
           
           {/* 1. WEBCAM FEED CARD (Natural 4:3 Aspect Ratio) */}
           <div className="bg-[#141724] border-2 border-emerald-500/50 rounded-2xl p-2 relative aspect-[4/3] w-full flex items-center justify-center shadow-lg overflow-hidden shrink-0">
@@ -1191,8 +1284,8 @@ export default function QuizRoom() {
 
         </div>
 
-        {/* RIGHT COLUMN: Figma Questions Stack */}
-        <div className="flex-1 bg-[#141724] border border-[#212638] rounded-2xl p-6 overflow-y-auto shadow-lg space-y-6">
+        {/* QUESTIONS STACK: Full width on mobile, right column on desktop */}
+        <div className="w-full flex-1 bg-[#141724] border border-[#212638] rounded-2xl p-4 lg:p-6 overflow-y-visible lg:overflow-y-auto shadow-lg space-y-6">
           {loadingQuiz ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />

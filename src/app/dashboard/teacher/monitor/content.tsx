@@ -16,168 +16,42 @@ interface Feed {
   snapshot: string | null;
 }
 
-function StudentVideoFeed({ feed, teacherId }: { feed: Feed; teacherId: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasWebRTCStream, setHasWebRTCStream] = useState(false);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-
-  useEffect(() => {
-    if (!teacherId || !feed.id) return;
-
-    let pusherClient: any;
-    const teacherChannel = `teacher-${teacherId}`;
-    const studentChannel = `student-webrtc-${feed.id}`;
-
-    const rtcConfig: RTCConfiguration = {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-      ],
-    };
-
-    const requestStreamFromStudent = () => {
-      fetch("/api/live/webrtc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetUserId: feed.id,
-          targetChannel: studentChannel,
-          signalType: "request-stream",
-          data: { studentId: feed.id },
-        }),
-      }).catch(() => {});
-    };
-
-    const handleWebRTCSignal = async (signalData: any) => {
-      const { senderId, signalType, data } = signalData;
-
-      // Filter signals for this specific student feed
-      if (data?.studentId && String(data.studentId) !== String(feed.id) && senderId !== String(feed.id)) {
-        return;
-      }
-
-      try {
-        if (signalType === "student-ready") {
-          requestStreamFromStudent();
-        } else if (signalType === "sdp-offer" && data?.sdp) {
-          if (pcRef.current) pcRef.current.close();
-          const pc = new RTCPeerConnection(rtcConfig);
-          pcRef.current = pc;
-
-          pc.ontrack = (event) => {
-            if (event.streams && event.streams[0] && videoRef.current) {
-              videoRef.current.srcObject = event.streams[0];
-              setHasWebRTCStream(true);
-            }
-          };
-
-          pc.onicecandidate = (event) => {
-            if (event.candidate) {
-              fetch("/api/live/webrtc", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  targetUserId: feed.id,
-                  targetChannel: studentChannel,
-                  signalType: "ice-candidate",
-                  data: { candidate: event.candidate, studentId: feed.id },
-                }),
-              }).catch(() => {});
-            }
-          };
-
-          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          await fetch("/api/live/webrtc", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              targetUserId: feed.id,
-              targetChannel: studentChannel,
-              signalType: "sdp-answer",
-              data: { sdp: answer, studentId: feed.id },
-            }),
-          });
-        } else if (signalType === "ice-candidate" && data?.candidate) {
-          if (pcRef.current) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-          }
-        }
-      } catch (err) {
-        console.error("Teacher WebRTC signal error:", err);
-      }
-    };
-
-    import("pusher-js").then((Pusher) => {
-      pusherClient = new Pusher.default(
-        process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-        { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
-      );
-
-      const channel = pusherClient.subscribe(teacherChannel);
-      channel.bind("webrtc-signal", handleWebRTCSignal);
-
-      // Trigger initial stream request
-      requestStreamFromStudent();
-    });
-
-    return () => {
-      if (pcRef.current) pcRef.current.close();
-      if (pusherClient) {
-        pusherClient.unsubscribe(teacherChannel);
-        pusherClient.disconnect();
-      }
-    };
-  }, [teacherId, feed.id]);
-
+function StudentVideoFeed({ feed }: { feed: Feed }) {
   return (
     <div className={`rounded-xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer`}>
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-40 flex items-center justify-center relative overflow-hidden">
-        {/* Real-Time Live WebRTC Video Stream */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover ${hasWebRTCStream ? "block" : "hidden"}`}
-        />
-
-        {/* Fallback to Snapshot or Avatar if WebRTC stream is connecting */}
-        {!hasWebRTCStream && (
-          feed.snapshot ? (
-            <img src={feed.snapshot} alt={feed.name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-white">
-                {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-              </div>
-              <span className="text-[10px] text-gray-400 animate-pulse">Connecting Live Video...</span>
+        {/* Live Snapshot Stream Feed */}
+        {feed.snapshot ? (
+          <img src={feed.snapshot} alt={feed.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-white shadow-inner">
+              {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
-          )
+            <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Live Feed Connecting...</span>
+          </div>
         )}
 
         {/* Live indicator badge */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 bg-black/60 backdrop-blur rounded text-[9px] font-extrabold text-emerald-400 border border-emerald-500/30">
-          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-          {hasWebRTCStream ? "WEBRTC LIVE 60FPS" : feed.snapshot ? "LIVE VIDEO" : "CONNECTING"}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 bg-black/80 backdrop-blur rounded-md text-[9px] font-extrabold text-emerald-400 border border-emerald-500/30 shadow-md">
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+          {feed.snapshot ? "📸 1.5s GEMINI SNAPSHOT" : "CONNECTING..."}
         </div>
 
         {/* Violation badge */}
         {feed.violationCount > 0 && (
-          <div className="absolute top-2 right-2 px-2 py-0.5 bg-red-600 rounded text-[9px] font-extrabold text-white shadow-md">
+          <div className="absolute top-2 right-2 px-2.5 py-1 bg-red-600 rounded-md text-[9px] font-extrabold text-white shadow-md">
             {feed.violationCount}/3 ⚠
           </div>
         )}
       </div>
 
-      <div className="px-3 py-2.5 bg-[var(--surface2)]">
-        <div className="flex items-center justify-between text-xs font-semibold">
-          <span className="text-[var(--ink)] truncate">{feed.name}</span>
+      <div className="px-3.5 py-2.5 bg-[var(--surface2)] border-t border-[var(--border)]">
+        <div className="flex items-center justify-between text-xs font-bold">
+          <span className="text-[var(--ink)] truncate max-w-[150px]">{feed.name}</span>
           <span className={`${feed.statusColor} whitespace-nowrap`}>{feed.status}</span>
         </div>
-        <div className="text-[10px] text-[var(--muted)] mt-0.5">{feed.quizTitle}</div>
+        <div className="text-[10px] font-medium text-[var(--muted)] mt-0.5 truncate">{feed.quizTitle}</div>
       </div>
     </div>
   );
@@ -273,10 +147,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
     channel.bind("new-violation", (data: any) => {
       setTotalViolations((prev) => prev + 1);
-      const studentId = data.studentId ? String(data.studentId) : data.studentName;
+      const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
+      const studentNameLower = String(data.studentName || "").toLowerCase().trim();
 
       setFeeds((prev) => {
-        const existingIndex = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
+        const existingIndex = prev.findIndex((f) => 
+          String(f.id) === studentId || 
+          String(f.name || "").toLowerCase().trim() === studentNameLower
+        );
 
         let statusText = "⚠ Alert";
         if (data.violationType === "multiple_faces") statusText = "⚠ Multiple Faces";
@@ -288,6 +166,8 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         if (data.violationType === "audio_anomaly") statusText = "🎙 Audio Anomaly";
         if (data.violationType === "window_resize") statusText = "📐 Window Resized";
 
+        const currentSnap = data.snapshot || (existingIndex >= 0 ? prev[existingIndex].snapshot : null);
+
         const violationFeed: Feed = {
           id: studentId,
           name: data.studentName,
@@ -298,7 +178,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           joinedAt: existingIndex >= 0 ? prev[existingIndex].joinedAt : new Date(),
           lastSeen: new Date(),
           violationCount: existingIndex >= 0 ? prev[existingIndex].violationCount + 1 : 1,
-          snapshot: existingIndex >= 0 ? prev[existingIndex].snapshot : null,
+          snapshot: currentSnap,
         };
 
         if (existingIndex >= 0) {
@@ -313,7 +193,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       setTimeout(() => {
         setFeeds((prev) =>
           prev.map((f) =>
-            (f.id === studentId || f.name === data.studentName) && f.statusColor === "text-red-500"
+            (String(f.id) === studentId || String(f.name || "").toLowerCase().trim() === studentNameLower) && f.statusColor === "text-red-500"
               ? {
                   ...f,
                   statusColor: "text-amber-500",
@@ -345,19 +225,43 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         if (snapshots.length > 0) {
           setFeeds((prev) => {
             let updated = [...prev];
+
+            // ── Single Student Guarantee Fallback ──
+            // If 1 student card exists on screen and 1 snapshot exists in storage, bind them directly!
+            if (updated.length === 1 && snapshots.length === 1 && snapshots[0].snapshot) {
+              updated[0] = {
+                ...updated[0],
+                snapshot: snapshots[0].snapshot,
+                lastSeen: new Date(),
+              };
+              return updated;
+            }
+
             for (const snap of snapshots) {
-              const studentId = snap.studentId ? String(snap.studentId) : snap.studentName;
-              const idx = updated.findIndex((f) => f.id === studentId || f.name === snap.studentName);
+              const sIdStr = String(snap.studentId || "");
+              const sNameStr = String(snap.studentName || "").toLowerCase().trim();
+
+              const idx = updated.findIndex((f) => {
+                const fIdStr = String(f.id || "");
+                const fNameLower = String(f.name || "").toLowerCase().trim();
+
+                if (fIdStr && fIdStr === sIdStr) return true;
+                if (fNameLower && sNameStr && fNameLower === sNameStr) return true;
+                if (fNameLower && sNameStr && fNameLower.includes(sNameStr)) return true;
+                if (fNameLower && sNameStr && sNameStr.includes(fNameLower.split(",")[0].trim())) return true;
+                return false;
+              });
+
               if (idx >= 0) {
                 updated[idx] = {
                   ...updated[idx],
-                  id: studentId,
-                  snapshot: snap.snapshot,
+                  id: sIdStr || updated[idx].id,
+                  snapshot: snap.snapshot || updated[idx].snapshot,
                   lastSeen: new Date(),
                 };
               } else {
                 updated.push({
-                  id: studentId,
+                  id: sIdStr,
                   name: snap.studentName,
                   quizTitle: snap.quizTitle || "Quiz",
                   status: "✓ Active",
@@ -445,8 +349,8 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] px-5 py-4">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Status</div>
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm font-bold text-red-500">LIVE WEBRTC VIDEO</span>
+            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-sm font-bold text-emerald-500">LIVE SNAPSHOT STREAM (1.5s)</span>
           </div>
         </div>
       </div>
@@ -454,23 +358,23 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       {/* Main Monitor Grid */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📹 Live Video Monitoring — WebRTC Stream</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📸 Live Video Monitoring — Real-Time Snapshot Stream</h3>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">60 FPS ADAPTIVE HD</span>
+            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">REAL-TIME SNAPSHOT STREAM</span>
           </div>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {feeds.length === 0 ? (
               <div className="col-span-full h-40 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-xl text-[var(--muted)]">
-                <span className="text-3xl mb-3">📹</span>
-                <p className="text-sm font-semibold mb-1">Waiting for active student streams...</p>
-                <p className="text-xs text-[var(--muted)]">Students will appear here with live 30 FPS video feeds when they start a quiz.</p>
+                <span className="text-3xl mb-3">📸</span>
+                <p className="text-sm font-semibold mb-1">Waiting for active student snapshot feeds...</p>
+                <p className="text-xs text-[var(--muted)]">Students will appear here with live webcam snapshot feeds when they start a quiz.</p>
               </div>
             ) : (
               feeds.map((f) => (
-                <StudentVideoFeed key={f.id} feed={f} teacherId={teacherId} />
+                <StudentVideoFeed key={f.id} feed={f} />
               ))
             )}
           </div>
