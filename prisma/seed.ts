@@ -36,7 +36,15 @@ async function main() {
 
   const studentPassword = await hashPassword("student123");
   const teacherPassword = await hashPassword("teacher123");
-  const adminPassword = await hashPassword("admin123");
+  
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@proctorshield.ai";
+  const rawAdminPassword = process.env.ADMIN_PASSWORD || "admin123";
+  
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn("⚠️  WARNING: ADMIN_PASSWORD environment variable not set. Using default insecure password 'admin123'. Please set it in .env!");
+  }
+  
+  const adminPassword = await hashPassword(rawAdminPassword);
 
   const studentRole = roles[0];
   const teacherRole = roles[1];
@@ -115,11 +123,11 @@ async function main() {
   });
 
   const admin1 = await prisma.user.upsert({
-    where: { email: "admin@proctorshield.ai" },
+    where: { email: adminEmail },
     update: {},
     create: {
       fullName: "System Admin",
-      email: "admin@proctorshield.ai",
+      email: adminEmail,
       password: adminPassword,
       roleId: adminRole.id,
       status: "active",
@@ -132,7 +140,7 @@ async function main() {
   console.log("   ✓ Carlo Mendoza (carlo@demo.com / student123)");
   console.log("   ✓ Sir Ramos (teacher@demo.com / teacher123)");
   console.log("   ✓ Prof. Ana Lim (ana@demo.com / teacher123)");
-  console.log("   ✓ System Admin (admin@proctorshield.ai / admin123)\n");
+  console.log(`   ✓ System Admin (${adminEmail} / ${process.env.ADMIN_PASSWORD ? "****" : "admin123"})\n`);
 
   // ── 3. SUBJECTS ───────────────────────────────────────
   console.log("📚 Creating subjects...");
@@ -564,7 +572,7 @@ async function main() {
   console.log("\nDemo Credentials:");
   console.log("  Student:  student@demo.com  / student123");
   console.log("  Teacher:  teacher@demo.com  / teacher123");
-  console.log("  Admin:    admin@proctorshield.ai / admin123");
+  console.log(`  Admin:    ${adminEmail} / ${process.env.ADMIN_PASSWORD ? "****" : "admin123"}`);
   console.log("\nAccess Codes: PS-8821, PS-7412, PS-3047, PS-5519");
   console.log("═══════════════════════════════════════════\n");
 }

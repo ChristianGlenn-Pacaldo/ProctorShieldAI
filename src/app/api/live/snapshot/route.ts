@@ -78,8 +78,8 @@ export async function GET(req: NextRequest) {
     const now = Date.now();
 
     for (const [key, val] of store.entries()) {
-      // Only return snapshots from the last 30 seconds (active students)
-      if (now - val.updatedAt < 30000) {
+      // Only return snapshots from the last 5 seconds (active students)
+      if (now - val.updatedAt < 5000) {
         snapshots.push({
           studentName: val.studentName,
           quizTitle: val.quizTitle,

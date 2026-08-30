@@ -20,6 +20,7 @@ interface UserItem {
   email: string;
   role: string;
   roleClass: string;
+  plan: string;
   status: string;
   statusClass: string;
   joined: string;
@@ -45,6 +46,59 @@ export default function AdminDashboardContent() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleToggleStatus = async (userId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "Suspended" ? "active" : "suspended";
+    
+    // Optimistic UI update
+    setUsers(users.map(u => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          status: newStatus.charAt(0).toUpperCase() + newStatus.slice(1),
+          statusClass: newStatus === "suspended" 
+            ? "bg-red-500/10 text-red-500" 
+            : "bg-emerald-500/10 text-emerald-600"
+        };
+      }
+      return u;
+    }));
+
+    try {
+      await fetch(`/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (e) {
+      console.error("Failed to toggle status", e);
+    }
+  };
+
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await fetch(`/api/users/${editingUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: editingUser.plan }),
+      });
+      
+      // Local update
+      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+      setEditingUser(null);
+    } catch (e) {
+      console.error("Failed to update plan", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Fetch initial dashboard metrics from database (online users, active quizzes)
   const fetchDashboardData = async (silent = false) => {
@@ -110,6 +164,9 @@ export default function AdminDashboardContent() {
         } else if (data.type === "quiz-join") {
           icon = "🎯";
           type = "info";
+        } else if (data.type === "subscription") {
+          icon = "💎";
+          type = "warning";
         }
 
         const newActivity: Activity = {
@@ -239,19 +296,19 @@ export default function AdminDashboardContent() {
         </div>
       </div>
 
-      {/* Online Users */}
+      {/* Registered Users */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)]">👥 Online Users</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)]">👥 Registered Users</h3>
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-600">
-            {users.length} online
+            {users.length} users
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["User", "Email", "Role", "Status", "Joined", "Actions"].map((h) => (
+                {["User", "Email", "Role", "Plan", "Status", "Joined", "Actions"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -259,14 +316,14 @@ export default function AdminDashboardContent() {
             <tbody className="divide-y divide-[var(--border)]">
               {isLoading && users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={7} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">
-                    No users currently online.
+                  <td colSpan={7} className="text-center py-8 text-xs text-[var(--muted)]">
+                    No users currently registered.
                   </td>
                 </tr>
               ) : (
@@ -275,14 +332,30 @@ export default function AdminDashboardContent() {
                     <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{u.name}</td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.roleClass}`}>{u.role}</span></td>
+                    <td className="px-5 py-3">
+                      {u.plan === "Premium" ? (
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">💎 Premium</span>
+                      ) : u.plan === "Free Tier" ? (
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-500/10 text-slate-500 border border-slate-500/20">Free Tier</span>
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">-</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>{u.status}</span></td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3 flex gap-2">
-                      <button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">Edit</button>
+                      {u.role === "Teacher" && (
+                        <button 
+                          onClick={() => setEditingUser(u)}
+                          className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                      )}
                       {u.status === "Suspended" ? (
-                        <button className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
+                        <button onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
                       ) : (
-                        <button className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer">Suspend</button>
+                        <button onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer">Suspend</button>
                       )}
                     </td>
                   </tr>
@@ -292,6 +365,59 @@ export default function AdminDashboardContent() {
           </table>
         </div>
       </div>
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
+            <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
+            <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!editingUser) return;
+              setIsSaving(true);
+              fetch(`/api/users/${editingUser.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ plan: editingUser.plan }),
+              }).then(() => {
+                setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+                setEditingUser(null);
+                setIsSaving(false);
+              }).catch(() => setIsSaving(false));
+            }}>
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-[var(--muted)] block mb-1.5">Subscription Plan</label>
+                <select 
+                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500/50"
+                  value={editingUser.plan}
+                  onChange={(e) => setEditingUser({ ...editingUser, plan: e.target.value })}
+                >
+                  <option value="Premium">💎 Premium</option>
+                  <option value="Free Tier">Free Tier</option>
+                </select>
+              </div>
+              
+              <div className="flex gap-3 justify-end mt-6">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

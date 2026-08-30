@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { accessCode } = await req.json();
+    console.log("DEBUG JOIN ATTEMPT:", { session, accessCode });
 
     if (!accessCode) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
@@ -32,12 +33,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (!quiz) {
+      console.log("DEBUG JOIN: Quiz not found for code:", accessCode.trim().toUpperCase());
       return NextResponse.json({ error: "Invalid access code. Quiz not found." }, { status: 404 });
     }
+    
+    console.log("DEBUG JOIN: Quiz found:", quiz.title);
 
-    if (quiz.quizStatus === "draft") {
-      return NextResponse.json({ error: "This quiz is not yet active." }, { status: 403 });
-    }
+    // We allow joining draft quizzes so they act as a "waiting room"
+    // until the teacher formally starts the quiz.
+
 
     if (quiz.quizStatus === "ended") {
       return NextResponse.json({ error: "This quiz has already ended and is no longer accepting submissions." }, { status: 403 });
@@ -68,19 +72,41 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Notify teacher via Pusher if this is a late join
-    if (isLateJoin) {
-      try {
-        const { pusherServer } = await import("@/lib/pusher");
+    // Create a notification for the teacher
+    let notificationId = null;
+    const notification = await prisma.notification.create({
+      data: {
+        userId: quiz.teacherId,
+        title: "Student Joined",
+        message: `${session.fullName} has joined ${quiz.title}`,
+        isRead: false,
+      },
+    });
+    notificationId = notification.id;
+
+    // Notify teacher via Pusher
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      
+      // Personal notification for the teacher
+      await pusherServer.trigger(`user-${quiz.teacherId}`, "notification", {
+        id: notificationId,
+        title: "Student Joined",
+        message: `${session.fullName} has joined ${quiz.title}`,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Special event for late joins
+      if (isLateJoin) {
         await pusherServer.trigger(`teacher-${quiz.teacherId}`, "late-join-request", {
           studentQuizId: studentQuiz.id,
           studentName: session.fullName,
           quizTitle: quiz.title,
           quizId: quiz.id,
         });
-      } catch (e) {
-        console.error("Failed to trigger late join push event:", e);
       }
+    } catch (e) {
+      console.error("Failed to trigger push events:", e);
     }
 
     // Log activity

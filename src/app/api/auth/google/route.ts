@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
 
     // If user doesn't exist, create them
     if (!user) {
+      if (requestedRole.toLowerCase() === "admin") {
+        return NextResponse.json(
+          { success: false, message: "Admin registration via Google is restricted." },
+          { status: 403 }
+        );
+      }
+
       let dbRole = await prisma.role.findFirst({
         where: { roleName: { equals: requestedRole, mode: "insensitive" } },
       });
@@ -60,6 +67,55 @@ export async function POST(req: NextRequest) {
         },
         include: { role: true },
       });
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          activity: `New ${requestedRole} account created via Google`,
+          ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+        },
+      });
+
+      // Broadcast activity to admin
+      try {
+        const { pusherServer } = await import("@/lib/pusher");
+        await pusherServer.trigger("admin-dashboard", "activity", {
+          type: "register",
+          userId: user.id,
+          fullName: user.fullName,
+          role: user.role.roleName,
+          activity: `New ${user.role.roleName} account created via Google`,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Send a personal notification to the admin
+        const adminUser = await prisma.user.findFirst({
+          where: { role: { roleName: "admin" } },
+        });
+
+        if (adminUser) {
+          let notificationId = null;
+          const notification = await prisma.notification.create({
+            data: {
+              userId: adminUser.id,
+              title: "New Google Sign-Up",
+              message: `${user.fullName} just registered as a ${user.role.roleName}.`,
+              isRead: false,
+            },
+          });
+          notificationId = notification.id;
+
+          await pusherServer.trigger(`user-${adminUser.id}`, "notification", {
+            id: notificationId?.toString(),
+            title: "New Google Sign-Up",
+            message: `${user.fullName} just registered as a ${user.role.roleName}.`,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to broadcast activity to admin:", e);
+      }
     } else {
       // If user exists, update their role if they are logging into a different portal role
       let targetRoleId = user.roleId;

@@ -768,3 +768,297 @@
 [2026-07-21T08:21:42.071Z] GET /api/live/snapshot: Returning 0 active snapshots
 [2026-07-21T08:21:51.370Z] GET /api/live/snapshot: session={"userId":"6f68899b-e0dc-482a-9b9d-58cde2d538af","email":"juan@gmail.com","role":"teacher","fullName":"Juan","iat":1784621251,"exp":1785226051}
 [2026-07-21T08:21:51.371Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:25.257Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:25.259Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:25.285Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:25.286Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:26.086Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:26.087Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:27.082Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:27.083Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:28.083Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:28.084Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:29.084Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:29.085Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:30.093Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:30.094Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:31.093Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:31.093Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:33:32.103Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:33:32.104Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:33.597Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:33.599Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:33.645Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:33.646Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:34.352Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:34.353Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:35.311Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:35.312Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:36.303Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:36.304Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T02:39:37.295Z] GET /api/live/snapshot: session={"userId":"593eaa53-853c-467b-a91e-3bd98ff7da24","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788055883,"exp":1788660683}
+[2026-08-30T02:39:37.296Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:25.235Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:25.238Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:25.267Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:25.268Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:26.026Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:26.027Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:27.036Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:27.037Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:28.028Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:28.029Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:29.037Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:29.038Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T04:07:30.034Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T04:07:30.035Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:55.503Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:55.505Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:55.552Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:55.554Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:56.244Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:56.245Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:57.236Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:57.237Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:58.240Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:58.241Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:51:59.247Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:51:59.248Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:00.237Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:00.238Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:01.244Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:01.245Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:02.239Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:02.240Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:03.249Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:03.250Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:04.246Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:04.247Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:05.229Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:05.230Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:06.234Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:06.235Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:07.238Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:07.239Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:08.231Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:08.232Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:09.251Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:09.252Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:10.244Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:10.245Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:11.234Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:11.235Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:12.229Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:12.230Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:13.241Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:13.242Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:14.236Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:14.238Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:15.258Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:15.259Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:16.238Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:16.239Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:17.229Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:17.230Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:18.237Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:18.238Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:19.260Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:19.261Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:20.235Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:20.236Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:21.239Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:21.240Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:22.238Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:22.239Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:24.399Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:24.400Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:24.532Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:24.533Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:25.236Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:25.237Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:26.245Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:26.247Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:27.239Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:27.239Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:28.239Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:28.240Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:29.241Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:29.242Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:30.271Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:30.272Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:32.895Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:32.897Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:32.934Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:32.935Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:33.245Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:33.246Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:34.253Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:34.254Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:35.258Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:35.259Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:36.250Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:36.250Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:37.253Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:37.254Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:38.241Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:38.241Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:39.226Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:39.227Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:40.239Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:40.240Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:41.240Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:41.240Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:42.242Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:42.243Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:43.244Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:43.245Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:44.235Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:44.235Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:45.255Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:45.256Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:46.230Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:46.231Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:47.232Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:47.233Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:48.243Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:48.244Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:49.246Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:49.247Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:50.254Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:50.255Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:51.250Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:51.254Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:52.260Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:52.262Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:53.251Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:53.252Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:55.073Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:55.075Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:56.295Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:56.296Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:57.085Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:57.086Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:58.076Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:58.077Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:52:59.084Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:52:59.085Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:00.065Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:00.066Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:01.059Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:01.060Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:02.070Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:02.071Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:03.069Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:03.070Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:04.081Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:04.082Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:05.063Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:05.064Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:06.059Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:06.060Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:07.082Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:07.083Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:08.064Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:08.065Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:09.057Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:09.057Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:10.084Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:10.084Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:11.061Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:11.062Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:12.058Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:12.059Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:13.081Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:13.082Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:14.067Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:14.068Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:15.073Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:15.075Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:17.884Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:17.885Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:17.911Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:17.912Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:18.058Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:18.067Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:19.065Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:19.065Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:20.058Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:20.059Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:21.076Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:21.077Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:22.065Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:22.066Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:23.057Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:23.058Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:24.067Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:24.068Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:25.087Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:25.088Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:26.065Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:26.066Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:27.068Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:27.069Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:28.076Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:28.077Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:29.065Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:29.066Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:30.085Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:30.086Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:31.086Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:31.087Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:32.083Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:32.084Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:33.058Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:33.059Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:34.067Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:34.068Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:35.066Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:35.067Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:36.087Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:36.088Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:37.062Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:37.064Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:38.064Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:38.065Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:39.070Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:39.070Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:40.060Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:40.060Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:41.068Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:41.069Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:42.062Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:42.063Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:43.071Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:43.072Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:44.074Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:44.075Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:45.084Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:45.085Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:46.077Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:46.078Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:47.080Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:47.081Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:48.064Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:48.065Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:49.066Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:49.066Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:50.071Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:50.072Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:51.062Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:51.063Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:52.069Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:52.069Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:53:53.058Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:53:53.059Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:02.883Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:02.884Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:03.256Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:03.257Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:04.249Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:04.250Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:05.230Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:05.231Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:07.059Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:07.060Z] GET /api/live/snapshot: Returning 0 active snapshots
+[2026-08-30T05:54:08.077Z] GET /api/live/snapshot: session={"userId":"14717344-852f-4e3d-a57f-fe518a4efc43","email":"roronoazoljin@gmail.com","role":"teacher","fullName":"PACALDO, CHRISTIAN GLENN","iat":1788062782,"exp":1788667582}
+[2026-08-30T05:54:08.078Z] GET /api/live/snapshot: Returning 0 active snapshots

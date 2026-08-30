@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Shield, Target, Camera, Brain, Lock } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
@@ -8,7 +8,22 @@ import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 type Panel = "login" | "register";
 
 export default function StudentLoginPage() {
-  const [activePanel, setActivePanel] = useState<Panel>("login");
+  const [activePanel, setActivePanel] = useState<"login" | "register">("login");
+  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Google Identity Services blocks HTTP IPs on mobile (except localhost)
+    if (
+      typeof window !== "undefined" && 
+      window.location.protocol === "http:" && 
+      window.location.hostname !== "localhost" && 
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      setIsSecureOrigin(false);
+    }
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -61,7 +76,13 @@ export default function StudentLoginPage() {
       // Fallback for regular login (should not happen with our update)
       const role = data.user.role;
       if (role === "student") {
-        window.location.href = "/dashboard/student";
+        const pendingCode = localStorage.getItem("pendingJoinCode");
+        if (pendingCode) {
+          localStorage.removeItem("pendingJoinCode");
+          window.location.href = `/join?code=${pendingCode}`;
+        } else {
+          window.location.href = "/dashboard/student";
+        }
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
         setIsLoading(false);
@@ -99,7 +120,13 @@ export default function StudentLoginPage() {
       // Redirect based on role
       const role = data.user.role;
       if (role === "student") {
-        window.location.href = "/dashboard/student";
+        const pendingCode = localStorage.getItem("pendingJoinCode");
+        if (pendingCode) {
+          localStorage.removeItem("pendingJoinCode");
+          window.location.href = `/join?code=${pendingCode}`;
+        } else {
+          window.location.href = "/dashboard/student";
+        }
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
         setIsLoading(false);
@@ -142,7 +169,13 @@ export default function StudentLoginPage() {
         return;
       }
 
-      window.location.href = "/dashboard/student";
+      const pendingCode = localStorage.getItem("pendingJoinCode");
+      if (pendingCode) {
+        localStorage.removeItem("pendingJoinCode");
+        window.location.href = `/join?code=${pendingCode}`;
+      } else {
+        window.location.href = "/dashboard/student";
+      }
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);
@@ -174,7 +207,13 @@ export default function StudentLoginPage() {
 
       const role = data.user.role;
       if (role === "student") {
-        window.location.href = "/dashboard/student";
+        const pendingCode = localStorage.getItem("pendingJoinCode");
+        if (pendingCode) {
+          localStorage.removeItem("pendingJoinCode");
+          window.location.href = `/join?code=${pendingCode}`;
+        } else {
+          window.location.href = "/dashboard/student";
+        }
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
         setIsLoading(false);
@@ -231,11 +270,12 @@ export default function StudentLoginPage() {
         </div>
 
         {/* ── RIGHT PANEL ──────────────────────────── */}
-        <div className="w-full lg:w-1/2 bg-[var(--dark-s1)] flex items-center justify-center p-6">
+        <div className="w-full lg:w-1/2 bg-[var(--dark-s1)] flex items-center justify-center p-6 relative z-10">
           <div className="w-full max-w-md">
             {/* Tab Switcher */}
             <div className="flex gap-0.5 bg-white/5 p-1 rounded-xl mb-6">
               <button
+                type="button"
                 onClick={() => { setActivePanel("login"); setError(""); }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "login"
                     ? "bg-indigo-600/20 text-indigo-300"
@@ -245,6 +285,7 @@ export default function StudentLoginPage() {
                 Sign In
               </button>
               <button
+                type="button"
                 onClick={() => { setActivePanel("register"); setError(""); }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "register"
                     ? "bg-indigo-600/20 text-indigo-300"
@@ -321,15 +362,21 @@ export default function StudentLoginPage() {
                 </p>
 
                 {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Google Login Failed")}
-                    theme="filled_black"
-                    size="large"
-                    text="signin_with"
-                    shape="rectangular"
-                  />
+                <div className="mb-4 flex justify-center w-full min-h-[40px]">
+                  {mounted && isSecureOrigin ? (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError("Google Login Failed")}
+                      theme="filled_black"
+                      size="large"
+                      text="signin_with"
+                      shape="rectangular"
+                    />
+                  ) : mounted && !isSecureOrigin ? (
+                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
+                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex items-center gap-3 my-5">
@@ -387,6 +434,7 @@ export default function StudentLoginPage() {
                 <p className="text-center text-xs text-white/25 mt-5">
                   Don&apos;t have an account?{" "}
                   <button
+                    type="button"
                     onClick={() => setActivePanel("register")}
                     className="text-indigo-400 font-semibold hover:text-indigo-300"
                   >
@@ -406,14 +454,20 @@ export default function StudentLoginPage() {
 
                 {/* Real Google Button */}
                 <div className="mb-4 flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Google Registration Failed")}
-                    theme="filled_black"
-                    size="large"
-                    text="signup_with"
-                    shape="rectangular"
-                  />
+                  {isSecureOrigin ? (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError("Google Registration Failed")}
+                      theme="filled_black"
+                      size="large"
+                      text="signup_with"
+                      shape="rectangular"
+                    />
+                  ) : (
+                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
+                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 my-5">
@@ -486,10 +540,11 @@ export default function StudentLoginPage() {
                 <p className="text-center text-xs text-white/25 mt-5">
                   Already have an account?{" "}
                   <button
+                    type="button"
                     onClick={() => setActivePanel("login")}
                     className="text-indigo-400 font-semibold hover:text-indigo-300"
                   >
-                    Sign in →
+                    Sign in instead →
                   </button>
                 </p>
               </div>

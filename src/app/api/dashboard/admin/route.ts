@@ -52,14 +52,22 @@ export async function GET(req: NextRequest) {
 
     const totalOnlineCalculated = Math.max(1, onlineStudents + onlineTeachers + onlineAdmins);
 
-    // 3. User Management table list (Online users only)
-    const dbOnlineUsers = await prisma.user.findMany({
-      where: { isOnline: true },
-      include: { role: true },
-      orderBy: { fullName: "asc" },
+    // 3. User Management table list (Fetch all non-admin users)
+    const dbUsers = await prisma.user.findMany({
+      where: {
+        role: { roleName: { not: "admin" } }
+      },
+      include: { 
+        role: true,
+        userSubscriptions: {
+          include: { plan: true },
+          where: { subscriptionStatus: "active" }
+        }
+      },
+      orderBy: { createdAt: "desc" },
     });
 
-    const formattedUsers = dbOnlineUsers.map((u) => {
+    const formattedUsers = dbUsers.map((u) => {
       let roleClass = "bg-indigo-500/10 text-indigo-600";
       if (u.role.roleName === "teacher") {
         roleClass = "bg-violet-500/10 text-violet-600";
@@ -71,12 +79,21 @@ export async function GET(req: NextRequest) {
         ? "bg-red-500/10 text-red-500"
         : "bg-emerald-500/10 text-emerald-600";
 
+      // Determine Subscription Plan
+      let plan = "N/A";
+      if (u.role.roleName === "teacher") {
+        plan = u.userSubscriptions.length > 0 && u.userSubscriptions[0].plan.planName.includes("Premium") 
+          ? "Premium" 
+          : "Free Tier";
+      }
+
       return {
         id: u.id,
         name: u.fullName,
         email: u.email,
         role: u.role.roleName.charAt(0).toUpperCase() + u.role.roleName.slice(1),
         roleClass,
+        plan,
         status: u.status.charAt(0).toUpperCase() + u.status.slice(1),
         statusClass,
         joined: new Date(u.createdAt).toLocaleDateString("en-US", {

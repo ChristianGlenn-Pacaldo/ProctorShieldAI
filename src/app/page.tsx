@@ -103,9 +103,14 @@ export default function LandingPage() {
           <a href="#features" className="hover:text-white transition-colors">Features</a>
           <a href="#how" className="hover:text-white transition-colors">How It Works</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-          <a href="#testimonials" className="hover:text-white transition-colors">Testimonials</a>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/join"
+            className="px-4 py-2 text-sm font-semibold text-white/60 hover:text-white transition-all flex items-center gap-1.5"
+          >
+            Enter Code
+          </Link>
           <Link
             href="/login"
             className="px-4 py-2 text-sm font-semibold text-white/60 border border-white/10 rounded-lg hover:bg-white/5 transition-all"
@@ -156,21 +161,7 @@ export default function LandingPage() {
               Learn More <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-2xl mx-auto">
-            {[
-              { val: "98.4%", lbl: "Detection accuracy" },
-              { val: "50K+", lbl: "Quizzes proctored" },
-              { val: "<1s", lbl: "Violation alert time" },
-              { val: "200+", lbl: "Schools trust us" },
-            ].map((s) => (
-              <div key={s.lbl} className="text-center">
-                <div className="text-2xl md:text-3xl font-extrabold text-white font-[family-name:var(--font-display)]">
-                  {s.val}
-                </div>
-                <div className="text-xs text-white/30 mt-1">{s.lbl}</div>
-              </div>
-            ))}
-          </div>
+
         </div>
       </section>
 
@@ -230,44 +221,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ───────────────────────────── */}
-      <section id="testimonials" className="px-6 md:px-12 py-20 max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-3">
-            Testimonials
-          </div>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)]">
-            Trusted by educators
-          </h2>
-        </div>
-        <div className="grid md:grid-cols-3 gap-4">
-          {testimonials.map((t) => (
-            <div
-              key={t.name}
-              className="p-6 rounded-2xl bg-white/[0.025] border border-white/[0.06]"
-            >
-              <div className="text-amber-400 text-sm mb-3">
-                {Array.from({ length: t.stars }, (_, i) => (
-                  <Star key={i} className="w-4 h-4 inline fill-current" />
-                ))}
-                {t.stars < 5 && <Star className="w-4 h-4 inline text-white/15" />}
-              </div>
-              <p className="text-sm text-white/40 italic leading-relaxed mb-4">
-                &ldquo;{t.quote}&rdquo;
-              </p>
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 ${t.color} rounded-full flex items-center justify-center text-xs font-extrabold text-white`}>
-                  {t.initials}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-white/70">{t.name}</div>
-                  <div className="text-xs text-white/30">{t.role}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* ── PRICING ────────────────────────────────── */}
       <section id="pricing" className="px-6 md:px-12 py-20 max-w-3xl mx-auto">
@@ -300,15 +253,15 @@ export default function LandingPage() {
           </div>
           <div className="p-8 rounded-2xl bg-indigo-600/[0.06] border border-indigo-500/30">
             <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-2">
-              Premium Yearly
+              Premium Monthly
             </div>
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-extrabold text-white font-[family-name:var(--font-display)]">
-                ₱1,999
-                <span className="text-sm font-normal text-white/30"> / yr</span>
+                ₱500
+                <span className="text-sm font-normal text-white/30"> / mo</span>
               </span>
               <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-400 text-[10px] font-extrabold">
-                Save 40%
+                Best Value
               </span>
             </div>
             <p className="text-xs text-white/35 mt-3 mb-6 leading-relaxed">

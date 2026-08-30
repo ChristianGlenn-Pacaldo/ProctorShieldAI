@@ -83,6 +83,31 @@ export async function POST(req: NextRequest) {
         activity: `Logged in via Google with MFA as ${user.role.roleName}`,
         timestamp: new Date().toISOString(),
       });
+
+      // Send a personal notification to the admin if it's a student (or teacher)
+      const adminUser = await prisma.user.findFirst({
+        where: { role: { roleName: "admin" } },
+      });
+
+      if (adminUser) {
+        let notificationId = null;
+        const notification = await prisma.notification.create({
+          data: {
+            userId: adminUser.id,
+            title: "New Login",
+            message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+            isRead: false,
+          },
+        });
+        notificationId = notification.id;
+
+        await pusherServer.trigger(`user-${adminUser.id}`, "notification", {
+          id: notificationId?.toString(),
+          title: "New Login",
+          message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
     } catch (e) {
       console.error("Failed to broadcast MFA login to admin:", e);
     }

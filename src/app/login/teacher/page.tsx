@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Shield, Target, Camera, Brain, Lock } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
@@ -11,6 +11,20 @@ export default function TeacherLoginPage() {
   const [activePanel, setActivePanel] = useState<Panel>("login");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
+
+  useEffect(() => {
+    setMounted(true);
+    if (
+      typeof window !== "undefined" && 
+      window.location.protocol === "http:" && 
+      window.location.hostname !== "localhost" && 
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      setIsSecureOrigin(false);
+    }
+  }, []);
 
   // Form state
   const [loginEmail, setLoginEmail] = useState("");
@@ -323,15 +337,21 @@ export default function TeacherLoginPage() {
                 </p>
                 
                 {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Google Login Failed")}
-                    theme="filled_black"
-                    size="large"
-                    text="signin_with"
-                    shape="rectangular"
-                  />
+                <div className="mb-4 flex justify-center w-full min-h-[40px]">
+                  {mounted && isSecureOrigin ? (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError("Google Login Failed")}
+                      theme="filled_black"
+                      size="large"
+                      text="signin_with"
+                      shape="rectangular"
+                    />
+                  ) : mounted && !isSecureOrigin ? (
+                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
+                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex items-center gap-3 my-5">

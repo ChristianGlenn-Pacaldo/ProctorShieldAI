@@ -18,8 +18,19 @@ import {
   FileBarChart,
   Sun,
   Moon,
+  CreditCard,
+  Bell,
 } from "lucide-react";
 import { clsx } from "clsx";
+import PusherClient from "pusher-js";
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
 
 interface NavItem {
   label: string;
@@ -68,6 +79,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
     {
       section: "Account",
       items: [
+        { label: "Billing", icon: <CreditCard className="w-4 h-4" />, href: "/dashboard/teacher/billing" },
         { label: "Settings", icon: <Settings className="w-4 h-4" />, href: "/dashboard/teacher/settings" },
       ],
     },
@@ -107,11 +119,15 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState("light");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
   const nav = navConfig[role] || [];
   const portal = portalConfig[role];
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   // Initialize Theme
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || 
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -135,6 +151,68 @@ export default function DashboardShell({
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
+  };
+
+  // Fetch Notifications & Listen to Pusher
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch("/api/notifications");
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch notifications", e);
+      }
+    };
+    
+    fetchNotifications();
+
+    const getUserId = async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        const session = await res.json();
+        if (session && session.userId) {
+          const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
+          const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
+          const pusher = new PusherClient(pusherKey, { cluster: pusherCluster });
+          const channel = pusher.subscribe(`user-${session.userId}`);
+          
+          channel.bind("notification", (data: any) => {
+            const newNotif: Notification = {
+              id: data.id || Math.random().toString(),
+              title: data.title,
+              message: data.message,
+              createdAt: data.createdAt,
+              isRead: false,
+            };
+            setNotifications(prev => [newNotif, ...prev]);
+          });
+        }
+      } catch (e) {
+        console.error("Session fetch failed", e);
+      }
+    };
+
+    getUserId();
+  }, []);
+
+  const markAsRead = async (id: string) => {
+    setNotifications(prev => 
+      id === "all" 
+        ? prev.map(n => ({ ...n, isRead: true })) 
+        : prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+    );
+    try {
+      await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+    } catch (e) {
+      console.error("Failed to mark as read", e);
+    }
   };
 
   return (
@@ -243,6 +321,59 @@ export default function DashboardShell({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)] relative"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center animate-bounce">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+              
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+                    <h3 className="text-sm font-bold text-[var(--ink)]">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button 
+                        onClick={() => markAsRead("all")}
+                        className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-400"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-[var(--muted)]">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map(n => (
+                        <div 
+                          key={n.id} 
+                          onClick={() => !n.isRead && markAsRead(n.id)}
+                          className={`p-4 border-b border-[var(--border)] transition-colors cursor-pointer ${n.isRead ? 'opacity-60' : 'bg-[var(--surface2)]'}`}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-bold text-[var(--ink)]">{n.title}</span>
+                            {!n.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />}
+                          </div>
+                          <p className="text-[10px] text-[var(--muted)]">{n.message}</p>
+                          <p className="text-[9px] text-[var(--muted2)] mt-2">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)]"

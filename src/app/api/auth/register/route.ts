@@ -42,6 +42,14 @@ export async function POST(req: NextRequest) {
 
     // Resolve role ID (default to "student")
     const roleName = role || "student";
+    
+    if (roleName.toLowerCase() === "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin registration is restricted. Contact system administrator." },
+        { status: 403 }
+      );
+    }
+
     let roleRecord = await prisma.role.findUnique({
       where: { roleName },
     });

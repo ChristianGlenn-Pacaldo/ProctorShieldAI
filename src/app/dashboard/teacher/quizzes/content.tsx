@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Search, Sparkles, Camera, Upload, Trash, Check } from "lucide-react";
+import { Plus, Search, Sparkles, Camera, Upload, Trash, Check, Crown, Shield } from "lucide-react";
+import Link from "next/link";
 
 export default function TeacherQuizzesPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
@@ -21,6 +22,11 @@ export default function TeacherQuizzesPage() {
     shuffleQuestions: true
   });
 
+  // Subscription Gating State
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [showBillingModal, setShowBillingModal] = useState(false);
+  const [isCheckingSub, setIsCheckingSub] = useState(true);
+
   // AI Modal State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
@@ -37,6 +43,24 @@ export default function TeacherQuizzesPage() {
   const [manageQuizDetails, setManageQuizDetails] = useState<any>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Check subscription status on mount
+  useEffect(() => {
+    const checkSub = async () => {
+      try {
+        const res = await fetch("/api/billing/status");
+        if (res.ok) {
+          const data = await res.json();
+          setIsSubscribed(data.isSubscribed);
+        }
+      } catch (err) {
+        console.error("Subscription check failed:", err);
+      } finally {
+        setIsCheckingSub(false);
+      }
+    };
+    checkSub();
+  }, []);
 
   // Stop camera helper
   const stopCamera = () => {
@@ -423,9 +447,16 @@ export default function TeacherQuizzesPage() {
               />
             </div>
             <button 
-              onClick={() => setIsAiModalOpen(true)}
+              onClick={() => {
+                if (!isSubscribed) {
+                  setShowBillingModal(true);
+                  return;
+                }
+                setIsAiModalOpen(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-violet-500/30 text-violet-500 hover:bg-violet-500/10 transition-all">
               <Sparkles className="w-3.5 h-3.5" /> AI Create
+              {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
             </button>
             <button 
               onClick={openNewQuizModal}
@@ -930,6 +961,68 @@ export default function TeacherQuizzesPage() {
               <button onClick={() => setManageQuiz(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* BILLING / SUBSCRIPTION GATE MODAL */}
+      {showBillingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-violet-600/10 to-amber-500/5 pointer-events-none" />
+
+            <div className="relative z-10 p-8 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-amber-500/20">
+                <Crown className="w-8 h-8 text-white" />
+              </div>
+
+              <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">
+                Premium Feature
+              </h2>
+              <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
+                AI Quiz Generation is a Premium feature. Upgrade your plan to
+                unlock AI-powered quiz creation, live monitoring, and more.
+              </p>
+
+              <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
+                {[
+                  "AI Quiz Generation (Gemini AI)",
+                  "Real-time Live Monitoring",
+                  "Evidence Replay & Timeline",
+                  "AI Verdict Reports",
+                  "Unlimited Quizzes",
+                ].map((feat) => (
+                  <div key={feat} className="flex items-center gap-2 text-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-[var(--ink)] font-medium">{feat}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center mb-5">
+                <span className="text-3xl font-extrabold text-[var(--ink)]">₱500</span>
+                <span className="text-sm text-[var(--muted)]">/month</span>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBillingModal(false)}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)] transition-all"
+                >
+                  Maybe Later
+                </button>
+                <Link
+                  href="/dashboard/teacher/billing"
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5"
+                >
+                  <Crown className="w-4 h-4" /> Upgrade Now
+                </Link>
+              </div>
+
+              <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[var(--muted)]">
+                <Shield className="w-3 h-3" />
+                Secured by PayMongo · GCash & Card accepted
+              </div>
             </div>
           </div>
         </div>

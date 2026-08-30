@@ -293,10 +293,10 @@ export default function QuizRoom() {
         // Notify teacher once (lightweight)
         setTimeout(() => notifyTeacherJoined(), 1500);
 
-        // Upload snapshots every 3 seconds for teacher live view
+        // Upload snapshots every 1 second for teacher live view
         snapshotInterval = setInterval(() => {
           uploadSnapshot();
-        }, 3000);
+        }, 1000);
 
         // Load face-api models and COCO-SSD
         try {

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import PusherClient from "pusher-js";
+import Link from "next/link";
+import { Crown, Shield, Check, Radio } from "lucide-react";
 
 interface Feed {
   id: string;
@@ -22,6 +24,27 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
   const feedsRef = useRef<Feed[]>([]);
+
+  // Subscription gating
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isCheckingSub, setIsCheckingSub] = useState(true);
+
+  useEffect(() => {
+    const checkSub = async () => {
+      try {
+        const res = await fetch("/api/billing/status");
+        if (res.ok) {
+          const data = await res.json();
+          setIsSubscribed(data.isSubscribed);
+        }
+      } catch (err) {
+        console.error("Subscription check failed:", err);
+      } finally {
+        setIsCheckingSub(false);
+      }
+    };
+    checkSub();
+  }, []);
 
   // Keep ref in sync
   useEffect(() => {
@@ -179,7 +202,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     };
   }, [teacherId]);
 
-  // ── Poll snapshots from server every 3 seconds ──
+  // ── Poll snapshots from server every 1 second ──
   useEffect(() => {
     if (!teacherId || teacherId === "unknown") return;
 
@@ -226,11 +249,68 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     };
 
     // Start polling
-    const interval = setInterval(pollSnapshots, 3000);
+    const interval = setInterval(pollSnapshots, 1000);
     pollSnapshots(); // immediate first poll
 
     return () => clearInterval(interval);
   }, [teacherId]);
+
+  // Subscription paywall
+  if (isCheckingSub) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isSubscribed) {
+    return (
+      <div className="animate-fade-in flex items-center justify-center min-h-[60vh]">
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-violet-600/10 to-amber-500/5 pointer-events-none" />
+          <div className="relative z-10 p-8 text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-amber-500/20">
+              <Crown className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">Live Monitoring is Premium</h2>
+            <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
+              Real-time webcam monitoring of students during quizzes requires a Premium subscription.
+              Upgrade to watch live feeds, approve late joins, and catch cheating in real-time.
+            </p>
+            <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
+              {[
+                "Real-time 1-second webcam feeds",
+                "Live violation alerts & trust scores",
+                "Late join approval system",
+                "Retake request management",
+                "AI-powered cheating detection",
+              ].map((feat) => (
+                <div key={feat} className="flex items-center gap-2 text-xs">
+                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="text-[var(--ink)] font-medium">{feat}</span>
+                </div>
+              ))}
+            </div>
+            <div className="text-center mb-5">
+              <span className="text-3xl font-extrabold text-[var(--ink)]">₱500</span>
+              <span className="text-sm text-[var(--muted)]">/month</span>
+            </div>
+            <Link
+              href="/dashboard/teacher/billing"
+              className="w-full py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5"
+            >
+              <Crown className="w-4 h-4" /> Upgrade to Premium
+            </Link>
+            <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[var(--muted)]">
+              <Shield className="w-3 h-3" />
+              Secured by PayMongo · GCash & Card accepted
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-4">

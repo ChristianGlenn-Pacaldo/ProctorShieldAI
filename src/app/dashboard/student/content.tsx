@@ -26,9 +26,6 @@ interface StudentQuiz {
 }
 
 export default function StudentDashboardContent() {
-  const [joinCode, setJoinCode] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [studentQuizzes, setStudentQuizzes] = useState<StudentQuiz[]>([]);
   const [isFetching, setIsFetching] = useState(true);
 
@@ -50,34 +47,6 @@ export default function StudentDashboardContent() {
     fetchQuizzes();
   }, []);
 
-  const handleJoinQuiz = async () => {
-    if (!joinCode.trim()) return;
-    
-    setIsLoading(true);
-    setMessage("");
-
-    try {
-      const res = await fetch("/api/quizzes/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessCode: joinCode }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setMessage(`✅ ${data.message || "Successfully joined quiz"}`);
-        setJoinCode("");
-        fetchQuizzes(); // Refresh lists
-      } else {
-        setMessage(`❌ ${data.error || "Failed to join quiz"}`);
-      }
-    } catch (error) {
-      setMessage("❌ Network error. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Compute Dynamic Stats
   const completed = studentQuizzes.filter((se) => se.quizStatus === "completed");
@@ -107,37 +76,20 @@ export default function StudentDashboardContent() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Join Quiz Box */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-600/10 to-violet-600/10 border border-indigo-500/30">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-indigo-600 mb-1">Join an Quiz</h3>
-            <p className="text-xs text-[var(--muted)]">
-              Enter the code provided by your instructor to start your proctored session.
-            </p>
-          </div>
-          <div className="flex gap-2.5">
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="PS-8821"
-              className="w-36 px-4 py-2.5 text-center font-bold tracking-widest text-sm rounded-xl bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
-            />
-            <button
-              onClick={handleJoinQuiz}
-              disabled={isLoading}
-              className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
-            >
-              {isLoading ? "Joining..." : "Join Quiz"}
-            </button>
-          </div>
+      {/* Join Quiz Banner */}
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-600/10 to-violet-600/10 border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h3 className="font-bold text-indigo-600 mb-1 text-lg">Got a join code?</h3>
+          <p className="text-sm text-[var(--muted)]">
+            Head to the dedicated join page to enter your instructor's code and start your proctored session instantly.
+          </p>
         </div>
-        {message && (
-          <div className="mt-3 text-xs font-semibold animate-fade-in text-[var(--ink)]">
-            {message}
-          </div>
-        )}
+        <Link
+          href="/join"
+          className="px-6 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 whitespace-nowrap"
+        >
+          Join a Quiz ➔
+        </Link>
       </div>
 
       {/* Stats */}

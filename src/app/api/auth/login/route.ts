@@ -85,6 +85,29 @@ export async function POST(req: NextRequest) {
         activity: `Logged in as ${user.role.roleName}`,
         timestamp: new Date().toISOString(),
       });
+
+      // Send a personal notification to the admin
+      const adminUser = await prisma.user.findFirst({
+        where: { role: { roleName: "admin" } },
+      });
+
+      if (adminUser) {
+        const notification = await prisma.notification.create({
+          data: {
+            userId: adminUser.id,
+            title: "New Login",
+            message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+            isRead: false,
+          },
+        });
+
+        await pusherServer.trigger(`user-${adminUser.id}`, "notification", {
+          id: notification.id.toString(),
+          title: "New Login",
+          message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
     } catch (e) {
       console.error("Failed to broadcast activity to admin:", e);
     }

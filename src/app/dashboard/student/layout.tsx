@@ -1,6 +1,7 @@
 import DashboardShell from "@/components/dashboard-shell";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import NameEnforcer from "@/components/name-enforcer";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -24,6 +25,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
       userAvatar={initials || "SD"}
       avatarColor="from-indigo-600 to-violet-600"
     >
+      <NameEnforcer initialName={name} />
       {children}
     </DashboardShell>
   );
