@@ -85,21 +85,21 @@ const testimonials = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[var(--dark-bg)] text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* ── NAVBAR ──────────────────────────────────── */}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-white/5 backdrop-blur-md sticky top-0 z-50 bg-[var(--dark-bg)]/80">
+      <nav className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-50 bg-slate-950/80">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-lg">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-lg shadow-sm">
             🛡️
           </div>
           <div>
-            <span className="font-bold text-white text-lg font-[var(--font-display)]">
+            <span className="font-bold text-white text-lg font-[family-name:var(--font-display)] tracking-tight">
               Proctor Shield{" "}
-              <span className="text-indigo-400">AI</span>
+              <span className="text-blue-400">AI</span>
             </span>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-8 text-sm text-white/50">
+        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
           <a href="#features" className="hover:text-white transition-colors">Features</a>
           <a href="#how" className="hover:text-white transition-colors">How It Works</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
@@ -113,13 +113,13 @@ export default function LandingPage() {
           </Link>
           <Link
             href="/login"
-            className="px-4 py-2 text-sm font-semibold text-white/60 border border-white/10 rounded-lg hover:bg-white/5 transition-all"
+            className="px-4 py-2 text-sm font-semibold text-slate-300 border border-slate-800 rounded-lg hover:bg-slate-900 hover:text-white transition-all"
           >
             Log In
           </Link>
           <Link
             href="/login"
-            className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/25"
+            className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-xs"
           >
             Get Started Free
           </Link>
@@ -128,66 +128,80 @@ export default function LandingPage() {
 
       {/* ── HERO ───────────────────────────────────── */}
       <section className="relative px-6 md:px-12 pt-24 pb-20 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-indigo-600/8 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-950/30 via-transparent to-transparent pointer-events-none" />
         <div className="relative z-10 max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs text-white/50 mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-950/60 border border-blue-800/40 text-xs font-semibold text-blue-300 mb-8">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             AI-Powered · Real-time Detection · Evidence-based
           </div>
-          <h1 className="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight font-[family-name:var(--font-display)]">
+          <h1 className="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight font-[family-name:var(--font-display)] text-slate-100">
             The Smartest Way to
             <br />
             Run{" "}
-            <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-sky-400 bg-clip-text text-transparent">
               Honest Quizzes
             </span>{" "}
             Online
           </h1>
-          <p className="mt-6 text-lg text-white/40 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
             AI proctoring that detects cheating in real-time, captures evidence automatically,
             and delivers an intelligent verdict — so educators can focus on teaching.
           </p>
           <div className="flex items-center justify-center gap-4 mt-10">
             <Link
               href="/login"
-              className="px-8 py-4 text-base font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/30 flex items-center gap-2"
+              className="px-8 py-4 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/25 flex items-center gap-2"
             >
               <Sparkles className="w-5 h-5" /> Start Free Trial
             </Link>
             <Link
               href="/login"
-              className="px-6 py-4 text-base font-semibold text-white/50 border border-white/10 rounded-xl hover:bg-white/5 transition-all flex items-center gap-2"
+              className="px-6 py-4 text-base font-semibold text-slate-300 border border-slate-800 rounded-xl hover:bg-slate-900 hover:text-white transition-all flex items-center gap-2"
             >
               Learn More <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-2xl mx-auto">
+            {[
+              { val: "98.4%", lbl: "Detection accuracy" },
+              { val: "50K+", lbl: "Quizzes proctored" },
+              { val: "<1s", lbl: "Violation alert time" },
+              { val: "200+", lbl: "Schools trust us" },
+            ].map((s) => (
+              <div key={s.lbl} className="text-center p-4 rounded-xl bg-slate-900/40 border border-slate-800/50">
+                <div className="text-2xl md:text-3xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
+                  {s.val}
+                </div>
+                <div className="text-xs text-slate-400 mt-1 font-medium">{s.lbl}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* ── FEATURES ───────────────────────────────── */}
       <section id="features" className="px-6 md:px-12 py-20 max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-3">
+          <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-3">
             Core Features
           </div>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)]">
+          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)] text-slate-100">
             Everything for secure
             <br />
             online quizinations
           </h2>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
           {features.map((f) => (
             <div
               key={f.title}
-              className="p-6 rounded-2xl bg-white/[0.025] border border-white/[0.06] hover:border-white/15 transition-all group"
+              className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all group"
             >
-              <div className={`w-12 h-12 rounded-xl ${f.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+              <div className={`w-12 h-12 rounded-xl ${f.color} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}>
                 {f.icon}
               </div>
-              <h3 className="text-base font-bold text-white/90 mb-2">{f.title}</h3>
-              <p className="text-sm text-white/35 leading-relaxed">{f.desc}</p>
+              <h3 className="text-base font-bold text-slate-200 mb-2 font-[family-name:var(--font-display)]">{f.title}</h3>
+              <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
@@ -196,10 +210,10 @@ export default function LandingPage() {
       {/* ── HOW IT WORKS ───────────────────────────── */}
       <section id="how" className="px-6 md:px-12 py-20 max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-3">
+          <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-3">
             How It Works
           </div>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)]">
+          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)] text-slate-100">
             Simple for teachers,
             <br />
             transparent for students
@@ -209,67 +223,105 @@ export default function LandingPage() {
           {steps.map((s) => (
             <div
               key={s.num}
-              className="p-8 rounded-2xl bg-white/[0.025] border border-white/[0.06] text-center"
+              className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800/80 text-center"
             >
-              <div className="text-4xl font-extrabold bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent mb-4 font-[family-name:var(--font-display)]">
+              <div className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent mb-4 font-[family-name:var(--font-display)]">
                 {s.num}
               </div>
-              <h3 className="text-lg font-bold text-white/90 mb-2">{s.title}</h3>
-              <p className="text-sm text-white/35 leading-relaxed">{s.desc}</p>
+              <h3 className="text-lg font-bold text-slate-200 mb-2 font-[family-name:var(--font-display)]">{s.title}</h3>
+              <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
+      {/* ── TESTIMONIALS ───────────────────────────── */}
+      <section id="testimonials" className="px-6 md:px-12 py-20 max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-3">
+            Testimonials
+          </div>
+          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)] text-slate-100">
+            Trusted by educators
+          </h2>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5">
+          {testimonials.map((t) => (
+            <div
+              key={t.name}
+              className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80"
+            >
+              <div className="text-amber-400 text-sm mb-3">
+                {Array.from({ length: t.stars }, (_, i) => (
+                  <Star key={i} className="w-4 h-4 inline fill-current" />
+                ))}
+                {t.stars < 5 && <Star className="w-4 h-4 inline text-slate-700" />}
+              </div>
+              <p className="text-sm text-slate-300 italic leading-relaxed mb-4">
+                &ldquo;{t.quote}&rdquo;
+              </p>
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 ${t.color} rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs`}>
+                  {t.initials}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-slate-200">{t.name}</div>
+                  <div className="text-xs text-slate-400">{t.role}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── PRICING ────────────────────────────────── */}
       <section id="pricing" className="px-6 md:px-12 py-20 max-w-3xl mx-auto">
         <div className="text-center mb-12">
-          <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-3">
+          <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-3">
             Pricing
           </div>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)]">
+          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)] text-slate-100">
             Simple, transparent pricing
           </h2>
         </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="p-8 rounded-2xl bg-white/[0.025] border border-white/[0.06]">
-            <div className="text-xs font-bold tracking-widest uppercase text-white/40 mb-2">
+        <div className="grid md:grid-cols-2 gap-5">
+          <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+            <div className="text-xs font-bold tracking-widest uppercase text-slate-400 mb-2">
               Free
             </div>
-            <div className="text-4xl font-extrabold text-white font-[family-name:var(--font-display)]">
+            <div className="text-4xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
               ₱0
-              <span className="text-sm font-normal text-white/30"> / forever</span>
+              <span className="text-sm font-normal text-slate-400"> / forever</span>
             </div>
-            <p className="text-xs text-white/35 mt-3 mb-6 leading-relaxed">
+            <p className="text-xs text-slate-400 mt-3 mb-6 leading-relaxed">
               For individual teachers trying out the platform.
             </p>
             <Link
               href="/login"
-              className="block w-full py-3 text-center text-sm font-semibold text-white/60 border border-white/10 rounded-lg hover:bg-white/5 transition-all"
+              className="block w-full py-3 text-center text-sm font-semibold text-slate-300 border border-slate-800 rounded-lg hover:bg-slate-800 hover:text-white transition-all"
             >
               Get Started Free
             </Link>
           </div>
-          <div className="p-8 rounded-2xl bg-indigo-600/[0.06] border border-indigo-500/30">
-            <div className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-2">
+          <div className="p-8 rounded-2xl bg-slate-900 border border-blue-500/40 relative">
+            <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-2">
               Premium Monthly
             </div>
             <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-extrabold text-white font-[family-name:var(--font-display)]">
+              <span className="text-4xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
                 ₱500
-                <span className="text-sm font-normal text-white/30"> / mo</span>
+                <span className="text-sm font-normal text-slate-400"> / mo</span>
               </span>
-              <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-400 text-[10px] font-extrabold">
-                Best Value
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-extrabold">
+                Pro Plan
               </span>
             </div>
-            <p className="text-xs text-white/35 mt-3 mb-6 leading-relaxed">
+            <p className="text-xs text-slate-400 mt-3 mb-6 leading-relaxed">
               Full AI analysis, evidence replay, unlimited quizzes.
             </p>
             <Link
               href="/login"
-              className="block w-full py-3 text-center text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/25"
+              className="block w-full py-3 text-center text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20"
             >
               Upgrade to Premium →
             </Link>
@@ -278,23 +330,23 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ────────────────────────────────────── */}
-      <section className="px-6 md:px-12 py-20 text-center bg-gradient-to-b from-indigo-600/[0.08] via-violet-600/[0.04] to-transparent border-t border-white/[0.04]">
-        <h2 className="text-3xl md:text-4xl font-extrabold max-w-lg mx-auto font-[family-name:var(--font-display)]">
+      <section className="px-6 md:px-12 py-20 text-center bg-slate-900/60 border-t border-slate-800/80">
+        <h2 className="text-3xl md:text-4xl font-extrabold max-w-lg mx-auto font-[family-name:var(--font-display)] text-slate-100">
           Ready to make your quizzes cheat-proof?
         </h2>
-        <p className="text-white/40 text-base mt-4 mb-10">
-          What are you waiting for? Join ProctorShield-AI now!
+        <p className="text-slate-400 text-base mt-4 mb-10">
+          Join ProctorShield-AI now for reliable AI proctoring!
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link
             href="/login/student"
-            className="px-8 py-4 text-base font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/30"
+            className="px-8 py-4 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/25"
           >
             🎓 Start as Student
           </Link>
           <Link
             href="/login/teacher"
-            className="px-6 py-4 text-base font-semibold text-white/50 border border-white/10 rounded-xl hover:bg-white/5 transition-all"
+            className="px-6 py-4 text-base font-semibold text-slate-300 border border-slate-800 rounded-xl hover:bg-slate-900 hover:text-white transition-all"
           >
             👩‍🏫 Start as Teacher
           </Link>
@@ -302,12 +354,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ─────────────────────────────────── */}
-      <footer className="px-6 md:px-12 py-8 border-t border-white/[0.04] flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-white/20">
+      <footer className="px-6 md:px-12 py-8 border-t border-slate-800/60 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
         <p>© 2025 Proctor Shield AI · Built for the modern classroom</p>
         <div className="flex gap-6">
-          <a href="#" className="hover:text-white/50 transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-white/50 transition-colors">Terms of Service</a>
-          <Link href="/admin/login" className="text-white/[0.08] hover:text-white/20 transition-colors">
+          <a href="#" className="hover:text-slate-200 transition-colors">Privacy Policy</a>
+          <a href="#" className="hover:text-slate-200 transition-colors">Terms of Service</a>
+          <Link href="/admin/login" className="text-slate-500 hover:text-slate-300 transition-colors">
             System
           </Link>
         </div>

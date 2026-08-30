@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -23,6 +23,14 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import PusherClient from "pusher-js";
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
 
 interface Notification {
   id: string;
@@ -79,7 +87,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
     {
       section: "Account",
       items: [
-        { label: "Billing", icon: <CreditCard className="w-4 h-4" />, href: "/dashboard/teacher/billing" },
+        { label: "Billing & Plan", icon: <CreditCard className="w-4 h-4" />, href: "/dashboard/teacher/billing" },
         { label: "Settings", icon: <Settings className="w-4 h-4" />, href: "/dashboard/teacher/settings" },
       ],
     },
@@ -105,9 +113,9 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
 };
 
 const portalConfig = {
-  student: { title: "Proctor Shield", sub: "Student Portal", logoColor: "from-indigo-600 to-violet-600" },
-  teacher: { title: "Proctor Shield", sub: "Teacher Portal", logoColor: "from-indigo-600 to-violet-600" },
-  admin: { title: "Proctor Shield", sub: "Admin Panel", logoColor: "from-red-500 to-rose-500" },
+  student: { title: "Proctor Shield", sub: "Student Portal", logoColor: "from-blue-600 to-indigo-700" },
+  teacher: { title: "Proctor Shield", sub: "Teacher Portal", logoColor: "from-blue-600 to-indigo-700" },
+  admin: { title: "Proctor Shield", sub: "Admin Panel", logoColor: "from-slate-800 to-rose-700" },
 };
 
 export default function DashboardShell({
@@ -115,14 +123,104 @@ export default function DashboardShell({
   role,
   userName,
   userAvatar,
-  avatarColor = "from-indigo-600 to-violet-600",
+  avatarColor = "from-blue-600 to-slate-800",
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState("light");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
-  const nav = navConfig[role] || [];
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unreadCount || 0);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load notifications:", e);
+    }
+  };
+
+  // Fetch notifications on mount + setup Pusher listener & 3.5s polling
+  useEffect(() => {
+    let isMounted = true;
+    const fetchNotifs = async () => {
+      try {
+        const res = await fetch("/api/notifications");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data.success) {
+            setNotifications(data.notifications || []);
+            setUnreadCount(data.unreadCount || 0);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load notifications:", e);
+      }
+    };
+
+    fetchNotifs();
+
+    const pollInterval = setInterval(() => {
+      fetchNotifs();
+    }, 3500);
+
+    let pusher: any;
+    try {
+      import("pusher-js").then((PusherClient) => {
+        const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
+        const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
+        pusher = new PusherClient.default(key, { cluster });
+        const channel = pusher.subscribe("admin-dashboard");
+        channel.bind("activity", () => {
+          fetchNotifs();
+        });
+      });
+    } catch {}
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      if (pusher) pusher.disconnect();
+    };
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const openNotifications = async () => {
+    const nextState = !notifOpen;
+    setNotifOpen(nextState);
+    if (nextState) {
+      // Re-fetch latest notifications from DB when opening dropdown
+      await loadNotifications();
+      // Mark as read in DB
+      try {
+        await fetch("/api/notifications", { method: "PUT" });
+        setUnreadCount(0);
+      } catch (e) {
+        console.error("Failed to mark notifications read:", e);
+      }
+    }
+  };
+  const nav = navConfig[role] || navConfig.student;
   const portal = portalConfig[role];
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -132,7 +230,6 @@ export default function DashboardShell({
     const savedTheme = localStorage.getItem("theme") || 
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     if (savedTheme === "dark") {
-      setTheme("dark");
       document.documentElement.classList.add("dark");
     }
   }, []);
@@ -149,7 +246,11 @@ export default function DashboardShell({
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: role }),
+    });
     window.location.href = "/login";
   };
 
@@ -226,12 +327,12 @@ export default function DashboardShell({
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-[var(--border)]">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${portal.logoColor} flex items-center justify-center text-sm`}>
+          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${portal.logoColor} flex items-center justify-center text-sm text-white shadow-sm`}>
             {role === "admin" ? "🔒" : "🛡️"}
           </div>
           <div>
-            <div className="text-sm font-bold text-[var(--ink)]">{portal.title}</div>
-            <div className="text-[10px] text-[var(--muted)] font-semibold tracking-wide uppercase">
+            <div className="text-sm font-bold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
+            <div className="text-[10px] text-[var(--muted)] font-semibold tracking-wider uppercase">
               {portal.sub}
             </div>
           </div>
@@ -240,8 +341,8 @@ export default function DashboardShell({
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((group) => (
-            <div key={group.section} className="mb-4">
-              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--muted2)]">
+            <div key={group.section} className="mb-5">
+              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--muted)] opacity-80">
                 {group.section}
               </div>
               {group.items.map((item) => {
@@ -251,16 +352,16 @@ export default function DashboardShell({
                     key={item.href}
                     href={item.href}
                     className={clsx(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-0.5",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mb-1",
                       isActive
-                        ? "bg-indigo-600/10 text-indigo-600 font-semibold"
+                        ? "bg-blue-600/10 text-blue-600 dark:text-blue-400 font-semibold border-l-2 border-blue-600 rounded-r-lg rounded-l-none pl-2.5"
                         : "text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--ink)]"
                     )}
                   >
                     {item.icon}
                     <span className="flex-1">{item.label}</span>
                     {item.badge && (
-                      <span className="px-2 py-0.5 rounded-full bg-indigo-600/15 text-indigo-600 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-blue-600/15 text-blue-600 dark:text-blue-400 text-[10px] font-bold">
                         {item.badge}
                       </span>
                     )}
@@ -271,7 +372,7 @@ export default function DashboardShell({
           ))}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--muted)] hover:bg-red-500/10 hover:text-red-500 transition-all w-full"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--muted)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-all w-full mt-2"
           >
             <LogOut className="w-4 h-4" />
             Log Out
@@ -281,11 +382,11 @@ export default function DashboardShell({
         {/* User */}
         <div className="px-4 py-4 border-t border-[var(--border)]">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-xs font-extrabold text-white`}>
+            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
               {userAvatar}
             </div>
-            <div>
-              <div className="text-sm font-semibold text-[var(--ink)]">{userName}</div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[var(--ink)] truncate">{userName}</div>
               <div className="text-xs text-[var(--muted)] capitalize">{role}</div>
             </div>
           </div>
@@ -295,7 +396,7 @@ export default function DashboardShell({
       {/* Overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -316,57 +417,58 @@ export default function DashboardShell({
                 {role === "admin" ? "System Administration" : `${role} Dashboard`}
               </div>
               <div className="text-xs text-[var(--muted)]">
-                Welcome, <span className="font-semibold">{userName}</span>
+                Welcome, <span className="font-semibold text-[var(--ink2)]">{userName}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
+            {/* Notification Bell */}
+            <div className="relative" ref={notifRef}>
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)] relative"
+                onClick={openNotifications}
+                className="relative p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)]"
+                title="Notifications"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center animate-bounce">
-                    {unreadCount}
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </button>
-              
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-                    <h3 className="text-sm font-bold text-[var(--ink)]">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <button 
-                        onClick={() => markAsRead("all")}
-                        className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-400"
-                      >
-                        Mark all as read
-                      </button>
+              {/* Dropdown */}
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                  <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-[var(--ink)] uppercase tracking-wide">Notifications</h4>
+                    {notifications.length > 0 && (
+                      <span className="text-[10px] text-[var(--muted)]">All caught up</span>
                     )}
                   </div>
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-72 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-[var(--muted)]">
+                      <div className="py-8 text-center text-xs text-[var(--muted)]">
+                        <Bell className="w-5 h-5 mx-auto mb-2 opacity-30" />
                         No notifications yet.
                       </div>
                     ) : (
-                      notifications.map(n => (
-                        <div 
-                          key={n.id} 
-                          onClick={() => !n.isRead && markAsRead(n.id)}
-                          className={`p-4 border-b border-[var(--border)] transition-colors cursor-pointer ${n.isRead ? 'opacity-60' : 'bg-[var(--surface2)]'}`}
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-3 border-b border-[var(--border)] last:border-0 transition-colors ${
+                            n.isRead ? "" : "bg-blue-500/5"
+                          }`}
                         >
-                          <div className="flex justify-between items-start mb-1">
-                            <span className="text-xs font-bold text-[var(--ink)]">{n.title}</span>
-                            {!n.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />}
+                          <div className="flex items-start gap-2">
+                            {!n.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-semibold ${n.isRead ? "text-[var(--muted)]" : "text-[var(--ink)]"}`}>{n.title}</p>
+                              <p className="text-[11px] text-[var(--muted)] mt-0.5 leading-relaxed">{n.message}</p>
+                              <p className="text-[10px] text-[var(--muted2)] mt-1">
+                                {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-[10px] text-[var(--muted)]">{n.message}</p>
-                          <p className="text-[9px] text-[var(--muted2)] mt-2">
-                            {new Date(n.createdAt).toLocaleString()}
-                          </p>
                         </div>
                       ))
                     )}
@@ -384,7 +486,7 @@ export default function DashboardShell({
             {role === "teacher" && (
               <Link
                 href="/dashboard/teacher/quizzes?new=true"
-                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20"
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-xs"
               >
                 + New Quiz
               </Link>

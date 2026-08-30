@@ -34,34 +34,38 @@ export async function POST(req: NextRequest) {
       include: { role: true },
     });
 
-    // If user doesn't exist, create them
-    if (!user) {
-      if (requestedRole.toLowerCase() === "admin") {
+    // Security Check: Prevent unauthorized users from becoming admins via Google Auth
+    if (requestedRole.toLowerCase() === "admin") {
+      if (!user || user.role?.roleName.toLowerCase() !== "admin") {
         return NextResponse.json(
           { success: false, message: "Admin registration via Google is restricted." },
           { status: 403 }
         );
       }
+    }
 
-      let dbRole = await prisma.role.findFirst({
-        where: { roleName: { equals: requestedRole, mode: "insensitive" } },
+    // Fetch or create the requested role
+    let dbRole = await prisma.role.findFirst({
+      where: { roleName: { equals: requestedRole, mode: "insensitive" } },
+    });
+
+    if (!dbRole) {
+      // Auto-create role if missing
+      dbRole = await prisma.role.create({
+        data: {
+          roleName: requestedRole.toLowerCase(),
+          description: `Auto-created ${requestedRole} role`
+        }
       });
+    }
 
-      if (!dbRole) {
-        // Auto-create role if missing
-        dbRole = await prisma.role.create({
-          data: {
-            roleName: requestedRole.toLowerCase(),
-            description: `Auto-created ${requestedRole} role`
-          }
-        });
-      }
-
+    if (!user) {
+      // If user doesn't exist, create them
       user = await prisma.user.create({
         data: {
           fullName: name || "Google User",
           email: email.toLowerCase().trim(),
-          password: "GOOGLE_AUTH_NO_PASSWORD", // Placeholder
+          password: `GOOGLE_OAUTH_${crypto.randomUUID()}`, // Non-guessable placeholder
           profileImage: picture || null,
           roleId: dbRole.id,
         },
@@ -117,31 +121,13 @@ export async function POST(req: NextRequest) {
         console.error("Failed to broadcast activity to admin:", e);
       }
     } else {
-      // If user exists, update their role if they are logging into a different portal role
-      let targetRoleId = user.roleId;
-      if (role && user.role.roleName.toLowerCase() !== role.toLowerCase()) {
-        let dbRole = await prisma.role.findFirst({
-          where: { roleName: { equals: role, mode: "insensitive" } },
-        });
-
-        if (!dbRole) {
-          dbRole = await prisma.role.create({
-            data: {
-              roleName: role.toLowerCase(),
-              description: `Auto-created ${role} role`
-            }
-          });
-        }
-        targetRoleId = dbRole.id;
-      }
-
-      // Update their name, profile picture, and roleId to sync
+      // User exists. Update their name, profile picture, and override role to fix state
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
           fullName: name || user.fullName,
           profileImage: picture || user.profileImage,
-          roleId: targetRoleId,
+          roleId: dbRole.id, // Dynamically overwrite the role
         },
         include: { role: true },
       });
@@ -177,10 +163,10 @@ export async function POST(req: NextRequest) {
       email: user.email,
       role: user.role.roleName.toLowerCase()
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Google Auth error:", error);
     return NextResponse.json(
-      { success: false, message: error.message || "Google authentication failed" },
+      { success: false, message: "Google authentication failed. Please try again." },
       { status: 500 }
     );
   }

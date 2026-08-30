@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Camera, AlertCircle, PlayCircle, Download } from "lucide-react";
+import { Camera, AlertCircle, PlayCircle, Download, Trash2 } from "lucide-react";
 
 interface EvidenceItem {
   id: string;
@@ -20,6 +20,29 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearCache = async () => {
+    if (!confirm("Are you sure you want to purge all evidence logs and video clips from the database? This will free up storage space on Neon DB.")) return;
+
+    try {
+      setIsClearing(true);
+      const res = await fetch("/api/dashboard/teacher/evidence", { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setEvidenceList([]);
+        setSelectedEvidence(null);
+        alert(data.message || "Evidence storage successfully cleared from database!");
+      } else {
+        alert("Failed to clear evidence storage: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      console.error("Clear evidence cache failed:", err);
+      alert("Error clearing evidence cache");
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const fetchEvidence = async () => {
     try {
@@ -61,8 +84,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     <div className="animate-fade-in grid lg:grid-cols-2 gap-4">
       {/* Evidence Log */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
-        <div className="px-5 py-4 border-b border-[var(--border)]">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
           <h3 className="text-sm font-bold text-[var(--ink)]">📸 Evidence Log</h3>
+          {evidenceList.length > 0 && (
+            <button
+              onClick={handleClearCache}
+              disabled={isClearing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs transition-all border border-rose-500/20 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> {isClearing ? "Clearing DB..." : "Clear Storage & DB Cache"}
+            </button>
+          )}
         </div>
         
         <div className="divide-y divide-[var(--border)] min-h-[300px]">
@@ -126,20 +158,33 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                 }}
               >
                 {selectedEvidence.screenshotPath ? (
-                  <>
-                    <img
+                  selectedEvidence.screenshotPath.startsWith("data:video/") ||
+                  selectedEvidence.screenshotPath.endsWith(".webm") ||
+                  selectedEvidence.screenshotPath.endsWith(".mp4") ? (
+                    <video
                       src={selectedEvidence.screenshotPath}
-                      alt={`Evidence: ${selectedEvidence.name}`}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      controls
+                      autoPlay
+                      loop
+                      muted
+                      className="w-full h-full object-contain rounded-lg"
                     />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="bg-black/60 px-3 py-1.5 rounded-lg text-xs font-bold tracking-widest backdrop-blur-sm">CLICK TO ENLARGE</span>
-                    </div>
-                  </>
+                  ) : (
+                    <>
+                      <img
+                        src={selectedEvidence.screenshotPath}
+                        alt={`Evidence: ${selectedEvidence.name}`}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="bg-black/60 px-3 py-1.5 rounded-lg text-xs font-bold tracking-widest backdrop-blur-sm">CLICK TO ENLARGE</span>
+                      </div>
+                    </>
+                  )
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-[var(--muted2)]">
                     <Camera className="w-12 h-12" />
-                    <span className="text-xs">No webcam snapshot captured for this violation</span>
+                    <span className="text-xs">No webcam evidence captured for this violation</span>
                   </div>
                 )}
                 {/* Overlay Badge */}
@@ -217,13 +262,25 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
             
             <div className="flex-1 bg-black flex items-center justify-center p-4 overflow-hidden relative min-h-[50vh]">
               {selectedEvidence.screenshotPath ? (
-                <img
-                  src={selectedEvidence.screenshotPath}
-                  alt={`Evidence: ${selectedEvidence.name}`}
-                  className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
-                />
+                selectedEvidence.screenshotPath.startsWith("data:video/") ||
+                selectedEvidence.screenshotPath.endsWith(".webm") ||
+                selectedEvidence.screenshotPath.endsWith(".mp4") ? (
+                  <video
+                    src={selectedEvidence.screenshotPath}
+                    controls
+                    autoPlay
+                    loop
+                    className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
+                  />
+                ) : (
+                  <img
+                    src={selectedEvidence.screenshotPath}
+                    alt={`Evidence: ${selectedEvidence.name}`}
+                    className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
+                  />
+                )
               ) : (
-                <p className="text-gray-500">No snapshot available</p>
+                <p className="text-gray-500">No evidence available</p>
               )}
             </div>
             

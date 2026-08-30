@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+
 import {
   CreditCard,
   Crown,
@@ -322,6 +323,7 @@ export default function BillingContent() {
             </table>
           )}
         </div>
+
       </div>
     </div>
   );

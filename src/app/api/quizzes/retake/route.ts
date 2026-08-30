@@ -34,7 +34,20 @@ export async function POST(req: NextRequest) {
       data: { quizStatus: "pending_retake" },
     });
 
-    // Notify the teacher via Pusher
+    // 1. Create DB Notification for Teacher
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: studentQuiz.quiz.teacherId,
+          title: "Retake Request Submitted",
+          message: `${studentQuiz.student.fullName} requested to retake "${studentQuiz.quiz.title}".`,
+        },
+      });
+    } catch (nErr) {
+      console.error("Failed to create retake request notification:", nErr);
+    }
+
+    // 2. Notify the teacher via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
       await pusherServer.trigger(`teacher-${studentQuiz.quiz.teacherId}`, "retake-request", {
@@ -42,6 +55,22 @@ export async function POST(req: NextRequest) {
         studentName: studentQuiz.student.fullName,
         quizTitle: studentQuiz.quiz.title,
         quizId: studentQuiz.quiz.id,
+      });
+
+      // Trigger notification bell update for teacher
+      await pusherServer.trigger(`user-${studentQuiz.quiz.teacherId}`, "notification", {
+        title: "Retake Request Submitted",
+        message: `${studentQuiz.student.fullName} requested to retake "${studentQuiz.quiz.title}".`,
+      });
+
+      // Trigger admin activity log broadcast
+      await pusherServer.trigger("admin-dashboard", "activity", {
+        type: "retake-request",
+        userId: session.userId,
+        fullName: session.fullName,
+        role: "student",
+        activity: `Retake requested: ${studentQuiz.quiz.title} by ${session.fullName}`,
+        timestamp: new Date().toISOString(),
       });
     } catch (e) {
       console.error("Failed to trigger retake request push event:", e);

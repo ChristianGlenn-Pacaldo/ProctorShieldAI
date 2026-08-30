@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create custom JWT session
-    const token = await setSessionCookie({
+    // Create custom JWT session (sets HttpOnly cookie — token is NOT returned in body for security)
+    await setSessionCookie({
       userId: user.id,
       email: user.email,
       role: user.role.roleName.toLowerCase(),
@@ -121,13 +121,12 @@ export async function POST(req: NextRequest) {
         role: user.role.roleName.toLowerCase(),
         profileImage: user.profileImage,
       },
-      token,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Verify OTP error:", error);
     return NextResponse.json(
-      { success: false, message: error.message || "OTP verification failed" },
+      { success: false, message: "OTP verification failed. Please try again." },
       { status: 500 }
     );
   }

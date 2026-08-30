@@ -48,9 +48,11 @@ export async function POST(req: NextRequest) {
     const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
     
     await pusherServer.trigger(channelName, "new-violation", {
+      studentId: session.userId,
       studentName: session.fullName,
       quizTitle: studentQuiz.quiz.title,
       violationType: violationType,
+      snapshot: snapshot || null,
       timestamp: violation.timestamp,
     });
 
@@ -68,7 +70,15 @@ export async function POST(req: NextRequest) {
       console.error("Failed to broadcast violation to admin:", e);
     }
 
-    return NextResponse.json({ success: true, violation });
+    return NextResponse.json({
+      success: true,
+      violation: {
+        id: String(violation.id),
+        studentQuizId: String(violation.studentQuizId),
+        violationType: violation.violationType,
+        timestamp: violation.timestamp.toISOString(),
+      }
+    });
 
   } catch (error) {
     console.error("Record violation error:", error);

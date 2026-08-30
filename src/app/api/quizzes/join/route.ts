@@ -4,8 +4,7 @@ import { getSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    console.log("DEBUG: QUIZS JOIN SESSION:", session);
+    const session = await getSession("student");
     if (!session || !session.role || session.role.toLowerCase() !== "student") {
       const currentRole = session?.role ? ` (you are logged in as ${session.role})` : "";
       return NextResponse.json({ error: `Unauthorized. Only students can join quizzes${currentRole}.` }, { status: 401 });
@@ -72,31 +71,42 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create a notification for the teacher
-    let notificationId = null;
-    const notification = await prisma.notification.create({
-      data: {
-        userId: quiz.teacherId,
-        title: "Student Joined",
-        message: `${session.fullName} has joined ${quiz.title}`,
-        isRead: false,
-      },
-    });
-    notificationId = notification.id;
+    // Create notification for Teacher
+    let teacherNotificationId = null;
+    let teacherNotificationDate = new Date().toISOString();
+    try {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: quiz.teacherId,
+          title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
+          message: isLateJoin
+            ? `${session.fullName} requested late entry for "${quiz.title}".`
+            : `${session.fullName} joined your quiz: "${quiz.title}".`,
+        },
+      });
+      teacherNotificationId = notification.id.toString();
+      teacherNotificationDate = notification.createdAt.toISOString();
+    } catch (e) {
+      console.error("Failed to create teacher notification:", e);
+    }
 
-    // Notify teacher via Pusher
+    // Create notification for Student
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: session.userId,
+          title: "Quiz Joined",
+          message: `You have successfully joined "${quiz.title}" (${quiz.subject.subjectName}).`,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to create student notification:", e);
+    }
+
+    // Trigger Pusher notification events
     try {
       const { pusherServer } = await import("@/lib/pusher");
       
-      // Personal notification for the teacher
-      await pusherServer.trigger(`user-${quiz.teacherId}`, "notification", {
-        id: notificationId,
-        title: "Student Joined",
-        message: `${session.fullName} has joined ${quiz.title}`,
-        createdAt: new Date().toISOString(),
-      });
-
-      // Special event for late joins
       if (isLateJoin) {
         await pusherServer.trigger(`teacher-${quiz.teacherId}`, "late-join-request", {
           studentQuizId: studentQuiz.id,
@@ -105,8 +115,17 @@ export async function POST(req: NextRequest) {
           quizId: quiz.id,
         });
       }
+
+      await pusherServer.trigger(`user-${quiz.teacherId}`, "notification", {
+        id: teacherNotificationId,
+        title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
+        message: isLateJoin
+            ? `${session.fullName} requested late entry for "${quiz.title}".`
+            : `${session.fullName} joined "${quiz.title}".`,
+        createdAt: teacherNotificationDate,
+      });
     } catch (e) {
-      console.error("Failed to trigger push events:", e);
+      console.error("Failed to trigger push event:", e);
     }
 
     // Log activity

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { generateGeminiWithFallback } from "@/lib/gemini";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       where: { id: studentQuizId },
       include: {
         quiz: true,
+        student: true,
         violations: true,
       },
     });
@@ -32,8 +33,6 @@ export async function POST(req: NextRequest) {
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     // Prepare the violation summary for the AI
     const violations = studentQuiz.violations;
@@ -58,24 +57,22 @@ export async function POST(req: NextRequest) {
     
     Return ONLY the valid JSON object.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
-
-    if (!response.text) {
-      return NextResponse.json({ error: "Failed to generate verdict" }, { status: 500 });
-    }
-
-    let verdictData;
+    let text: string;
     try {
-      verdictData = JSON.parse(response.text);
-    } catch (parseError) {
-      return NextResponse.json({ error: "Invalid format returned by AI" }, { status: 500 });
+      text = await generateGeminiWithFallback(prompt, true);
+    } catch (chainErr) {
+      console.warn("Gemini model chain exhausted, using algorithmic fallback:", chainErr);
+      const totalV = violations.length;
+      const prob = Math.min(100, totalV * 35);
+      text = JSON.stringify({
+        cheatingProbability: prob,
+        riskLevel: prob > 70 ? "high" : prob > 30 ? "medium" : "low",
+        finalVerdict: prob > 70 ? "cheated" : prob > 30 ? "suspicious" : "clean",
+        aiExplanation: `Recorded ${totalV} proctoring violations during this session. Risk verdict calculated via rule engine.`,
+      });
     }
+
+    let verdictData = JSON.parse(text);
 
     // Save the verdict in the database
     const aiAnalysis = await prisma.aiAnalysis.upsert({
@@ -105,6 +102,47 @@ export async function POST(req: NextRequest) {
         cheatingProbability: verdictData.cheatingProbability,
       },
     });
+
+    // Save DB notification for Teacher and Student
+    try {
+      if (studentQuiz.quiz.teacherId) {
+        await prisma.notification.create({
+          data: {
+            userId: studentQuiz.quiz.teacherId,
+            title: "AI Verdict Issued",
+            message: `AI generated a ${verdictData.finalVerdict.toUpperCase()} verdict for ${studentQuiz.student?.fullName || "Student"} on "${studentQuiz.quiz.title}".`,
+          },
+        });
+      }
+      if (studentQuiz.studentId) {
+        await prisma.notification.create({
+          data: {
+            userId: studentQuiz.studentId,
+            title: "AI Proctoring Report Ready",
+            message: `AI evaluation for "${studentQuiz.quiz.title}" is ready. Verdict: ${verdictData.finalVerdict.toUpperCase()}.`,
+          },
+        });
+      }
+    } catch (nErr) {
+      console.error("Failed to create AI verdict notifications:", nErr);
+    }
+
+    // Send verdict notification email to student (non-blocking)
+    if (studentQuiz.student?.email) {
+      try {
+        const { sendVerdictEmail } = await import("@/lib/email");
+        sendVerdictEmail(
+          studentQuiz.student.email,
+          studentQuiz.student.fullName,
+          studentQuiz.quiz.title,
+          Number(studentQuiz.score || 0),
+          verdictData.finalVerdict,
+          verdictData.aiExplanation
+        ).catch((e) => console.error("Failed to send verdict email:", e));
+      } catch (e) {
+        console.error("Failed to import sendVerdictEmail:", e);
+      }
+    }
 
     return NextResponse.json({ success: true, analysis: aiAnalysis });
 

@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
       include: { role: true },
     });
 
-    // Create session
-    const token = await setSessionCookie({
+    // Create session (sets HttpOnly cookie — token is NOT returned in body for security)
+    await setSessionCookie({
       userId: user.id,
       email: user.email,
       role: user.role.roleName.toLowerCase(),
@@ -111,6 +111,16 @@ export async function POST(req: NextRequest) {
       console.error("Failed to broadcast activity to admin:", e);
     }
 
+    // Send welcome email (non-blocking)
+    try {
+      const { sendWelcomeEmail } = await import("@/lib/email");
+      sendWelcomeEmail(user.email, user.fullName, user.role.roleName).catch((e) =>
+        console.error("Failed to send welcome email:", e)
+      );
+    } catch (e) {
+      console.error("Failed to import sendWelcomeEmail:", e);
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -120,14 +130,13 @@ export async function POST(req: NextRequest) {
           email: user.email,
           role: user.role.roleName.toLowerCase(),
         },
-        token,
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Register error:", error);
     return NextResponse.json(
-      { success: false, message: error.message || "Internal server error" },
+      { success: false, message: "An unexpected error occurred. Please try again." },
       { status: 500 }
     );
   }

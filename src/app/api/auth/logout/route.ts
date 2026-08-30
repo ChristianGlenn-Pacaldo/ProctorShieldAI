@@ -4,7 +4,10 @@ import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
+    const body = await req.json().catch(() => ({}));
+    const roleHint = body.role;
+
+    const session = await getSession(roleHint);
     if (session) {
       const dbUser = await prisma.user.findUnique({
         where: { id: session.userId }
@@ -168,7 +171,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await clearSession();
+    await clearSession(roleHint);
     return NextResponse.json({ success: true, message: "Logged out" });
   } catch (error) {
     console.error("Logout error:", error);

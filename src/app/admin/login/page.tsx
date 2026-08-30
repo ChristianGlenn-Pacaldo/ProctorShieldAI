@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -35,11 +36,54 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const role = data.user.role;
+      const role = data.user?.role || data.role;
       if (role === "admin") {
         window.location.href = "/dashboard/admin";
       } else {
-        setError(`Access Denied: This portal is restricted to administrators.`);
+        setError("Access Denied: This portal is restricted to administrators.");
+        setIsLoading(false);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: credentialResponse.credential, role: "admin" }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Google login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.requiresMfa) {
+        setMfaState({
+          isPending: true,
+          userId: data.userId,
+          email: data.email,
+          role: data.role
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const role = data.user?.role || data.role;
+      if (role === "admin") {
+        window.location.href = "/dashboard/admin";
+      } else {
+        setError("Access Denied: This portal is restricted to administrators.");
         setIsLoading(false);
       }
     } catch {
@@ -72,11 +116,22 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const role = data.user.role;
+      if (data.requiresMfa) {
+        setMfaState({
+          isPending: true,
+          userId: data.userId,
+          email: data.email,
+          role: data.role
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const role = data.user?.role || data.role;
       if (role === "admin") {
         window.location.href = "/dashboard/admin";
       } else {
-        setError(`Access Denied: This portal is restricted to administrators.`);
+        setError("Access Denied: This portal is restricted to administrators.");
         setIsLoading(false);
       }
     } catch {
@@ -86,36 +141,40 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--dark-bg)] flex items-center justify-center p-6 relative overflow-hidden">
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
         {/* Decorative gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-red-600/10 via-transparent to-rose-600/10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-rose-950/20 pointer-events-none" />
 
-        <div className="w-full max-w-md p-8 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl shadow-2xl relative z-10">
+        <div className="w-full max-w-md p-8 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl relative z-10">
           <div className="text-center mb-8">
-            <div className="text-5xl mb-4 animate-bounce">🔒</div>
-            <h1 className="text-2xl font-extrabold text-white font-[family-name:var(--font-display)]">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-2xl mx-auto mb-4">
+              🔒
+            </div>
+            <h1 className="text-2xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
               Admin Access
             </h1>
-            <p className="text-sm text-white/35 mt-2">
+            <p className="text-sm text-slate-400 mt-2">
               Restricted to authorized system administrators only
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 animate-fade-in text-center">
+            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400 animate-fade-in text-center">
               ⚠ {error}
             </div>
           )}
 
           {mfaState.isPending ? (
             <div className="animate-fade-in">
-              <p className="text-sm text-white/60 mb-6 text-center">
-                We sent a 6-digit verification code to <br /><strong className="text-white">{mfaState.email}</strong>
+              <h2 className="text-xl font-bold text-slate-100 mb-1 text-center font-[family-name:var(--font-display)]">Verify Your Identity</h2>
+              <p className="text-sm text-slate-400 mb-6 text-center">
+                We sent a 6-digit verification code to <strong className="text-slate-200">{mfaState.email}</strong>.
               </p>
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-white/45 mb-1.5 block">
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
                     Verification Code
                   </label>
                   <input
@@ -123,7 +182,7 @@ export default function AdminLoginPage() {
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value)}
                     placeholder="Enter 6-digit code"
-                    className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 transition-all text-center tracking-[0.5em]"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 transition-all text-center tracking-[0.5em]"
                     maxLength={6}
                     required
                   />
@@ -131,7 +190,7 @@ export default function AdminLoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading || otpCode.length !== 6}
-                  className="w-full py-3.5 rounded-xl bg-red-600 text-sm font-bold text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/25 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full py-3.5 rounded-xl bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -139,15 +198,15 @@ export default function AdminLoginPage() {
                       Verifying...
                     </span>
                   ) : (
-                    "Verify & Access Admin Panel"
+                    "Verify & Access Admin"
                   )}
                 </button>
               </form>
-              <p className="text-center text-xs text-white/25 mt-5">
+              <p className="text-center text-xs text-slate-400 mt-5">
                 Didn't receive the email? Check your spam folder or{" "}
                 <button
                   onClick={() => { setMfaState({ isPending: false, userId: "", email: "", role: "" }); setOtpCode(""); }}
-                  className="text-red-400 font-semibold hover:text-red-300"
+                  className="text-rose-400 font-semibold hover:text-rose-300"
                 >
                   go back
                 </button>
@@ -155,34 +214,50 @@ export default function AdminLoginPage() {
             </div>
           ) : (
             <>
+              <div className="mb-4 flex justify-center w-full">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError("Google Login Failed")}
+                  theme="filled_black"
+                  size="large"
+                  text="signin_with"
+                  shape="rectangular"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-slate-800" />
+                <span className="text-xs text-slate-500 font-semibold">OR</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-white/45 mb-1.5 block">Admin Email</label>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Admin Email</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="admin@proctorshield.ai"
-                    className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 transition-all"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-white/45 mb-1.5 block">Password</label>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 transition-all"
                     required
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3.5 rounded-xl bg-red-600 text-sm font-bold text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/25 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full py-3.5 rounded-xl bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -196,7 +271,8 @@ export default function AdminLoginPage() {
               </form>
             </>
           )}
+        </div>
       </div>
-    </div>
+    </GoogleOAuthProvider>
   );
 }

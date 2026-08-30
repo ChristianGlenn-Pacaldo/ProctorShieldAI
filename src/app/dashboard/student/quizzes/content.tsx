@@ -76,8 +76,8 @@ export default function QuizzesContent({ userId }: { userId: string }) {
     };
   }, [userId, router]);
 
-  const filtered = quizzes.filter((e) => 
-    e.quiz?.title.toLowerCase().includes(search.toLowerCase())
+  const filtered = (quizzes || []).filter((e) => 
+    (e?.quiz?.title || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -126,11 +126,12 @@ export default function QuizzesContent({ userId }: { userId: string }) {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {filtered.map((enrollment) => {
-                  const e = enrollment.quiz;
+                  const e = enrollment?.quiz;
+                  if (!e) return null;
                   const isCompleted = ["completed", "ended", "rejected", "pending_retake"].includes(enrollment.quizStatus);
                   return (
                     <tr key={enrollment.id} className="hover:bg-[var(--surface2)] transition-colors">
-                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title}</td>
+                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title || "Untitled Quiz"}</td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.subject?.subjectName || "N/A"}</td>
                       <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.duration} min</td>
                       <td className="px-5 py-3">

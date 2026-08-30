@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
     const studentQuiz = await prisma.studentQuiz.findUnique({
       where: { id: studentQuizId },
-      include: { quiz: true },
+      include: { quiz: true, student: true },
     });
 
     if (!studentQuiz || studentQuiz.quiz.teacherId !== session.userId) {
@@ -62,12 +62,31 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Notify student of the decision
+    // 1. Create DB Notification for Student
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: studentQuiz.studentId,
+          title: `Retake Request ${action === "accept" ? "Approved" : "Rejected"}`,
+          message: `Your instructor ${action === "accept" ? "approved" : "rejected"} your request to retake "${studentQuiz.quiz.title}".`,
+        },
+      });
+    } catch (nErr) {
+      console.error("Failed to create retake decision notification:", nErr);
+    }
+
+    // 2. Notify student of the decision via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
       await pusherServer.trigger(`student-${studentQuiz.studentId}`, "retake-decision", {
         quizId: studentQuiz.quizId,
-        action: action
+        action: action,
+      });
+
+      // Trigger notification bell update for student
+      await pusherServer.trigger(`user-${studentQuiz.studentId}`, "notification", {
+        title: `Retake Request ${action === "accept" ? "Approved" : "Rejected"}`,
+        message: `Your instructor ${action === "accept" ? "approved" : "rejected"} your request to retake "${studentQuiz.quiz.title}".`,
       });
     } catch (e) {
       console.error("Failed to trigger retake decision push event:", e);

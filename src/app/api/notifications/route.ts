@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+// GET /api/notifications — Fetch unread notifications for current user
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
@@ -15,19 +16,26 @@ export async function GET(req: NextRequest) {
       take: 20,
     });
 
-    const serializedNotifications = notifications.map(n => ({
-      ...n,
-      id: n.id.toString(),
-      createdAt: n.createdAt.toISOString()
-    }));
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-    return NextResponse.json({ notifications: serializedNotifications });
-  } catch (error: any) {
-    console.error("Fetch notifications error:", error);
+    return NextResponse.json({
+      success: true,
+      notifications: notifications.map((n) => ({
+        id: n.id.toString(),
+        title: n.title,
+        message: n.message,
+        isRead: n.isRead,
+        createdAt: n.createdAt.toISOString(),
+      })),
+      unreadCount,
+    });
+  } catch (error: unknown) {
+    console.error("Notifications GET error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
+// PUT /api/notifications — Mark all as read for current user
 export async function PUT(req: NextRequest) {
   try {
     const session = await getSession();
@@ -50,8 +58,8 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("Update notification error:", error);
+  } catch (error: unknown) {
+    console.error("Notifications PUT error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

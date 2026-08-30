@@ -20,16 +20,19 @@ export async function POST(req: NextRequest) {
     // Strip the data:image/jpeg;base64, prefix
     const base64Data = snapshot.replace(/^data:image\/\w+;base64,/, "");
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: "image/jpeg",
+    // Use valid Gemini model (gemini-2.0-flash)
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: "image/jpeg",
+            },
           },
-        },
-        `You are a strict online quiz proctoring AI system. Analyze this webcam image of a student taking an quiz. 
+          `You are a strict online quiz proctoring AI system. Analyze this webcam image of a student taking an quiz. 
 Your ONLY task is to check for unauthorized devices.
 
 Check for this violation ONLY:
@@ -41,13 +44,27 @@ IMPORTANT RULES:
 - Only report "device_detected" if you can clearly see a phone, tablet, or other device.
 - If no devices are visible, return an empty array.
 
-Respond with ONLY a valid JSON array of violation type strings. Quizples:
+Respond with ONLY a valid JSON array of violation type strings. Examples:
 - No devices: []
 - Phone visible: ["device_detected"]
 
 Return ONLY the JSON array, nothing else.`
-      ],
-    });
+        ],
+      });
+    } catch {
+      response = await ai.models.generateContent({
+        model: "gemini-1.5-flash-latest",
+        contents: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: "image/jpeg",
+            },
+          },
+          `Analyze webcam image for unauthorized cellphones or laptops. Return JSON array e.g. ["device_detected"] or [].`
+        ],
+      });
+    }
 
     const text = response?.text?.trim() || "[]";
     
@@ -69,8 +86,9 @@ Return ONLY the JSON array, nothing else.`
     violations = violations.filter((v: string) => validTypes.includes(v));
 
     return NextResponse.json({ violations });
-  } catch (error: any) {
-    console.error("AI analysis error:", error?.message || error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("AI analysis error:", errMsg);
     // On error, return no violations (fail-open to avoid false positives)
     return NextResponse.json({ violations: [] });
   }

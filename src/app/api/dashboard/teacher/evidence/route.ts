@@ -96,3 +96,58 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "teacher") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const teacherId = session.userId;
+
+    // Find all violation IDs for quizzes created by this teacher
+    const violations = await prisma.violation.findMany({
+      where: {
+        studentQuiz: {
+          quiz: {
+            teacherId: teacherId,
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const violationIds = violations.map((v) => v.id);
+
+    if (violationIds.length > 0) {
+      // First delete associated EvidenceFile records if any
+      await prisma.evidenceFile.deleteMany({
+        where: {
+          violationId: {
+            in: violationIds,
+          },
+        },
+      });
+
+      // Delete all Violation records for this teacher's quizzes
+      await prisma.violation.deleteMany({
+        where: {
+          id: {
+            in: violationIds,
+          },
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Successfully purged ${violationIds.length} evidence records and freed database storage on Neon DB.`,
+    });
+  } catch (error) {
+    console.error("Clear evidence logs error:", error);
+    return NextResponse.json({ error: "Failed to clear evidence storage" }, { status: 500 });
+  }
+}

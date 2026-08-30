@@ -533,16 +533,21 @@ async function main() {
 
   await prisma.subscriptionPlan.upsert({
     where: { id: 2 },
-    update: {},
-    create: {
-      planName: "Premium",
-      yearlyPrice: 1999,
+    update: {
+      planName: "Premium Monthly",
+      yearlyPrice: 500,
       features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
-      durationDays: 365,
+      durationDays: 30,
+    },
+    create: {
+      planName: "Premium Monthly",
+      yearlyPrice: 500,
+      features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
+      durationDays: 30,
     },
   });
 
-  console.log("   ✓ Free plan (₱0)\n   ✓ Premium plan (₱1,999/yr)\n");
+  console.log("   ✓ Free plan (₱0)\n   ✓ Premium plan (₱500/mo)\n");
 
   // ── 12. SETTINGS ──────────────────────────────────────
   console.log("⚙️  Creating system settings...");

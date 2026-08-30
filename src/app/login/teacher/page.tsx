@@ -72,14 +72,8 @@ export default function TeacherLoginPage() {
         return;
       }
 
-      // Fallback for regular login (should not happen with our update)
-      const role = data.user.role;
-      if (role === "teacher") {
-        window.location.href = "/dashboard/teacher";
-      } else {
-        setError(`Access Denied: This portal is restricted to teachers. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      // This block is a fallback in case MFA is bypassed (not standard)
+      window.location.href = `/dashboard/${data.role || data.user?.role}`;
     } catch {
       setError("Network error connecting to Google Auth.");
       setIsLoading(false);
@@ -110,14 +104,9 @@ export default function TeacherLoginPage() {
         return;
       }
 
-      // Redirect based on role
-      const role = data.user.role;
-      if (role === "teacher") {
-        window.location.href = "/dashboard/teacher";
-      } else {
-        setError(`Access Denied: This portal is restricted to teachers. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      // Universal redirect based on role
+      const role = data.user?.role || data.role;
+      window.location.href = `/dashboard/${role}`;
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);
@@ -186,13 +175,8 @@ export default function TeacherLoginPage() {
         return;
       }
 
-      const role = data.user.role;
-      if (role === "teacher") {
-        window.location.href = "/dashboard/teacher";
-      } else {
-        setError(`Access Denied: This portal is restricted to teachers. Your account is registered as ${role.toUpperCase()}.`);
-        setIsLoading(false);
-      }
+      const role = data.user?.role || data.role;
+      window.location.href = `/dashboard/${role}`;
     } catch {
       setError("Network error. Please try again.");
       setIsLoading(false);
@@ -210,33 +194,35 @@ export default function TeacherLoginPage() {
     <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
       <div className="min-h-screen flex">
         {/* ── LEFT PANEL ───────────────────────────── */}
-        <div className="hidden lg:flex lg:w-1/2 bg-[var(--dark-bg)] text-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/15 via-transparent to-indigo-600/10 pointer-events-none" />
+        <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/40 via-slate-950 to-slate-900 pointer-events-none" />
           <div className="relative z-10 flex flex-col justify-center px-16 py-12">
-            <div className="text-6xl mb-6">🛡️</div>
-            <h1 className="text-3xl font-extrabold mb-3 font-[family-name:var(--font-display)]">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-2xl mb-6 shadow-lg shadow-blue-900/20">
+              🛡️
+            </div>
+            <h1 className="text-3xl font-extrabold mb-3 font-[family-name:var(--font-display)] text-slate-100">
               Teacher Portal
             </h1>
-            <p className="text-sm text-white/40 leading-relaxed mb-10 max-w-md">
+            <p className="text-sm text-slate-400 leading-relaxed mb-10 max-w-md">
               Create secure quizzes, monitor proctored sessions in real-time, review recorded evidence logs, and grade student submissions.
             </p>
             <div className="space-y-5">
               {features.map((f) => (
                 <div key={f.title} className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-violet-400 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-400 shrink-0">
                     {f.icon}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-white/80">{f.title}</div>
-                    <div className="text-xs text-white/30">{f.sub}</div>
+                    <div className="text-sm font-semibold text-slate-200">{f.title}</div>
+                    <div className="text-xs text-slate-400">{f.sub}</div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-12 pt-8 border-t border-white/[0.06] text-center">
-              <p className="text-xs text-white/20">
+            <div className="mt-12 pt-8 border-t border-slate-800/80 text-center">
+              <p className="text-xs text-slate-400">
                 ← Back to{" "}
-                <Link href="/login" className="text-violet-400 font-semibold hover:text-violet-300">
+                <Link href="/login" className="text-blue-400 font-semibold hover:text-blue-300">
                   Portal Selection
                 </Link>
               </p>
@@ -245,16 +231,16 @@ export default function TeacherLoginPage() {
         </div>
 
         {/* ── RIGHT PANEL ──────────────────────────── */}
-        <div className="w-full lg:w-1/2 bg-[var(--dark-s1)] flex items-center justify-center p-6">
+        <div className="w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-6 border-l border-slate-800/50">
           <div className="w-full max-w-md">
             {/* Tab Switcher */}
-            <div className="flex gap-0.5 bg-white/5 p-1 rounded-xl mb-6">
+            <div className="flex gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6">
               <button
                 onClick={() => { setActivePanel("login"); setError(""); }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                   activePanel === "login"
-                    ? "bg-violet-600/20 text-violet-300"
-                    : "text-white/35 hover:text-white/50"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 Sign In
@@ -263,8 +249,8 @@ export default function TeacherLoginPage() {
                 onClick={() => { setActivePanel("register"); setError(""); }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                   activePanel === "register"
-                    ? "bg-violet-600/20 text-violet-300"
-                    : "text-white/35 hover:text-white/50"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 Create Account
@@ -273,7 +259,7 @@ export default function TeacherLoginPage() {
 
             {/* Error Message */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 animate-fade-in">
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400 animate-fade-in">
                 ⚠ {error}
               </div>
             )}
@@ -281,14 +267,14 @@ export default function TeacherLoginPage() {
             {/* ── MFA OTP FORM ──────────────────────── */}
             {mfaState.isPending ? (
               <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-white mb-1">Verify Your Identity</h2>
-                <p className="text-sm text-white/35 mb-6">
-                  We sent a 6-digit verification code to <strong className="text-white">{mfaState.email}</strong>.
+                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Verify Your Identity</h2>
+                <p className="text-sm text-slate-400 mb-6">
+                  We sent a 6-digit verification code to <strong className="text-slate-200">{mfaState.email}</strong>.
                 </p>
 
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
                       Verification Code
                     </label>
                     <input
@@ -296,7 +282,7 @@ export default function TeacherLoginPage() {
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
                       placeholder="Enter 6-digit code"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all text-center tracking-[0.5em]"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all text-center tracking-[0.5em]"
                       maxLength={6}
                       required
                     />
@@ -304,7 +290,7 @@ export default function TeacherLoginPage() {
                   <button
                     type="submit"
                     disabled={isLoading || otpCode.length !== 6}
-                    className="w-full py-3.5 rounded-xl bg-violet-600 text-sm font-bold text-white hover:bg-violet-500 transition-all shadow-lg shadow-violet-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -316,11 +302,11 @@ export default function TeacherLoginPage() {
                     )}
                   </button>
                 </form>
-                <p className="text-center text-xs text-white/25 mt-5">
+                <p className="text-center text-xs text-slate-400 mt-5">
                   Didn't receive the email? Check your spam folder or{" "}
                   <button
                     onClick={() => { setMfaState({ isPending: false, userId: "", email: "", role: "" }); setOtpCode(""); }}
-                    className="text-violet-400 font-semibold hover:text-violet-300"
+                    className="text-blue-400 font-semibold hover:text-blue-300"
                   >
                     go back
                   </button>
@@ -331,8 +317,8 @@ export default function TeacherLoginPage() {
                 {/* ── LOGIN FORM ──────────────────────── */}
                 {activePanel === "login" && (
               <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-white mb-1">Teacher Sign In</h2>
-                <p className="text-sm text-white/35 mb-6">
+                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Teacher Sign In</h2>
+                <p className="text-sm text-slate-400 mb-6">
                   Sign in to manage proctored assessments
                 </p>
                 
@@ -355,14 +341,14 @@ export default function TeacherLoginPage() {
                 </div>
 
                 <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span className="text-xs text-white/20 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <div className="flex-1 h-px bg-slate-800" />
+                  <span className="text-xs text-slate-500 font-semibold">OR</span>
+                  <div className="flex-1 h-px bg-slate-800" />
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
                       Teacher Email Address
                     </label>
                     <input
@@ -370,30 +356,30 @@ export default function TeacherLoginPage() {
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-white/45">Password</label>
-                      <button type="button" className="text-xs text-violet-400 hover:text-violet-300">
+                      <label className="text-xs font-semibold text-slate-300">Password</label>
+                      <Link href="/login/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
                         Forgot password?
-                      </button>
+                      </Link>
                     </div>
                     <input
                       type="password"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-violet-600 text-sm font-bold text-white hover:bg-violet-505 transition-all shadow-lg shadow-violet-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -406,11 +392,11 @@ export default function TeacherLoginPage() {
                   </button>
                 </form>
 
-                <p className="text-center text-xs text-white/25 mt-5">
+                <p className="text-center text-xs text-slate-400 mt-5">
                   Don&apos;t have an account?{" "}
                   <button
                     onClick={() => setActivePanel("register")}
-                    className="text-violet-400 font-semibold hover:text-violet-300"
+                    className="text-blue-400 font-semibold hover:text-blue-300"
                   >
                     Create one →
                   </button>
@@ -421,8 +407,8 @@ export default function TeacherLoginPage() {
             {/* ── REGISTER FORM ───────────────────── */}
             {activePanel === "register" && (
               <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-white mb-1">Create Teacher Account</h2>
-                <p className="text-sm text-white/35 mb-6">
+                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Create Teacher Account</h2>
+                <p className="text-sm text-slate-400 mb-6">
                   Join Proctor Shield teacher portal today
                 </p>
 
@@ -439,60 +425,60 @@ export default function TeacherLoginPage() {
                 </div>
 
                 <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span className="text-xs text-white/20 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <div className="flex-1 h-px bg-slate-800" />
+                  <span className="text-xs text-slate-500 font-semibold">OR</span>
+                  <div className="flex-1 h-px bg-slate-800" />
                 </div>
 
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">Full Name</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
                     <input
                       type="text"
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
                       placeholder="Juan Dela Cruz"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">Email Address</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
                     <input
                       type="email"
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">Password</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
                     <input
                       type="password"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       placeholder="Min. 6 characters"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-white/45 mb-1.5 block">Confirm Password</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Confirm Password</label>
                     <input
                       type="password"
                       value={regConfirm}
                       onChange={(e) => setRegConfirm(e.target.value)}
                       placeholder="Repeat your password"
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                       required
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-violet-600 text-sm font-bold text-white hover:bg-violet-500 transition-all shadow-lg shadow-violet-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -505,11 +491,11 @@ export default function TeacherLoginPage() {
                   </button>
                 </form>
 
-                <p className="text-center text-xs text-white/25 mt-5">
+                <p className="text-center text-xs text-slate-400 mt-5">
                   Already have an account?{" "}
                   <button
                     onClick={() => setActivePanel("login")}
-                    className="text-violet-400 font-semibold hover:text-violet-300"
+                    className="text-blue-400 font-semibold hover:text-blue-300"
                   >
                     Sign in →
                   </button>
