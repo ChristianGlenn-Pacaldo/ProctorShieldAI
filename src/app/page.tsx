@@ -8,7 +8,6 @@ import {
   PlayCircle,
   Sparkles,
   ArrowRight,
-  Star,
 } from "lucide-react";
 
 const features = [
@@ -54,33 +53,6 @@ const steps = [
   { num: "01", title: "Create & Assign", desc: "Teachers create quizzes with multiple question types, set timer, and enable AI proctoring in seconds." },
   { num: "02", title: "Students Take Quiz", desc: "Students accept consent, camera access is verified, and AI monitoring begins automatically." },
   { num: "03", title: "AI Delivers Verdict", desc: "After submission, Gemini AI analyzes all violations and delivers a final cheating probability report." },
-];
-
-const testimonials = [
-  {
-    quote: "Proctor Shield completely changed how we run online quizzes. The AI verdict system saved our department hours of manual review.",
-    name: "Dr. Maria Reyes",
-    role: "Dean, University of Cebu",
-    initials: "MR",
-    color: "bg-indigo-600",
-    stars: 5,
-  },
-  {
-    quote: "The evidence replay system is incredible. When students dispute their grades, we can show them exactly what happened, second by second.",
-    name: "Prof. James Torres",
-    role: "IT Department, PLM",
-    initials: "JT",
-    color: "bg-violet-600",
-    stars: 5,
-  },
-  {
-    quote: "Setup was smooth, students adapted quickly, and the violation breakdown gives me confidence that our quizzes are fair and credible.",
-    name: "Ana Lim",
-    role: "CS Instructor, DLSU",
-    initials: "AL",
-    color: "bg-cyan-600",
-    stars: 4,
-  },
 ];
 
 export default function LandingPage() {
@@ -230,45 +202,6 @@ export default function LandingPage() {
               </div>
               <h3 className="text-lg font-bold text-slate-200 mb-2 font-[family-name:var(--font-display)]">{s.title}</h3>
               <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS ───────────────────────────── */}
-      <section id="testimonials" className="px-6 md:px-12 py-20 max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <div className="text-xs font-bold tracking-widest uppercase text-blue-400 mb-3">
-            Testimonials
-          </div>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-[family-name:var(--font-display)] text-slate-100">
-            Trusted by educators
-          </h2>
-        </div>
-        <div className="grid md:grid-cols-3 gap-5">
-          {testimonials.map((t) => (
-            <div
-              key={t.name}
-              className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80"
-            >
-              <div className="text-amber-400 text-sm mb-3">
-                {Array.from({ length: t.stars }, (_, i) => (
-                  <Star key={i} className="w-4 h-4 inline fill-current" />
-                ))}
-                {t.stars < 5 && <Star className="w-4 h-4 inline text-slate-700" />}
-              </div>
-              <p className="text-sm text-slate-300 italic leading-relaxed mb-4">
-                &ldquo;{t.quote}&rdquo;
-              </p>
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 ${t.color} rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs`}>
-                  {t.initials}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-200">{t.name}</div>
-                  <div className="text-xs text-slate-400">{t.role}</div>
-                </div>
-              </div>
             </div>
           ))}
         </div>

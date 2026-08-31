@@ -127,8 +127,6 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState("light");
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -222,7 +220,6 @@ export default function DashboardShell({
   };
   const nav = navConfig[role] || navConfig.student;
   const portal = portalConfig[role];
-  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   // Initialize Theme
 

@@ -20,38 +20,53 @@ interface Feed {
 
 function StudentVideoFeed({ feed }: { feed: Feed }) {
   return (
-    <div className={`rounded-xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer`}>
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-40 flex items-center justify-center relative overflow-hidden">
+    <div className={`rounded-xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-lg`}>
+      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-44 flex items-center justify-center relative overflow-hidden">
         {/* Live Snapshot Stream Feed */}
         {feed.snapshot ? (
-          <img src={feed.snapshot} alt={feed.name} className="w-full h-full object-cover" />
+          <img 
+            src={feed.snapshot} 
+            alt={feed.name} 
+            className="w-full h-full object-cover animate-fade-in" 
+          />
         ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-white shadow-inner">
+          <div className="flex flex-col items-center gap-2.5 px-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl font-extrabold text-blue-400 shadow-md">
               {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
-            <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Live Feed Connecting...</span>
+            <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
+              In Exam Lobby (Starting...)
+            </span>
           </div>
         )}
 
         {/* Live indicator badge */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 bg-black/80 backdrop-blur rounded-md text-[9px] font-extrabold text-emerald-400 border border-emerald-500/30 shadow-md">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          {feed.snapshot ? "📸 1.5s GEMINI SNAPSHOT" : "CONNECTING..."}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[9px] font-extrabold border shadow-md">
+          {feed.snapshot ? (
+            <>
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
+              <span className="text-emerald-400 tracking-wider">📸 LIVE SNAPSHOT</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+              <span className="text-amber-400 tracking-wider">⏳ IN LOBBY</span>
+            </>
+          )}
         </div>
 
         {/* Violation badge */}
         {feed.violationCount > 0 && (
-          <div className="absolute top-2 right-2 px-2.5 py-1 bg-red-600 rounded-md text-[9px] font-extrabold text-white shadow-md">
-            {feed.violationCount}/3 ⚠
+          <div className="absolute top-2 right-2 px-2.5 py-1 bg-red-600 rounded-lg text-[9px] font-extrabold text-white shadow-md border border-red-400/30 animate-pulse">
+            {feed.violationCount}/3 ⚠ VIOLATION
           </div>
         )}
       </div>
 
-      <div className="px-3.5 py-2.5 bg-[var(--surface2)] border-t border-[var(--border)]">
+      <div className="px-4 py-3 bg-[var(--surface2)] border-t border-[var(--border)]">
         <div className="flex items-center justify-between text-xs font-bold">
           <span className="text-[var(--ink)] truncate max-w-[150px]">{feed.name}</span>
-          <span className={`${feed.statusColor} whitespace-nowrap`}>{feed.status}</span>
+          <span className={`${feed.statusColor} whitespace-nowrap text-[11px]`}>{feed.status}</span>
         </div>
         <div className="text-[10px] font-medium text-[var(--muted)] mt-0.5 truncate">{feed.quizTitle}</div>
       </div>
@@ -232,6 +247,44 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           )
         );
       }, 6000);
+    });
+
+    channel.bind("live-snapshot", (data: any) => {
+      const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
+      const studentNameLower = String(data.studentName || "").toLowerCase().trim();
+
+      setFeeds((prev) => {
+        const existingIndex = prev.findIndex((f) => 
+          String(f.id) === studentId || 
+          String(f.name || "").toLowerCase().trim() === studentNameLower
+        );
+
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            snapshot: data.snapshot,
+            lastSeen: new Date(),
+          };
+          return updated;
+        } else {
+          return [
+            ...prev,
+            {
+              id: studentId,
+              name: data.studentName,
+              quizTitle: data.quizTitle || "Quiz",
+              status: "✓ Active",
+              statusColor: "text-emerald-500",
+              border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
+              joinedAt: new Date(),
+              lastSeen: new Date(),
+              violationCount: 0,
+              snapshot: data.snapshot,
+            },
+          ];
+        }
+      });
     });
 
     return () => {

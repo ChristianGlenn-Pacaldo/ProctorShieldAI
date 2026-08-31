@@ -2,30 +2,17 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Shield, Target, Camera, Brain, Lock } from "lucide-react";
+import { Target, Camera, Brain, Lock, UserPlus, LogIn } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 type Panel = "login" | "register";
 
 export default function StudentLoginPage() {
-  const [activePanel, setActivePanel] = useState<"login" | "register">("login");
-  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
+  const [activePanel, setActivePanel] = useState<Panel>("login");
   const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    // Google Identity Services blocks HTTP IPs on mobile (except localhost)
-    if (
-      typeof window !== "undefined" && 
-      window.location.protocol === "http:" && 
-      window.location.hostname !== "localhost" && 
-      window.location.hostname !== "127.0.0.1"
-    ) {
-      setIsSecureOrigin(false);
-    }
-  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleAvailable, setGoogleAvailable] = useState(true);
 
   // Form state
   const [loginEmail, setLoginEmail] = useState("");
@@ -39,6 +26,17 @@ export default function StudentLoginPage() {
   const [mfaState, setMfaState] = useState({ isPending: false, userId: "", email: "", role: "" });
   const [otpCode, setOtpCode] = useState("");
 
+  useEffect(() => {
+    setMounted(true);
+    // Check URL query param for default tab
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("tab") === "register" || params.get("mode") === "register") {
+        setActivePanel("register");
+      }
+    }
+  }, []);
+
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setError("");
     setIsLoading(true);
@@ -49,19 +47,18 @@ export default function StudentLoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           credential: credentialResponse.credential,
-          role: "student", // Lock role to student
+          role: "student",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Google auth server error" }));
 
       if (!res.ok) {
-        setError(data.message || "Google Auth failed");
+        setError(data.message || data.error || "Google Authentication failed");
         setIsLoading(false);
         return;
       }
 
-      // Check if MFA is required
       if (data.requiresMfa) {
         setMfaState({
           isPending: true,
@@ -73,8 +70,7 @@ export default function StudentLoginPage() {
         return;
       }
 
-      // Fallback for regular login (should not happen with our update)
-      const role = data.user.role;
+      const role = data.user?.role || data.role;
       if (role === "student") {
         const pendingCode = localStorage.getItem("pendingJoinCode");
         if (pendingCode) {
@@ -84,11 +80,12 @@ export default function StudentLoginPage() {
           window.location.href = "/dashboard/student";
         }
       } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);
       }
-    } catch {
-      setError("Network error connecting to Google Auth.");
+    } catch (err: any) {
+      console.error("Google login error:", err);
+      setError("Network error connecting to Google Auth. Please register with Email & Password below.");
       setIsLoading(false);
     }
   };
@@ -96,6 +93,12 @@ export default function StudentLoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!loginEmail || !loginPassword) {
+      setError("Please fill in both email and password.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -105,20 +108,19 @@ export default function StudentLoginPage() {
         body: JSON.stringify({
           email: loginEmail,
           password: loginPassword,
-          role: "student", // Lock role to student
+          role: "student",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Server error occurred" }));
 
       if (!res.ok) {
-        setError(data.message || "Login failed");
+        setError(data.message || data.error || "Invalid email or password");
         setIsLoading(false);
         return;
       }
 
-      // Redirect based on role
-      const role = data.user.role;
+      const role = data.user?.role || data.role;
       if (role === "student") {
         const pendingCode = localStorage.getItem("pendingJoinCode");
         if (pendingCode) {
@@ -128,11 +130,12 @@ export default function StudentLoginPage() {
           window.location.href = "/dashboard/student";
         }
       } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError("Network error. Please check your connection.");
       setIsLoading(false);
     }
   };
@@ -141,8 +144,23 @@ export default function StudentLoginPage() {
     e.preventDefault();
     setError("");
 
+    if (!regName.trim()) {
+      setError("Please enter your full name");
+      return;
+    }
+
+    if (!regEmail.trim()) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     if (regPassword !== regConfirm) {
-      setError("Passwords do not match");
+      setError("Passwords do not match. Please verify your password.");
       return;
     }
 
@@ -153,18 +171,18 @@ export default function StudentLoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: regName,
-          email: regEmail,
+          fullName: regName.trim(),
+          email: regEmail.trim(),
           password: regPassword,
           confirmPassword: regConfirm,
-          role: "student", // Lock role to student
+          role: "student",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Server error occurred" }));
 
       if (!res.ok) {
-        setError(data.message || "Registration failed");
+        setError(data.message || data.error || "Registration failed. Please try a different email.");
         setIsLoading(false);
         return;
       }
@@ -176,8 +194,9 @@ export default function StudentLoginPage() {
       } else {
         window.location.href = "/dashboard/student";
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Registration error:", err);
+      setError("Network error during registration. Please try again.");
       setIsLoading(false);
     }
   };
@@ -197,15 +216,15 @@ export default function StudentLoginPage() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Verification error" }));
 
       if (!res.ok) {
-        setError(data.message || "Verification failed");
+        setError(data.message || data.error || "Verification failed");
         setIsLoading(false);
         return;
       }
 
-      const role = data.user.role;
+      const role = data.user?.role || data.role;
       if (role === "student") {
         const pendingCode = localStorage.getItem("pendingJoinCode");
         if (pendingCode) {
@@ -215,10 +234,11 @@ export default function StudentLoginPage() {
           window.location.href = "/dashboard/student";
         }
       } else {
-        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role.toUpperCase()}.`);
+        setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);
       }
-    } catch {
+    } catch (err: any) {
+      console.error("OTP error:", err);
       setError("Network error. Please try again.");
       setIsLoading(false);
     }
@@ -233,8 +253,8 @@ export default function StudentLoginPage() {
 
   return (
     <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
-      <div className="min-h-screen flex">
-        {/* ── LEFT PANEL ───────────────────────────── */}
+      <div className="min-h-screen flex bg-slate-950">
+        {/* ── LEFT PANEL (DESKTOP) ─────────────────── */}
         <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-950/40 via-slate-950 to-slate-900 pointer-events-none" />
           <div className="relative z-10 flex flex-col justify-center px-16 py-12">
@@ -272,42 +292,57 @@ export default function StudentLoginPage() {
         </div>
 
         {/* ── RIGHT PANEL ──────────────────────────── */}
-        <div className="w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-6 border-l border-slate-800/50">
-          <div className="w-full max-w-md">
-            {/* Tab Switcher */}
-            <div className="flex gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6">
+        <div className="w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-4 sm:p-8 border-l border-slate-800/50 min-h-screen">
+          <div className="w-full max-w-md my-auto">
+            {/* Mobile Branding Header */}
+            <div className="lg:hidden text-center mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-xl mx-auto mb-2 shadow-md">
+                🛡️
+              </div>
+              <h1 className="text-2xl font-extrabold text-white font-[family-name:var(--font-display)]">
+                Student Portal
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                ProctorShield AI Examination System
+              </p>
+            </div>
+
+            {/* TAB SWITCHER (TOUCH OPTIMIZED) */}
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 mb-6 shadow-inner">
               <button
                 type="button"
                 onClick={() => { setActivePanel("login"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "login"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
-                  }`}
+                className={`py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer select-none touch-manipulation ${
+                  activePanel === "login"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-[1.02]"
+                    : "text-slate-400 hover:text-slate-200 bg-transparent"
+                }`}
               >
-                Sign In
+                <LogIn className="w-4 h-4" /> Sign In
               </button>
               <button
                 type="button"
                 onClick={() => { setActivePanel("register"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${activePanel === "register"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
-                  }`}
+                className={`py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer select-none touch-manipulation ${
+                  activePanel === "register"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-[1.02]"
+                    : "text-slate-400 hover:text-slate-200 bg-transparent"
+                }`}
               >
-                Create Account
+                <UserPlus className="w-4 h-4" /> Create Account
               </button>
             </div>
 
-            {/* Error Message */}
+            {/* Error Message Box */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400 animate-fade-in">
+              <div className="mb-5 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-sm text-rose-300 animate-fade-in text-center font-medium">
                 ⚠ {error}
               </div>
             )}
 
             {/* ── MFA OTP FORM ──────────────────────── */}
             {mfaState.isPending ? (
-              <div className="animate-fade-in">
+              <div className="animate-fade-in bg-slate-950/60 p-6 rounded-2xl border border-slate-800">
                 <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Verify Your Identity</h2>
                 <p className="text-sm text-slate-400 mb-6">
                   We sent a 6-digit verification code to <strong className="text-slate-200">{mfaState.email}</strong>.
@@ -323,7 +358,7 @@ export default function StudentLoginPage() {
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
                       placeholder="Enter 6-digit code"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all text-center tracking-[0.5em]"
+                      className="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-slate-800 text-base text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all text-center tracking-[0.5em] font-mono"
                       maxLength={6}
                       required
                     />
@@ -331,7 +366,7 @@ export default function StudentLoginPage() {
                   <button
                     type="submit"
                     disabled={isLoading || otpCode.length !== 6}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-4 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 active:scale-[0.99] transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer touch-manipulation"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -343,11 +378,12 @@ export default function StudentLoginPage() {
                     )}
                   </button>
                 </form>
-                <p className="text-center text-xs text-white/25 mt-5">
-                  Didn't receive the email? Check your spam folder or{" "}
+                <p className="text-center text-xs text-white/40 mt-5">
+                  Didn&apos;t receive the email? Check your spam folder or{" "}
                   <button
+                    type="button"
                     onClick={() => { setMfaState({ isPending: false, userId: "", email: "", role: "" }); setOtpCode(""); }}
-                    className="text-indigo-400 font-semibold hover:text-indigo-300"
+                    className="text-blue-400 font-semibold hover:text-blue-300 cursor-pointer underline"
                   >
                     go back
                   </button>
@@ -355,204 +391,223 @@ export default function StudentLoginPage() {
               </div>
             ) : (
               <>
-                {/* ── LOGIN FORM ──────────────────────── */}
+                {/* ── 1. LOGIN FORM ───────────────────── */}
                 {activePanel === "login" && (
-              <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Student Sign In</h2>
-                <p className="text-sm text-slate-400 mb-6">
-                  Sign in to access your proctored quizzes
-                </p>
-
-                {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full min-h-[40px]">
-                  {mounted && isSecureOrigin ? (
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={() => setError("Google Login Failed")}
-                      theme="filled_black"
-                      size="large"
-                      text="signin_with"
-                      shape="rectangular"
-                    />
-                  ) : mounted && !isSecureOrigin ? (
-                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
-                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
+                  <div className="animate-fade-in space-y-5">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-100 font-[family-name:var(--font-display)]">Student Sign In</h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Sign in to access your proctored quizzes
+                      </p>
                     </div>
-                  ) : null}
-                </div>
 
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-500 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
-                      Student Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-300">Password</label>
-                      <Link href="/login/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <input
-                      type="password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Signing In...
-                      </span>
-                    ) : (
-                      "Sign In"
+                    {/* Google Login Button */}
+                    {mounted && googleAvailable && (
+                      <div className="flex justify-center w-full min-h-[44px]">
+                        <GoogleLogin
+                          onSuccess={handleGoogleSuccess}
+                          onError={() => {
+                            setGoogleAvailable(false);
+                            console.warn("Google login unavailable on current domain.");
+                          }}
+                          theme="filled_black"
+                          size="large"
+                          text="signin_with"
+                          shape="rectangular"
+                        />
+                      </div>
                     )}
-                  </button>
-                </form>
 
-                <p className="text-center text-xs text-slate-400 mt-5">
-                  Don&apos;t have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => setActivePanel("register")}
-                    className="text-blue-400 font-semibold hover:text-blue-300"
-                  >
-                    Create one →
-                  </button>
-                </p>
-              </div>
-            )}
-
-            {/* ── REGISTER FORM ───────────────────── */}
-            {activePanel === "register" && (
-              <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Create Student Account</h2>
-                <p className="text-sm text-slate-400 mb-6">
-                  Join Proctor Shield student portal today
-                </p>
-
-                {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full">
-                  {isSecureOrigin ? (
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={() => setError("Google Registration Failed")}
-                      theme="filled_black"
-                      size="large"
-                      text="signup_with"
-                      shape="rectangular"
-                    />
-                  ) : (
-                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
-                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-500 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
-                    <input
-                      type="text"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Juan Dela Cruz"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
-                    <input
-                      type="password"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Min. 6 characters"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Confirm Password</label>
-                    <input
-                      type="password"
-                      value={regConfirm}
-                      onChange={(e) => setRegConfirm(e.target.value)}
-                      placeholder="Repeat your password"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Creating Account...
-                      </span>
-                    ) : (
-                      "Create Account"
+                    {googleAvailable && (
+                      <div className="flex items-center gap-3 my-2">
+                        <div className="flex-1 h-px bg-slate-800" />
+                        <span className="text-xs text-slate-500 font-semibold">OR EMAIL</span>
+                        <div className="flex-1 h-px bg-slate-800" />
+                      </div>
                     )}
-                  </button>
-                </form>
 
-                <p className="text-center text-xs text-slate-400 mt-5">
-                  Already have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => setActivePanel("login")}
-                    className="text-blue-400 font-semibold hover:text-blue-300"
-                  >
-                    Sign in instead →
-                  </button>
-                </p>
-              </div>
+                    <form onSubmit={handleLogin} className="space-y-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
+                          Student Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          placeholder="student@demo.com"
+                          autoComplete="email"
+                          className="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-slate-300">Password</label>
+                        </div>
+                        <input
+                          type="password"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          placeholder="••••••••"
+                          autoComplete="current-password"
+                          className="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full py-4 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 active:scale-[0.99] transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer touch-manipulation"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Signing In...
+                          </span>
+                        ) : (
+                          "Sign In"
+                        )}
+                      </button>
+                    </form>
+
+                    <div className="text-center pt-2">
+                      <p className="text-xs text-slate-400">
+                        Don&apos;t have an account?{" "}
+                        <button
+                          type="button"
+                          onClick={() => { setActivePanel("register"); setError(""); }}
+                          className="text-blue-400 font-bold hover:text-blue-300 cursor-pointer underline touch-manipulation"
+                        >
+                          Create one now →
+                        </button>
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 2. REGISTER FORM ────────────────── */}
+                {activePanel === "register" && (
+                  <div className="animate-fade-in space-y-5">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-100 font-[family-name:var(--font-display)]">Create Student Account</h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Register to start taking proctored exams
+                      </p>
+                    </div>
+
+                    {/* Google Register Button */}
+                    {mounted && googleAvailable && (
+                      <div className="flex justify-center w-full min-h-[44px]">
+                        <GoogleLogin
+                          onSuccess={handleGoogleSuccess}
+                          onError={() => {
+                            setGoogleAvailable(false);
+                            console.warn("Google sign-up unavailable on current domain.");
+                          }}
+                          theme="filled_black"
+                          size="large"
+                          text="signup_with"
+                          shape="rectangular"
+                        />
+                      </div>
+                    )}
+
+                    {googleAvailable && (
+                      <div className="flex items-center gap-3 my-2">
+                        <div className="flex-1 h-px bg-slate-800" />
+                        <span className="text-xs text-slate-500 font-semibold">OR REGISTER WITH EMAIL</span>
+                        <div className="flex-1 h-px bg-slate-800" />
+                      </div>
+                    )}
+
+                    <form onSubmit={handleRegister} className="space-y-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Full Name</label>
+                        <input
+                          type="text"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          placeholder="Juan Dela Cruz"
+                          autoComplete="name"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Email Address</label>
+                        <input
+                          type="email"
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          placeholder="student@school.edu.ph"
+                          autoComplete="email"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
+                        <input
+                          type="password"
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="Min. 6 characters"
+                          autoComplete="new-password"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
+                        <input
+                          type="password"
+                          value={regConfirm}
+                          onChange={(e) => setRegConfirm(e.target.value)}
+                          placeholder="Repeat your password"
+                          autoComplete="new-password"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full py-4 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 active:scale-[0.99] transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer touch-manipulation mt-2"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Creating Account...
+                          </span>
+                        ) : (
+                          "Create Student Account"
+                        )}
+                      </button>
+                    </form>
+
+                    <div className="text-center pt-2">
+                      <p className="text-xs text-slate-400">
+                        Already have an account?{" "}
+                        <button
+                          type="button"
+                          onClick={() => { setActivePanel("login"); setError(""); }}
+                          className="text-blue-400 font-bold hover:text-blue-300 cursor-pointer underline touch-manipulation"
+                        >
+                          Sign in instead →
+                        </button>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-            </>
-            )}
+
+            <div className="lg:hidden mt-8 pt-6 border-t border-slate-800/80 text-center">
+              <Link href="/login" className="text-xs text-slate-400 hover:text-white transition-colors">
+                ← Back to Portal Selection
+              </Link>
+            </div>
           </div>
         </div>
       </div>

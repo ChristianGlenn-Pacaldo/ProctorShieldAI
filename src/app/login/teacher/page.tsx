@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Shield, Target, Camera, Brain, Lock } from "lucide-react";
+import { Target, Camera, Brain, Lock } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 type Panel = "login" | "register";
@@ -12,18 +12,9 @@ export default function TeacherLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
-  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    if (
-      typeof window !== "undefined" && 
-      window.location.protocol === "http:" && 
-      window.location.hostname !== "localhost" && 
-      window.location.hostname !== "127.0.0.1"
-    ) {
-      setIsSecureOrigin(false);
-    }
   }, []);
 
   // Form state
@@ -48,14 +39,14 @@ export default function TeacherLoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           credential: credentialResponse.credential,
-          role: "teacher", // Lock role to teacher
+          role: "teacher",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Google auth server error" }));
 
       if (!res.ok) {
-        setError(data.message || "Google Auth failed");
+        setError(data.message || data.error || "Google Auth failed");
         setIsLoading(false);
         return;
       }
@@ -72,10 +63,10 @@ export default function TeacherLoginPage() {
         return;
       }
 
-      // This block is a fallback in case MFA is bypassed (not standard)
-      window.location.href = `/dashboard/${data.role || data.user?.role}`;
-    } catch {
-      setError("Network error connecting to Google Auth.");
+      window.location.href = `/dashboard/${data.role || data.user?.role || "teacher"}`;
+    } catch (err: any) {
+      console.error("Google login error:", err);
+      setError("Network error connecting to Google Auth. Please use Email & Password.");
       setIsLoading(false);
     }
   };
@@ -92,23 +83,23 @@ export default function TeacherLoginPage() {
         body: JSON.stringify({
           email: loginEmail,
           password: loginPassword,
-          role: "teacher", // Lock role to teacher
+          role: "teacher",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Server error occurred" }));
 
       if (!res.ok) {
-        setError(data.message || "Login failed");
+        setError(data.message || data.error || "Invalid email or password");
         setIsLoading(false);
         return;
       }
 
-      // Universal redirect based on role
-      const role = data.user?.role || data.role;
+      const role = data.user?.role || data.role || "teacher";
       window.location.href = `/dashboard/${role}`;
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError("Network error. Please check your connection.");
       setIsLoading(false);
     }
   };
@@ -116,6 +107,11 @@ export default function TeacherLoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (regPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
 
     if (regPassword !== regConfirm) {
       setError("Passwords do not match");
@@ -133,20 +129,21 @@ export default function TeacherLoginPage() {
           email: regEmail,
           password: regPassword,
           confirmPassword: regConfirm,
-          role: "teacher", // Lock role to teacher
+          role: "teacher",
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Registration error" }));
 
       if (!res.ok) {
-        setError(data.message || "Registration failed");
+        setError(data.message || data.error || "Registration failed");
         setIsLoading(false);
         return;
       }
 
       window.location.href = "/dashboard/teacher";
-    } catch {
+    } catch (err: any) {
+      console.error("Registration error:", err);
       setError("Network error. Please try again.");
       setIsLoading(false);
     }
@@ -167,17 +164,18 @@ export default function TeacherLoginPage() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ message: "Verification error" }));
 
       if (!res.ok) {
-        setError(data.message || "Verification failed");
+        setError(data.message || data.error || "Verification failed");
         setIsLoading(false);
         return;
       }
 
-      const role = data.user?.role || data.role;
+      const role = data.user?.role || data.role || "teacher";
       window.location.href = `/dashboard/${role}`;
-    } catch {
+    } catch (err: any) {
+      console.error("OTP error:", err);
       setError("Network error. Please try again.");
       setIsLoading(false);
     }
@@ -195,7 +193,7 @@ export default function TeacherLoginPage() {
       <div className="min-h-screen flex">
         {/* ── LEFT PANEL ───────────────────────────── */}
         <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/40 via-slate-950 to-slate-900 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-950/40 via-slate-950 to-slate-900 pointer-events-none" />
           <div className="relative z-10 flex flex-col justify-center px-16 py-12">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-2xl mb-6 shadow-lg shadow-blue-900/20">
               🛡️
@@ -233,25 +231,38 @@ export default function TeacherLoginPage() {
         {/* ── RIGHT PANEL ──────────────────────────── */}
         <div className="w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-6 border-l border-slate-800/50">
           <div className="w-full max-w-md">
+            {/* Mobile Header */}
+            <div className="lg:hidden text-center mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-xl mx-auto mb-2 shadow-md">
+                🛡️
+              </div>
+              <h1 className="text-2xl font-extrabold text-white font-[family-name:var(--font-display)]">
+                Teacher Portal
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">
+                ProctorShield AI Examination System
+              </p>
+            </div>
+
             {/* Tab Switcher */}
             <div className="flex gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6">
               <button
+                type="button"
                 onClick={() => { setActivePanel("login"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                  activePanel === "login"
+                className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all cursor-pointer ${activePanel === "login"
                     ? "bg-blue-600 text-white shadow-xs"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 Sign In
               </button>
               <button
+                type="button"
                 onClick={() => { setActivePanel("register"); setError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                  activePanel === "register"
+                className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all cursor-pointer ${activePanel === "register"
                     ? "bg-blue-600 text-white shadow-xs"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 Create Account
               </button>
@@ -259,7 +270,7 @@ export default function TeacherLoginPage() {
 
             {/* Error Message */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400 animate-fade-in">
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400 animate-fade-in text-center">
                 ⚠ {error}
               </div>
             )}
@@ -290,7 +301,7 @@ export default function TeacherLoginPage() {
                   <button
                     type="submit"
                     disabled={isLoading || otpCode.length !== 6}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -302,11 +313,11 @@ export default function TeacherLoginPage() {
                     )}
                   </button>
                 </form>
-                <p className="text-center text-xs text-slate-400 mt-5">
-                  Didn't receive the email? Check your spam folder or{" "}
+                <p className="text-center text-xs text-white/40 mt-5">
+                  Didn&apos;t receive the email? Check your spam folder or{" "}
                   <button
                     onClick={() => { setMfaState({ isPending: false, userId: "", email: "", role: "" }); setOtpCode(""); }}
-                    className="text-blue-400 font-semibold hover:text-blue-300"
+                    className="text-blue-400 font-semibold hover:text-blue-300 cursor-pointer"
                   >
                     go back
                   </button>
@@ -316,194 +327,197 @@ export default function TeacherLoginPage() {
               <>
                 {/* ── LOGIN FORM ──────────────────────── */}
                 {activePanel === "login" && (
-              <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Teacher Sign In</h2>
-                <p className="text-sm text-slate-400 mb-6">
-                  Sign in to manage proctored assessments
-                </p>
-                
-                {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full min-h-[40px]">
-                  {mounted && isSecureOrigin ? (
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={() => setError("Google Login Failed")}
-                      theme="filled_black"
-                      size="large"
-                      text="signin_with"
-                      shape="rectangular"
-                    />
-                  ) : mounted && !isSecureOrigin ? (
-                    <div className="w-full py-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold rounded-xl text-center px-4">
-                      Google Auth requires HTTPS. On mobile Wi-Fi, please use Email & Password.
+                  <div className="animate-fade-in">
+                    <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Teacher Sign In</h2>
+                    <p className="text-sm text-slate-400 mb-6">
+                      Sign in to manage proctored assessments
+                    </p>
+                    
+                    {/* Google Button */}
+                    <div className="mb-4 flex justify-center w-full min-h-[40px]">
+                      {mounted && (
+                        <GoogleLogin
+                          onSuccess={handleGoogleSuccess}
+                          onError={() => setError("Google Login Failed. Please use Email & Password.")}
+                          theme="filled_black"
+                          size="large"
+                          text="signin_with"
+                          shape="rectangular"
+                        />
+                      )}
                     </div>
-                  ) : null}
-                </div>
 
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-500 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
-                      Teacher Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-300">Password</label>
-                      <Link href="/login/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                        Forgot password?
-                      </Link>
+                    <div className="flex items-center gap-3 my-5">
+                      <div className="flex-1 h-px bg-slate-800" />
+                      <span className="text-xs text-slate-500 font-semibold">OR</span>
+                      <div className="flex-1 h-px bg-slate-800" />
                     </div>
-                    <input
-                      type="password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Signing In...
-                      </span>
-                    ) : (
-                      "Sign In"
-                    )}
-                  </button>
-                </form>
 
-                <p className="text-center text-xs text-slate-400 mt-5">
-                  Don&apos;t have an account?{" "}
-                  <button
-                    onClick={() => setActivePanel("register")}
-                    className="text-blue-400 font-semibold hover:text-blue-300"
-                  >
-                    Create one →
-                  </button>
-                </p>
-              </div>
+                    <form onSubmit={handleLogin} className="space-y-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
+                          Teacher Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          placeholder="teacher@demo.com"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-slate-300">Password</label>
+                        </div>
+                        <input
+                          type="password"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Signing In...
+                          </span>
+                        ) : (
+                          "Sign In"
+                        )}
+                      </button>
+                    </form>
+
+                    <p className="text-center text-xs text-slate-400 mt-5">
+                      Don&apos;t have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setActivePanel("register")}
+                        className="text-blue-400 font-semibold hover:text-blue-300 cursor-pointer"
+                      >
+                        Create one →
+                      </button>
+                    </p>
+                  </div>
+                )}
+
+                {/* ── REGISTER FORM ───────────────────── */}
+                {activePanel === "register" && (
+                  <div className="animate-fade-in">
+                    <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Create Teacher Account</h2>
+                    <p className="text-sm text-slate-400 mb-6">
+                      Join Proctor Shield teacher portal today
+                    </p>
+
+                    {/* Google Button */}
+                    <div className="mb-4 flex justify-center w-full min-h-[40px]">
+                      {mounted && (
+                        <GoogleLogin
+                          onSuccess={handleGoogleSuccess}
+                          onError={() => setError("Google Registration Failed. Please use Email & Password.")}
+                          theme="filled_black"
+                          size="large"
+                          text="signup_with"
+                          shape="rectangular"
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 my-5">
+                      <div className="flex-1 h-px bg-slate-800" />
+                      <span className="text-xs text-slate-500 font-semibold">OR</span>
+                      <div className="flex-1 h-px bg-slate-800" />
+                    </div>
+
+                    <form onSubmit={handleRegister} className="space-y-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
+                        <input
+                          type="text"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          placeholder="Prof. Juan Dela Cruz"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
+                        <input
+                          type="email"
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          placeholder="teacher@school.edu.ph"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
+                        <input
+                          type="password"
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="Min. 6 characters"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Confirm Password</label>
+                        <input
+                          type="password"
+                          value={regConfirm}
+                          onChange={(e) => setRegConfirm(e.target.value)}
+                          placeholder="Repeat your password"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Creating Account...
+                          </span>
+                        ) : (
+                          "Create Account"
+                        )}
+                      </button>
+                    </form>
+
+                    <p className="text-center text-xs text-slate-400 mt-5">
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setActivePanel("login")}
+                        className="text-blue-400 font-semibold hover:text-blue-300 cursor-pointer"
+                      >
+                        Sign in instead →
+                      </button>
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* ── REGISTER FORM ───────────────────── */}
-            {activePanel === "register" && (
-              <div className="animate-fade-in">
-                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Create Teacher Account</h2>
-                <p className="text-sm text-slate-400 mb-6">
-                  Join Proctor Shield teacher portal today
-                </p>
-
-                {/* Real Google Button */}
-                <div className="mb-4 flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Google Registration Failed")}
-                    theme="filled_black"
-                    size="large"
-                    text="signup_with"
-                    shape="rectangular"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-500 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
-                    <input
-                      type="text"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Juan Dela Cruz"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="you@school.edu.ph"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
-                    <input
-                      type="password"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Min. 6 characters"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Confirm Password</label>
-                    <input
-                      type="password"
-                      value={regConfirm}
-                      onChange={(e) => setRegConfirm(e.target.value)}
-                      placeholder="Repeat your password"
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Creating Account...
-                      </span>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </button>
-                </form>
-
-                <p className="text-center text-xs text-slate-400 mt-5">
-                  Already have an account?{" "}
-                  <button
-                    onClick={() => setActivePanel("login")}
-                    className="text-blue-400 font-semibold hover:text-blue-300"
-                  >
-                    Sign in →
-                  </button>
-                </p>
-              </div>
-            )}
-            </>
-            )}
+            <div className="lg:hidden mt-8 pt-6 border-t border-slate-800 text-center">
+              <Link href="/login" className="text-xs text-slate-400 hover:text-white transition-colors">
+                ← Back to Portal Selection
+              </Link>
+            </div>
           </div>
         </div>
       </div>

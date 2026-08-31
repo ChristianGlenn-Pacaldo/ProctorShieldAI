@@ -7,6 +7,7 @@ const snapshotStore = new Map<string, {
   studentName: string;
   quizTitle: string;
   quizId: number;
+  teacherId?: number;
   updatedAt: number;
 }>();
 
@@ -20,10 +21,10 @@ function getStore() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    const { snapshot, quizId, quizTitle, studentId, studentName } = await req.json();
+    const { snapshot, quizId, quizTitle, studentId, studentName, teacherId } = await req.json();
 
     if (!snapshot) {
-      return NextResponse.json({ error: "No snapshot" }, { status: 400 });
+      return NextResponse.json({ error: "No snapshot provided" }, { status: 400 });
     }
 
     const store = getStore();
@@ -36,11 +37,35 @@ export async function POST(req: NextRequest) {
       studentName: sName,
       quizTitle: quizTitle || "Quiz",
       quizId: Number(quizId),
+      teacherId: teacherId ? Number(teacherId) : undefined,
       updatedAt: Date.now(),
     };
 
     store.set(sId, dataObj);
     store.set(sName, dataObj);
+
+    // Broadcast snapshot via Pusher in real-time
+    try {
+      const { pusherServer } = await import("@/lib/pusher");
+      if (teacherId) {
+        await pusherServer.trigger(`teacher-${teacherId}`, "live-snapshot", {
+          studentId: sId,
+          studentName: sName,
+          quizTitle: quizTitle || "Quiz",
+          snapshot,
+          timestamp: Date.now(),
+        });
+      }
+      await pusherServer.trigger("teacher-monitor", "live-snapshot", {
+        studentId: sId,
+        studentName: sName,
+        quizTitle: quizTitle || "Quiz",
+        snapshot,
+        timestamp: Date.now(),
+      });
+    } catch (pushErr) {
+      // Non-blocking pusher error
+    }
 
     // Clean up stale entries older than 2 minutes
     const now = Date.now();

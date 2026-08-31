@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Sparkles, Camera, Upload, Trash, Check, Crown, Shield } from "lucide-react";
 import Link from "next/link";
 
-export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boolean }) {
+export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed = false }: { isSubscribed?: boolean }) {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -23,7 +23,7 @@ export default function TeacherQuizzesPage({ isSubscribed }: { isSubscribed: boo
   });
 
   // Subscription Gating State
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [isCheckingSub, setIsCheckingSub] = useState(true);
 

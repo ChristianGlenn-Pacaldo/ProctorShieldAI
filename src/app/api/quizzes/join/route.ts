@@ -55,7 +55,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingEnrollment) {
-      return NextResponse.json({ error: "You have already joined this quiz." }, { status: 409 });
+      return NextResponse.json({
+        success: true,
+        message: `Welcome back to ${quiz.title}`,
+        quiz: {
+          id: quiz.id,
+          title: quiz.title,
+          subject: quiz.subject.subjectName,
+        },
+      }, { status: 200 });
     }
 
     // Determine initial status based on quiz status

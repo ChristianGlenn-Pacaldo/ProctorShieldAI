@@ -413,12 +413,13 @@ export default function QuizRoom() {
           quizTitle: quiz?.title,
           studentId: userId,
           studentName: quiz?.studentName || "Student",
+          teacherId: quiz?.teacherId,
         }),
       });
     } catch (err) {
       console.error("Snapshot upload failed:", err);
     }
-  }, [captureSnapshot, quizId, quiz?.title, userId]);
+  }, [captureSnapshot, quizId, quiz?.title, quiz?.teacherId, quiz?.studentName, userId]);
 
   // ── Send frame to Gemini AI for real violation detection ──
   const analyzeFrame = useCallback(async () => {
@@ -992,19 +993,19 @@ export default function QuizRoom() {
                 <p className="flex items-center gap-2 text-red-400 mt-4 pt-4 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Quiz will auto-terminate after 3 violations.</p>
               </div>
               {studentQuizStatus === "pending_approval" ? (
-                <button disabled className="w-full py-3 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+                <button disabled className="w-full py-3.5 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Waiting for Teacher Approval...
                 </button>
-              ) : quiz?.quizStatus === "active" ? (
-                <button disabled className="w-full py-3 bg-indigo-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+              ) : quiz?.quizStatus === "draft" || quiz?.quizStatus === "scheduled" ? (
+                <button disabled className="w-full py-3.5 bg-indigo-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Waiting for Teacher to Start...
+                  Waiting for Teacher to Start Quiz...
                 </button>
               ) : (
                 <button
                   onClick={() => setHasStarted(true)}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20 cursor-pointer"
                 >
                   I Understand, Start Quiz
                 </button>

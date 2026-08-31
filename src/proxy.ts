@@ -68,7 +68,15 @@ const ROLE_API_PATHS: Record<string, string[]> = {
 const SHARED_API_PATHS = [
   "/api/auth/session",
   "/api/auth/logout",
-  "/api/quizzes",  // GET is shared (filtered by role in handler)
+  "/api/quizzes",
+  "/api/users/me",
+  "/api/users",
+  "/api/notifications",
+  "/api/live/snapshot",
+  "/api/live/join",
+  "/api/live/violation",
+  "/api/live/analyze",
+  "/api/live/webrtc",
 ];
 
 // ── JWT Decoding (Edge-compatible, no `jsonwebtoken`) ─────────────

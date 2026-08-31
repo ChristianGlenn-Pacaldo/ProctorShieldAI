@@ -40,14 +40,11 @@ function JoinContent() {
 
       const data = await res.json();
 
-      if (res.ok) {
-        // Success! Go straight to dashboard (which will show the quiz)
-        // or actually, since we joined it, go to dashboard to see it in Upcoming.
-        // Even better: go directly to the quiz if it's live!
-        // But /api/quizzes/join just registers them. Dashboard routes them.
-        router.push("/dashboard/student");
+      if (res.ok && data.quiz?.id) {
+        // Redirect directly into the quiz lobby!
+        router.push(`/quiz/${data.quiz.id}`);
       } else if (res.status === 401) {
-        // Not logged in. Save code and redirect to login.
+        // Not logged in. Save code and redirect to student login.
         localStorage.setItem("pendingJoinCode", code.toUpperCase());
         router.push("/login/student");
       } else {
