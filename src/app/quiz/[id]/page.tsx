@@ -752,13 +752,13 @@ export default function QuizRoom() {
 
               setAudioLevel(levelPercent);
 
-              // Threshold for speech/loud noise (> 35% audio level)
-              if (levelPercent > 35) {
+              // Calibrated threshold for distinct speech/loud noise (> 48% audio level)
+              if (levelPercent > 48) {
                 violationConsecutiveCount++;
                 if (violationConsecutiveCount === 2) {
                   setPreWarning("⚠️ Pre-Warning: Audio anomaly / speaking detected. Please remain quiet.");
                 }
-                if (violationConsecutiveCount >= 4) { // ~2 seconds continuous speech
+                if (violationConsecutiveCount >= 5) { // ~2.5 seconds continuous loud speech
                   reportViolation("audio_anomaly");
                   violationConsecutiveCount = 0;
                   setPreWarning(null);

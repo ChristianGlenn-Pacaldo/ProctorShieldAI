@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
 import {
   CreditCard,
   Crown,
@@ -12,10 +11,9 @@ import {
   ClipboardList,
   Shield,
   Check,
-  ExternalLink,
   AlertTriangle,
   CheckCircle,
-  XCircle,
+  Zap,
 } from "lucide-react";
 
 interface Subscription {
@@ -37,12 +35,12 @@ interface PaymentRecord {
 }
 
 const premiumFeatures = [
-  { icon: <Sparkles className="w-4 h-4" />, title: "AI Quiz Generation", desc: "Auto-generate quizzes from topics, images, or webcam captures using Gemini AI" },
-  { icon: <Radio className="w-4 h-4" />, title: "Live Monitoring", desc: "Real-time webcam feed of all students with 1-second snapshot updates" },
-  { icon: <Camera className="w-4 h-4" />, title: "Evidence Replay", desc: "Full timeline replay of all violations with captured screenshot evidence" },
-  { icon: <Brain className="w-4 h-4" />, title: "AI Verdict Reports", desc: "Gemini AI analyzes violations and delivers cheating probability verdicts" },
-  { icon: <ClipboardList className="w-4 h-4" />, title: "Unlimited Quizzes", desc: "Create as many quizzes as you need with no restrictions" },
-  { icon: <Shield className="w-4 h-4" />, title: "Priority Support", desc: "Dedicated support channel for premium subscribers" },
+  { icon: <Sparkles className="w-4 h-4" />, title: "AI Quiz Generation", desc: "Auto-generate quizzes from topics, text prompts, or syllabus notes with Gemini AI" },
+  { icon: <Radio className="w-4 h-4" />, title: "Live Snapshot Monitoring", desc: "Real-time webcam snapshot stream of all examinees with 1.5s live updates" },
+  { icon: <Camera className="w-4 h-4" />, title: "Evidence & Violation Logs", desc: "Timeline logs of all violations with captured screenshot forensic evidence" },
+  { icon: <Brain className="w-4 h-4" />, title: "Gemini AI Verdict Reports", desc: "AI calculates cheating probability verdicts and generates integrity reports" },
+  { icon: <ClipboardList className="w-4 h-4" />, title: "Unlimited Quizzes", desc: "Create as many quizzes and assessments as you need with no limits" },
+  { icon: <Shield className="w-4 h-4" />, title: "Live Security & Defense Tools", desc: "Fullscreen lockdown, gaze detection, and multi-device proctoring" },
 ];
 
 export default function BillingContent() {
@@ -51,9 +49,10 @@ export default function BillingContent() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isActivatingDemo, setIsActivatingDemo] = useState(false);
   const [paymentResult, setPaymentResult] = useState<"success" | "cancelled" | null>(null);
 
-  // Fetch billing data function (moved up so it can be used in the first useEffect)
+  // Fetch billing data
   const fetchBilling = async () => {
     try {
       const res = await fetch("/api/billing");
@@ -77,14 +76,12 @@ export default function BillingContent() {
       const payment = params.get("payment");
       if (payment === "success") {
         setPaymentResult("success");
-        // Confirm payment and activate subscription locally
         fetch("/api/billing/confirm", { method: "POST" })
           .then(() => {
-            fetchBilling(); // Refresh billing data to show premium status
+            fetchBilling();
           })
           .catch((err) => console.error("Confirmation error:", err));
 
-        // Clean URL
         const url = new URL(window.location.href);
         url.searchParams.delete("payment");
         window.history.replaceState({}, "", url.pathname);
@@ -97,11 +94,11 @@ export default function BillingContent() {
     }
   }, []);
 
-  // Initial fetch billing data
   useEffect(() => {
     fetchBilling();
   }, []);
 
+  // Standard PayMongo Test Checkout
   const handleUpgrade = async () => {
     setIsUpgrading(true);
     try {
@@ -111,15 +108,38 @@ export default function BillingContent() {
       });
       const data = await res.json();
       if (res.ok && data.checkoutUrl) {
-        // Redirect to PayMongo checkout (GCash/Card)
         window.location.href = data.checkoutUrl;
       } else {
-        alert(data.error || "Failed to initiate checkout. Please try again.");
-        setIsUpgrading(false);
+        alert(data.error || "Failed to initiate PayMongo test checkout. Using instant sandbox activation instead.");
+        await handleSandboxInstantActivate();
       }
     } catch (err) {
-      alert("Network error. Please check your connection.");
+      console.warn("PayMongo redirect error, falling back to sandbox activation:", err);
+      await handleSandboxInstantActivate();
+    } finally {
       setIsUpgrading(false);
+    }
+  };
+
+  // 1-Click Instant Sandbox Activation (Zero External Friction)
+  const handleSandboxInstantActivate = async () => {
+    setIsActivatingDemo(true);
+    try {
+      const res = await fetch("/api/billing/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        setPaymentResult("success");
+        await fetchBilling();
+      } else {
+        alert("Failed to activate sandbox subscription.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Network error activating sandbox.");
+    } finally {
+      setIsActivatingDemo(false);
     }
   };
 
@@ -133,13 +153,23 @@ export default function BillingContent() {
 
   return (
     <div className="animate-fade-in space-y-6 max-w-4xl mx-auto">
+      {/* Sandbox Test Banner */}
+      <div className="flex items-center justify-between p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-400">
+        <span className="flex items-center gap-2 font-semibold">
+          <Shield className="w-4 h-4" /> PayMongo Sandbox Active (Test Mode Only — No real money charged)
+        </span>
+        <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-[10px] font-bold">
+          TEST KEYS
+        </span>
+      </div>
+
       {/* Payment Result Banners */}
       {paymentResult === "success" && (
         <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-fade-in">
           <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-emerald-500">Payment Successful!</p>
-            <p className="text-xs text-[var(--muted)]">Your Premium subscription is now active. It may take a moment to reflect. Refresh the page if needed.</p>
+            <p className="text-sm font-bold text-emerald-500">Premium Plan Activated!</p>
+            <p className="text-xs text-[var(--muted)]">Your subscription is now active with full access to Live Monitoring and AI generation.</p>
           </div>
         </div>
       )}
@@ -148,7 +178,7 @@ export default function BillingContent() {
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
           <div>
             <p className="text-sm font-bold text-amber-500">Payment Cancelled</p>
-            <p className="text-xs text-[var(--muted)]">Your checkout was cancelled. No charges were made. You can try again anytime.</p>
+            <p className="text-xs text-[var(--muted)]">PayMongo test checkout was cancelled. You can retry or use the 1-Click Sandbox button below.</p>
           </div>
         </div>
       )}
@@ -173,7 +203,7 @@ export default function BillingContent() {
                 </span>
               </div>
               <h2 className="text-2xl font-extrabold text-[var(--ink)]">
-                {isSubscribed ? "Premium Monthly" : "Free Plan"}
+                {isSubscribed ? (subscription?.planName || "Premium Tier") : "Free Tier"}
               </h2>
               {isSubscribed && subscription && (
                 <p className="text-xs text-[var(--muted)] mt-1">
@@ -199,8 +229,7 @@ export default function BillingContent() {
                 <span className="text-sm font-bold text-amber-500">Limited Access</span>
               </div>
               <p className="text-xs text-[var(--muted)] leading-relaxed">
-                You are on the Free plan. AI Quiz Generation and Live Monitoring require a Premium subscription.
-                Upgrade now to unlock all features.
+                You are currently on the Free plan. AI Quiz Generation and Live Monitoring require a Premium subscription.
               </p>
             </div>
           )}
@@ -210,10 +239,10 @@ export default function BillingContent() {
             {premiumFeatures.map((f) => (
               <div
                 key={f.title}
-                className={`flex items-start gap-3 p-3 rounded-xl transition-all ${
+                className={`flex items-start gap-3 p-3.5 rounded-xl transition-all ${
                   isSubscribed
                     ? "bg-white/[0.04] border border-white/[0.06]"
-                    : "bg-[var(--surface2)] border border-[var(--border)] opacity-60"
+                    : "bg-[var(--surface2)] border border-[var(--border)] opacity-70"
                 }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
@@ -224,7 +253,7 @@ export default function BillingContent() {
                 <div>
                   <h4 className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                     {f.title}
-                    {isSubscribed && <Check className="w-3 h-3 text-emerald-500" />}
+                    {isSubscribed && <Check className="w-3.5 h-3.5 text-emerald-500" />}
                   </h4>
                   <p className="text-[10px] text-[var(--muted)] leading-relaxed mt-0.5">{f.desc}</p>
                 </div>
@@ -232,82 +261,101 @@ export default function BillingContent() {
             ))}
           </div>
 
-          {/* Upgrade Button */}
+          {/* Upgrade Buttons */}
           {!isSubscribed && (
-            <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
               <button
+                type="button"
                 onClick={handleUpgrade}
-                disabled={isUpgrading}
-                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-xl shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={isUpgrading || isActivatingDemo}
+                className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all shadow-xl shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isUpgrading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
+                    Opening PayMongo...
                   </>
                 ) : (
                   <>
                     <Crown className="w-4 h-4" />
-                    Upgrade to Premium — ₱500/month
+                    Pay with PayMongo Sandbox (₱500)
                   </>
                 )}
               </button>
-              <div className="flex items-center gap-2 text-[10px] text-[var(--muted)]">
-                <Shield className="w-3 h-3" />
-                Secured by PayMongo · GCash & Card accepted
-              </div>
+
+              <button
+                type="button"
+                onClick={handleSandboxInstantActivate}
+                disabled={isActivatingDemo || isUpgrading}
+                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isActivatingDemo ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Activating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    1-Click Sandbox Demo Activate
+                  </>
+                )}
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Payment History */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
-        <div className="px-5 py-4 border-b border-[var(--border)]">
+      {/* Payment History Table */}
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] overflow-hidden shadow-xs">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
           <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-indigo-500" />
             Payment History
           </h3>
+          <span className="text-[10px] text-[var(--muted)]">
+            Auto-recorded in PostgreSQL
+          </span>
         </div>
-        <div className="min-h-[120px]">
+        <div className="min-h-[120px] overflow-x-auto">
           {payments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-[var(--muted)]">
               <CreditCard className="w-8 h-8 mb-2 opacity-30" />
-              <p className="text-xs font-semibold">No payment history</p>
+              <p className="text-xs font-semibold">No payment history yet</p>
               <p className="text-[10px] text-[var(--muted2)] mt-0.5">
-                Your transactions will appear here after upgrading
+                Transactions will appear here after completing sandbox checkout
               </p>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-[var(--border)]">
+                <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                   {["Date", "Amount", "Method", "Reference", "Status"].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border)]">
+              <tbody className="divide-y divide-[var(--border)] text-xs">
                 {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-[var(--surface2)] transition-colors">
-                    <td className="px-5 py-3 text-sm text-[var(--ink)]">
+                  <tr key={p.id} className="hover:bg-[var(--surface2)]/40 transition-colors">
+                    <td className="px-5 py-3 text-[var(--ink)] font-medium">
                       {p.paidAt ? new Date(p.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </td>
-                    <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">
+                    <td className="px-5 py-3 font-bold text-[var(--ink)]">
                       ₱{Number(p.amount).toFixed(2)}
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 uppercase">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 uppercase font-mono">
                         {p.method || "gcash"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-xs text-[var(--muted)] font-mono">
+                    <td className="px-5 py-3 text-[var(--muted)] font-mono text-[11px]">
                       {p.reference || "—"}
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
                         p.status === "completed"
                           ? "bg-emerald-500/15 text-emerald-600"
                           : p.status === "pending"
@@ -323,7 +371,6 @@ export default function BillingContent() {
             </table>
           )}
         </div>
-
       </div>
     </div>
   );
