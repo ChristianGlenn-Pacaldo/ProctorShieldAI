@@ -613,14 +613,19 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       {/* CREATE QUIZ MODAL */}
       {isCreateModalOpen && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsCreateModalOpen(false);
           }}
         >
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div 
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
-              <h2 className="text-lg font-bold text-[var(--ink)]">Create New Quiz</h2>
+              <h2 className="text-base sm:text-lg font-bold text-[var(--ink)] flex items-center gap-2">
+                <span>📝</span> Create New Quiz
+              </h2>
               <button 
                 type="button" 
                 onClick={() => setIsCreateModalOpen(false)} 
@@ -630,8 +635,8 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
               </button>
             </div>
             
-            <form onSubmit={handleCreateQuiz} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form onSubmit={handleCreateQuiz} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                 {createError && (
                   <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
                     {createError}
@@ -778,9 +783,16 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
               </div>
 
               <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex gap-3">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-2 rounded-lg font-semibold text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#222] transition-all">Cancel</button>
-                <button type="submit" disabled={isCreating} className="flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50">
-                  {isCreating ? "Creating..." : "Create Quiz"}
+                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isCreating} className="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
+                  {isCreating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating Quiz...
+                    </>
+                  ) : (
+                    "Create Quiz"
+                  )}
                 </button>
               </div>
             </form>
@@ -790,8 +802,19 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
       {/* AI GENERATE MODAL */}
       {isAiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative">
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsAiModalOpen(false);
+              stopCamera();
+            }
+          }}
+        >
+          <div 
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative my-auto animate-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 opacity-50 pointer-events-none" />
             
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] relative z-10">
@@ -935,11 +958,11 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
       {manageQuiz && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
           onClick={() => setManageQuiz(null)}
         >
           <div 
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
