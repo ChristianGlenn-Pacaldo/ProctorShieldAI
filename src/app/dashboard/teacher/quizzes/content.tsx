@@ -240,13 +240,25 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
   };
 
   const openNewQuizModal = () => {
-    setAiGeneratedQuestions([]);
+    setAiGeneratedQuestions([
+      {
+        questionText: "",
+        questionType: "multiple_choice",
+        points: 1,
+        choices: [
+          { choiceText: "", isCorrect: true },
+          { choiceText: "", isCorrect: false },
+          { choiceText: "", isCorrect: false },
+          { choiceText: "", isCorrect: false }
+        ]
+      }
+    ]);
     setNewQuizForm({
       title: "",
       subjectName: "",
       description: "",
       duration: 60,
-      totalQuestions: 0,
+      totalQuestions: 1,
       shuffleQuestions: true,
       isGamified: true,
     });
@@ -600,11 +612,22 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
       {/* CREATE QUIZ MODAL */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsCreateModalOpen(false);
+          }}
+        >
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
               <h2 className="text-lg font-bold text-[var(--ink)]">Create New Quiz</h2>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-[var(--muted)] hover:text-white transition-colors">✕</button>
+              <button 
+                type="button" 
+                onClick={() => setIsCreateModalOpen(false)} 
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
             
             <form onSubmit={handleCreateQuiz} className="flex-1 flex flex-col min-h-0">
