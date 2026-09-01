@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const isFrontend = process.env.FRONTEND_ONLY === 'true';
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  distDir: isFrontend ? '.next-frontend' : '.next-backend',
+  output: "standalone",
+  ...(isFrontend ? { distDir: '.next-frontend' } : {}),
   async rewrites() {
     if (isFrontend) {
       return [
