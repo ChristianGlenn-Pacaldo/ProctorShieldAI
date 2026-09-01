@@ -32,7 +32,7 @@ export async function POST() {
       plan = await prisma.subscriptionPlan.create({
         data: {
           planName: "Premium Monthly",
-          yearlyPrice: 50.0, // Monthly price
+          yearlyPrice: 500.0, // Monthly price ₱500.00
           features: "AI Quiz Generation, Live Monitoring, Evidence Replay, AI Reports, Unlimited Quizzes",
           durationDays: 30,
         },
@@ -59,7 +59,7 @@ export async function POST() {
     await prisma.payment.create({
       data: {
         subscriptionId: subscription.id,
-        amount: 50.0, // 50 PHP for monthly
+        amount: 500.0, // ₱500.00 for monthly
         paymentMethod: "gcash",
         paymentStatus: "completed",
         transactionReference: `MANUAL-${session.userId.slice(0, 8)}-${Date.now()}`,
