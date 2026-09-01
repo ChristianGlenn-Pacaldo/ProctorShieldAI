@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
             }
           }))
         } : undefined
-      },
+      } as any,
     });
 
     // Log activity
