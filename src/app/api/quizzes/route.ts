@@ -182,12 +182,12 @@ export async function POST(req: NextRequest) {
         totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
         passingScore: passingScore || 50,
         quizStatus: "draft",
+        quizType: isGamified !== false ? "gamified" : "standard",
         shuffleQuestions: shuffleQuestions || false,
-        isGamified: isGamified !== undefined ? Boolean(isGamified) : true,
         questions: validQuestions.length > 0 ? {
           create: validQuestions,
         } : undefined
-      } as any,
+      },
     });
 
     // Log activity
