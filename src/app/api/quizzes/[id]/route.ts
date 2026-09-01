@@ -104,6 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         passingScore: quiz.passingScore,
         shuffleQuestions: quiz.shuffleQuestions,
         quizStatus: quiz.quizStatus,
+        teacherId: quiz.teacherId,
         subject: quiz.subject,
       },
       questions: safeQuestions.map(q => ({

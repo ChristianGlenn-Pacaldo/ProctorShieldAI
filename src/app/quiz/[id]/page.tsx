@@ -386,9 +386,14 @@ export default function QuizRoom() {
 
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
-    const video = mobileVideoRef.current || videoRef.current;
+    const video = (videoRef.current && videoRef.current.videoWidth > 0)
+      ? videoRef.current
+      : (mobileVideoRef.current && mobileVideoRef.current.videoWidth > 0)
+      ? mobileVideoRef.current
+      : videoRef.current || mobileVideoRef.current;
+
     if (!video) return null;
-    if (video.readyState < 2 && video.videoWidth === 0) return null;
+    if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) return null;
 
     let canvas = canvasRef.current;
     if (!canvas) {
@@ -397,13 +402,13 @@ export default function QuizRoom() {
 
     const w = video.videoWidth || 640;
     const h = video.videoHeight || 480;
-    canvas.width = Math.min(w, 640);
-    canvas.height = Math.min(h, 480);
+    canvas.width = Math.min(w, 480);
+    canvas.height = Math.min(h, 360);
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     try {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.70);
+      return canvas.toDataURL("image/jpeg", 0.65);
     } catch {
       return null;
     }
@@ -593,7 +598,8 @@ export default function QuizRoom() {
           body: JSON.stringify({
             quizId: parseInt(quizId),
             teacherId: quiz?.teacherId,
-            studentQuizId: studentQuizId,
+            studentQuizId: studentQuizIdRef.current,
+            quizTitle: quiz?.title || "Quiz",
             snapshot: snap,
           }),
         });
@@ -603,8 +609,14 @@ export default function QuizRoom() {
     startMedia()
       .then(async ({ stream, audioActive }) => {
         mediaStreamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        if (mobileVideoRef.current) mobileVideoRef.current.srcObject = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+        if (mobileVideoRef.current) {
+          mobileVideoRef.current.srcObject = stream;
+          mobileVideoRef.current.play().catch(() => {});
+        }
         setCameraActive(true);
 
         setTimeout(() => notifyTeacherJoined(), 1500);

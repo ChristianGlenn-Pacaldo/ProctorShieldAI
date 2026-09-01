@@ -19,15 +19,20 @@ interface Feed {
 }
 
 function StudentVideoFeed({ feed }: { feed: Feed }) {
+  const [imgError, setImgError] = useState(false);
+  const hasValidSnapshot = Boolean(feed.snapshot && feed.snapshot.startsWith("data:image/") && !imgError);
+
   return (
     <div className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}>
       <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
         {/* Live 1-Second Snapshot Stream */}
-        {feed.snapshot ? (
+        {hasValidSnapshot ? (
           <img 
-            src={feed.snapshot} 
+            key={feed.snapshot?.slice(-20)}
+            src={feed.snapshot!} 
             alt={feed.name} 
-            className="w-full h-full object-cover" 
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-opacity duration-200" 
           />
         ) : (
           <div className="flex flex-col items-center gap-2.5 px-4 text-center">
@@ -35,14 +40,14 @@ function StudentVideoFeed({ feed }: { feed: Feed }) {
               {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
             <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
-              In Exam Lobby (Waiting to Start)
+              {feed.snapshot ? "Capturing AI Snapshot..." : "In Exam Lobby (Waiting to Start)"}
             </span>
           </div>
         )}
 
         {/* Top-Left Live Indicator Badge */}
         <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[10px] font-extrabold border border-white/10 shadow-md">
-          {feed.snapshot ? (
+          {hasValidSnapshot ? (
             <>
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
               <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT (1s)</span>
