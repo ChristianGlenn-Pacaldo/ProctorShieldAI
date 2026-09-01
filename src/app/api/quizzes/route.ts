@@ -134,46 +134,72 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Generate random 4-digit access code (e.g. PS-1234)
-    const accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Generate unique 4-digit access code (e.g. PS-1234)
+    let accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+    let codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
+    while (codeExists) {
+      accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+      codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
+    }
+
+    // Filter and sanitize questions and choices
+    const validQuestions = Array.isArray(questions)
+      ? questions
+          .filter((q: any) => q && q.questionText && String(q.questionText).trim() !== "")
+          .map((q: any) => {
+            const rawChoices = Array.isArray(q.choices) ? q.choices : [];
+            const validChoices = rawChoices
+              .filter((c: any) => c && c.choiceText && String(c.choiceText).trim() !== "")
+              .map((c: any) => ({
+                choiceText: String(c.choiceText).trim(),
+                isCorrect: Boolean(c.isCorrect),
+              }));
+
+            // Ensure at least one choice is marked correct
+            if (validChoices.length > 0 && !validChoices.some((c: any) => c.isCorrect)) {
+              validChoices[0].isCorrect = true;
+            }
+
+            return {
+              questionText: String(q.questionText).trim(),
+              questionType: q.questionType || "multiple_choice",
+              points: Number(q.points) || 1,
+              choices: {
+                create: validChoices,
+              },
+            };
+          })
+      : [];
 
     const quiz = await prisma.quiz.create({
       data: {
         teacherId: session.userId,
         subjectId: subject.id,
-        title,
-        description,
+        title: title.trim(),
+        description: description ? description.trim() : null,
         accessCode,
         duration: duration || 60,
-        totalQuestions: totalQuestions || (questions ? questions.length : 10),
+        totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
         passingScore: passingScore || 50,
         quizStatus: "draft",
         shuffleQuestions: shuffleQuestions || false,
         isGamified: isGamified !== undefined ? Boolean(isGamified) : true,
-        questions: questions && questions.length > 0 ? {
-          create: questions.map((q: any) => ({
-            questionText: q.questionText,
-            questionType: q.questionType || "multiple_choice",
-            points: q.points || 1,
-            choices: {
-              create: q.choices.map((c: any) => ({
-                choiceText: c.choiceText,
-                isCorrect: c.isCorrect || false
-              }))
-            }
-          }))
+        questions: validQuestions.length > 0 ? {
+          create: validQuestions,
         } : undefined
       } as any,
     });
 
     // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        activity: `Created quiz: ${title}`,
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
-    });
+    try {
+      await prisma.activityLog.create({
+        data: {
+          userId: session.userId,
+          activity: `Created quiz: ${title}`,
+          ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+        },
+      });
+    } catch {}
 
     // Broadcast quiz creation to admin
     try {
@@ -191,8 +217,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, quiz }, { status: 201 });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Create quiz error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Failed to create quiz" }, { status: 500 });
   }
 }
