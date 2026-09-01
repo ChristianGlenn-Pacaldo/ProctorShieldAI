@@ -409,12 +409,33 @@ export default function QuizRoom() {
     }
   }, []);
 
+  // Stable refs for exam state
+  const answersStateRef = useRef<Record<number, number>>({});
+  answersStateRef.current = answersState;
+  const xpRef = useRef(xp);
+  xpRef.current = xp;
+  const streakRef = useRef(streak);
+  streakRef.current = streak;
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const studentQuizIdRef = useRef(studentQuizId);
+  studentQuizIdRef.current = studentQuizId;
+  const violationCountStateRef = useRef(violationCount);
+  violationCountStateRef.current = violationCount;
+
   // ── Submit quiz to backend ────────────────────────────
   const submitQuiz = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const payloadAnswers = Object.entries(answersState).map(([qId, cId]) => ({
+      const currentAnswers = answersStateRef.current;
+      const currentXp = xpRef.current;
+      const currentStreak = streakRef.current;
+      const currentQuestions = questionsRef.current;
+      const currentStudentQuizId = studentQuizIdRef.current;
+      const currentViolations = violationCountStateRef.current;
+
+      const payloadAnswers = Object.entries(currentAnswers).map(([qId, cId]) => ({
         questionId: parseInt(qId),
         choiceId: cId
       }));
@@ -425,9 +446,9 @@ export default function QuizRoom() {
         body: JSON.stringify({
           quizId: parseInt(quizId),
           answers: payloadAnswers,
-          studentQuizId: studentQuizId,
-          xpEarned: xp,
-          streakMax: streak,
+          studentQuizId: currentStudentQuizId,
+          xpEarned: currentXp,
+          streakMax: currentStreak,
         })
       });
 
@@ -435,11 +456,11 @@ export default function QuizRoom() {
       if (res.ok) {
         playTone([523, 659, 783, 1046, 1318], "triangle", 0.25);
         setQuizSubmittedResult({
-          score: data.score || Object.keys(answersState).length * 10,
-          total: questions.length * 10,
-          xp: xp,
-          streak: streak,
-          violations: violationCount,
+          score: data.score || Object.keys(currentAnswers).length * 10,
+          total: currentQuestions.length * 10,
+          xp: currentXp,
+          streak: currentStreak,
+          violations: currentViolations,
         });
       } else {
         alert(data.error || "Submission failed");
@@ -449,7 +470,10 @@ export default function QuizRoom() {
       alert("Network error submitting quiz");
       setIsSubmitting(false);
     }
-  }, [isSubmitting, answersState, quizId, studentQuizId, xp, streak, questions.length, violationCount, playTone]);
+  }, [isSubmitting, quizId, playTone]);
+
+  const submitQuizRef = useRef(submitQuiz);
+  submitQuizRef.current = submitQuiz;
 
   // ── Report Violation to Backend ───────────────────────
   const reportViolation = useCallback(async (type: string) => {
@@ -468,7 +492,7 @@ export default function QuizRoom() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId: parseInt(quizId),
-          studentQuizId: studentQuizId,
+          studentQuizId: studentQuizIdRef.current,
           violationType: type,
           confidenceScore: 92,
           screenshot: base64Img,
@@ -485,7 +509,7 @@ export default function QuizRoom() {
           isFinal: true,
         });
         setTimeout(() => {
-          submitQuiz();
+          submitQuizRef.current();
         }, 3000);
       } else {
         isAlertingRef.current = true;
@@ -502,7 +526,10 @@ export default function QuizRoom() {
         isReportingRef.current = false;
       }, 2500);
     }
-  }, [quizId, studentQuizId, captureSnapshot, submitQuiz, playTone]);
+  }, [quizId, captureSnapshot, playTone]);
+
+  const reportViolationRef = useRef(reportViolation);
+  reportViolationRef.current = reportViolation;
 
   // ── Notify Teacher on Student Joining ─────────────────
   const notifyTeacherJoined = useCallback(async () => {
@@ -894,9 +921,6 @@ export default function QuizRoom() {
       if (graceTimer) clearTimeout(graceTimer);
       if (tabSwitchTimer) clearTimeout(tabSwitchTimer);
       if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("copy", preventCopy);
@@ -904,7 +928,7 @@ export default function QuizRoom() {
       document.removeEventListener("contextmenu", preventContextMenu);
       document.removeEventListener("keydown", preventShortcuts);
     };
-  }, [hasStarted, reportViolation]);
+  }, [hasStarted]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
