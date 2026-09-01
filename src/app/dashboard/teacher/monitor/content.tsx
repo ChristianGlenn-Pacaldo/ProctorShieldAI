@@ -18,12 +18,15 @@ interface Feed {
   snapshot: string | null;
 }
 
-function StudentVideoFeed({ feed }: { feed: Feed }) {
+function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
   const [imgError, setImgError] = useState(false);
   const hasValidSnapshot = Boolean(feed.snapshot && feed.snapshot.startsWith("data:image/") && !imgError);
 
   return (
-    <div className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}>
+    <div
+      onClick={onClick}
+      className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}
+    >
       <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
         {/* Live 1-Second Snapshot Stream */}
         {hasValidSnapshot ? (
@@ -89,6 +92,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   const [totalViolations, setTotalViolations] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
+  const [selectedStudentModal, setSelectedStudentModal] = useState<Feed | null>(null);
 
   // Subscription gating
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -147,11 +151,10 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
+      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
     );
 
-    const teacherChannel = pusher.subscribe(`teacher-${teacherId}`);
-    const broadcastChannel = pusher.subscribe("teacher-monitor");
+    const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
 
     // Real-Time 1-Second Snapshot Receiver
     const handleLiveSnapshot = (data: any) => {
@@ -193,7 +196,6 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     };
 
     teacherChannel.bind("live-snapshot", handleLiveSnapshot);
-    broadcastChannel.bind("live-snapshot", handleLiveSnapshot);
 
     teacherChannel.bind("late-join-request", (data: any) => {
       setPendingApprovals((prev) => {
@@ -297,8 +299,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     });
 
     return () => {
-      pusher.unsubscribe(`teacher-${teacherId}`);
-      pusher.unsubscribe("teacher-monitor");
+      pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
   }, [teacherId]);
@@ -316,7 +317,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
         if (snapshots.length > 0) {
           setFeeds((prev) => {
-            let updated = [...prev];
+            const updated = [...prev];
 
             // Single Student Direct Bind Guarantee
             if (updated.length === 1 && snapshots.length === 1 && snapshots[0].snapshot) {
@@ -520,12 +521,110 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
               </div>
             ) : (
               feeds.map((f) => (
-                <StudentVideoFeed key={f.id} feed={f} />
+                <StudentVideoFeed
+                  key={f.id}
+                  feed={f}
+                  onClick={() => setSelectedStudentModal(f)}
+                />
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* LIVE STUDENT INSPECTOR MODAL */}
+      {selectedStudentModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedStudentModal(null);
+          }}
+        >
+          <div
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/30 flex items-center justify-center text-indigo-500 font-bold text-xs">
+                  {selectedStudentModal.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--ink)] leading-none">{selectedStudentModal.name}</h3>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">{selectedStudentModal.quizTitle}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedStudentModal(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 overflow-y-auto">
+              {/* Snapshot View */}
+              <div className="relative rounded-2xl overflow-hidden border-2 border-[var(--border)] bg-slate-950 aspect-[4/3] flex items-center justify-center shadow-lg">
+                {selectedStudentModal.snapshot && selectedStudentModal.snapshot.startsWith("data:image/") ? (
+                  <img
+                    src={selectedStudentModal.snapshot}
+                    alt={selectedStudentModal.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <Camera className="w-10 h-10 text-slate-500 mb-1 opacity-50" />
+                    <p className="text-xs font-bold text-slate-300">Live Snapshot Initializing</p>
+                    <p className="text-[11px] text-slate-500">Waiting for 1-second camera sync...</p>
+                  </div>
+                )}
+
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 bg-black/85 backdrop-blur-md rounded-full text-[10px] font-extrabold border border-white/10 text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>1s AI SURVEILLANCE FEED</span>
+                </div>
+              </div>
+
+              {/* Status & Violation Breakdown */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 bg-[var(--surface2)] border border-[var(--border)] rounded-xl">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Status</div>
+                  <div className="text-xs font-bold text-emerald-500">{selectedStudentModal.status}</div>
+                </div>
+                <div className="p-3.5 bg-[var(--surface2)] border border-[var(--border)] rounded-xl">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Violations</div>
+                  <div className={`text-xs font-bold ${selectedStudentModal.violationCount > 0 ? "text-red-500" : "text-emerald-500"}`}>
+                    {selectedStudentModal.violationCount}/3 Violations
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert(`Security alert sent to ${selectedStudentModal.name}'s active exam screen.`);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Send Warning Pop-Up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentModal(null)}
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,31 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pusherServer } from "@/lib/pusher";
 import { getSession } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
-// POST /api/live/webrtc — Relay WebRTC signaling (offers, answers, ICE candidates)
+const SIGNAL_TYPES = new Set([
+  "request-stream",
+  "teacher-ready",
+  "student-ready",
+  "sdp-offer",
+  "sdp-answer",
+  "ice-candidate",
+]);
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    const { targetUserId, targetChannel, signalType, data } = await req.json();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!targetChannel || !signalType || !data) {
+    const { targetChannel, signalType, data } = await req.json();
+    const quizId = Number(data?.quizId);
+    if (
+      typeof targetChannel !== "string" ||
+      !SIGNAL_TYPES.has(signalType) ||
+      !Number.isInteger(quizId) ||
+      JSON.stringify(data).length > 100_000
+    ) {
       return NextResponse.json({ error: "Invalid signaling payload" }, { status: 400 });
     }
 
-    const senderId = session?.userId ? String(session.userId) : data.studentId || "unknown";
-    const senderName = session?.fullName || data.studentName || "User";
-    const senderRole = session?.role || "user";
+    let allowed = false;
+    if (session.role === "student") {
+      const enrollment = await prisma.studentQuiz.findFirst({
+        where: { studentId: session.userId, quizId },
+        select: { quiz: { select: { teacherId: true } } },
+      });
+      allowed = Boolean(
+        enrollment && targetChannel === `private-teacher-${enrollment.quiz.teacherId}`
+      );
+    } else if (session.role === "teacher") {
+      const target = /^private-student-(.+)$/.exec(targetChannel)?.[1];
+      if (target) {
+        allowed = Boolean(await prisma.studentQuiz.findFirst({
+          where: { studentId: target, quizId, quiz: { teacherId: session.userId } },
+          select: { id: true },
+        }));
+      }
+    }
 
-    // Trigger Pusher event on target channel
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     await pusherServer.trigger(targetChannel, "webrtc-signal", {
-      senderId,
-      senderName,
-      senderRole,
+      senderId: session.userId,
+      senderName: session.fullName,
+      senderRole: session.role,
       signalType,
       data,
       timestamp: new Date().toISOString(),
     });
-
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error("WebRTC signaling error:", error);

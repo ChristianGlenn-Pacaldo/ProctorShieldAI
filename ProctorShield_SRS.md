@@ -437,14 +437,8 @@ The database uses PostgreSQL and Prisma ORM, defined in [schema.prisma](file:///
 
 ## 26. Appendices
 
-### Appendix A: Pre-Configured Demo Accounts
-The following test credentials can be generated using [seed.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/prisma/seed.ts):
-
-| System Role | Username / Email | Password | Access Privileges |
-| :--- | :--- | :--- | :--- |
-| **System Admin** | `admin@proctorshield.ai` | `admin123` | Total platform access; logs; user suspensions. |
-| **Teacher** | `teacher@demo.com` | `teacher123` | Exam creation; live monitoring; AI reports. |
-| **Student** | `student@demo.com` | `student123` | Join exams; submit answers; view grades. |
+### Appendix A: Seeded Accounts
+Seeded credentials are supplied through environment variables. The source code intentionally contains no default passwords. See `README.md` and `.env.example`.
 
 ---
 

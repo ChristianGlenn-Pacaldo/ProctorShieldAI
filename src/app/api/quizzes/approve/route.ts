@@ -28,17 +28,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Student is not pending approval" }, { status: 400 });
     }
 
-    const newStatus = action === "accept" ? "enrolled" : "rejected";
+    const newStatus = action === "accept" ? "in_progress" : "rejected";
 
     await prisma.studentQuiz.update({
       where: { id: studentQuizId },
-      data: { quizStatus: newStatus },
+      data: {
+        quizStatus: newStatus,
+        startTime: action === "accept" ? new Date() : studentQuiz.startTime,
+      },
     });
 
     // Notify the specific student
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`student-${studentQuiz.studentId}`, "approval-status", {
+      await pusherServer.trigger(`private-student-${studentQuiz.studentId}`, "approval-status", {
         status: newStatus,
         quizId: studentQuiz.quizId,
       });

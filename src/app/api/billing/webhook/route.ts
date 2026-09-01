@@ -1,124 +1,136 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import crypto from "crypto";
+import { verifyPayMongoSignature } from "@/lib/paymongo";
+import { parsePaidCheckout, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
 
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get("paymongo-signature");
-    
-    // In production, we should verify the webhook signature.
-    // For MVP, we will just parse the body and process if secret is present.
-    if (!process.env.PAYMONGO_SECRET_KEY) {
-      return NextResponse.json({ error: "Config missing" }, { status: 500 });
-    }
+    if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    if (!webhookSecret) return NextResponse.json({ error: "Config missing" }, { status: 500 });
+    const signatureMode = verifyPayMongoSignature(rawBody, signature, webhookSecret);
+    if (!signatureMode) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 
-    let event;
+    let body: unknown;
     try {
-      event = JSON.parse(rawBody);
-    } catch (e) {
+      body = JSON.parse(rawBody);
+    } catch {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
+    const event = parsePaymongoEventEnvelope(body);
+    if (!event) return NextResponse.json({ error: "Invalid event" }, { status: 400 });
+    if ((event.livemode && signatureMode !== "li") || (!event.livemode && signatureMode !== "te")) {
+      return NextResponse.json({ error: "Signature mode mismatch" }, { status: 401 });
+    }
 
-    if (event?.data?.attributes?.type === "checkout_session.payment.paid") {
-      const checkoutSession = event.data.attributes.data.attributes;
-      const metadata = checkoutSession.metadata;
-
-      if (!metadata || !metadata.userId || !metadata.planId) {
-        console.error("Webhook missing metadata:", metadata);
-        return NextResponse.json({ success: true, message: "Ignored (no metadata)" });
+    if (event.type === "checkout_session.payment.paid") {
+      const paid = parsePaidCheckout(event.resource);
+      if (!paid) return NextResponse.json({ success: true, message: "Ignored invalid payment data" });
+      const [user, plan] = await Promise.all([
+        prisma.user.findFirst({ where: { id: paid.userId, role: { roleName: "teacher" } } }),
+        prisma.subscriptionPlan.findUnique({ where: { id: paid.planId } }),
+      ]);
+      if (!user || !plan || plan.yearlyPrice === null) {
+        console.error("PayMongo webhook referenced an invalid user or plan", event.id);
+        return NextResponse.json({ success: true, message: "Ignored invalid metadata" });
+      }
+      const expectedCentavos = Math.round(Number(plan.yearlyPrice) * 100);
+      if (paid.amountCentavos !== expectedCentavos) {
+        console.error("PayMongo amount mismatch", { eventId: event.id, expectedCentavos, received: paid.amountCentavos });
+        return NextResponse.json({ success: true, message: "Ignored amount mismatch" });
       }
 
-      const userId = metadata.userId;
-      const planId = parseInt(metadata.planId);
-      const referenceNumber = checkoutSession.reference_number || event.data.id;
-      const amountPaid = (checkoutSession.payments?.[0]?.attributes?.amount || checkoutSession.line_items?.[0]?.amount) / 100 || 500.00;
-      const paymentMethod = checkoutSession.payments?.[0]?.attributes?.source?.type || "paymongo";
-
-      // Check if this payment was already processed
-      const existingPayment = await prisma.payment.findUnique({
-        where: { transactionReference: referenceNumber }
-      });
-
-      if (existingPayment) {
-        return NextResponse.json({ success: true, message: "Already processed" });
-      }
-
-      const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
-      if (!plan) {
-        console.error("Webhook plan not found:", planId);
-        return NextResponse.json({ error: "Plan not found" }, { status: 404 });
-      }
-
-      const durationDays = plan.durationDays || 30;
-
-      // Wrap in a transaction
-      await prisma.$transaction(async (tx) => {
-        // 1. Check if user already has an active subscription
-        let userSub = await tx.userSubscription.findFirst({
-          where: { userId: userId, planId: planId }
-        });
-
-        const now = new Date();
-        let newEndDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
-
-        if (userSub) {
-          // If active, extend the end date
-          if (userSub.endDate > now) {
-            newEndDate = new Date(userSub.endDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
-          }
-          
-          userSub = await tx.userSubscription.update({
-            where: { id: userSub.id },
-            data: {
-              endDate: newEndDate,
-              paymentStatus: "paid",
-              subscriptionStatus: "active"
-            }
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.webhookEvent.create({ data: { provider: "paymongo", eventId: event.id, eventType: event.type } });
+          const now = new Date();
+          const durationDays = plan.durationDays ?? 30;
+          const existing = await tx.userSubscription.findUnique({
+            where: { userId_planId: { userId: paid.userId, planId: paid.planId } },
           });
-        } else {
-          // Create new subscription
-          userSub = await tx.userSubscription.create({
-            data: {
-              userId: userId,
-              planId: planId,
+          const baseDate = existing && existing.endDate > now ? existing.endDate : now;
+          const endDate = new Date(baseDate.getTime() + durationDays * 86_400_000);
+          const subscription = await tx.userSubscription.upsert({
+            where: { userId_planId: { userId: paid.userId, planId: paid.planId } },
+            update: { endDate, paymentStatus: "paid", subscriptionStatus: "active" },
+            create: {
+              userId: paid.userId,
+              planId: paid.planId,
               startDate: now,
-              endDate: newEndDate,
+              endDate,
               paymentStatus: "paid",
-              subscriptionStatus: "active"
-            }
+              subscriptionStatus: "active",
+            },
           });
-        }
-
-        // 2. Record Payment
-        await tx.payment.create({
-          data: {
-            subscriptionId: userSub.id,
-            amount: amountPaid,
-            paymentMethod: paymentMethod,
-            paymentStatus: "paid",
-            transactionReference: referenceNumber,
-            paidAt: now
-          }
+          await tx.payment.create({
+            data: {
+              subscriptionId: subscription.id,
+              amount: paid.amountCentavos / 100,
+              paymentMethod: paid.paymentMethod,
+              paymentStatus: "paid",
+              transactionReference: paid.reference,
+              providerPaymentId: paid.providerPaymentId,
+              paidAt: now,
+            },
+          });
+          await tx.activityLog.create({
+            data: {
+              userId: paid.userId,
+              activity: `Subscribed to ${plan.planName} for ${durationDays} days via ${paid.paymentMethod}`,
+              ipAddress: "paymongo-webhook",
+            },
+          });
         });
-        
-        // 3. Log Activity
-        await tx.activityLog.create({
-          data: {
-            userId: userId,
-            activity: `Subscribed to AI Pro for ${durationDays} days via ${paymentMethod}`,
-            ipAddress: "webhook"
-          }
-        });
-      });
-
-      console.log(`Successfully activated subscription for user ${userId}`);
+      } catch (error) {
+        if (isUniqueConstraintError(error)) return NextResponse.json({ success: true, message: "Already processed" });
+        throw error;
+      }
       return NextResponse.json({ success: true });
     }
 
-    // Ignore other events
-    return NextResponse.json({ success: true, message: "Event ignored" });
+    if (event.type === "payment.refunded" || event.type === "payment.refund.updated") {
+      const refund = parseRefundedPayment(event.resource);
+      if (!refund) return NextResponse.json({ success: true, message: "Ignored invalid refund data" });
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.webhookEvent.create({ data: { provider: "paymongo", eventId: event.id, eventType: event.type } });
+          const payment = await tx.payment.findUnique({
+            where: { providerPaymentId: refund.providerPaymentId },
+            include: { subscription: true },
+          });
+          if (!payment) throw new Error("Refunded PayMongo payment was not found");
+          const refundedAmount = refund.refundedCentavos / 100;
+          const fullyRefunded = refundedAmount >= Number(payment.amount);
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              refundedAmount,
+              refundedAt: new Date(),
+              paymentStatus: fullyRefunded ? "refunded" : "partially_refunded",
+            },
+          });
+          if (fullyRefunded) {
+            await tx.userSubscription.update({
+              where: { id: payment.subscriptionId },
+              data: { subscriptionStatus: "cancelled", paymentStatus: "refunded", endDate: new Date() },
+            });
+          }
+        });
+      } catch (error) {
+        if (isUniqueConstraintError(error)) return NextResponse.json({ success: true, message: "Already processed" });
+        throw error;
+      }
+      return NextResponse.json({ success: true });
+    }
 
+    return NextResponse.json({ success: true, message: "Event ignored" });
   } catch (error: unknown) {
     console.error("Webhook error:", error);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });

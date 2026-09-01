@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Broadcast lightweight "student-joined" event to the teacher's channel
     // NO snapshot data here — snapshots go through /api/live/snapshot instead
-    const channelName = `teacher-${quiz.teacherId}`;
+    const channelName = `private-teacher-${quiz.teacherId}`;
 
     await pusherServer.trigger(channelName, "student-joined", {
       studentId: session.userId,
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     // Broadcast student-joined event to admin
     try {
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "quiz-join",
         userId: session.userId,
         fullName: session.fullName,

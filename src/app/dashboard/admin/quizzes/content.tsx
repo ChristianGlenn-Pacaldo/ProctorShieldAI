@@ -67,20 +67,20 @@ export default function QuizzesContent() {
 
     const pusher = new PusherClient(pusherKey, {
       cluster: pusherCluster,
+      authEndpoint: "/api/pusher/auth",
     });
 
-    const channel = pusher.subscribe("admin-dashboard");
+    const channel = pusher.subscribe("private-admin-dashboard");
 
     // Re-fetch quizzes when new quizzes are created or completed
     channel.bind("activity", (data: any) => {
-      console.log("Admin Quizzes page received real-time activity:", data);
       if (data.type === "quiz-created" || data.type === "quiz-submit" || data.type === "quiz-join") {
         fetchQuizzes(true);
       }
     });
 
     return () => {
-      pusher.unsubscribe("admin-dashboard");
+      pusher.unsubscribe("private-admin-dashboard");
       pusher.disconnect();
     };
   }, []);

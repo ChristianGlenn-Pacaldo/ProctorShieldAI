@@ -1,0 +1,44 @@
+name: Quality gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://user:password@localhost:5432/proctorshield
+      NEXTAUTH_SECRET: ci-only-secret-that-is-longer-than-thirty-two-characters
+      CRON_SECRET: ci-only-cron-secret-that-is-longer-than-thirty-two-characters
+      NEXT_PUBLIC_APP_URL: https://example.test
+      PUSHER_APP_ID: ci-app
+      NEXT_PUBLIC_PUSHER_KEY: ci-key
+      PUSHER_SECRET: ci-secret
+      NEXT_PUBLIC_PUSHER_CLUSTER: ap1
+      GEMINI_API_KEY: ci-key
+      PAYMONGO_SECRET_KEY: sk_test_ci
+      PAYMONGO_WEBHOOK_SECRET: whsk_test_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma validate
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run lint -- --quiet
+      - run: npx tsc --noEmit --incremental false
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          E2E_WEB_SERVER_COMMAND: "npm run prepare:standalone && node .next/standalone/server.js"

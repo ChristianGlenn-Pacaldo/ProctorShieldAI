@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
+import { consumeRateLimitGroup, getClientIp, isStrongPassword } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,9 +15,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (password.length < 6) {
+    if (!isStrongPassword(password)) {
       return NextResponse.json(
-        { success: false, message: "Password must be at least 6 characters" },
+        { success: false, message: "Password must be 10-128 characters and contain letters and numbers" },
         { status: 400 }
       );
     }
@@ -28,9 +29,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const rateLimit = await consumeRateLimitGroup(
+      [`register:ip:${getClientIp(req)}`, `register:account:${normalizedEmail}`],
+      5,
+      60 * 60 * 1000
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many registration attempts." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
     const existing = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
     });
 
     if (existing) {
@@ -41,27 +54,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve role ID (default to "student")
-    const roleName = role || "student";
-    
-    if (roleName.toLowerCase() === "admin") {
+    const roleName = String(role || "student").toLowerCase();
+    if (!['student', 'teacher'].includes(roleName)) {
       return NextResponse.json(
         { success: false, message: "Admin registration is restricted. Contact system administrator." },
         { status: 403 }
       );
     }
 
-    let roleRecord = await prisma.role.findUnique({
+    const roleRecord = await prisma.role.findUnique({
       where: { roleName },
     });
 
     if (!roleRecord) {
-      // Auto-create role if missing
-      roleRecord = await prisma.role.create({
-        data: {
-          roleName: roleName.toLowerCase(),
-          description: `Auto-created ${roleName} role`
-        }
-      });
+      return NextResponse.json(
+        { success: false, message: "Account role is not configured." },
+        { status: 500 }
+      );
     }
 
     // Hash password
@@ -71,7 +80,7 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         fullName: fullName.trim(),
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         password: hashedPassword,
         roleId: roleRecord.id,
         status: "active",
@@ -99,7 +108,7 @@ export async function POST(req: NextRequest) {
     // Broadcast activity to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "register",
         userId: user.id,
         fullName: user.fullName,

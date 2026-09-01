@@ -364,7 +364,7 @@ The visual proctoring system relies on a serverless proxy pipeline routing base6
 ```
 
 #### The Prompt Design
-The payload is routed to model `gemini-2.0-flash` in [route.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/src/app/api/live/analyze/route.ts) with a system prompt instructing the model to return a structured JSON array containing only the following violation keys:
+The quiz client detects supported proctoring events locally and sends validated events to the authenticated `/api/live/violation` endpoint:
 *   `no_face`: No face is present in the frame.
 *   `multiple_faces`: Multiple people are visible.
 *   `looking_away`: Gaze is significantly turned off-screen.
@@ -464,7 +464,7 @@ Teachers can use the exam generation utility in [create/route.ts](file:///c:/Use
 *   **Database Archiving:** Monthly scripts migrate old logs and violation records older than 90 days to cold storage, keeping database costs and size under control.
 *   **API Token Rotation:** Rotate Gemini API keys, NextAuth session keys, and Pusher credentials every 90 days.
 *   **Dependency Management:** Monitor npm package updates for next, react, and tailwind to install security patches.
-*   **Error Monitoring:** Monitor error rates on endpoints like `/api/live/analyze` to detect rate limiting or service degradation issues.
+*   **Error Monitoring:** Monitor error rates on endpoints like `/api/live/violation` to detect rate limiting or service degradation issues.
 
 ---
 
@@ -527,14 +527,8 @@ This budget outlines estimated monthly operational costs for running ProctorShie
 
 ---
 
-### Appendix A: Pre-Configured Demo Accounts
-The following test credentials can be generated using [seed.ts](file:///c:/Users/roron/OneDrive/Desktop/proctorshieldai/prisma/seed.ts):
-
-| System Role | Username / Email | Password | Access Privileges |
-| :--- | :--- | :--- | :--- |
-| **System Admin** | `admin@proctorshield.ai` | `admin123` | Total platform access; logs; user suspensions. |
-| **Teacher** | `teacher@demo.com` | `teacher123` | Exam creation; live monitoring; AI reports. |
-| **Student** | `student@demo.com` | `student123` | Join exams; submit answers; view grades. |
+### Appendix A: Seeded Accounts
+Seeded credentials are supplied through environment variables. The source code intentionally contains no default passwords. See `README.md` and `.env.example`.
 
 ---
 

@@ -6,8 +6,7 @@ import { generateGeminiWithFallback } from "@/lib/gemini";
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    // System or Teacher can request verdict. For this MVP, let's allow teachers to trigger it or students when submitting
-    if (!session) {
+    if (!session || (session.role !== "teacher" && session.role !== "admin")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -32,6 +31,10 @@ export async function POST(req: NextRequest) {
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
+    }
+
+    if (session.role === "teacher" && studentQuiz.quiz.teacherId !== session.userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Prepare the violation summary for the AI
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let verdictData = JSON.parse(text);
+    const verdictData = JSON.parse(text);
 
     // Save the verdict in the database
     const aiAnalysis = await prisma.aiAnalysis.upsert({

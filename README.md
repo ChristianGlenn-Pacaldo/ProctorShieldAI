@@ -1,71 +1,68 @@
-# 🛡️ ProctorShield AI — AI-Powered Proctoring System
+# ProctorShield AI
 
-ProctorShield AI is a modern Next.js application that provides real-time AI-powered exam monitoring, webcam snapshot logs, and automated cheating analysis reports using Gemini Vision AI.
+ProctorShield AI is a Next.js proctoring application with live exam monitoring, webcam evidence, automated analysis, role-based dashboards, and PayMongo subscriptions.
 
----
+## Local setup
 
-## 🚀 Getting Started (Classmate Setup Guide)
+Requirements: Node.js 24, PostgreSQL, Redis, private S3-compatible object storage, and the service credentials listed in `.env.example`. Docker Compose includes Redis and private MinIO services for a complete local stack.
 
-Follow these steps to set up and run the project locally on your machine:
-
-### 1. Clone & Install Dependencies
-First, clone the repository and navigate into the project directory:
 ```bash
-git clone https://github.com/ChristianGlenn-Pacaldo/ProctorShieldAI.git
-cd ProctorShieldAI
-```
-
-Install the required npm packages:
-```bash
-npm install
-```
-
-### 2. Configure Environment Variables
-Environment files (`.env`) are ignored by Git for security. You must create your own:
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-   *(On Windows Command Prompt, run: `copy .env.example .env`)*
-   *(On Windows PowerShell, run: `copy .env.example .env`)*
-2. Open the new `.env` file and verify the variables.
-3. **Important:** Add a valid Gemini API key to `GEMINI_API_KEY=""`. Get a free key from [Google AI Studio](https://aistudio.google.com/).
-
-### 3. Initialize the Database
-This application uses **Prisma ORM** with **PostgreSQL**. To set up your database schema and create default roles (student, teacher, admin) and demo accounts:
-
-1. Generate the Prisma client:
-   ```bash
-   npx prisma generate
-   ```
-2. Sync the database schema (creates the database tables):
-   ```bash
-   npx prisma db push
-   ```
-3. Seed the database (essential for creating default roles and demo users):
-   ```bash
-   npm run db:seed
-   ```
-
-### 4. Start the Application
-Now you can start the development server:
-```bash
+npm ci
+cp .env.example .env
+npx prisma generate
+npx prisma db push
+npm run db:bootstrap
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
 
----
+Before bootstrapping, configure `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` of at least 14 characters. `db:bootstrap` creates only roles, plans, settings, and the configured administrator.
 
-## 👥 Demo Logins (Created during Seeding)
-Once you seed the database, you can log in immediately using these pre-configured accounts:
+Demo data is explicitly opt-in and must be used only with a disposable development database. Set `SEED_DEMO_DATA=true`, optionally configure `DEMO_STUDENT_PASSWORD` and `DEMO_TEACHER_PASSWORD`, then run `npm run db:seed`. Demo student and teacher passwords have no source-code defaults.
 
-* **Student Portal:**
-  * Email: `student@demo.com`
-  * Password: `student123`
-* **Teacher Portal:**
-  * Email: `teacher@demo.com`
-  * Password: `teacher123`
-* **Admin Portal:**
-  * Email: `admin@proctorshield.ai`
-  * Password: `admin123`
+## Required production configuration
+
+- Use a unique `NEXTAUTH_SECRET` of at least 32 characters. Generate one with `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`.
+- Set `NEXT_PUBLIC_APP_URL` to the public HTTPS origin.
+- Configure the database, Gemini, Google OAuth, Pusher, SMTP, and PayMongo variables in `.env.example`.
+- Configure Redis for shared rate limits and live-snapshot state. Do not use the process-local fallback for a multi-instance production deployment.
+- Configure a private S3-compatible bucket for evidence. Evidence is returned only through the authenticated `/api/evidence/[id]` endpoint; the bucket must never be public.
+- Create a PayMongo webhook for the production URL `/api/billing/webhook` and set its dedicated signing secret as `PAYMONGO_WEBHOOK_SECRET`. A successful redirect never activates a subscription; only a verified webhook does.
+- Do not expose `.env`, commit credentials, or reuse development secrets in production.
+- Back up the database before applying schema changes. Existing duplicate quiz enrollments, answers, or user-plan subscriptions must be resolved before applying the new unique constraints.
+
+PayMongo webhooks process paid checkout sessions idempotently and reconcile successful refunds. Subscribe the endpoint to `checkout_session.payment.paid`, `payment.refunded`, and `payment.refund.updated` when those events are available for the account.
+
+## Scheduled maintenance
+
+Run the following command daily from the deployment scheduler:
+
+```bash
+npm run maintenance
+```
+
+For the standalone container, schedule an authenticated `POST /api/internal/maintenance` request with `Authorization: Bearer <CRON_SECRET>`. `CRON_SECRET` must be a unique value of at least 32 characters.
+
+It expires ended subscriptions, deletes expired OTPs, removes old webhook idempotency records, and enforces the configured evidence-retention window. The default evidence retention is 90 days.
+
+## Verification and deployment
+
+```bash
+npm test
+npm run test:e2e
+npm run lint
+npx tsc --noEmit --incremental false
+npm run build
+npm audit --omit=dev
+npm run preflight
+docker compose up -d --build
+```
+
+The Docker build does not copy `.env` into the image. Supply production secrets through the deployment platform or Compose runtime environment. The `/api/health` readiness endpoint checks PostgreSQL, Redis, and evidence storage, and the container health check uses it.
+
+The repository also includes a GitHub Actions workflow that runs dependency audit, tests, lint errors, type checking, Prisma validation, and the production build for pushes and pull requests.
+
+## Seeded accounts
+
+The production bootstrap creates only required platform records and the administrator specified by environment variables. The separate demo seed creates sample data and rotates seeded demo-user passwords every time it runs. There are intentionally no default account passwords.

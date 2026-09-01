@@ -53,6 +53,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
+    if (session.role === "teacher" && quiz.teacherId !== session.userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     let questions = quiz.questions;
     let studentQuiz: Awaited<ReturnType<typeof prisma.studentQuiz.findFirst>> = null;
 
@@ -159,7 +163,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.quizStatus) {
       try {
         const { pusherServer } = await import("@/lib/pusher");
-        await pusherServer.trigger(`quiz-${quizId}`, "quiz-started", {
+        await pusherServer.trigger(`private-quiz-${quizId}`, "quiz-started", {
           quizId,
           quizStatus: body.quizStatus,
         });
@@ -273,7 +277,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Broadcast quiz deletion to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "quiz-deleted",
         userId: session.userId,
         fullName: session.fullName,

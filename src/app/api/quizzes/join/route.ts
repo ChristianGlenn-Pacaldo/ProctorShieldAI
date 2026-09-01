@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,10 +12,20 @@ export async function POST(req: NextRequest) {
     }
 
     const { accessCode } = await req.json();
-    console.log("DEBUG JOIN ATTEMPT:", { session, accessCode });
 
     if (!accessCode) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
+    }
+    const rateLimit = await consumeRateLimitGroup(
+      [`quiz-join:user:${session.userId}`, `quiz-join:ip:${getClientIp(req)}`],
+      15,
+      15 * 60_000,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many access-code attempts" },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+      );
     }
 
     // Verify the student actually exists in the database (catches stale JWT after db reset)
@@ -32,12 +43,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (!quiz) {
-      console.log("DEBUG JOIN: Quiz not found for code:", accessCode.trim().toUpperCase());
       return NextResponse.json({ error: "Invalid access code. Quiz not found." }, { status: 404 });
     }
     
-    console.log("DEBUG JOIN: Quiz found:", quiz.title);
-
     // We allow joining draft quizzes so they act as a "waiting room"
     // until the teacher formally starts the quiz.
 
@@ -116,7 +124,7 @@ export async function POST(req: NextRequest) {
       const { pusherServer } = await import("@/lib/pusher");
       
       if (isLateJoin) {
-        await pusherServer.trigger(`teacher-${quiz.teacherId}`, "late-join-request", {
+        await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "late-join-request", {
           studentQuizId: studentQuiz.id,
           studentName: session.fullName,
           quizTitle: quiz.title,
@@ -124,7 +132,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await pusherServer.trigger(`user-${quiz.teacherId}`, "notification", {
+      await pusherServer.trigger(`private-user-${quiz.teacherId}`, "notification", {
         id: teacherNotificationId,
         title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
         message: isLateJoin

@@ -1,36 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
+import { consumeRateLimitGroup, getClientIp, hashOtp, isStrongPassword } from "@/lib/security";
 
-// POST /api/auth/reset-password
-// Body: { userId, otpCode, newPassword }
 export async function POST(req: NextRequest) {
   try {
-    const { userId, otpCode, newPassword } = await req.json();
-
-    if (!userId || !otpCode || !newPassword) {
+    const { email, otpCode, newPassword } = await req.json();
+    if (!email || !otpCode || !newPassword) {
       return NextResponse.json(
         { success: false, message: "All fields are required." },
         { status: 400 }
       );
     }
-
-    if (newPassword.length < 6) {
+    if (!isStrongPassword(newPassword)) {
       return NextResponse.json(
-        { success: false, message: "Password must be at least 6 characters." },
+        { success: false, message: "Password must be 10-128 characters and contain letters and numbers." },
         { status: 400 }
       );
     }
+    if (typeof otpCode !== "string" || !/^\d{6}$/.test(otpCode)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid or expired verification code." },
+        { status: 401 }
+      );
+    }
 
-    // Verify OTP
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const rateLimit = await consumeRateLimitGroup(
+      [`reset-password:ip:${getClientIp(req)}`, `reset-password:account:${normalizedEmail}`],
+      8,
+      15 * 60 * 1000
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user || user.status !== "active") {
+      return NextResponse.json(
+        { success: false, message: "Invalid or expired verification code." },
+        { status: 401 }
+      );
+    }
+
     const otpRecord = await prisma.otpCode.findFirst({
       where: {
-        userId,
-        code: otpCode,
+        userId: user.id,
+        code: hashOtp(user.id, otpCode, "password-reset"),
         expiresAt: { gt: new Date() },
       },
+      orderBy: { createdAt: "desc" },
     });
-
     if (!otpRecord) {
       return NextResponse.json(
         { success: false, message: "Invalid or expired verification code." },
@@ -38,23 +61,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Delete OTP so it can't be reused
-    await prisma.otpCode.delete({ where: { id: otpRecord.id } });
-
-    // Hash and update password
     const hashedPassword = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    // Log the activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        activity: "Password reset via forgot password flow",
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
+    await prisma.$transaction(async (tx) => {
+      const consumed = await tx.otpCode.deleteMany({ where: { id: otpRecord.id } });
+      if (consumed.count !== 1) throw new Error("OTP already consumed");
+      await tx.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+      await tx.activityLog.create({
+        data: {
+          userId: user.id,
+          activity: "Password reset via forgot password flow",
+          ipAddress: getClientIp(req),
+        },
+      });
     });
 
     return NextResponse.json({

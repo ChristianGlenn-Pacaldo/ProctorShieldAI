@@ -76,8 +76,8 @@ export default function SettingsContent() {
       showToast("New passwords do not match.", "error");
       return;
     }
-    if (newPassword.length < 6) {
-      showToast("New password must be at least 6 characters.", "error");
+    if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      showToast("New password must be at least 10 characters and contain letters and numbers.", "error");
       return;
     }
     setIsChangingPassword(true);
@@ -188,7 +188,7 @@ export default function SettingsContent() {
                   type={showNew ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min. 6 characters"
+                  placeholder="Min. 10 characters with letters and numbers"
                   className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
                 <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">

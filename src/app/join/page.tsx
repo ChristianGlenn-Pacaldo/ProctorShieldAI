@@ -14,13 +14,6 @@ function JoinContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // Automatically attempt join if code is provided in URL and we hit enter
-  useEffect(() => {
-    if (initialCode) {
-      handleJoinQuiz(initialCode);
-    }
-  }, [initialCode]);
-
   const handleJoinQuiz = async (codeToUse?: string) => {
     const code = codeToUse || joinCode;
     if (!code.trim()) {
@@ -56,6 +49,13 @@ function JoinContent() {
       setIsLoading(false);
     }
   };
+
+  // Automatically attempt join if code is provided in the URL.
+  useEffect(() => {
+    if (initialCode) {
+      handleJoinQuiz(initialCode);
+    }
+  }, [initialCode]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-br from-indigo-950/20 via-[var(--dark-bg)] to-violet-950/20 relative overflow-hidden">

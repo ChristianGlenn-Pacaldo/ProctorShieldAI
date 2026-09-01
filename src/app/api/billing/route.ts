@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
+import { expireSubscriptions } from "@/lib/maintenance";
 
 // GET: Check teacher's current subscription status
 export async function GET() {
@@ -79,13 +81,24 @@ export async function POST(req: NextRequest) {
     }
 
     const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrlValue = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
 
-    if (!PAYMONGO_SECRET_KEY) {
+    if (!PAYMONGO_SECRET_KEY || !appUrlValue) {
       return NextResponse.json(
         { error: "PayMongo is not configured. Please add PAYMONGO_SECRET_KEY to your .env file." },
         { status: 500 }
       );
+    }
+    await expireSubscriptions(session.userId);
+
+    let appUrl: URL;
+    try {
+      appUrl = new URL(appUrlValue);
+    } catch {
+      return NextResponse.json({ error: "Application URL is not configured correctly." }, { status: 500 });
+    }
+    if (process.env.NODE_ENV === "production" && appUrl.protocol !== "https:") {
+      return NextResponse.json({ error: "Production payment redirects require HTTPS." }, { status: 500 });
     }
 
     // Check if already subscribed
@@ -116,13 +129,18 @@ export async function POST(req: NextRequest) {
         },
       });
     }
+    if (plan.yearlyPrice === null) {
+      return NextResponse.json({ error: "Subscription plan price is not configured" }, { status: 500 });
+    }
+    const checkoutAmount = Math.round(Number(plan.yearlyPrice) * 100);
 
     // Create PayMongo checkout session
-    const response = await fetch("https://api.paymongo.com/v2/checkout_sessions", {
+    const response = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
       method: "POST",
       headers: {
         Authorization: "Basic " + Buffer.from(PAYMONGO_SECRET_KEY + ":").toString("base64"),
         "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
       },
       body: JSON.stringify({
         data: {
@@ -131,14 +149,14 @@ export async function POST(req: NextRequest) {
               {
                 name: "ProctorShield AI — Premium Yearly",
                 description: "Full AI proctoring, live monitoring, evidence replay, AI reports, and unlimited quizzes for 1 year.",
-                amount: 50000, // ₱500.00 in centavos
+                amount: checkoutAmount,
                 currency: "PHP",
                 quantity: 1,
               },
             ],
             payment_method_types: ["gcash", "card"],
-            success_url: `${APP_URL}/dashboard/teacher/billing?payment=success`,
-            cancel_url: `${APP_URL}/dashboard/teacher/billing?payment=cancelled`,
+            success_url: new URL("/dashboard/teacher/billing?payment=success", appUrl).toString(),
+            cancel_url: new URL("/dashboard/teacher/billing?payment=cancelled", appUrl).toString(),
             reference_number: `PS-${session.userId.slice(0, 8)}-${Date.now()}`,
             metadata: {
               userId: session.userId,
@@ -154,7 +172,7 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       console.error("PayMongo error:", paymongoData);
       return NextResponse.json(
-        { error: paymongoData?.errors?.[0]?.detail || "Failed to create checkout session" },
+        { error: "Failed to create checkout session" },
         { status: 500 }
       );
     }
@@ -167,8 +185,8 @@ export async function POST(req: NextRequest) {
       checkoutUrl,
       checkoutSessionId,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Billing POST error:", error);
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

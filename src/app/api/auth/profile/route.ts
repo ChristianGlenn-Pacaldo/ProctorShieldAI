@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession, hashPassword, verifyPassword, setSessionCookie } from "@/lib/auth";
+import { isStrongPassword } from "@/lib/security";
 
 // PUT /api/auth/profile — Update full name and/or password
 export async function PUT(req: NextRequest) {
@@ -37,9 +38,9 @@ export async function PUT(req: NextRequest) {
           { status: 400 }
         );
       }
-      if (newPassword.length < 6) {
+      if (!isStrongPassword(newPassword)) {
         return NextResponse.json(
-          { success: false, message: "New password must be at least 6 characters." },
+          { success: false, message: "New password must be 10-128 characters and contain letters and numbers." },
           { status: 400 }
         );
       }

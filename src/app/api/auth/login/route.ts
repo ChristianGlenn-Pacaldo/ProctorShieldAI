@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyPassword, setSessionCookie } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
+import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,9 +16,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find user
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const rateLimit = await consumeRateLimitGroup(
+      [`login:ip:${getClientIp(req)}`, `login:account:${normalizedEmail}`],
+      10,
+      15 * 60 * 1000
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       include: { role: true },
     });
 
@@ -77,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     // Broadcast activity to admin
     try {
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "login",
         userId: user.id,
         fullName: user.fullName,
@@ -101,7 +114,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        await pusherServer.trigger(`user-${adminUser.id}`, "notification", {
+        await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
           id: notification.id.toString(),
           title: "New Login",
           message: `${user.fullName} (${user.role.roleName}) just logged in.`,

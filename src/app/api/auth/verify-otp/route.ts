@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
+import { consumeRateLimitGroup, getClientIp, hashOtp } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,11 +14,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (typeof userId !== "string" || typeof otpCode !== "string" || !/^\d{6}$/.test(otpCode)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid or expired OTP code" },
+        { status: 401 }
+      );
+    }
+
+    const rateLimit = await consumeRateLimitGroup(
+      [`verify-otp:ip:${getClientIp(req)}`, `verify-otp:account:${userId}`],
+      8,
+      15 * 60 * 1000
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
     // Find the latest valid OTP for this user
     const otpRecord = await prisma.otpCode.findFirst({
       where: {
         userId: userId,
-        code: otpCode,
+        code: hashOtp(userId, otpCode, "login"),
         expiresAt: {
           gt: new Date() // Must not be expired
         }
@@ -31,21 +51,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Delete the OTP code so it can't be reused
-    await prisma.otpCode.delete({
-      where: { id: otpRecord.id }
-    });
-
     // Fetch the user to get their details for the session
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { role: true }
     });
 
-    if (!user) {
+    if (!user || user.status !== "active") {
       return NextResponse.json(
         { success: false, message: "User not found" },
         { status: 404 }
+      );
+    }
+
+    const consumed = await prisma.otpCode.deleteMany({ where: { id: otpRecord.id } });
+    if (consumed.count !== 1) {
+      return NextResponse.json(
+        { success: false, message: "Invalid or expired OTP code" },
+        { status: 401 }
       );
     }
 
@@ -75,7 +98,7 @@ export async function POST(req: NextRequest) {
     // Broadcast activity to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "login",
         userId: user.id,
         fullName: user.fullName,
@@ -101,7 +124,7 @@ export async function POST(req: NextRequest) {
         });
         notificationId = notification.id;
 
-        await pusherServer.trigger(`user-${adminUser.id}`, "notification", {
+        await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
           id: notificationId?.toString(),
           title: "New Login",
           message: `${user.fullName} (${user.role.roleName}) just logged in.`,

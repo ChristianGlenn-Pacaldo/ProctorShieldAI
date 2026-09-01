@@ -11,7 +11,6 @@ export default function ForgotPasswordPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [userId, setUserId] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,9 +31,6 @@ export default function ForgotPasswordPage() {
       });
       const data = await res.json();
       if (data.success) {
-        if (data.userId) {
-          setUserId(data.userId);
-        }
         setStep("reset");
       } else {
         setError(data.message || "Failed to send reset code.");
@@ -49,16 +45,15 @@ export default function ForgotPasswordPage() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpCode.trim() || otpCode.length !== 6) { setError("Please enter the 6-digit code."); return; }
-    if (!newPassword || newPassword.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (!newPassword || newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { setError("Password must be at least 10 characters and contain letters and numbers."); return; }
     if (newPassword !== confirmPassword) { setError("Passwords do not match."); return; }
-    if (!userId) { setError("Session expired. Please restart the process."); setStep("email"); return; }
     setError("");
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, otpCode, newPassword }),
+        body: JSON.stringify({ email, otpCode, newPassword }),
       });
       const data = await res.json();
       if (data.success) {
@@ -163,7 +158,7 @@ export default function ForgotPasswordPage() {
                       type={showPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Min. 6 characters"
+                      placeholder="Min. 10 characters with letters and numbers"
                       className="w-full pl-10 pr-10 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">

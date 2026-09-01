@@ -78,13 +78,13 @@ export async function POST(req: NextRequest) {
     // 2. Notify student of the decision via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`student-${studentQuiz.studentId}`, "retake-decision", {
+      await pusherServer.trigger(`private-student-${studentQuiz.studentId}`, "retake-decision", {
         quizId: studentQuiz.quizId,
         action: action,
       });
 
       // Trigger notification bell update for student
-      await pusherServer.trigger(`user-${studentQuiz.studentId}`, "notification", {
+      await pusherServer.trigger(`private-user-${studentQuiz.studentId}`, "notification", {
         title: `Retake Request ${action === "accept" ? "Approved" : "Rejected"}`,
         message: `Your instructor ${action === "accept" ? "approved" : "rejected"} your request to retake "${studentQuiz.quiz.title}".`,
       });

@@ -1,5 +1,5 @@
 # ── STAGE 1: Base & Dependencies ──────────────────────
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 
 # Install libc6-compat for Alpine compatibility with native binaries
@@ -10,11 +10,11 @@ COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 
 # Install dependencies (including devDeps for build) and generate Prisma client
-RUN npm install
+RUN npm ci
 RUN npx prisma generate
 
 # ── STAGE 2: Build Application ────────────────────────
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -29,7 +29,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ── STAGE 3: Production Runner ────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

@@ -144,12 +144,14 @@ model StudentQuiz {
   quizStatus          String?  @map("quiz_status")
   createdAt           DateTime @default(now()) @map("created_at")
 
-  student    User          @relation(fields: [studentId], references: [id])
-  quiz       Quiz          @relation(fields: [quizId], references: [id])
+  student    User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quiz       Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
   answers    Answer[]
   violations Violation[]
   aiAnalysis AiAnalysis?
 
+  @@unique([studentId, quizId])
+  @@index([quizId, quizStatus])
   @@map("student_quizzes")
 }
 
@@ -161,9 +163,10 @@ model Answer {
   isCorrect     Boolean? @map("is_correct")
   pointsEarned  Int?    @map("points_earned")
 
-  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id])
-  question    Question    @relation(fields: [questionId], references: [id])
+  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id], onDelete: Cascade)
+  question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
+  @@unique([studentQuizId, questionId])
   @@map("answers")
 }
 
@@ -179,7 +182,7 @@ model Violation {
   screenshotPath  String?   @map("screenshot_path")
   createdAt       DateTime  @default(now()) @map("created_at")
 
-  studentQuiz   StudentQuiz    @relation(fields: [studentQuizId], references: [id])
+  studentQuiz   StudentQuiz    @relation(fields: [studentQuizId], references: [id], onDelete: Cascade)
   evidenceFiles EvidenceFile[]
 
   @@map("violations")
@@ -192,7 +195,7 @@ model EvidenceFile {
   filePath    String   @map("file_path")
   uploadedAt  DateTime @default(now()) @map("uploaded_at")
 
-  violation Violation @relation(fields: [violationId], references: [id])
+  violation Violation @relation(fields: [violationId], references: [id], onDelete: Cascade)
 
   @@map("evidence_files")
 }
@@ -207,7 +210,7 @@ model AiAnalysis {
   aiExplanation       String?  @map("ai_explanation")
   analyzedAt          DateTime @default(now()) @map("analyzed_at")
 
-  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id])
+  studentQuiz StudentQuiz @relation(fields: [studentQuizId], references: [id], onDelete: Cascade)
 
   @@map("ai_analysis")
 }
@@ -222,7 +225,7 @@ model Notification {
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -234,7 +237,7 @@ model ActivityLog {
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("activity_logs")
 }
@@ -263,10 +266,12 @@ model UserSubscription {
   paymentStatus      String?  @map("payment_status")
   subscriptionStatus String?  @map("subscription_status")
 
-  user     User             @relation(fields: [userId], references: [id])
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan     SubscriptionPlan @relation(fields: [planId], references: [id])
   payments Payment[]
 
+  @@unique([userId, planId])
+  @@index([subscriptionStatus, endDate])
   @@map("user_subscriptions")
 }
 
@@ -277,11 +282,25 @@ model Payment {
   paymentMethod        String?   @map("payment_method")
   paymentStatus        String?   @map("payment_status")
   transactionReference String?   @unique @map("transaction_reference")
+  providerPaymentId    String?   @unique @map("provider_payment_id")
+  refundedAmount       Decimal   @default(0) @map("refunded_amount") @db.Decimal(10, 2)
+  refundedAt           DateTime? @map("refunded_at")
   paidAt               DateTime? @map("paid_at")
 
-  subscription UserSubscription @relation(fields: [subscriptionId], references: [id])
+  subscription UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  provider    String
+  eventId     String   @unique @map("event_id")
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([provider, processedAt])
+  @@map("webhook_events")
 }
 
 // --- SYSTEM SETTINGS ---

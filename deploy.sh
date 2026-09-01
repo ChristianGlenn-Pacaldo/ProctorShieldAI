@@ -1,39 +1,24 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# ProctorShield AI — 1-Command VPS Production Deployment Script
-# ==============================================================================
-set -e
+set -euo pipefail
 
-echo "🛡️  Starting ProctorShield AI Deployment..."
+echo "Starting ProctorShield AI deployment..."
 
-# 1. Check for .env file
 if [ ! -f ".env" ]; then
-  echo "❌ Error: .env file not found. Please create .env with your database URL & API keys before deploying."
+  echo "Error: .env is required. Create it from .env.example and supply production secrets."
   exit 1
 fi
 
-# 2. Check Docker installation
-if ! command -v docker &> /dev/null; then
-  echo "📦 Docker not found. Installing Docker..."
-  curl -fsSL https://get.docker.com -o get-docker.sh
-  sh get-docker.sh
-  rm get-docker.sh
-  sudo usermod -aG docker $USER || true
-  echo "✅ Docker installed successfully."
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required. Install it from your operating system's trusted package source, then rerun this script."
+  exit 1
 fi
 
-# 3. Build & Run Containers with Docker Compose
-echo "🚀 Building and launching Docker container..."
-if docker compose version &> /dev/null; then
-  docker compose down --remove-orphans || true
+if docker compose version >/dev/null 2>&1; then
+  docker compose down --remove-orphans
   docker compose up -d --build
 else
-  docker-compose down --remove-orphans || true
+  docker-compose down --remove-orphans
   docker-compose up -d --build
 fi
 
-echo "=============================================================================="
-echo "🎉 ProctorShield AI is now LIVE on your VPS!"
-echo "🌐 Access your application at: http://<YOUR_VPS_IP>:3000"
-echo "📊 Check container logs with: docker logs -f proctorshieldai"
-echo "=============================================================================="
+echo "Deployment completed. Verify HTTPS, health checks, logs, and the PayMongo webhook before accepting traffic."

@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
         },
       },
       include: {
+        evidenceFiles: { orderBy: { uploadedAt: "desc" }, take: 1 },
         studentQuiz: {
           include: {
             student: {
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
         timestamp: v.timestamp,
         bg,
         btnClass,
-        screenshotPath: v.screenshotPath || null,
+        screenshotPath: v.evidenceFiles.length > 0 ? `/api/evidence/${v.id}` : v.screenshotPath || null,
       };
     });
 
@@ -115,14 +116,15 @@ export async function DELETE(req: NextRequest) {
           },
         },
       },
-      select: {
-        id: true,
-      },
+      select: { id: true, evidenceFiles: { select: { filePath: true } } },
     });
 
     const violationIds = violations.map((v) => v.id);
+    const evidenceKeys = violations.flatMap((violation) => violation.evidenceFiles.map((file) => file.filePath));
 
     if (violationIds.length > 0) {
+      const { deleteEvidence } = await import("@/lib/evidence-storage");
+      await deleteEvidence(evidenceKeys);
       // First delete associated EvidenceFile records if any
       await prisma.evidenceFile.deleteMany({
         where: {

@@ -48,7 +48,7 @@ export async function PUT(
       if (subscriptionStatus === "active") {
         // Find the premium plan
         const premiumPlan = await prisma.subscriptionPlan.findFirst({
-          where: { id: 2 }, // Premium plan ID
+          where: { planName: "Premium Yearly" },
         });
 
         if (premiumPlan) {
@@ -112,7 +112,7 @@ export async function PUT(
     // 4. Notify admin dashboard clients via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "user_update",
         userId: id,
         timestamp: new Date().toISOString(),
@@ -122,8 +122,8 @@ export async function PUT(
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to update user:", error);
-    return NextResponse.json({ error: error?.message || "Internal Server Error", stack: error?.stack }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

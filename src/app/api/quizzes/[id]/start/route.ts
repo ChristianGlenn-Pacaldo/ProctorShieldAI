@@ -24,16 +24,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Quiz is not in a startable state" }, { status: 400 });
     }
 
-    // Update quiz status to in_progress
-    await prisma.quiz.update({
-      where: { id: quizId },
-      data: { quizStatus: "in_progress" },
-    });
+    const startedAt = new Date();
+    await prisma.$transaction([
+      prisma.quiz.update({
+        where: { id: quizId },
+        data: { quizStatus: "in_progress" },
+      }),
+      prisma.studentQuiz.updateMany({
+        where: { quizId, quizStatus: "enrolled" },
+        data: { quizStatus: "in_progress", startTime: startedAt },
+      }),
+    ]);
 
     // Notify all students in the lobby
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`quiz-${quizId}`, "quiz-started", {
+      await pusherServer.trigger(`private-quiz-${quizId}`, "quiz-started", {
         message: "Quiz has started!",
       });
     } catch (e) {

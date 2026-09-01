@@ -12,7 +12,6 @@ export default function QuizzesContent({ userId }: { userId: string }) {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isClearing, setIsClearing] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
 
   useEffect(() => {
@@ -33,31 +32,14 @@ export default function QuizzesContent({ userId }: { userId: string }) {
     fetchQuizzes();
   }, []);
 
-  const handleClearHistory = async () => {
-    if (!confirm("Are you sure you want to completely delete all your quiz history? This cannot be undone.")) return;
-    setIsClearing(true);
-    try {
-      const res = await fetch("/api/dashboard/student/clear", { method: "DELETE" });
-      if (res.ok) {
-        setQuizzes([]);
-      } else {
-        alert("Failed to clear history.");
-      }
-    } catch (e) {
-      alert("Error clearing history.");
-    } finally {
-      setIsClearing(false);
-    }
-  };
-
   useEffect(() => {
     if (!userId) return;
     
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
+      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
     );
-    const channel = pusher.subscribe(`student-${userId}`);
+    const channel = pusher.subscribe(`private-student-${userId}`);
     
     channel.bind("retake-decision", (data: any) => {
       if (data.action === "accept") {
@@ -71,7 +53,7 @@ export default function QuizzesContent({ userId }: { userId: string }) {
 
     return () => {
       channel.unbind("retake-decision");
-      pusher.unsubscribe(`student-${userId}`);
+      pusher.unsubscribe(`private-student-${userId}`);
       pusher.disconnect();
     };
   }, [userId, router]);
@@ -86,13 +68,6 @@ export default function QuizzesContent({ userId }: { userId: string }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div className="flex items-center gap-4">
             <h3 className="text-sm font-bold text-[var(--ink)]">📝 My Enrolled Quizzes</h3>
-            <button 
-              onClick={handleClearHistory}
-              disabled={isClearing || quizzes.length === 0}
-              className="text-xs font-bold text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
-            >
-              {isClearing ? "Clearing..." : "Clear All History"}
-            </button>
           </div>
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { expireSubscriptions } from "@/lib/maintenance";
 
 // GET: Lightweight subscription status check (used by gating modals)
 export async function GET() {
@@ -9,6 +10,7 @@ export async function GET() {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ isSubscribed: false });
     }
+    await expireSubscriptions(session.userId);
 
     const subscription = await prisma.userSubscription.findFirst({
       where: {

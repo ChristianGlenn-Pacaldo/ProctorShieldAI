@@ -51,10 +51,16 @@ export async function PUT(req: NextRequest) {
         data: { isRead: true },
       });
     } else {
-      await prisma.notification.update({
-        where: { id: BigInt(id) },
+      if (typeof id !== "string" || !/^\d+$/.test(id)) {
+        return NextResponse.json({ error: "Invalid notification" }, { status: 400 });
+      }
+      const updated = await prisma.notification.updateMany({
+        where: { id: BigInt(id), userId: session.userId },
         data: { isRead: true },
       });
+      if (updated.count === 0) {
+        return NextResponse.json({ error: "Notification not found" }, { status: 404 });
+      }
     }
 
     return NextResponse.json({ success: true });

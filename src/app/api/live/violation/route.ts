@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
+import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
+import { uploadEvidence } from "@/lib/evidence-storage";
+
+const VALID_VIOLATION_TYPES = new Set([
+  "no_face",
+  "multiple_faces",
+  "looking_away",
+  "device_detected",
+  "audio_anomaly",
+  "fullscreen_exit",
+  "tab_switch",
+  "attempted_screenshot",
+]);
+
+function isValidSnapshot(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length <= 2_800_000
+    && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,17 +29,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { quizId, violationType, confidenceScore, snapshot } = await req.json();
+    const rateLimit = await consumeRateLimitGroup(
+      [`violation:user:${session.userId}`, `violation:ip:${getClientIp(req)}`],
+      60,
+      60_000,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many violation events" },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+      );
+    }
 
-    if (!quizId || !violationType) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const { quizId, violationType, confidenceScore, screenshot, snapshot } = await req.json();
+    const evidence = screenshot ?? snapshot;
+    const numericQuizId = Number(quizId);
+
+    if (!Number.isInteger(numericQuizId) || !VALID_VIOLATION_TYPES.has(violationType)) {
+      return NextResponse.json({ error: "Invalid violation event" }, { status: 400 });
+    }
+    if (evidence != null && !isValidSnapshot(evidence)) {
+      return NextResponse.json({ error: "Invalid or oversized evidence image" }, { status: 413 });
     }
 
     // Get the studentQuiz record
     const studentQuiz = await prisma.studentQuiz.findFirst({
       where: {
         studentId: session.userId,
-        quizId: Number(quizId),
+        quizId: numericQuizId,
+        quizStatus: "in_progress",
+        endTime: null,
       },
       include: {
         quiz: true,
@@ -31,34 +69,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
-    // Record the violation in the database
+    // Record metadata first, then persist image content outside PostgreSQL.
     const violation = await prisma.violation.create({
       data: {
         studentQuizId: studentQuiz.id,
         violationType: violationType,
-        confidenceScore: confidenceScore || 100,
+        confidenceScore: Math.max(0, Math.min(100, Number(confidenceScore) || 100)),
         timestamp: new Date(),
         durationSeconds: 5,
-        screenshotPath: snapshot || null,
+        screenshotPath: null,
       },
     });
 
+    if (evidence) {
+      try {
+        const stored = await uploadEvidence(evidence, studentQuiz.id);
+        if (stored) {
+          await prisma.evidenceFile.create({
+            data: {
+              violationId: violation.id,
+              fileType: stored.contentType,
+              filePath: stored.key,
+            },
+          });
+        } else if (process.env.NODE_ENV !== "production") {
+          await prisma.violation.update({
+            where: { id: violation.id },
+            data: { screenshotPath: evidence },
+          });
+        }
+      } catch (error) {
+        console.error("Permanent evidence upload failed:", error);
+      }
+    }
+
     // Broadcast the violation to the teacher via Pusher
     // We use the teacher's ID as the channel name so the teacher receives alerts for all their quizzes
-    const channelName = `teacher-${studentQuiz.quiz.teacherId}`;
+    const channelName = `private-teacher-${studentQuiz.quiz.teacherId}`;
     
     await pusherServer.trigger(channelName, "new-violation", {
       studentId: session.userId,
       studentName: session.fullName,
       quizTitle: studentQuiz.quiz.title,
-      violationType: violationType,
-      snapshot: snapshot || null,
+      violationType,
+      snapshot: evidence || null,
       timestamp: violation.timestamp,
     });
 
     // Broadcast violation event to admin
     try {
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "violation",
         userId: session.userId,
         fullName: session.fullName,

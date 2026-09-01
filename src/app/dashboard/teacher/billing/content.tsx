@@ -13,7 +13,6 @@ import {
   Check,
   AlertTriangle,
   CheckCircle,
-  Zap,
 } from "lucide-react";
 
 interface Subscription {
@@ -49,7 +48,6 @@ export default function BillingContent() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [isUpgrading, setIsUpgrading] = useState(false);
-  const [isActivatingDemo, setIsActivatingDemo] = useState(false);
   const [paymentResult, setPaymentResult] = useState<"success" | "cancelled" | null>(null);
 
   // Fetch billing data
@@ -76,11 +74,7 @@ export default function BillingContent() {
       const payment = params.get("payment");
       if (payment === "success") {
         setPaymentResult("success");
-        fetch("/api/billing/confirm", { method: "POST" })
-          .then(() => {
-            fetchBilling();
-          })
-          .catch((err) => console.error("Confirmation error:", err));
+        fetchBilling();
 
         const url = new URL(window.location.href);
         url.searchParams.delete("payment");
@@ -110,36 +104,12 @@ export default function BillingContent() {
       if (res.ok && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        alert(data.error || "Failed to initiate PayMongo test checkout. Using instant sandbox activation instead.");
-        await handleSandboxInstantActivate();
+        alert(data.error || "Failed to initiate PayMongo checkout.");
       }
     } catch (err) {
-      console.warn("PayMongo redirect error, falling back to sandbox activation:", err);
-      await handleSandboxInstantActivate();
+      console.error("PayMongo redirect error:", err);
     } finally {
       setIsUpgrading(false);
-    }
-  };
-
-  // 1-Click Instant Sandbox Activation (Zero External Friction)
-  const handleSandboxInstantActivate = async () => {
-    setIsActivatingDemo(true);
-    try {
-      const res = await fetch("/api/billing/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (res.ok) {
-        setPaymentResult("success");
-        await fetchBilling();
-      } else {
-        alert("Failed to activate sandbox subscription.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Network error activating sandbox.");
-    } finally {
-      setIsActivatingDemo(false);
     }
   };
 
@@ -168,8 +138,8 @@ export default function BillingContent() {
         <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-fade-in">
           <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-emerald-500">Premium Plan Activated!</p>
-            <p className="text-xs text-[var(--muted)]">Your subscription is now active with full access to Live Monitoring and AI generation.</p>
+            <p className="text-sm font-bold text-emerald-500">Payment received</p>
+            <p className="text-xs text-[var(--muted)]">Your plan will activate after PayMongo's signed webhook is verified. Refresh in a few seconds.</p>
           </div>
         </div>
       )}
@@ -178,7 +148,7 @@ export default function BillingContent() {
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
           <div>
             <p className="text-sm font-bold text-amber-500">Payment Cancelled</p>
-            <p className="text-xs text-[var(--muted)]">PayMongo test checkout was cancelled. You can retry or use the 1-Click Sandbox button below.</p>
+            <p className="text-xs text-[var(--muted)]">PayMongo checkout was cancelled. You can retry when ready.</p>
           </div>
         </div>
       )}
@@ -267,7 +237,7 @@ export default function BillingContent() {
               <button
                 type="button"
                 onClick={handleUpgrade}
-                disabled={isUpgrading || isActivatingDemo}
+                disabled={isUpgrading}
                 className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all shadow-xl shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isUpgrading ? (
@@ -279,25 +249,6 @@ export default function BillingContent() {
                   <>
                     <Crown className="w-4 h-4" />
                     Pay with PayMongo Sandbox (₱500)
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSandboxInstantActivate}
-                disabled={isActivatingDemo || isUpgrading}
-                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isActivatingDemo ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Activating...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    1-Click Sandbox Demo Activate
                   </>
                 )}
               </button>

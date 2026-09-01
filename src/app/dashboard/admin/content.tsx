@@ -133,13 +133,13 @@ export default function AdminDashboardContent() {
 
     const pusher = new PusherClient(pusherKey, {
       cluster: pusherCluster,
+      authEndpoint: "/api/pusher/auth",
     });
 
-    const channel = pusher.subscribe("admin-dashboard");
+    const channel = pusher.subscribe("private-admin-dashboard");
 
     // Listen for platform activities in real-time
     channel.bind("activity", (data: any) => {
-      console.log("Admin received real-time event:", data);
 
       // 1. Prepend the new activity to the local UI state
       setActivities((prev) => {
@@ -189,7 +189,7 @@ export default function AdminDashboardContent() {
     });
 
     return () => {
-      pusher.unsubscribe("admin-dashboard");
+      pusher.unsubscribe("private-admin-dashboard");
       pusher.disconnect();
     };
   }, []);

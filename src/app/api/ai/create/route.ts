@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { expireSubscriptions } from "@/lib/maintenance";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
@@ -9,6 +10,7 @@ export async function POST(req: NextRequest) {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await expireSubscriptions(session.userId);
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: "Gemini API key is not configured" }, { status: 500 });

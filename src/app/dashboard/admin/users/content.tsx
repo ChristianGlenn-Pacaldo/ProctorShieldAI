@@ -54,15 +54,15 @@ export default function UsersContent() {
 
     const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
     const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
-    const pusher = new PusherClient(pusherKey, { cluster: pusherCluster });
-    const channel = pusher.subscribe("admin-dashboard");
+    const pusher = new PusherClient(pusherKey, { cluster: pusherCluster, authEndpoint: "/api/pusher/auth" });
+    const channel = pusher.subscribe("private-admin-dashboard");
     channel.bind("activity", (data: any) => {
       if (["login", "logout", "user_update"].includes(data.type)) {
         fetchUsers(true);
       }
     });
     return () => {
-      pusher.unsubscribe("admin-dashboard");
+      pusher.unsubscribe("private-admin-dashboard");
       pusher.disconnect();
     };
   }, []);

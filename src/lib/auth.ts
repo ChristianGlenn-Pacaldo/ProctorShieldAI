@@ -3,16 +3,16 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 
 // ── SECURITY: Fail loudly if JWT secret is not configured ────────
-const JWT_SECRET = process.env.NEXTAUTH_SECRET as string;
-if (!JWT_SECRET) {
-  throw new Error(
-    "[ProctorShield] FATAL: NEXTAUTH_SECRET environment variable is not set. " +
-    "The server cannot start without a JWT signing secret. " +
-    "Add NEXTAUTH_SECRET to your .env file."
-  );
+function getJwtSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("NEXTAUTH_SECRET must be configured with at least 32 characters");
+  }
+  return secret;
 }
 const TOKEN_PREFIX = "ps_session_";
 const TOKEN_EXPIRY = "7d";
+const VALID_ROLES = ["student", "teacher", "admin"] as const;
 
 // ── PASSWORD HASHING ────────────────────────────────────
 
@@ -37,12 +37,24 @@ export interface TokenPayload {
 }
 
 export function createToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { algorithm: "HS256", expiresIn: TOKEN_EXPIRY });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as unknown as TokenPayload;
+    const payload = jwt.verify(token, getJwtSecret(), {
+      algorithms: ["HS256"],
+    }) as TokenPayload;
+
+    if (
+      !payload.userId ||
+      !payload.role ||
+      !VALID_ROLES.includes(payload.role.toLowerCase() as (typeof VALID_ROLES)[number])
+    ) {
+      return null;
+    }
+
+    return payload;
   } catch {
     return null;
   }
@@ -71,50 +83,42 @@ export async function setSessionCookie(payload: TokenPayload) {
 
 export async function getSession(roleHint?: string): Promise<TokenPayload | null> {
   const cookieStore = await cookies();
-  let resolvedRole = roleHint;
+  const normalizedHint = roleHint?.toLowerCase();
+  const roles = normalizedHint
+    ? [normalizedHint, ...VALID_ROLES.filter((role) => role !== normalizedHint)]
+    : [...VALID_ROLES];
 
-  if (!resolvedRole) {
-    try {
-      // In Next.js App Router, headers() is available in Server Components and API routes
-      const { headers } = await import("next/headers");
-      const headersList = await headers();
-      const activeRole = headersList.get("x-active-role");
-      if (activeRole) {
-        resolvedRole = activeRole;
-      } else {
-        // Deduce active role context from Referer header
-        const referer = headersList.get("referer") || "";
-        if (referer.includes("/dashboard/student") || referer.includes("/student") || referer.includes("/quiz/")) {
-          resolvedRole = "student";
-        } else if (referer.includes("/dashboard/teacher") || referer.includes("/teacher")) {
-          resolvedRole = "teacher";
-        } else if (referer.includes("/dashboard/admin") || referer.includes("/admin")) {
-          resolvedRole = "admin";
-        }
-      }
-    } catch {
-      // Ignore if called from context where headers() isn't available
-    }
-  }
-  
-  if (resolvedRole) {
-    const token = cookieStore.get(`${TOKEN_PREFIX}${resolvedRole}`)?.value;
-    if (token) {
-      const payload = verifyToken(token);
-      if (payload) return payload;
-    }
-  }
-
-  // If no hint or referer context matched, check student -> teacher -> admin
-  const roles = ["student", "teacher", "admin"];
   for (const role of roles) {
     const token = cookieStore.get(`${TOKEN_PREFIX}${role}`)?.value;
-    if (token) {
-      const payload = verifyToken(token);
-      if (payload) return payload;
-    }
+    if (!token) continue;
+
+    const payload = verifyToken(token);
+    if (!payload || payload.role.toLowerCase() !== role) continue;
+
+    const { default: prisma } = await import("@/lib/prisma");
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: {
+        email: true,
+        fullName: true,
+        status: true,
+        role: { select: { roleName: true } },
+      },
+    });
+
+    if (!user || user.status !== "active") return null;
+
+    const currentRole = user.role.roleName.toLowerCase();
+    if (currentRole !== payload.role.toLowerCase()) return null;
+
+    return {
+      userId: payload.userId,
+      email: user.email,
+      role: currentRole,
+      fullName: user.fullName,
+    };
   }
-  
+
   return null;
 }
 

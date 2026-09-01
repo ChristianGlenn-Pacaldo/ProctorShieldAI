@@ -98,14 +98,13 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
 
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
+      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
     );
 
-    const channel = pusher.subscribe(`teacher-${teacherId}`);
+    const channel = pusher.subscribe(`private-teacher-${teacherId}`);
 
     // Student Joined Event
     channel.bind("student-joined", (data: any) => {
-      console.log("Student joined dashboard feed:", data);
       setLiveStudents((prev) => {
         const exists = prev.some((s) => s.name === data.studentName);
         if (exists) return prev;
@@ -133,7 +132,6 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
 
     // New Violation Event
     channel.bind("new-violation", (data: any) => {
-      console.log("Violation received on dashboard:", data);
 
       // Increment general violations counters
       setStats((curr) => ({
@@ -225,7 +223,6 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
 
     // Student Submitted / Quiz Complete Event
     channel.bind("student-submitted", (data: any) => {
-      console.log("Student completed quiz on dashboard:", data);
 
       // Remove from live view list
       setLiveStudents((prev) => prev.filter((s) => s.name !== data.studentName));
@@ -235,7 +232,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
     });
 
     return () => {
-      pusher.unsubscribe(`teacher-${teacherId}`);
+      pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
   }, [teacherId]);

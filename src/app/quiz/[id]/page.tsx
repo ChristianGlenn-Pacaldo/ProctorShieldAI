@@ -165,8 +165,8 @@ export default function QuizRoom() {
     if (!hasStarted || !userId || !quiz?.teacherId) return;
 
     let pusherClient: any;
-    const teacherChannelName = `teacher-${quiz.teacherId}`;
-    const studentChannelName = `student-webrtc-${userId}`;
+    const teacherChannelName = `private-teacher-${quiz.teacherId}`;
+    const studentChannelName = `private-student-${userId}`;
 
     const rtcConfig: RTCConfiguration = {
       iceServers: [
@@ -201,7 +201,7 @@ export default function QuizRoom() {
                   targetUserId: senderId,
                   targetChannel: teacherChannelName,
                   signalType: "ice-candidate",
-                  data: { candidate: event.candidate, studentId: userId },
+                  data: { candidate: event.candidate, quizId },
                 }),
               }).catch(() => {});
             }
@@ -217,7 +217,7 @@ export default function QuizRoom() {
               targetUserId: senderId,
               targetChannel: teacherChannelName,
               signalType: "sdp-offer",
-              data: { sdp: offer, studentId: userId },
+              data: { sdp: offer, quizId },
             }),
           });
         } else if (signalType === "sdp-answer") {
@@ -239,7 +239,7 @@ export default function QuizRoom() {
     import("pusher-js").then((Pusher) => {
       pusherClient = new Pusher.default(
         process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-        { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
+        { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
       );
 
       const channel = pusherClient.subscribe(studentChannelName);
@@ -253,7 +253,7 @@ export default function QuizRoom() {
           targetUserId: quiz.teacherId,
           targetChannel: teacherChannelName,
           signalType: "student-ready",
-          data: { studentId: userId },
+          data: { quizId },
         }),
       }).catch(() => {});
     });
@@ -330,9 +330,10 @@ export default function QuizRoom() {
     import("pusher-js").then((Pusher) => {
       pusherClient = new Pusher.default(process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774", {
         cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1",
+        authEndpoint: "/api/pusher/auth",
       });
 
-      const quizChannel = pusherClient.subscribe(`quiz-${quizId}`);
+      const quizChannel = pusherClient.subscribe(`private-quiz-${quizId}`);
       quizChannel.bind("quiz-started", (data: any) => {
         // Teacher started quiz! Fetch full quiz data immediately
         fetch(`/api/quizzes/${quizId}`)
@@ -346,7 +347,7 @@ export default function QuizRoom() {
           .catch(() => {});
       });
 
-      const studentChannel = pusherClient.subscribe(`student-${userId}`);
+      const studentChannel = pusherClient.subscribe(`private-student-${userId}`);
       studentChannel.bind("approval-status", (data: any) => {
         if (data.quizId === parseInt(quizId)) {
           setStudentQuizStatus(data.status);
@@ -359,8 +360,8 @@ export default function QuizRoom() {
 
     return () => {
       if (pusherClient) {
-        pusherClient.unsubscribe(`quiz-${quizId}`);
-        pusherClient.unsubscribe(`student-${userId}`);
+        pusherClient.unsubscribe(`private-quiz-${quizId}`);
+        pusherClient.unsubscribe(`private-student-${userId}`);
       }
     };
   }, [quizId, userId]);
@@ -416,17 +417,20 @@ export default function QuizRoom() {
 
   // Stable refs for exam state
   const answersStateRef = useRef<Record<number, number>>({});
-  answersStateRef.current = answersState;
   const xpRef = useRef(xp);
-  xpRef.current = xp;
   const streakRef = useRef(streak);
-  streakRef.current = streak;
   const questionsRef = useRef(questions);
-  questionsRef.current = questions;
   const studentQuizIdRef = useRef(studentQuizId);
-  studentQuizIdRef.current = studentQuizId;
   const violationCountStateRef = useRef(violationCount);
-  violationCountStateRef.current = violationCount;
+
+  useEffect(() => {
+    answersStateRef.current = answersState;
+    xpRef.current = xp;
+    streakRef.current = streak;
+    questionsRef.current = questions;
+    studentQuizIdRef.current = studentQuizId;
+    violationCountStateRef.current = violationCount;
+  }, [answersState, xp, streak, questions, studentQuizId, violationCount]);
 
   // ── Submit quiz to backend ────────────────────────────
   const submitQuiz = useCallback(async () => {
@@ -478,7 +482,9 @@ export default function QuizRoom() {
   }, [isSubmitting, quizId, playTone]);
 
   const submitQuizRef = useRef(submitQuiz);
-  submitQuizRef.current = submitQuiz;
+  useEffect(() => {
+    submitQuizRef.current = submitQuiz;
+  }, [submitQuiz]);
 
   // ── Report Violation to Backend ───────────────────────
   const reportViolation = useCallback(async (type: string) => {
@@ -534,7 +540,9 @@ export default function QuizRoom() {
   }, [quizId, captureSnapshot, playTone]);
 
   const reportViolationRef = useRef(reportViolation);
-  reportViolationRef.current = reportViolation;
+  useEffect(() => {
+    reportViolationRef.current = reportViolation;
+  }, [reportViolation]);
 
   // ── Notify Teacher on Student Joining ─────────────────
   const notifyTeacherJoined = useCallback(async () => {
@@ -558,7 +566,7 @@ export default function QuizRoom() {
     if (!hasStarted) return;
 
     let snapshotInterval: NodeJS.Timeout | null = null;
-    let aiInterval: NodeJS.Timeout | null = null;
+    const aiInterval: NodeJS.Timeout | null = null;
     let faceDetectionInterval: NodeJS.Timeout | null = null;
     let audioInterval: NodeJS.Timeout | null = null;
     let audioContext: AudioContext | null = null;

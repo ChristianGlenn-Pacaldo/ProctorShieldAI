@@ -315,7 +315,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
     setCreateError("");
 
     try {
-      let body: any = { numQuestions: 10 };
+      const body: any = { numQuestions: 10 };
       if (activeTab === "text") {
         if (!aiTopic) {
           alert("Please enter a topic.");

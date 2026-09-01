@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
       // Broadcast activity to admin
       try {
         const { pusherServer } = await import("@/lib/pusher");
-        await pusherServer.trigger("admin-dashboard", "activity", {
+        await pusherServer.trigger("private-admin-dashboard", "activity", {
           type: "logout",
           userId: session.userId,
           fullName: session.fullName,

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     // 2. Notify the teacher via Pusher
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(`teacher-${studentQuiz.quiz.teacherId}`, "retake-request", {
+      await pusherServer.trigger(`private-teacher-${studentQuiz.quiz.teacherId}`, "retake-request", {
         studentQuizId: studentQuiz.id,
         studentName: studentQuiz.student.fullName,
         quizTitle: studentQuiz.quiz.title,
@@ -58,13 +58,13 @@ export async function POST(req: NextRequest) {
       });
 
       // Trigger notification bell update for teacher
-      await pusherServer.trigger(`user-${studentQuiz.quiz.teacherId}`, "notification", {
+      await pusherServer.trigger(`private-user-${studentQuiz.quiz.teacherId}`, "notification", {
         title: "Retake Request Submitted",
         message: `${studentQuiz.student.fullName} requested to retake "${studentQuiz.quiz.title}".`,
       });
 
       // Trigger admin activity log broadcast
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "retake-request",
         userId: session.userId,
         fullName: session.fullName,

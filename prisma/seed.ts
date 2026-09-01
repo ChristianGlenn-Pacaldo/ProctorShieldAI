@@ -1,6 +1,7 @@
 import "dotenv/config";
 import prisma from "../src/lib/prisma";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 
 async function hashPassword(password: string): Promise<string> {
@@ -8,6 +9,9 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function main() {
+  if (process.env.SEED_DEMO_DATA !== "true") {
+    throw new Error("Demo seeding is disabled. Set SEED_DEMO_DATA=true only for a disposable development database, or run npm run db:bootstrap.");
+  }
   console.log("🌱 Seeding ProctorShield AI database...\n");
 
   // ── 1. ROLES ──────────────────────────────────────────
@@ -34,14 +38,20 @@ async function main() {
   // ── 2. USERS ──────────────────────────────────────────
   console.log("👥 Creating demo users...");
 
-  const studentPassword = await hashPassword("student123");
-  const teacherPassword = await hashPassword("teacher123");
-  
-  const adminEmail = process.env.ADMIN_EMAIL || "admin@proctorshield.ai";
-  const rawAdminPassword = process.env.ADMIN_PASSWORD || "admin123";
-  
-  if (!process.env.ADMIN_PASSWORD) {
-    console.warn("⚠️  WARNING: ADMIN_PASSWORD environment variable not set. Using default insecure password 'admin123'. Please set it in .env!");
+  const demoStudentPassword = process.env.DEMO_STUDENT_PASSWORD?.trim() || randomBytes(24).toString("base64url");
+  const demoTeacherPassword = process.env.DEMO_TEACHER_PASSWORD?.trim() || randomBytes(24).toString("base64url");
+  const studentPassword = await hashPassword(demoStudentPassword);
+  const teacherPassword = await hashPassword(demoTeacherPassword);
+
+  if (demoStudentPassword.length < 10 || demoTeacherPassword.length < 10) {
+    throw new Error("Demo passwords must be at least 10 characters when explicitly configured");
+  }
+
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const rawAdminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !rawAdminPassword || rawAdminPassword.length < 14) {
+    throw new Error("ADMIN_EMAIL and an ADMIN_PASSWORD of at least 14 characters are required to seed the database");
   }
   
   const adminPassword = await hashPassword(rawAdminPassword);
@@ -52,7 +62,7 @@ async function main() {
 
   const student1 = await prisma.user.upsert({
     where: { email: "student@demo.com" },
-    update: {},
+    update: { password: studentPassword },
     create: {
       fullName: "Juan Dela Cruz",
       email: "student@demo.com",
@@ -64,7 +74,7 @@ async function main() {
 
   const student2 = await prisma.user.upsert({
     where: { email: "maria@demo.com" },
-    update: {},
+    update: { password: studentPassword },
     create: {
       fullName: "Maria Santos",
       email: "maria@demo.com",
@@ -76,7 +86,7 @@ async function main() {
 
   const student3 = await prisma.user.upsert({
     where: { email: "ethan@demo.com" },
-    update: {},
+    update: { password: studentPassword },
     create: {
       fullName: "Ethan Reyes",
       email: "ethan@demo.com",
@@ -88,7 +98,7 @@ async function main() {
 
   const student4 = await prisma.user.upsert({
     where: { email: "carlo@demo.com" },
-    update: {},
+    update: { password: studentPassword },
     create: {
       fullName: "Carlo Mendoza",
       email: "carlo@demo.com",
@@ -100,7 +110,7 @@ async function main() {
 
   const teacher1 = await prisma.user.upsert({
     where: { email: "teacher@demo.com" },
-    update: {},
+    update: { password: teacherPassword },
     create: {
       fullName: "Sir Ramos",
       email: "teacher@demo.com",
@@ -112,7 +122,7 @@ async function main() {
 
   const teacher2 = await prisma.user.upsert({
     where: { email: "ana@demo.com" },
-    update: {},
+    update: { password: teacherPassword },
     create: {
       fullName: "Prof. Ana Lim",
       email: "ana@demo.com",
@@ -124,7 +134,7 @@ async function main() {
 
   const admin1 = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    update: { password: adminPassword, roleId: adminRole.id, status: "active" },
     create: {
       fullName: "System Admin",
       email: adminEmail,
@@ -134,13 +144,9 @@ async function main() {
     },
   });
 
-  console.log("   ✓ Juan Dela Cruz (student@demo.com / student123)");
-  console.log("   ✓ Maria Santos (maria@demo.com / student123)");
-  console.log("   ✓ Ethan Reyes (ethan@demo.com / student123) [SUSPENDED]");
-  console.log("   ✓ Carlo Mendoza (carlo@demo.com / student123)");
-  console.log("   ✓ Sir Ramos (teacher@demo.com / teacher123)");
-  console.log("   ✓ Prof. Ana Lim (ana@demo.com / teacher123)");
-  console.log(`   ✓ System Admin (${adminEmail} / ${process.env.ADMIN_PASSWORD ? "****" : "admin123"})\n`);
+  console.log("   Demo student accounts created; password comes from DEMO_STUDENT_PASSWORD or is random");
+  console.log("   Demo teacher accounts created; password comes from DEMO_TEACHER_PASSWORD or is random");
+  console.log(`   System Admin (${adminEmail} / configured through ADMIN_PASSWORD)\n`);
 
   // ── 3. SUBJECTS ───────────────────────────────────────
   console.log("📚 Creating subjects...");
@@ -534,20 +540,20 @@ async function main() {
   await prisma.subscriptionPlan.upsert({
     where: { id: 2 },
     update: {
-      planName: "Premium Monthly",
+      planName: "Premium Yearly",
       yearlyPrice: 500,
       features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
-      durationDays: 30,
+      durationDays: 365,
     },
     create: {
-      planName: "Premium Monthly",
+      planName: "Premium Yearly",
       yearlyPrice: 500,
       features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
-      durationDays: 30,
+      durationDays: 365,
     },
   });
 
-  console.log("   ✓ Free plan (₱0)\n   ✓ Premium plan (₱500/mo)\n");
+  console.log("   ✓ Free plan (₱0)\n   ✓ Premium yearly plan (₱500/year)\n");
 
   // ── 12. SETTINGS ──────────────────────────────────────
   console.log("⚙️  Creating system settings...");
@@ -558,6 +564,7 @@ async function main() {
     { settingKey: "strict_ai_enforcement", settingValue: "false" },
     { settingKey: "max_violations_before_lock", settingValue: "5" },
     { settingKey: "evidence_retention_days", settingValue: "90" },
+    { settingKey: "webhook_retention_days", settingValue: "365" },
   ];
 
   for (const s of settings) {
@@ -568,16 +575,14 @@ async function main() {
     });
   }
 
-  console.log("   ✓ 5 system settings configured\n");
+  console.log("   ✓ 6 system settings configured\n");
 
   // ── DONE ──────────────────────────────────────────────
   console.log("═══════════════════════════════════════════");
   console.log("🎉 DATABASE SEEDING COMPLETE!");
   console.log("═══════════════════════════════════════════");
-  console.log("\nDemo Credentials:");
-  console.log("  Student:  student@demo.com  / student123");
-  console.log("  Teacher:  teacher@demo.com  / teacher123");
-  console.log(`  Admin:    ${adminEmail} / ${process.env.ADMIN_PASSWORD ? "****" : "admin123"}`);
+  console.log("\nSeeded account credentials are controlled by environment variables.");
+  console.log("No default passwords are embedded in the source code.");
   console.log("\nAccess Codes: PS-8821, PS-7412, PS-3047, PS-5519");
   console.log("═══════════════════════════════════════════\n");
 }

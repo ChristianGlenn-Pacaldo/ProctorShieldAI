@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import crypto from "node:crypto";
+
+type RawChoice = { choiceText?: unknown; isCorrect?: unknown };
+type RawQuestion = { questionText?: unknown; questionType?: unknown; points?: unknown; choices?: unknown };
+
+function newCode(prefix: string) {
+  return `${prefix}-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -103,8 +111,11 @@ export async function POST(req: NextRequest) {
 
     const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions, isGamified } = await req.json();
 
-    if (!subjectName || !title) {
+    if (typeof subjectName !== "string" || typeof title !== "string" || !subjectName.trim() || !title.trim()) {
       return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
+    }
+    if (subjectName.length > 150 || title.length > 200 || (typeof description === "string" && description.length > 2_000)) {
+      return NextResponse.json({ error: "Quiz metadata is too long" }, { status: 400 });
     }
 
     // Verify the teacher actually exists in the database (catches stale JWT after db reset)
@@ -129,41 +140,42 @@ export async function POST(req: NextRequest) {
         data: {
           teacherId: session.userId,
           subjectName: subjectName,
-          subjectCode: `SUB-${Math.floor(1000 + Math.random() * 9000)}`
+          subjectCode: newCode("SUB")
         }
       });
     }
 
-    // Generate unique 4-digit access code (e.g. PS-1234)
-    let accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Generate a cryptographically random, high-entropy access code.
+    let accessCode = newCode("PS");
     let codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
     while (codeExists) {
-      accessCode = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+      accessCode = newCode("PS");
       codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
     }
 
     // Filter and sanitize questions and choices
     const validQuestions = Array.isArray(questions)
-      ? questions
-          .filter((q: any) => q && q.questionText && String(q.questionText).trim() !== "")
-          .map((q: any) => {
+      ? (questions as RawQuestion[]).slice(0, 100)
+          .filter((q) => q && typeof q.questionText === "string" && q.questionText.trim() !== "" && q.questionText.length <= 2_000)
+          .map((q) => {
             const rawChoices = Array.isArray(q.choices) ? q.choices : [];
             const validChoices = rawChoices
-              .filter((c: any) => c && c.choiceText && String(c.choiceText).trim() !== "")
-              .map((c: any) => ({
+              .slice(0, 10)
+              .filter((c: RawChoice) => c && typeof c.choiceText === "string" && c.choiceText.trim() !== "" && c.choiceText.length <= 1_000)
+              .map((c: RawChoice) => ({
                 choiceText: String(c.choiceText).trim(),
                 isCorrect: Boolean(c.isCorrect),
               }));
 
             // Ensure at least one choice is marked correct
-            if (validChoices.length > 0 && !validChoices.some((c: any) => c.isCorrect)) {
+            if (validChoices.length > 0 && !validChoices.some((c) => c.isCorrect)) {
               validChoices[0].isCorrect = true;
             }
 
             return {
               questionText: String(q.questionText).trim(),
-              questionType: q.questionType || "multiple_choice",
-              points: Number(q.points) || 1,
+              questionType: typeof q.questionType === "string" ? q.questionType.slice(0, 50) : "multiple_choice",
+              points: Math.max(1, Math.min(100, Number(q.points) || 1)),
               choices: {
                 create: validChoices,
               },
@@ -178,9 +190,9 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         description: description ? description.trim() : null,
         accessCode,
-        duration: duration || 60,
+        duration: Math.max(1, Math.min(480, Number(duration) || 60)),
         totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
-        passingScore: passingScore || 50,
+        passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
         quizStatus: "draft",
         quizType: isGamified !== false ? "gamified" : "standard",
         shuffleQuestions: shuffleQuestions || false,
@@ -204,7 +216,7 @@ export async function POST(req: NextRequest) {
     // Broadcast quiz creation to admin
     try {
       const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("admin-dashboard", "activity", {
+      await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "quiz-created",
         userId: session.userId,
         fullName: session.fullName,
@@ -217,8 +229,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, quiz }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Create quiz error:", error);
-    return NextResponse.json({ error: error?.message || "Failed to create quiz" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create quiz" }, { status: 500 });
   }
 }

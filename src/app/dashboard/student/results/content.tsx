@@ -1,17 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, BarChart3, Trash2 } from "lucide-react";
+import { CheckCircle2, BarChart3 } from "lucide-react";
 import ResultModal from "@/components/student/ResultModal";
 
 export default function ResultsContent() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
-
-  useEffect(() => {
-    fetchResults();
-  }, []);
 
   const fetchResults = async () => {
     try {
@@ -28,21 +24,9 @@ export default function ResultsContent() {
     }
   };
 
-  const handleClearHistory = async () => {
-    if (!confirm("Are you sure you want to completely delete your quiz history? This action cannot be undone.")) return;
-    
-    try {
-      const res = await fetch("/api/dashboard/student/results", {
-        method: "DELETE"
-      });
-      const data = await res.json();
-      if (data.success) {
-        setResults([]);
-      }
-    } catch (error) {
-      console.error("Failed to clear history", error);
-    }
-  };
+  useEffect(() => {
+    fetchResults();
+  }, []);
 
   const calculateAverage = () => {
     if (results.length === 0) return 0;
@@ -74,13 +58,6 @@ export default function ResultsContent() {
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
           <h3 className="text-sm font-bold text-[var(--ink)]">📈 Complete Results History</h3>
-          <button 
-            onClick={handleClearHistory}
-            className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear All History
-          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">

@@ -177,8 +177,8 @@ export default function DashboardShell({
       import("pusher-js").then((PusherClient) => {
         const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
         const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
-        pusher = new PusherClient.default(key, { cluster });
-        const channel = pusher.subscribe("admin-dashboard");
+        pusher = new PusherClient.default(key, { cluster, authEndpoint: "/api/pusher/auth" });
+        const channel = pusher.subscribe("private-admin-dashboard");
         channel.bind("activity", () => {
           fetchNotifs();
         });
@@ -274,8 +274,8 @@ export default function DashboardShell({
         if (session && session.userId) {
           const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
           const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
-          const pusher = new PusherClient(pusherKey, { cluster: pusherCluster });
-          const channel = pusher.subscribe(`user-${session.userId}`);
+          const pusher = new PusherClient(pusherKey, { cluster: pusherCluster, authEndpoint: "/api/pusher/auth" });
+          const channel = pusher.subscribe(`private-user-${session.userId}`);
           
           channel.bind("notification", (data: any) => {
             const newNotif: Notification = {

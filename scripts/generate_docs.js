@@ -1,6 +1,9 @@
-const fs = require("fs");
-const path = require("path");
-const { jsPDF } = require("jspdf");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { jsPDF } from "jspdf";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Helper function to create standard formatted PDF from text section content
 function createPdfDocument(title, subtitle, sections, outputPath) {

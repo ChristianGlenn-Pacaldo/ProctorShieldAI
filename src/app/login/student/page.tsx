@@ -154,8 +154,8 @@ export default function StudentLoginPage() {
       return;
     }
 
-    if (regPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (regPassword.length < 10 || !/[A-Za-z]/.test(regPassword) || !/\d/.test(regPassword)) {
+      setError("Password must be at least 10 characters and contain letters and numbers");
       return;
     }
 
@@ -552,7 +552,7 @@ export default function StudentLoginPage() {
                           type="password"
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Min. 6 characters"
+                          placeholder="Min. 10 characters with letters and numbers"
                           autoComplete="new-password"
                           className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                           required
