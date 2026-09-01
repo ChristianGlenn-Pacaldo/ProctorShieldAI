@@ -512,11 +512,11 @@ export default function QuizRoom() {
         // Notify teacher once (lightweight)
         setTimeout(() => notifyTeacherJoined(), 1500);
 
-        // Upload snapshots every 1.5 seconds for live monitor feed
+        // Upload snapshots every 1 second (1000ms) for real-time AI snapshot monitoring
         uploadSnapshot();
         snapshotInterval = setInterval(() => {
           uploadSnapshot();
-        }, 1500);
+        }, 1000);
 
         // Load face-api models and COCO-SSD
         try {

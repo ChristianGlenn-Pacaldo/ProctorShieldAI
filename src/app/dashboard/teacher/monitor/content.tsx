@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
-import { Crown, Shield, Check, Radio } from "lucide-react";
+import { Crown, Shield, Check, Camera, Radio, AlertTriangle } from "lucide-react";
 
 interface Feed {
   id: string;
@@ -20,32 +20,32 @@ interface Feed {
 
 function StudentVideoFeed({ feed }: { feed: Feed }) {
   return (
-    <div className={`rounded-xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-lg`}>
-      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-44 flex items-center justify-center relative overflow-hidden">
-        {/* Live Snapshot Stream Feed */}
+    <div className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}>
+      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
+        {/* Live 1-Second Snapshot Stream */}
         {feed.snapshot ? (
           <img 
             src={feed.snapshot} 
             alt={feed.name} 
-            className="w-full h-full object-cover animate-fade-in" 
+            className="w-full h-full object-cover" 
           />
         ) : (
           <div className="flex flex-col items-center gap-2.5 px-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl font-extrabold text-blue-400 shadow-md">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl font-extrabold text-blue-400 shadow-inner">
               {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
             <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
-              In Exam Lobby (Starting...)
+              In Exam Lobby (Waiting to Start)
             </span>
           </div>
         )}
 
-        {/* Live indicator badge */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[9px] font-extrabold border shadow-md">
+        {/* Top-Left Live Indicator Badge */}
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[10px] font-extrabold border border-white/10 shadow-md">
           {feed.snapshot ? (
             <>
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
-              <span className="text-emerald-400 tracking-wider">📸 LIVE SNAPSHOT</span>
+              <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT (1s)</span>
             </>
           ) : (
             <>
@@ -55,9 +55,9 @@ function StudentVideoFeed({ feed }: { feed: Feed }) {
           )}
         </div>
 
-        {/* Violation badge */}
+        {/* Top-Right Violation Badge */}
         {feed.violationCount > 0 && (
-          <div className="absolute top-2 right-2 px-2.5 py-1 bg-red-600 rounded-lg text-[9px] font-extrabold text-white shadow-md border border-red-400/30 animate-pulse">
+          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-red-600 rounded-lg text-[10px] font-extrabold text-white shadow-md border border-red-400/40 animate-pulse">
             {feed.violationCount}/3 ⚠ VIOLATION
           </div>
         )}
@@ -65,10 +65,15 @@ function StudentVideoFeed({ feed }: { feed: Feed }) {
 
       <div className="px-4 py-3 bg-[var(--surface2)] border-t border-[var(--border)]">
         <div className="flex items-center justify-between text-xs font-bold">
-          <span className="text-[var(--ink)] truncate max-w-[150px]">{feed.name}</span>
+          <span className="text-[var(--ink)] truncate max-w-[160px] font-semibold">{feed.name}</span>
           <span className={`${feed.statusColor} whitespace-nowrap text-[11px]`}>{feed.status}</span>
         </div>
-        <div className="text-[10px] font-medium text-[var(--muted)] mt-0.5 truncate">{feed.quizTitle}</div>
+        <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
+          <span>{feed.quizTitle}</span>
+          <span className="text-[9px] text-[var(--muted2)]">
+            {feed.snapshot ? "Live" : "Waiting"}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -79,7 +84,6 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   const [totalViolations, setTotalViolations] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
-  const feedsRef = useRef<Feed[]>([]);
 
   // Subscription gating
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -101,11 +105,6 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     };
     checkSub();
   }, []);
-
-  // Keep ref in sync
-  useEffect(() => {
-    feedsRef.current = feeds;
-  }, [feeds]);
 
   const handleApprove = async (studentQuizId: number, action: "accept" | "reject") => {
     try {
@@ -137,7 +136,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     }
   };
 
-  // ── Pusher for lightweight join/violation events ──
+  // ── Pusher for real-time 1-second snapshots, joins & violations ──
   useEffect(() => {
     if (!teacherId || teacherId === "unknown") return;
 
@@ -146,23 +145,66 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1" }
     );
 
-    const channel = pusher.subscribe(`teacher-${teacherId}`);
+    const teacherChannel = pusher.subscribe(`teacher-${teacherId}`);
+    const broadcastChannel = pusher.subscribe("teacher-monitor");
 
-    channel.bind("late-join-request", (data: any) => {
+    // Real-Time 1-Second Snapshot Receiver
+    const handleLiveSnapshot = (data: any) => {
+      const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
+      const studentNameLower = String(data.studentName || "").toLowerCase().trim();
+
+      setFeeds((prev) => {
+        const existingIndex = prev.findIndex((f) => 
+          String(f.id) === studentId || 
+          String(f.name || "").toLowerCase().trim() === studentNameLower
+        );
+
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            snapshot: data.snapshot,
+            lastSeen: new Date(),
+          };
+          return updated;
+        } else {
+          return [
+            ...prev,
+            {
+              id: studentId,
+              name: data.studentName,
+              quizTitle: data.quizTitle || "Quiz",
+              status: "✓ Active",
+              statusColor: "text-emerald-500",
+              border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
+              joinedAt: new Date(),
+              lastSeen: new Date(),
+              violationCount: 0,
+              snapshot: data.snapshot,
+            },
+          ];
+        }
+      });
+    };
+
+    teacherChannel.bind("live-snapshot", handleLiveSnapshot);
+    broadcastChannel.bind("live-snapshot", handleLiveSnapshot);
+
+    teacherChannel.bind("late-join-request", (data: any) => {
       setPendingApprovals((prev) => {
         if (prev.find((p) => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
 
-    channel.bind("retake-request", (data: any) => {
+    teacherChannel.bind("retake-request", (data: any) => {
       setPendingRetakes((prev) => {
         if (prev.find((p) => p.studentQuizId === data.studentQuizId)) return prev;
         return [...prev, data];
       });
     });
 
-    channel.bind("student-joined", (data: any) => {
+    teacherChannel.bind("student-joined", (data: any) => {
       const studentId = data.studentId ? String(data.studentId) : data.studentName;
       setFeeds((prev) => {
         const exists = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
@@ -189,7 +231,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       });
     });
 
-    channel.bind("new-violation", (data: any) => {
+    teacherChannel.bind("new-violation", (data: any) => {
       setTotalViolations((prev) => prev + 1);
       const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
       const studentNameLower = String(data.studentName || "").toLowerCase().trim();
@@ -249,51 +291,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       }, 6000);
     });
 
-    channel.bind("live-snapshot", (data: any) => {
-      const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
-      const studentNameLower = String(data.studentName || "").toLowerCase().trim();
-
-      setFeeds((prev) => {
-        const existingIndex = prev.findIndex((f) => 
-          String(f.id) === studentId || 
-          String(f.name || "").toLowerCase().trim() === studentNameLower
-        );
-
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            snapshot: data.snapshot,
-            lastSeen: new Date(),
-          };
-          return updated;
-        } else {
-          return [
-            ...prev,
-            {
-              id: studentId,
-              name: data.studentName,
-              quizTitle: data.quizTitle || "Quiz",
-              status: "✓ Active",
-              statusColor: "text-emerald-500",
-              border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
-              joinedAt: new Date(),
-              lastSeen: new Date(),
-              violationCount: 0,
-              snapshot: data.snapshot,
-            },
-          ];
-        }
-      });
-    });
-
     return () => {
       pusher.unsubscribe(`teacher-${teacherId}`);
+      pusher.unsubscribe("teacher-monitor");
       pusher.disconnect();
     };
   }, [teacherId]);
 
-  // ── Poll snapshots from server ──
+  // ── Poll 1-second snapshots as automatic background sync ──
   useEffect(() => {
     if (!teacherId || teacherId === "unknown") return;
 
@@ -308,8 +313,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           setFeeds((prev) => {
             let updated = [...prev];
 
-            // ── Single Student Guarantee Fallback ──
-            // If 1 student card exists on screen and 1 snapshot exists in storage, bind them directly!
+            // Single Student Direct Bind Guarantee
             if (updated.length === 1 && snapshots.length === 1 && snapshots[0].snapshot) {
               updated[0] = {
                 ...updated[0],
@@ -362,7 +366,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       } catch {}
     };
 
-    const interval = setInterval(pollSnapshots, 1500);
+    const interval = setInterval(pollSnapshots, 1000);
     pollSnapshots();
 
     return () => clearInterval(interval);
@@ -388,16 +392,15 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             </div>
             <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">Live Monitoring is Premium</h2>
             <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
-              Real-time webcam monitoring of students during quizzes requires a Premium subscription.
-              Upgrade to watch live feeds, approve late joins, and catch cheating in real-time.
+              Real-time 1-second AI snapshot monitoring of students during quizzes requires a Premium subscription.
             </p>
             <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
               {[
-                "Real-time 1-second webcam feeds",
+                "1-Second Real-Time AI Webcam Snapshots",
                 "Live violation alerts & trust scores",
                 "Late join approval system",
                 "Retake request management",
-                "AI-powered cheating detection",
+                "AI-powered cheating detection verdicts",
               ].map((feat) => (
                 <div key={feat} className="flex items-center gap-2 text-xs">
                   <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -411,14 +414,10 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             </div>
             <Link
               href="/dashboard/teacher/billing"
-              className="w-full py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5"
+              className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5"
             >
-              <Crown className="w-4 h-4" /> Upgrade to Premium
+              <Crown className="w-4 h-4" /> Go to Billing & Upgrade
             </Link>
-            <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[var(--muted)]">
-              <Shield className="w-3 h-3" />
-              Secured by PayMongo · GCash & Card accepted
-            </div>
           </div>
         </div>
       </div>
@@ -426,7 +425,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   }
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="animate-fade-in space-y-5">
       {/* Pending Approvals */}
       {pendingApprovals.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
@@ -442,8 +441,8 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   <div className="text-xs text-[var(--muted)]">wants to join &quot;{req.quizTitle}&quot; late</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
-                  <button onClick={() => handleApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-lg shadow-emerald-600/20">Accept</button>
+                  <button onClick={() => handleApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20 cursor-pointer">Reject</button>
+                  <button onClick={() => handleApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-lg shadow-emerald-600/20 cursor-pointer">Accept</button>
                 </div>
               </div>
             ))}
@@ -466,8 +465,8 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   <div className="text-xs text-[var(--muted)]">requested to retake &quot;{req.quizTitle}&quot;</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20">Reject</button>
-                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-600/20">Accept</button>
+                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "reject")} className="px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20 cursor-pointer">Reject</button>
+                  <button onClick={() => handleRetakeApprove(req.studentQuizId, "accept")} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-600/20 cursor-pointer">Accept</button>
                 </div>
               </div>
             ))}
@@ -477,39 +476,42 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] px-5 py-4">
+        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Active Students</div>
-          <div className="text-2xl font-bold text-emerald-500">{feeds.length}</div>
+          <div className="text-2xl font-extrabold text-emerald-500 font-[family-name:var(--font-display)]">{feeds.length}</div>
         </div>
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] px-5 py-4">
+        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Total Violations</div>
-          <div className="text-2xl font-bold text-red-500">{totalViolations}</div>
+          <div className="text-2xl font-extrabold text-red-500 font-[family-name:var(--font-display)]">{totalViolations}</div>
         </div>
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] px-5 py-4">
-          <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Status</div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-sm font-bold text-emerald-500">LIVE SNAPSHOT STREAM (1.5s)</span>
+        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
+          <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Surveillance Mode</div>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_6px_#10b981]" />
+            <span className="text-xs font-extrabold text-emerald-500 uppercase tracking-wide">1-SEC AI SNAPSHOT</span>
           </div>
         </div>
       </div>
 
       {/* Main Monitor Grid */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📸 Live Video Monitoring — Real-Time Snapshot Stream</h3>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+          <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)] flex items-center gap-2">
+            <Camera className="w-4 h-4 text-indigo-500" />
+            Live AI Surveillance — 1-Second Snapshot Feed
+          </h3>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">REAL-TIME SNAPSHOT STREAM</span>
+            <span className="text-[10px] font-extrabold text-emerald-500 uppercase tracking-wide font-mono">1s AUTO-REFRESH</span>
           </div>
         </div>
-        <div className="p-5">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {feeds.length === 0 ? (
-              <div className="col-span-full h-40 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-xl text-[var(--muted)]">
-                <span className="text-3xl mb-3">📸</span>
-                <p className="text-sm font-semibold mb-1">Waiting for active student snapshot feeds...</p>
-                <p className="text-xs text-[var(--muted)]">Students will appear here with live webcam snapshot feeds when they start a quiz.</p>
+              <div className="col-span-full h-44 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-2xl text-[var(--muted)]">
+                <Camera className="w-8 h-8 text-indigo-500 mb-2 opacity-50" />
+                <p className="text-sm font-bold text-[var(--ink)] mb-1">Waiting for active students to join...</p>
+                <p className="text-xs text-[var(--muted)]">Student webcam photos will appear here automatically every 1 second once they start a quiz.</p>
               </div>
             ) : (
               feeds.map((f) => (
