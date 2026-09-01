@@ -69,15 +69,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "You are not enrolled in this quiz" }, { status: 403 });
       }
 
-      if (quiz.quizStatus === "draft") {
-        return NextResponse.json({ error: "This quiz is not yet active." }, { status: 403 });
-      }
-
       if (quiz.quizStatus === "ended") {
         return NextResponse.json({ error: "This quiz has already ended." }, { status: 403 });
       }
 
-      if (quiz.shuffleQuestions) {
+      const isDraftOrScheduled = quiz.quizStatus === "draft" || quiz.quizStatus === "scheduled";
+
+      if (!isDraftOrScheduled && quiz.shuffleQuestions) {
         // Shuffle questions deterministically using the student's unique studentQuiz.id
         questions = shuffleArray(quiz.questions, studentQuiz.id);
         
@@ -89,6 +87,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    const isDraftOrScheduled = session.role === "student" && (quiz.quizStatus === "draft" || quiz.quizStatus === "scheduled");
+    const safeQuestions = isDraftOrScheduled ? [] : questions;
+
     return NextResponse.json({
       success: true,
       userId: session.userId,
@@ -99,13 +100,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         title: quiz.title,
         description: quiz.description,
         duration: quiz.duration,
-        totalQuestions: quiz.totalQuestions,
+        totalQuestions: quiz.totalQuestions || quiz.questions.length,
         passingScore: quiz.passingScore,
         shuffleQuestions: quiz.shuffleQuestions,
         quizStatus: quiz.quizStatus,
         subject: quiz.subject,
       },
-      questions: questions.map(q => ({
+      questions: safeQuestions.map(q => ({
         id: q.id,
         questionText: q.questionText,
         questionType: q.questionType,
@@ -152,6 +153,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         duration: body.duration !== undefined ? parseInt(body.duration) : existingQuiz.duration,
       },
     });
+
+    // Broadcast quiz status update to all waiting students in lobby
+    if (body.quizStatus) {
+      try {
+        const { pusherServer } = await import("@/lib/pusher");
+        await pusherServer.trigger(`quiz-${quizId}`, "quiz-started", {
+          quizId,
+          quizStatus: body.quizStatus,
+        });
+      } catch (e) {
+        console.error("Failed to broadcast quiz status update:", e);
+      }
+    }
 
     return NextResponse.json({ success: true, quiz: updatedQuiz });
   } catch (error) {

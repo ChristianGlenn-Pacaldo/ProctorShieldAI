@@ -283,7 +283,7 @@ export default function QuizRoom() {
         const data = await res.json();
         if (res.ok && data.success) {
           setQuiz(data.quiz);
-          setQuestions(data.questions);
+          setQuestions(data.questions || []);
           setStudentQuizStatus(data.studentQuizStatus || "");
           setStudentQuizId(data.studentQuizId || null);
           setUserId(data.userId || "");
@@ -300,7 +300,26 @@ export default function QuizRoom() {
       }
     };
     loadQuiz();
-  }, [quizId]);
+
+    // Auto-poll every 3s if quiz is in draft/waiting mode
+    const pollInterval = setInterval(() => {
+      if (!hasStarted) {
+        fetch(`/api/quizzes/${quizId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.quiz) {
+              setQuiz(data.quiz);
+              if (data.questions && data.questions.length > 0) {
+                setQuestions(data.questions);
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [quizId, hasStarted]);
 
   // Handle pusher lobby real-time updates
   useEffect(() => {
@@ -314,8 +333,17 @@ export default function QuizRoom() {
       });
 
       const quizChannel = pusherClient.subscribe(`quiz-${quizId}`);
-      quizChannel.bind("quiz-started", () => {
-        setQuiz((prev: any) => prev ? { ...prev, quizStatus: "in_progress" } : prev);
+      quizChannel.bind("quiz-started", (data: any) => {
+        // Teacher started quiz! Fetch full quiz data immediately
+        fetch(`/api/quizzes/${quizId}`)
+          .then((res) => res.json())
+          .then((freshData) => {
+            if (freshData.success) {
+              setQuiz(freshData.quiz);
+              setQuestions(freshData.questions || []);
+            }
+          })
+          .catch(() => {});
       });
 
       const studentChannel = pusherClient.subscribe(`student-${userId}`);
@@ -1017,22 +1045,49 @@ export default function QuizRoom() {
                 <p className="flex items-center gap-2 text-red-400 mt-3 pt-3 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Quiz will auto-terminate after 3 violations.</p>
               </div>
 
-              {studentQuizStatus === "pending_approval" ? (
-                <button disabled className="w-full py-3.5 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Waiting for Teacher Approval...
-                </button>
-              ) : quiz?.quizStatus === "draft" || quiz?.quizStatus === "scheduled" ? (
-                <button disabled className="w-full py-3.5 bg-gray-800 text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-gray-700">
-                  <Clock className="w-4 h-4" />
-                  Waiting for Teacher to Start Quiz...
-                </button>
+              {/* LOBBY / WAITING FOR TEACHER STATUS */}
+              {quiz?.quizStatus === "draft" || quiz?.quizStatus === "scheduled" ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2.5">
+                    <div className="relative flex items-center justify-center my-1">
+                      <span className="w-9 h-9 rounded-full bg-amber-500/20 animate-ping absolute" />
+                      <span className="w-7 h-7 rounded-full bg-amber-500/30 border border-amber-400 flex items-center justify-center text-amber-300 text-sm font-bold relative z-10">
+                        ⏳
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-amber-300">Waiting for Teacher to Start the Quiz...</p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                        You are in the exam lobby. Please remain on this screen. The session will automatically unlock the moment your teacher starts it.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[11px] font-bold text-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Live Lobby Active
+                    </div>
+                  </div>
+
+                  <button disabled className="w-full py-3.5 bg-gray-800/80 text-gray-400 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-gray-700">
+                    <Clock className="w-4 h-4 animate-spin text-amber-400" />
+                    Waiting for Teacher to Start...
+                  </button>
+                </div>
+              ) : studentQuizStatus === "pending_approval" ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2">
+                    <p className="text-sm font-bold text-amber-300">Late Entry Approval Pending</p>
+                    <p className="text-xs text-slate-400">Waiting for teacher approval to join this in-progress quiz.</p>
+                  </div>
+                  <button disabled className="w-full py-3.5 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Waiting for Teacher Approval...
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => setHasStarted(true)}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black text-sm rounded-xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black text-sm rounded-xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer animate-fade-in"
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4 text-amber-300" />
                   I Understand, Start Quiz
                 </button>
               )}
