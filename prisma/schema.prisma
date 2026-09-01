@@ -91,6 +91,7 @@ model Quiz {
   passingScore     Int?     @map("passing_score")
   shuffleQuestions Boolean  @default(false) @map("shuffle_questions")
   allowRetake      Boolean  @default(false) @map("allow_retake")
+  isGamified       Boolean  @default(true) @map("is_gamified")
   quizStatus       String   @default("draft") @map("quiz_status")
   createdAt        DateTime @default(now()) @map("created_at")
 

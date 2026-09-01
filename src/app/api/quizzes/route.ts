@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unauthorized. Only teachers can create quizzes${currentRole}.` }, { status: 401 });
     }
 
-    const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions } = await req.json();
+    const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions, isGamified } = await req.json();
 
     if (!subjectName || !title) {
       return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
@@ -149,6 +149,7 @@ export async function POST(req: NextRequest) {
         passingScore: passingScore || 50,
         quizStatus: "draft",
         shuffleQuestions: shuffleQuestions || false,
+        isGamified: isGamified !== undefined ? Boolean(isGamified) : true,
         questions: questions && questions.length > 0 ? {
           create: questions.map((q: any) => ({
             questionText: q.questionText,
