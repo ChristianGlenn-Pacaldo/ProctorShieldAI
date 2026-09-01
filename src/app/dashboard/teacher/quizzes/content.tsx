@@ -662,7 +662,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
                       />
                       <label htmlFor="isGamified" className="text-xs font-bold text-violet-400 cursor-pointer select-none flex items-center gap-1.5 py-1">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                        Wayground Gamified Mode (Streaks & Power-Ups)
+                        ProctorShield Gamified Mode (Streaks & Power-Ups)
                       </label>
                     </div>
                   </div>

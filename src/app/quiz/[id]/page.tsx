@@ -63,7 +63,7 @@ export default function QuizRoom() {
   const [studentQuizId, setStudentQuizId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string>("");
 
-  // ── WAYGROUND / QUIZIZZ GAMIFICATION STATE ──────────────────
+  // ── PROCTORSHIELD GAMIFICATION STATE ──────────────────
   const [streak, setStreak] = useState(1);
   const [xp, setXp] = useState(100);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -884,7 +884,7 @@ export default function QuizRoom() {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // ─── POST-QUIZ WAYGROUND CELEBRATORY PODIUM SCREEN ────────────────
+  // ─── POST-QUIZ PROCTORSHIELD CELEBRATORY PODIUM SCREEN ────────────────
   if (quizSubmittedResult) {
     return (
       <div className="min-h-screen bg-[#0d0f18] text-white flex items-center justify-center p-4 relative overflow-hidden">
@@ -907,7 +907,7 @@ export default function QuizRoom() {
               Assessment Completed!
             </h1>
             <p className="text-sm text-slate-400 mt-1 font-medium">
-              Wayground Gamified Integrity Score Recorded
+              ProctorShield Gamified Integrity Score Recorded
             </p>
           </div>
 
@@ -1002,7 +1002,7 @@ export default function QuizRoom() {
               
               {/* Gamification Badge */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-bold mb-4">
-                <Flame className="w-3.5 h-3.5 text-orange-400" /> Wayground Gamified Exam Engine Enabled
+                <Flame className="w-3.5 h-3.5 text-orange-400" /> ProctorShield Gamified Exam Engine Enabled
               </div>
 
               <p className="text-gray-400 mb-6 text-sm leading-relaxed">
@@ -1043,7 +1043,7 @@ export default function QuizRoom() {
     );
   }
 
-  // ─── ACTIVE EXAM ROOM (WITH WAYGROUND GAMIFICATION) ────────────
+  // ─── ACTIVE EXAM ROOM (WITH PROCTORSHIELD GAMIFICATION) ────────────
   const answeredCount = Object.keys(answersState).length;
   const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 
@@ -1094,7 +1094,7 @@ export default function QuizRoom() {
         </div>
       )}
 
-      {/* TOP HEADER WITH WAYGROUND GAMIFICATION HUD */}
+      {/* TOP HEADER WITH PROCTORSHIELD GAMIFICATION HUD */}
       <header className="py-2.5 px-4 lg:px-8 bg-[#131627] border-b border-[#242a42] flex flex-wrap items-center justify-between shrink-0 shadow-md gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-base lg:text-xl font-black text-white tracking-tight font-[family-name:var(--font-display)] truncate max-w-[180px] sm:max-w-none">
@@ -1272,11 +1272,11 @@ export default function QuizRoom() {
         {/* QUESTIONS STACK & POWER-UP DOCK */}
         <div className="w-full flex-1 flex flex-col gap-4 overflow-hidden">
           
-          {/* WAYGROUND POWER-UP DOCK */}
+          {/* PROCTORSHIELD POWER-UP DOCK */}
           <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md shrink-0">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-violet-400" />
-              <span className="text-xs font-bold text-slate-300">Wayground Power-Ups:</span>
+              <span className="text-xs font-bold text-slate-300">ProctorShield Power-Ups:</span>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
