@@ -84,6 +84,7 @@ model Quiz {
   description      String?
   accessCode       String?  @unique @map("access_code")
   isAiGenerated    Boolean  @default(false) @map("is_ai_generated")
+  isGamified       Boolean  @default(true) @map("is_gamified")
   sourceFilePath   String?  @map("source_file_path")
   quizType         String?  @map("quiz_type")
   duration         Int?
@@ -142,6 +143,10 @@ model StudentQuiz {
   aiVerdict           String?  @map("ai_verdict")
   cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
   quizStatus          String?  @map("quiz_status")
+  deviceType          String?  @map("device_type")
+  monitoringLevel     String?  @map("monitoring_level")
+  deviceCapabilities  Json?    @map("device_capabilities")
+  lastHeartbeatAt     DateTime? @map("last_heartbeat_at")
   createdAt           DateTime @default(now()) @map("created_at")
 
   student    User          @relation(fields: [studentId], references: [id], onDelete: Cascade)

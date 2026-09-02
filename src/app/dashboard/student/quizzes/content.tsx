@@ -63,7 +63,7 @@ export default function QuizzesContent({ userId }: { userId: string }) {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div>
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div className="flex items-center gap-4">

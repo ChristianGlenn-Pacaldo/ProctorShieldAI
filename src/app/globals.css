@@ -20,32 +20,40 @@
 }
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f4f8ff;
+  --foreground: #0b1733;
+  --ambient-a: rgba(37, 99, 235, 0.14);
+  --ambient-b: rgba(14, 165, 233, 0.11);
+  --ambient-c: rgba(56, 189, 248, 0.09);
   --surface: #ffffff;
-  --surface2: #f1f5f9;
-  --border: #e2e8f0;
-  --border2: #cbd5e1;
-  --ink: #0f172a;
-  --ink2: #334155;
-  --ink3: #475569;
-  --muted: #64748b;
+  --surface2: #edf4ff;
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --border: rgba(37, 99, 235, 0.13);
+  --border2: rgba(37, 99, 235, 0.22);
+  --ink: #0b1733;
+  --ink2: #253858;
+  --ink3: #405576;
+  --muted: #637592;
   --muted2: #94a3b8;
-  --dark-bg: #0b0f19;
-  --dark-s1: #111827;
-  --dark-s2: #1f2937;
-  --dark-s3: #374151;
+  --dark-bg: #060b17;
+  --dark-s1: #0b1426;
+  --dark-s2: #111f38;
+  --dark-s3: #1a2e4d;
   --dark-border: rgba(255, 255, 255, 0.08);
   --sidebar-w: 240px;
 }
 
 .dark {
-  --background: #0b0f19;
+  --background: #060b17;
   --foreground: #f8fafc;
-  --surface: #111827;
-  --surface2: #1f2937;
-  --border: rgba(255, 255, 255, 0.08);
-  --border2: rgba(255, 255, 255, 0.14);
+  --ambient-a: rgba(37, 99, 235, 0.18);
+  --ambient-b: rgba(14, 165, 233, 0.13);
+  --ambient-c: rgba(56, 189, 248, 0.08);
+  --surface: #0b1426;
+  --surface2: #111f38;
+  --surface-glass: rgba(11, 20, 38, 0.84);
+  --border: rgba(96, 165, 250, 0.13);
+  --border2: rgba(96, 165, 250, 0.22);
   --ink: #f8fafc;
   --ink2: #cbd5e1;
   --ink3: #94a3b8;
@@ -61,11 +69,248 @@
 
 body {
   font-family: var(--font-sans);
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(circle at 12% 12%, var(--ambient-a), transparent 34%),
+    radial-gradient(circle at 88% 18%, var(--ambient-b), transparent 32%),
+    radial-gradient(circle at 52% 92%, var(--ambient-c), transparent 38%),
+    linear-gradient(135deg, var(--background) 0%, color-mix(in srgb, var(--background) 94%, #6366f1) 48%, var(--background) 100%);
+  background-attachment: fixed;
+  background-size: 125% 125%, 135% 135%, 145% 145%, 100% 100%;
   color: var(--foreground);
   min-height: 100vh;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
+
+/* Keep app shells transparent so the ambient background remains visible. */
+.app-gradient-shell {
+  background: transparent;
+}
+
+.app-glass-panel {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+/* Premium blue SaaS shell shared by Admin, Teacher, and Student dashboards. */
+.dashboard-ambient {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 86% 8%, rgba(56, 189, 248, 0.12), transparent 28%),
+    radial-gradient(circle at 42% 100%, rgba(37, 99, 235, 0.1), transparent 34%),
+    linear-gradient(145deg, var(--background), color-mix(in srgb, var(--background) 93%, #dbeafe));
+}
+
+.dashboard-sidebar {
+  background:
+    radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.13), transparent 32%),
+    linear-gradient(180deg, #081328 0%, #0a1830 52%, #071224 100%);
+  box-shadow: 18px 0 50px -36px rgba(15, 70, 160, 0.7);
+}
+
+.dashboard-nav-item svg {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), color 220ms ease;
+}
+
+.dashboard-nav-active {
+  background: linear-gradient(110deg, rgba(37, 99, 235, 0.95), rgba(14, 165, 233, 0.78));
+  box-shadow: 0 10px 24px -16px rgba(56, 189, 248, 0.9), inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.dashboard-nav-active::before {
+  content: "";
+  width: 3px;
+  height: 18px;
+  margin-left: -0.4rem;
+  border-radius: 999px;
+  background: #bae6fd;
+  box-shadow: 0 0 14px rgba(125, 211, 252, 0.8);
+}
+
+.dashboard-topbar {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  backdrop-filter: blur(20px) saturate(145%);
+  box-shadow: 0 12px 35px -32px rgba(30, 64, 175, 0.7);
+}
+
+.dashboard-dropdown {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+
+.dashboard-main {
+  position: relative;
+}
+
+.dashboard-main :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.auth-shell :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: var(--border2) !important;
+  border-radius: 0.75rem;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.dashboard-main :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  background-color: var(--surface) !important;
+  color: var(--ink) !important;
+}
+
+.dashboard-main :where([class*="border-dashed"]) {
+  background: color-mix(in srgb, var(--surface2) 58%, transparent);
+  border-color: var(--border2);
+}
+
+.dashboard-main :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus,
+.auth-shell :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12) !important;
+}
+
+.dashboard-main :where(button, a).ui-primary,
+.ui-primary {
+  background: linear-gradient(110deg, #1d4ed8 0%, #2563eb 48%, #0ea5e9 100%);
+  box-shadow: 0 10px 24px -15px rgba(37, 99, 235, 0.9), inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.dashboard-main :where(button, a)[class*="bg-blue-600"],
+.dashboard-main :where(button, a)[class*="bg-indigo-600"],
+.dashboard-main :where(button, a)[class*="from-indigo-600"] {
+  background-image: linear-gradient(110deg, #1d4ed8 0%, #2563eb 50%, #0ea5e9 100%) !important;
+  box-shadow: 0 10px 24px -16px rgba(37, 99, 235, 0.85);
+}
+
+.dashboard-main :where([class*="bg-[var(--surface)]"])[class*="rounded"] {
+  box-shadow: 0 14px 42px -34px rgba(30, 64, 175, 0.55);
+}
+
+.dashboard-main table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.dashboard-main thead {
+  background: color-mix(in srgb, var(--surface2) 76%, transparent);
+}
+
+.dashboard-main th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.dashboard-main tbody tr {
+  transition: background-color 180ms ease;
+}
+
+.dashboard-main tbody tr:hover {
+  background: rgba(59, 130, 246, 0.055);
+}
+
+.auth-shell {
+  --surface: #0b1830;
+  --surface2: #0e203d;
+  --border: rgba(96, 165, 250, 0.16);
+  --border2: rgba(96, 165, 250, 0.26);
+  --ink: #f8fafc;
+  --ink2: #dbeafe;
+  --ink3: #bfdbfe;
+  --muted: #94a3b8;
+  --muted2: #64748b;
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(14, 165, 233, 0.19), transparent 28%),
+    radial-gradient(circle at 84% 82%, rgba(37, 99, 235, 0.2), transparent 30%),
+    linear-gradient(145deg, #030814 0%, #07162e 48%, #0b2550 100%) !important;
+}
+
+.auth-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.26;
+  background-image:
+    linear-gradient(rgba(125, 211, 252, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.08) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(to bottom, black, transparent 75%);
+}
+
+.auth-panel {
+  background: rgba(8, 20, 42, 0.82) !important;
+  border-color: rgba(96, 165, 250, 0.18) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+  box-shadow: 0 30px 80px -42px rgba(14, 165, 233, 0.65), inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.auth-shell :where(button, a)[class*="bg-blue-600"],
+.auth-shell :where(button, a)[class*="bg-indigo-600"],
+.auth-shell :where(button, a).ui-primary {
+  background-image: linear-gradient(110deg, #1d4ed8 0%, #2563eb 50%, #0ea5e9 100%) !important;
+  box-shadow: 0 12px 28px -16px rgba(14, 165, 233, 0.8);
+}
+
+.auth-shell :where(button, a)[class*="bg-blue-600"]:hover,
+.auth-shell :where(button, a)[class*="bg-indigo-600"]:hover,
+.auth-shell :where(button, a).ui-primary:hover {
+  filter: brightness(1.08);
+  transform: scale(1.02);
+}
+
+.marketing-shell {
+  background:
+    radial-gradient(circle at 50% -8%, rgba(37, 99, 235, 0.2), transparent 34%),
+    radial-gradient(circle at 94% 32%, rgba(14, 165, 233, 0.09), transparent 24%),
+    linear-gradient(180deg, #030814, #071122 52%, #050b16) !important;
+}
+
+.marketing-shell :where(button, a)[class*="bg-blue-600"] {
+  background-image: linear-gradient(110deg, #1d4ed8, #2563eb 52%, #0ea5e9) !important;
+  box-shadow: 0 12px 28px -16px rgba(14, 165, 233, 0.8);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .marketing-shell :where([class*="rounded-2xl"])[class*="border"]:hover {
+    transform: translateY(-4px);
+    border-color: rgba(96, 165, 250, 0.3);
+    box-shadow: 0 24px 50px -38px rgba(14, 165, 233, 0.75);
+  }
+}
+
+.exam-shell {
+  background:
+    radial-gradient(circle at 8% 10%, rgba(37, 99, 235, 0.08), transparent 27%),
+    linear-gradient(145deg, #070d19, #0a1425 58%, #080f1d) !important;
+}
+
+.exam-shell :where(button, a)[class*="from-indigo-600"],
+.exam-shell :where(button, a)[class*="bg-indigo-600"],
+.exam-shell :where(button, a)[class*="bg-violet-600"] {
+  background-image: linear-gradient(110deg, #1d4ed8, #2563eb 55%, #0ea5e9) !important;
+}
+
+.dashboard-main > :first-child {
+  max-width: 100%;
+}
+
+.dashboard-main :where(.grid) > :where([class*="rounded-xl"], [class*="rounded-2xl"]) {
+  animation: pageEnter 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-main :where(.grid) > :where([class*="rounded-xl"], [class*="rounded-2xl"]):nth-child(2) { animation-delay: 45ms; }
+.dashboard-main :where(.grid) > :where([class*="rounded-xl"], [class*="rounded-2xl"]):nth-child(3) { animation-delay: 80ms; }
+.dashboard-main :where(.grid) > :where([class*="rounded-xl"], [class*="rounded-2xl"]):nth-child(4) { animation-delay: 115ms; }
 
 /* ── SCROLLBAR ───────────────────────────────────────── */
 ::-webkit-scrollbar {
@@ -119,6 +364,22 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ambientGradient {
+  0% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+  50% { background-position: 9% 7%, 91% 12%, 45% 88%, 0 0; }
+  100% { background-position: 16% 13%, 82% 5%, 56% 82%, 0 0; }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -129,6 +390,96 @@ body {
 
 .animate-modal {
   animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-dropdown {
+  transform-origin: top right;
+  animation: dropdownIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.app-page-enter {
+  animation: pageEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* A shared viewport contract keeps every modal above dashboard stacking contexts. */
+.app-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 2.5vw, 1.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  isolation: isolate;
+}
+
+.app-modal-panel {
+  width: 100%;
+  max-height: calc(100dvh - 2rem);
+  margin-block: auto;
+}
+
+/* Shared tactile feedback for interactive controls and dashboard surfaces. */
+.app-motion-scope :where(a, button, input, select, textarea, [role="button"]) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, translate, scale;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-motion-scope :where(a, button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-indigo-light) 35%, transparent);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .app-motion-scope :where(button:not(:disabled), a[class*="rounded"], [role="button"]):hover {
+    translate: 0 -2px;
+  }
+
+  .dashboard-nav-item:not(.dashboard-nav-active):hover {
+    transform: translateX(3px);
+  }
+
+  .dashboard-nav-item:hover svg {
+    transform: scale(1.08);
+  }
+
+  .dashboard-main :where([class*="bg-[var(--surface)]"])[class*="rounded"]:not([class*="fixed"]):not([class*="absolute"]):hover {
+    translate: 0 -3px;
+    border-color: rgba(59, 130, 246, 0.24);
+    box-shadow: 0 20px 44px -30px rgba(30, 64, 175, 0.52);
+  }
+
+  .ui-primary:hover,
+  .dashboard-main :where(button, a)[class*="bg-blue-600"]:hover,
+  .dashboard-main :where(button, a)[class*="bg-indigo-600"]:hover {
+    scale: 1.025;
+    filter: brightness(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  body,
+  .animate-modal,
+  .animate-dropdown,
+  .animate-fade-in,
+  .animate-slide-up,
+  .app-page-enter {
+    animation: none !important;
+  }
+
+  .app-motion-scope *,
+  .app-motion-scope *::before,
+  .app-motion-scope *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── TOAST SYSTEM ────────────────────────────────────── */

@@ -4,7 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Sparkles, Camera, Upload, Trash, Check, Crown, Shield } from "lucide-react";
 import Link from "next/link";
 
-export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed = false }: { isSubscribed?: boolean }) {
+interface TeacherQuizzesPageProps {
+  isSubscribed?: boolean;
+  initialManualQuizCount?: number;
+  initialManualQuizLimit?: number;
+}
+
+export default function TeacherQuizzesPage({
+  isSubscribed: initialIsSubscribed = false,
+  initialManualQuizCount = 0,
+  initialManualQuizLimit = 5,
+}: TeacherQuizzesPageProps) {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -25,18 +35,21 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
   // Subscription Gating State
   const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
+  const [manualQuizCount, setManualQuizCount] = useState(initialManualQuizCount);
+  const [manualQuizLimit, setManualQuizLimit] = useState(initialManualQuizLimit);
   const [showBillingModal, setShowBillingModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<"ai" | "quiz_limit">("ai");
   const [isCheckingSub, setIsCheckingSub] = useState(true);
 
   // AI Modal State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<"text" | "upload" | "webcam">("text");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<any[]>([]);
+  const [creationSource, setCreationSource] = useState<"manual" | "ai">("manual");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -54,6 +67,8 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
         if (res.ok) {
           const data = await res.json();
           setIsSubscribed(data.isSubscribed);
+          setManualQuizCount(data.manualQuizCount ?? 0);
+          setManualQuizLimit(data.manualQuizLimit ?? initialManualQuizLimit);
         }
       } catch (err) {
         console.error("Subscription check failed:", err);
@@ -240,6 +255,12 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
   };
 
   const openNewQuizModal = () => {
+    if (!isSubscribed && manualQuizCount >= manualQuizLimit) {
+      setUpgradeReason("quiz_limit");
+      setShowBillingModal(true);
+      return;
+    }
+    setCreationSource("manual");
     setAiGeneratedQuestions([
       {
         questionText: "",
@@ -363,6 +384,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       }
 
       setAiGeneratedQuestions(data.questions);
+      setCreationSource("ai");
 
       const displayTopic = activeTab === "text" ? aiTopic : (activeTab === "upload" ? "Uploaded Document" : "Captured Document");
       setNewQuizForm({
@@ -400,6 +422,11 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
         const data = await res.json();
         setQuizzes(data.quizzes || []);
         setPendingRetakes(data.pendingRetakes || []);
+        if (data.entitlements) {
+          setIsSubscribed(data.entitlements.isSubscribed);
+          setManualQuizCount(data.entitlements.manualQuizCount ?? 0);
+          setManualQuizLimit(data.entitlements.manualQuizLimit ?? initialManualQuizLimit);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch quizzes", error);
@@ -441,13 +468,24 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
         body: JSON.stringify({
           ...newQuizForm,
           totalQuestions: aiGeneratedQuestions.length,
-          questions: aiGeneratedQuestions
+          questions: aiGeneratedQuestions,
+          isAiGenerated: creationSource === "ai",
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.entitlements) {
+          setIsSubscribed(data.entitlements.isSubscribed);
+          setManualQuizCount(data.entitlements.manualQuizCount ?? manualQuizCount);
+          setManualQuizLimit(data.entitlements.manualQuizLimit ?? manualQuizLimit);
+        }
+        if (data.code === "FREE_QUIZ_LIMIT_REACHED" || data.code === "SUBSCRIPTION_REQUIRED") {
+          setUpgradeReason(data.code === "FREE_QUIZ_LIMIT_REACHED" ? "quiz_limit" : "ai");
+          setIsCreateModalOpen(false);
+          setShowBillingModal(true);
+        }
         setCreateError(data.details || data.message || data.error || "Failed to create quiz");
         setIsCreating(false);
         return;
@@ -456,6 +494,12 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       // Success! Close modal, reset form, refresh quizzes
       setIsCreateModalOpen(false);
       setAiGeneratedQuestions([]);
+      setCreationSource("manual");
+      if (data.entitlements) {
+        setIsSubscribed(data.entitlements.isSubscribed);
+        setManualQuizCount(data.entitlements.manualQuizCount ?? manualQuizCount);
+        setManualQuizLimit(data.entitlements.manualQuizLimit ?? manualQuizLimit);
+      }
       setNewQuizForm({
         title: "",
         subjectName: "",
@@ -476,7 +520,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
   const filtered = quizzes.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="space-y-4">
       {/* Pending Retake Requests Banner */}
       {pendingRetakes.length > 0 && (
         <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 shadow-xs">
@@ -513,19 +557,20 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)]">📝 My Created Quizzes</h3>
-          <div className="flex gap-2">
-            <div className="relative">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <div className="relative w-full sm:w-auto">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search quizzes..."
-                className="w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
+                className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
               />
             </div>
             <button 
               onClick={() => {
                 if (!isSubscribed) {
+                  setUpgradeReason("ai");
                   setShowBillingModal(true);
                   return;
                 }
@@ -535,10 +580,15 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
               <Sparkles className="w-3.5 h-3.5" /> AI Create
               {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
             </button>
+            {!isSubscribed && !isCheckingSub && (
+              <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)] text-[10px] font-bold text-[var(--muted)]">
+                {manualQuizCount}/{manualQuizLimit} free quizzes
+              </span>
+            )}
             <button 
               onClick={openNewQuizModal}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all">
-              <Plus className="w-3.5 h-3.5" /> New Quiz
+              <Plus className="w-3.5 h-3.5" /> {isSubscribed ? "New Quiz" : "Manual Quiz"}
             </button>
           </div>
         </div>
@@ -613,13 +663,13 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       {/* CREATE QUIZ MODAL */}
       {isCreateModalOpen && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
+          className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsCreateModalOpen(false);
           }}
         >
           <div 
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
+            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
@@ -645,7 +695,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left Column: Metadata (5/12 grid span) */}
-                  <div className="lg:col-span-5 space-y-4">
+                  <div className="lg:col-span-5 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface2)]/55 p-4 sm:p-5">
                     <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">Quiz Settings</h3>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Quiz Title *</label>
@@ -680,15 +730,15 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
                       </label>
                     </div>
 
-                    <div className="flex items-center gap-2 py-1 px-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                    <div className="flex items-center gap-2 py-1 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                       <input 
                         type="checkbox" 
                         id="isGamified"
                         checked={newQuizForm.isGamified ?? true} 
                         onChange={e => setNewQuizForm({...newQuizForm, isGamified: e.target.checked})}
-                        className="w-4 h-4 rounded text-violet-600 focus:ring-0 cursor-pointer" 
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer"
                       />
-                      <label htmlFor="isGamified" className="text-xs font-bold text-violet-400 cursor-pointer select-none flex items-center gap-1.5 py-1">
+                      <label htmlFor="isGamified" className="text-xs font-bold text-blue-500 cursor-pointer select-none flex items-center gap-1.5 py-1">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                         ProctorShield Gamified Mode (Streaks & Power-Ups)
                       </label>
@@ -696,7 +746,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
                   </div>
 
                   {/* Right Column: Questions Editor (7/12 grid span) */}
-                  <div className="lg:col-span-7 flex flex-col min-h-[400px] lg:h-full">
+                  <div className="lg:col-span-7 flex flex-col min-h-[400px] lg:h-full rounded-2xl border border-[var(--border)] bg-[var(--surface2)]/35 p-4 sm:p-5">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">
                         Questions ({aiGeneratedQuestions.length})
@@ -784,7 +834,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
               <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex gap-3">
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all cursor-pointer">Cancel</button>
-                <button type="submit" disabled={isCreating} className="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
+                <button type="submit" disabled={isCreating} className="ui-primary flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
                   {isCreating ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -803,7 +853,7 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       {/* AI GENERATE MODAL */}
       {isAiModalOpen && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
+          className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsAiModalOpen(false);
@@ -812,10 +862,10 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
           }}
         >
           <div 
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative my-auto animate-modal"
+            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden relative animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 opacity-50 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 opacity-50 pointer-events-none" />
             
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] relative z-10">
               <h2 className="text-lg font-bold text-[var(--ink)] flex items-center gap-2">
@@ -958,11 +1008,11 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
 
       {manageQuiz && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
+          className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={() => setManageQuiz(null)}
         >
           <div 
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
+            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
@@ -1093,8 +1143,8 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
       {/* BILLING / SUBSCRIPTION GATE MODAL */}
       {/* BILLING / SUBSCRIPTION GATE MODAL */}
       {showBillingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative">
+        <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-violet-600/10 to-amber-500/5 pointer-events-none" />
 
             <div className="relative z-10 p-8 text-center">
@@ -1103,11 +1153,12 @@ export default function TeacherQuizzesPage({ isSubscribed: initialIsSubscribed =
               </div>
 
               <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">
-                Premium Feature
+                {upgradeReason === "quiz_limit" ? "Free Quiz Limit Reached" : "Premium Feature"}
               </h2>
               <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
-                AI Quiz Generation is a Premium feature. Upgrade your plan to
-                unlock AI-powered quiz creation, live monitoring, and more.
+                {upgradeReason === "quiz_limit"
+                  ? `Your Free plan includes ${manualQuizLimit} manual quizzes, and all ${manualQuizLimit} have been used. Upgrade for unlimited quizzes.`
+                  : "AI Quiz Generation is a Premium feature. Upgrade your plan to unlock AI-powered quiz creation, live monitoring, and more."}
               </p>
 
               <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">

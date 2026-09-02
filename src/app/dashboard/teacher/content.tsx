@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, Users, AlertTriangle, Brain, Search } from "lucide-react";
+import { FileText, Users, AlertTriangle, Brain, Search, Crown } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
 
@@ -40,7 +40,13 @@ interface RecentVerdict {
   score: string;
 }
 
-export default function TeacherDashboardContent({ teacherId }: { teacherId: string }) {
+export default function TeacherDashboardContent({
+  teacherId,
+  isSubscribed,
+}: {
+  teacherId: string;
+  isSubscribed: boolean;
+}) {
   const [stats, setStats] = useState({
     totalQuizzes: 0,
     studentsMonitored: 0,
@@ -94,7 +100,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
 
   // Pusher real-time updates
   useEffect(() => {
-    if (!teacherId || teacherId === "unknown") return;
+    if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
@@ -235,7 +241,7 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
-  }, [teacherId]);
+  }, [isSubscribed, teacherId]);
 
   const statCards: StatCard[] = [
     {
@@ -293,13 +299,27 @@ export default function TeacherDashboardContent({ teacherId }: { teacherId: stri
         <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🔴 Live Monitoring Feed</h3>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10">
-              <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">LIVE</span>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isSubscribed ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
+              {isSubscribed ? (
+                <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-500 animate-pulse" />
+              ) : (
+                <Crown className="w-3 h-3 text-amber-500" />
+              )}
+              <span className={`text-[10px] font-bold ${isSubscribed ? "text-rose-600 dark:text-rose-400" : "text-amber-500"}`}>
+                {isSubscribed ? "LIVE" : "PRO"}
+              </span>
             </div>
           </div>
           <div className="divide-y divide-[var(--border)] min-h-[160px]">
-            {liveStudents.length === 0 ? (
+            {!isSubscribed ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center h-[160px]">
+                <Crown className="w-7 h-7 text-amber-500 mb-2" />
+                <p className="text-xs font-bold text-[var(--ink)]">Live Monitoring requires Pro</p>
+                <Link href="/dashboard/teacher/billing" className="mt-2 text-xs font-bold text-indigo-500 hover:text-indigo-400">
+                  View plans and upgrade
+                </Link>
+              </div>
+            ) : liveStudents.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-[var(--muted)] text-center h-[160px]">
                 <span className="text-xl mb-1">📹</span>
                 <p className="text-xs font-semibold">No active proctored sessions</p>

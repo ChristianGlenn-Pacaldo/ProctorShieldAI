@@ -151,7 +151,7 @@ export default function AnalyticsContent() {
             <p className="text-xs text-[var(--muted)] mt-0.5">Platform-wide exam statistics</p>
           </div>
           <div className="p-5 space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-extrabold text-[var(--ink)]">{data.quizStats.totalQuizzes}</div>
                 <div className="text-[10px] text-[var(--muted)] mt-0.5">Quizzes Created</div>

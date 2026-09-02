@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   FileText,
@@ -20,6 +20,10 @@ import {
   Moon,
   CreditCard,
   Bell,
+  ChevronDown,
+  ShieldCheck,
+  UserRound,
+  ArrowUpRight,
 } from "lucide-react";
 import { clsx } from "clsx";
 import PusherClient from "pusher-js";
@@ -30,14 +34,7 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
-}
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
+  actionUrl: string;
 }
 
 interface NavItem {
@@ -115,7 +112,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
 const portalConfig = {
   student: { title: "Proctor Shield", sub: "Student Portal", logoColor: "from-blue-600 to-indigo-700" },
   teacher: { title: "Proctor Shield", sub: "Teacher Portal", logoColor: "from-blue-600 to-indigo-700" },
-  admin: { title: "Proctor Shield", sub: "Admin Panel", logoColor: "from-slate-800 to-rose-700" },
+  admin: { title: "Proctor Shield", sub: "Admin Panel", logoColor: "from-blue-600 to-cyan-500" },
 };
 
 export default function DashboardShell({
@@ -128,10 +125,13 @@ export default function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState("light");
   const pathname = usePathname();
+  const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const loadNotifications = async () => {
     try {
@@ -148,9 +148,11 @@ export default function DashboardShell({
     }
   };
 
-  // Fetch notifications on mount + setup Pusher listener & 3.5s polling
+  // Load notifications and maintain one role-aware realtime connection.
   useEffect(() => {
     let isMounted = true;
+    let pusher: PusherClient | null = null;
+
     const fetchNotifs = async () => {
       try {
         const res = await fetch("/api/notifications");
@@ -166,37 +168,67 @@ export default function DashboardShell({
       }
     };
 
-    fetchNotifs();
+    void fetchNotifs();
 
     const pollInterval = setInterval(() => {
-      fetchNotifs();
-    }, 3500);
+      void fetchNotifs();
+    }, 15_000);
 
-    let pusher: any;
-    try {
-      import("pusher-js").then((PusherClient) => {
-        const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
-        const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
-        pusher = new PusherClient.default(key, { cluster, authEndpoint: "/api/pusher/auth" });
-        const channel = pusher.subscribe("private-admin-dashboard");
-        channel.bind("activity", () => {
-          fetchNotifs();
+    const connectRealtime = async () => {
+      const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+      const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+      if (!key || !cluster) return;
+
+      try {
+        const response = await fetch("/api/auth/session");
+        if (!response.ok || !isMounted) return;
+
+        const session = await response.json() as {
+          user?: { userId?: number } | null;
+        };
+        const userId = session.user?.userId;
+        if (!userId || !isMounted) return;
+
+        pusher = new PusherClient(key, {
+          cluster,
+          authEndpoint: "/api/pusher/auth",
         });
-      });
-    } catch {}
+
+        const userChannel = pusher.subscribe(`private-user-${userId}`);
+        userChannel.bind("notification", () => void fetchNotifs());
+        userChannel.bind("pusher:subscription_error", (error: unknown) => {
+          console.warn("Notification channel subscription failed:", error);
+        });
+
+        if (role === "admin") {
+          const adminChannel = pusher.subscribe("private-admin-dashboard");
+          adminChannel.bind("activity", () => void fetchNotifs());
+          adminChannel.bind("pusher:subscription_error", (error: unknown) => {
+            console.warn("Admin activity channel subscription failed:", error);
+          });
+        }
+      } catch (error) {
+        console.error("Failed to initialize realtime notifications:", error);
+      }
+    };
+
+    void connectRealtime();
 
     return () => {
       isMounted = false;
       clearInterval(pollInterval);
-      if (pusher) pusher.disconnect();
+      pusher?.disconnect();
     };
-  }, []);
+  }, [role]);
 
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -207,11 +239,23 @@ export default function DashboardShell({
     const nextState = !notifOpen;
     setNotifOpen(nextState);
     if (nextState) {
+      setProfileOpen(false);
       // Re-fetch latest notifications from DB when opening dropdown
       await loadNotifications();
       // Mark as read in DB
       try {
-        await fetch("/api/notifications", { method: "PUT" });
+        const response = await fetch("/api/notifications", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: "all" }),
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to mark notifications read (${response.status})`);
+        }
+        setNotifications((current) => current.map((notification) => ({
+          ...notification,
+          isRead: true,
+        })));
         setUnreadCount(0);
       } catch (e) {
         console.error("Failed to mark notifications read:", e);
@@ -229,6 +273,7 @@ export default function DashboardShell({
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
     }
+    setTheme(savedTheme);
   }, []);
 
   const toggleTheme = () => {
@@ -251,85 +296,28 @@ export default function DashboardShell({
     window.location.href = "/login";
   };
 
-  // Fetch Notifications & Listen to Pusher
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const res = await fetch("/api/notifications");
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data.notifications || []);
-        }
-      } catch (e) {
-        console.error("Failed to fetch notifications", e);
-      }
-    };
-    
-    fetchNotifications();
-
-    const getUserId = async () => {
-      try {
-        const res = await fetch("/api/auth/session");
-        const session = await res.json();
-        if (session && session.userId) {
-          const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
-          const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1";
-          const pusher = new PusherClient(pusherKey, { cluster: pusherCluster, authEndpoint: "/api/pusher/auth" });
-          const channel = pusher.subscribe(`private-user-${session.userId}`);
-          
-          channel.bind("notification", (data: any) => {
-            const newNotif: Notification = {
-              id: data.id || Math.random().toString(),
-              title: data.title,
-              message: data.message,
-              createdAt: data.createdAt,
-              isRead: false,
-            };
-            setNotifications(prev => [newNotif, ...prev]);
-          });
-        }
-      } catch (e) {
-        console.error("Session fetch failed", e);
-      }
-    };
-
-    getUserId();
-  }, []);
-
-  const markAsRead = async (id: string) => {
-    setNotifications(prev => 
-      id === "all" 
-        ? prev.map(n => ({ ...n, isRead: true })) 
-        : prev.map(n => n.id === id ? { ...n, isRead: true } : n)
-    );
-    try {
-      await fetch("/api/notifications", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-    } catch (e) {
-      console.error("Failed to mark as read", e);
-    }
+  const handleNotificationClick = (notification: Notification) => {
+    setNotifOpen(false);
+    router.push(notification.actionUrl);
   };
 
   return (
-    <div className="flex h-screen bg-[var(--background)]">
+    <div className="dashboard-ambient app-gradient-shell flex h-screen">
       {/* ── SIDEBAR ─────────────────────────────── */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 w-60 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0",
+          "dashboard-sidebar fixed inset-y-0 left-0 z-40 w-60 border-r border-white/10 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-[var(--border)]">
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
           <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${portal.logoColor} flex items-center justify-center text-sm text-white shadow-sm`}>
-            {role === "admin" ? "🔒" : "🛡️"}
+            <ShieldCheck className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
-            <div className="text-sm font-bold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
-            <div className="text-[10px] text-[var(--muted)] font-semibold tracking-wider uppercase">
+            <div className="text-sm font-bold text-white tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
+            <div className="text-[10px] text-blue-200/55 font-semibold tracking-wider uppercase">
               {portal.sub}
             </div>
           </div>
@@ -339,7 +327,7 @@ export default function DashboardShell({
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((group) => (
             <div key={group.section} className="mb-5">
-              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--muted)] opacity-80">
+              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-blue-200/45">
                 {group.section}
               </div>
               {group.items.map((item) => {
@@ -349,10 +337,10 @@ export default function DashboardShell({
                     key={item.href}
                     href={item.href}
                     className={clsx(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mb-1",
+                      "dashboard-nav-item group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-1",
                       isActive
-                        ? "bg-blue-600/10 text-blue-600 dark:text-blue-400 font-semibold border-l-2 border-blue-600 rounded-r-lg rounded-l-none pl-2.5"
-                        : "text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--ink)]"
+                        ? "dashboard-nav-active text-white font-semibold"
+                        : "text-blue-100/60 hover:bg-white/[0.07] hover:text-white"
                     )}
                   >
                     {item.icon}
@@ -369,7 +357,7 @@ export default function DashboardShell({
           ))}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--muted)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-all w-full mt-2"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-blue-100/60 hover:bg-rose-500/10 hover:text-rose-300 transition-all w-full mt-2"
           >
             <LogOut className="w-4 h-4" />
             Log Out
@@ -377,14 +365,14 @@ export default function DashboardShell({
         </nav>
 
         {/* User */}
-        <div className="px-4 py-4 border-t border-[var(--border)]">
+        <div className="px-4 py-4 border-t border-white/10 bg-black/10">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
               {userAvatar}
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-[var(--ink)] truncate">{userName}</div>
-              <div className="text-xs text-[var(--muted)] capitalize">{role}</div>
+              <div className="text-sm font-semibold text-white truncate">{userName}</div>
+              <div className="text-xs text-blue-200/50 capitalize">{role}</div>
             </div>
           </div>
         </div>
@@ -401,10 +389,12 @@ export default function DashboardShell({
       {/* ── MAIN CONTENT ───────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-16 bg-[var(--surface)] border-b border-[var(--border)] flex items-center justify-between px-6 shrink-0">
+        <header className="dashboard-topbar relative z-30 h-16 border-b border-[var(--border)] flex items-center justify-between px-4 sm:px-6 shrink-0">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label={sidebarOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={sidebarOpen}
               className="lg:hidden p-2 rounded-lg hover:bg-[var(--surface2)] text-[var(--muted)]"
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -423,7 +413,9 @@ export default function DashboardShell({
             <div className="relative" ref={notifRef}>
               <button
                 onClick={openNotifications}
-                className="relative p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)]"
+                aria-label="Open notifications"
+                aria-expanded={notifOpen}
+                className="dashboard-icon-button relative p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
                 title="Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -435,7 +427,7 @@ export default function DashboardShell({
               </button>
               {/* Dropdown */}
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                <div className="dashboard-dropdown absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-2rem))] bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden animate-dropdown">
                   <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                     <h4 className="text-xs font-bold text-[var(--ink)] uppercase tracking-wide">Notifications</h4>
                     {notifications.length > 0 && (
@@ -450,11 +442,14 @@ export default function DashboardShell({
                       </div>
                     ) : (
                       notifications.map((n) => (
-                        <div
+                        <button
+                          type="button"
                           key={n.id}
+                          onClick={() => handleNotificationClick(n)}
+                          aria-label={`${n.title}. Open related page`}
                           className={`px-4 py-3 border-b border-[var(--border)] last:border-0 transition-colors ${
                             n.isRead ? "" : "bg-blue-500/5"
-                          }`}
+                          } group w-full text-left hover:bg-blue-500/10 focus-visible:bg-blue-500/10`}
                         >
                           <div className="flex items-start gap-2">
                             {!n.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
@@ -465,8 +460,9 @@ export default function DashboardShell({
                                 {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
                             </div>
+                            <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted2)] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-blue-500" aria-hidden="true" />
                           </div>
-                        </div>
+                        </button>
                       ))
                     )}
                   </div>
@@ -475,7 +471,8 @@ export default function DashboardShell({
             </div>
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors border border-[var(--border)]"
+              aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+              className="dashboard-icon-button p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
               title="Toggle Theme"
             >
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
@@ -483,16 +480,55 @@ export default function DashboardShell({
             {role === "teacher" && (
               <Link
                 href="/dashboard/teacher/quizzes?new=true"
-                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-xs"
+                className="ui-primary hidden sm:inline-flex px-4 py-2 text-xs font-bold text-white rounded-xl transition-all"
               >
                 + New Quiz
               </Link>
             )}
+            <div className="relative" ref={profileRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileOpen((current) => !current);
+                  setNotifOpen(false);
+                }}
+                aria-label="Open profile menu"
+                aria-expanded={profileOpen}
+                className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 pr-2.5 text-left shadow-sm hover:border-blue-400/50"
+              >
+                <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarColor} flex items-center justify-center text-[10px] font-bold text-white`}>
+                  {userAvatar}
+                </span>
+                <span className="hidden xl:block max-w-28 truncate text-xs font-semibold text-[var(--ink)]">{userName}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${profileOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+              </button>
+              {profileOpen && (
+                <div className="dashboard-dropdown absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-2xl animate-dropdown">
+                  <div className="px-3 py-2.5 border-b border-[var(--border)] mb-1">
+                    <p className="text-xs font-bold text-[var(--ink)] truncate">{userName}</p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600">{role} account</p>
+                  </div>
+                  <Link
+                    href={`/dashboard/${role}/settings`}
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--ink2)] hover:bg-blue-500/10 hover:text-blue-600"
+                  >
+                    <UserRound className="w-4 h-4" aria-hidden="true" /> Profile &amp; Settings
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10"
+                  >
+                    <LogOut className="w-4 h-4" aria-hidden="true" /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main key={pathname} className="dashboard-main app-page-enter flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">{children}</main>
       </div>
     </div>
   );

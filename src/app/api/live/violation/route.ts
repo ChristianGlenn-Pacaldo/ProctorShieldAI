@@ -4,17 +4,9 @@ import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 import { uploadEvidence } from "@/lib/evidence-storage";
+import { VALID_VIOLATION_TYPES } from "@/lib/proctoring-detection";
 
-const VALID_VIOLATION_TYPES = new Set([
-  "no_face",
-  "multiple_faces",
-  "looking_away",
-  "device_detected",
-  "audio_anomaly",
-  "fullscreen_exit",
-  "tab_switch",
-  "attempted_screenshot",
-]);
+const validViolationTypes = new Set<string>(VALID_VIOLATION_TYPES);
 
 function isValidSnapshot(value: unknown): value is string {
   return typeof value === "string"
@@ -45,7 +37,7 @@ export async function POST(req: NextRequest) {
     const evidence = screenshot ?? snapshot;
     const numericQuizId = Number(quizId);
 
-    if (!Number.isInteger(numericQuizId) || !VALID_VIOLATION_TYPES.has(violationType)) {
+    if (!Number.isInteger(numericQuizId) || !validViolationTypes.has(violationType)) {
       return NextResponse.json({ error: "Invalid violation event" }, { status: 400 });
     }
     if (evidence != null && !isValidSnapshot(evidence)) {
@@ -130,8 +122,13 @@ export async function POST(req: NextRequest) {
       console.error("Failed to broadcast violation to admin:", e);
     }
 
+    const violationCount = await prisma.violation.count({
+      where: { studentQuizId: studentQuiz.id },
+    });
+
     return NextResponse.json({
       success: true,
+      violationCount,
       violation: {
         id: String(violation.id),
         studentQuizId: String(violation.studentQuizId),

@@ -35,7 +35,7 @@ export default function ResultsContent() {
   };
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="space-y-4">
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">

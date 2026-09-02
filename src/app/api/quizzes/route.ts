@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import crypto from "node:crypto";
+import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
+import { getQuizCreationDecision } from "@/lib/subscription-rules";
 
 type RawChoice = { choiceText?: unknown; isCorrect?: unknown };
 type RawQuestion = { questionText?: unknown; questionType?: unknown; points?: unknown; choices?: unknown };
@@ -52,9 +54,12 @@ export async function GET(req: NextRequest) {
         },
       });
 
+      const entitlements = await getTeacherEntitlements(session.userId);
+
       return NextResponse.json({
         success: true,
         quizzes,
+        entitlements,
         pendingRetakes: pendingRetakes.map((pr) => ({
           studentQuizId: pr.id,
           studentName: pr.student.fullName,
@@ -109,7 +114,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unauthorized. Only teachers can create quizzes${currentRole}.` }, { status: 401 });
     }
 
-    const { subjectName, title, description, duration, totalQuestions, passingScore, questions, shuffleQuestions, isGamified } = await req.json();
+    const {
+      subjectName,
+      title,
+      description,
+      duration,
+      totalQuestions,
+      passingScore,
+      questions,
+      shuffleQuestions,
+      isGamified,
+      isAiGenerated,
+    } = await req.json();
+    const isAiQuiz = isAiGenerated === true;
 
     if (typeof subjectName !== "string" || typeof title !== "string" || !subjectName.trim() || !title.trim()) {
       return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
@@ -125,32 +142,6 @@ export async function POST(req: NextRequest) {
         success: false, 
         message: "Your session is outdated. Please log out and log back in." 
       }, { status: 401 });
-    }
-
-    // Find or create subject
-    let subject = await prisma.subject.findFirst({
-      where: { 
-        teacherId: session.userId,
-        subjectName: { equals: subjectName, mode: "insensitive" }
-      }
-    });
-
-    if (!subject) {
-      subject = await prisma.subject.create({
-        data: {
-          teacherId: session.userId,
-          subjectName: subjectName,
-          subjectCode: newCode("SUB")
-        }
-      });
-    }
-
-    // Generate a cryptographically random, high-entropy access code.
-    let accessCode = newCode("PS");
-    let codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
-    while (codeExists) {
-      accessCode = newCode("PS");
-      codeExists = await prisma.quiz.findUnique({ where: { accessCode } });
     }
 
     // Filter and sanitize questions and choices
@@ -183,35 +174,88 @@ export async function POST(req: NextRequest) {
           })
       : [];
 
-    const quiz = await prisma.quiz.create({
-      data: {
-        teacherId: session.userId,
-        subjectId: subject.id,
-        title: title.trim(),
-        description: description ? description.trim() : null,
-        accessCode,
-        duration: Math.max(1, Math.min(480, Number(duration) || 60)),
-        totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
-        passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
-        quizStatus: "draft",
-        quizType: isGamified !== false ? "gamified" : "standard",
-        shuffleQuestions: shuffleQuestions || false,
-        questions: validQuestions.length > 0 ? {
-          create: validQuestions,
-        } : undefined
-      },
-    });
+    const creation = await prisma.$transaction(async (tx) => {
+      // Serialize quiz creation per teacher so concurrent requests cannot exceed
+      // the free quota. The project uses PostgreSQL, so this lock lasts only for
+      // the current transaction.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-creation:${session.userId}`}))`;
 
-    // Log activity
-    try {
-      await prisma.activityLog.create({
-        data: {
-          userId: session.userId,
-          activity: `Created quiz: ${title}`,
-          ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+      const entitlements = await getTeacherEntitlements(session.userId, tx);
+      const decision = getQuizCreationDecision(entitlements, isAiQuiz);
+      if (!decision.allowed) {
+        return { quiz: null, entitlements, decision };
+      }
+
+      let subject = await tx.subject.findFirst({
+        where: {
+          teacherId: session.userId,
+          subjectName: { equals: subjectName, mode: "insensitive" },
         },
       });
-    } catch {}
+
+      if (!subject) {
+        subject = await tx.subject.create({
+          data: {
+            teacherId: session.userId,
+            subjectName: subjectName.trim(),
+            subjectCode: newCode("SUB"),
+          },
+        });
+      }
+
+      let accessCode = newCode("PS");
+      let codeExists = await tx.quiz.findUnique({ where: { accessCode } });
+      while (codeExists) {
+        accessCode = newCode("PS");
+        codeExists = await tx.quiz.findUnique({ where: { accessCode } });
+      }
+
+      const quiz = await tx.quiz.create({
+        data: {
+          teacherId: session.userId,
+          subjectId: subject.id,
+          title: title.trim(),
+          description: description ? description.trim() : null,
+          accessCode,
+          isAiGenerated: isAiQuiz,
+          duration: Math.max(1, Math.min(480, Number(duration) || 60)),
+          totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
+          passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
+          quizStatus: "draft",
+          quizType: isGamified !== false ? "gamified" : "standard",
+          shuffleQuestions: Boolean(shuffleQuestions),
+          questions: validQuestions.length > 0 ? { create: validQuestions } : undefined,
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.userId,
+          activity: `${isAiQuiz ? "Created AI quiz" : "Created manual quiz"}: ${title.trim()}`,
+          ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+        },
+      });
+
+      return {
+        quiz,
+        decision,
+        entitlements: await getTeacherEntitlements(session.userId, tx),
+      };
+    });
+
+    if (!creation.quiz) {
+      return NextResponse.json(
+        {
+          error: creation.decision.message,
+          message: creation.decision.message,
+          code: creation.decision.code,
+          entitlements: creation.entitlements,
+        },
+        { status: 403 },
+      );
+    }
+
+    const quiz = creation.quiz;
 
     // Broadcast quiz creation to admin
     try {
@@ -221,14 +265,17 @@ export async function POST(req: NextRequest) {
         userId: session.userId,
         fullName: session.fullName,
         role: "teacher",
-        activity: `Created quiz: ${title}`,
+        activity: `${isAiQuiz ? "Created AI quiz" : "Created manual quiz"}: ${title}`,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
       console.error("Failed to broadcast quiz creation to admin:", e);
     }
 
-    return NextResponse.json({ success: true, quiz }, { status: 201 });
+    return NextResponse.json(
+      { success: true, quiz, entitlements: creation.entitlements },
+      { status: 201 },
+    );
   } catch (error: unknown) {
     console.error("Create quiz error:", error);
     return NextResponse.json({ error: "Failed to create quiz" }, { status: 500 });

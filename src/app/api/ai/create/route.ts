@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { expireSubscriptions } from "@/lib/maintenance";
 import { getSession } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,18 +17,14 @@ export async function POST(req: NextRequest) {
     }
 
     // ── SUBSCRIPTION CHECK ──
-    const activeSub = await prisma.userSubscription.findFirst({
-      where: {
-        userId: session.userId,
-        subscriptionStatus: "active",
-        endDate: { gt: new Date() } // Must not be expired
-      }
-    });
+    const entitlements = await getTeacherEntitlements(session.userId);
 
-    if (!activeSub) {
+    if (!entitlements.isSubscribed) {
       return NextResponse.json({ 
         error: "Subscription Required", 
-        message: "You need an active ProctorShield AI Pro subscription to use the AI Quiz Generator." 
+        code: "SUBSCRIPTION_REQUIRED",
+        message: "You need an active ProctorShield AI Pro subscription to use the AI Quiz Generator.",
+        entitlements,
       }, { status: 403 });
     }
 

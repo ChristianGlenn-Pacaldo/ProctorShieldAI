@@ -19,14 +19,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing quizId" }, { status: 400 });
     }
 
-    // Find the quiz to get the teacherId
-    const quiz = await prisma.quiz.findUnique({
-      where: { id: Number(quizId) },
+    const enrollment = await prisma.studentQuiz.findFirst({
+      where: { studentId: session.userId, quizId: Number(quizId) },
+      include: { quiz: true },
     });
 
-    if (!quiz) {
-      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    if (!enrollment) {
+      return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
+    const quiz = enrollment.quiz;
 
     // Broadcast lightweight "student-joined" event to the teacher's channel
     // NO snapshot data here — snapshots go through /api/live/snapshot instead
@@ -37,6 +38,9 @@ export async function POST(req: NextRequest) {
       studentName: session.fullName,
       quizId: quiz.id,
       quizTitle: quiz.title,
+      deviceType: enrollment.deviceType === "mobile" ? "mobile" : "desktop",
+      monitoringLevel: enrollment.monitoringLevel === "strict" ? "strict" : "reduced",
+      connectionStatus: "online",
       timestamp: new Date().toISOString(),
     });
 

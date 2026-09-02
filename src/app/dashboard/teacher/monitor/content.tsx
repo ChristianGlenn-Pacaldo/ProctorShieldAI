@@ -16,6 +16,9 @@ interface Feed {
   lastSeen: Date;
   violationCount: number;
   snapshot: string | null;
+  deviceType?: "desktop" | "mobile";
+  monitoringLevel?: "strict" | "reduced";
+  connectionStatus?: "online" | "offline";
 }
 
 function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
@@ -78,8 +81,8 @@ function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void 
         </div>
         <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
           <span>{feed.quizTitle}</span>
-          <span className="text-[9px] text-[var(--muted2)]">
-            {feed.snapshot ? "Live" : "Waiting"}
+          <span className={`text-[9px] font-bold ${feed.monitoringLevel === "reduced" ? "text-violet-400" : "text-emerald-500"}`}>
+            {feed.deviceType === "mobile" ? "Mobile" : "Desktop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
           </span>
         </div>
       </div>
@@ -87,7 +90,13 @@ function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void 
   );
 }
 
-export default function LiveMonitorContent({ teacherId }: { teacherId: string }) {
+export default function LiveMonitorContent({
+  teacherId,
+  initialIsSubscribed = false,
+}: {
+  teacherId: string;
+  initialIsSubscribed?: boolean;
+}) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [totalViolations, setTotalViolations] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
@@ -95,7 +104,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   const [selectedStudentModal, setSelectedStudentModal] = useState<Feed | null>(null);
 
   // Subscription gating
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
   const [isCheckingSub, setIsCheckingSub] = useState(true);
 
   useEffect(() => {
@@ -147,7 +156,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
   // ── Pusher for real-time 1-second snapshots, joins & violations ──
   useEffect(() => {
-    if (!teacherId || teacherId === "unknown") return;
+    if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
@@ -172,6 +181,12 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           updated[existingIndex] = {
             ...updated[existingIndex],
             snapshot: data.snapshot,
+            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+            monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+            connectionStatus: "online",
+            status: "✓ Active",
+            statusColor: "text-emerald-500",
+            border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
             lastSeen: new Date(),
           };
           return updated;
@@ -189,6 +204,9 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
               lastSeen: new Date(),
               violationCount: 0,
               snapshot: data.snapshot,
+              deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+              monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+              connectionStatus: "online",
             },
           ];
         }
@@ -217,7 +235,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
         const exists = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
         if (exists >= 0) {
           const updated = [...prev];
-          updated[exists] = { ...updated[exists], id: studentId, lastSeen: new Date() };
+          updated[exists] = {
+            ...updated[exists],
+            id: studentId,
+            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+            monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+            connectionStatus: "online",
+            lastSeen: new Date(),
+          };
           return updated;
         }
         return [
@@ -233,6 +258,9 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             lastSeen: new Date(),
             violationCount: 0,
             snapshot: null,
+            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+            monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+            connectionStatus: "online",
           },
         ];
       });
@@ -272,6 +300,13 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           lastSeen: new Date(),
           violationCount: existingIndex >= 0 ? prev[existingIndex].violationCount + 1 : 1,
           snapshot: currentSnap,
+          deviceType: data.deviceType === "mobile"
+            ? "mobile"
+            : existingIndex >= 0 ? prev[existingIndex].deviceType : "desktop",
+          monitoringLevel: data.monitoringLevel === "strict"
+            ? "strict"
+            : existingIndex >= 0 ? prev[existingIndex].monitoringLevel : "reduced",
+          connectionStatus: "online",
         };
 
         if (existingIndex >= 0) {
@@ -302,11 +337,29 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
-  }, [teacherId]);
+  }, [isSubscribed, teacherId]);
+
+  useEffect(() => {
+    if (!isSubscribed) return;
+    const connectionCheck = window.setInterval(() => {
+      const cutoff = Date.now() - 10_000;
+      setFeeds((current) => current.map((feed) => {
+        if (feed.lastSeen.getTime() >= cutoff || feed.connectionStatus === "offline") return feed;
+        return {
+          ...feed,
+          connectionStatus: "offline",
+          status: "Connection lost",
+          statusColor: "text-rose-500",
+          border: "border-rose-500/50",
+        };
+      }));
+    }, 5_000);
+    return () => window.clearInterval(connectionCheck);
+  }, [isSubscribed]);
 
   // ── Poll 1-second snapshots as automatic background sync ──
   useEffect(() => {
-    if (!teacherId || teacherId === "unknown") return;
+    if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
     const pollSnapshots = async () => {
       try {
@@ -324,6 +377,12 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
               updated[0] = {
                 ...updated[0],
                 snapshot: snapshots[0].snapshot,
+                deviceType: snapshots[0].deviceType === "mobile" ? "mobile" : "desktop",
+                monitoringLevel: snapshots[0].monitoringLevel === "strict" ? "strict" : "reduced",
+                connectionStatus: "online",
+                status: "✓ Active",
+                statusColor: "text-emerald-500",
+                border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
                 lastSeen: new Date(),
               };
               return updated;
@@ -349,6 +408,12 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   ...updated[idx],
                   id: sIdStr || updated[idx].id,
                   snapshot: snap.snapshot || updated[idx].snapshot,
+                  deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
+                  monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
+                  connectionStatus: "online",
+                  status: "✓ Active",
+                  statusColor: "text-emerald-500",
+                  border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
                   lastSeen: new Date(),
                 };
               } else {
@@ -363,6 +428,9 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   lastSeen: new Date(),
                   violationCount: 0,
                   snapshot: snap.snapshot,
+                  deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
+                  monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
+                  connectionStatus: "online",
                 });
               }
             }
@@ -376,7 +444,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
     pollSnapshots();
 
     return () => clearInterval(interval);
-  }, [teacherId]);
+  }, [isSubscribed, teacherId]);
 
   // Subscription paywall
   if (isCheckingSub) {
@@ -398,11 +466,11 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
             </div>
             <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">Live Monitoring is Premium</h2>
             <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
-              Real-time 1-second AI snapshot monitoring of students during quizzes requires a Premium subscription.
+              Real-time adaptive AI snapshot monitoring of students during quizzes requires a Premium subscription.
             </p>
             <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
               {[
-                "1-Second Real-Time AI Webcam Snapshots",
+                "Adaptive 1–2 Second AI Webcam Snapshots",
                 "Live violation alerts & trust scores",
                 "Late join approval system",
                 "Retake request management",
@@ -431,7 +499,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
   }
 
   return (
-    <div className="animate-fade-in space-y-5">
+    <div className="space-y-5">
       {/* Pending Approvals */}
       {pendingApprovals.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
@@ -441,7 +509,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           </h3>
           <div className="space-y-2">
             {pendingApprovals.map((req) => (
-              <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+              <div key={req.studentQuizId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
                   <div className="text-xs text-[var(--muted)]">wants to join &quot;{req.quizTitle}&quot; late</div>
@@ -465,7 +533,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
           </h3>
           <div className="space-y-2">
             {pendingRetakes.map((req) => (
-              <div key={req.studentQuizId} className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+              <div key={req.studentQuizId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
                 <div>
                   <div className="text-sm font-bold text-[var(--ink)]">{req.studentName}</div>
                   <div className="text-xs text-[var(--muted)]">requested to retake &quot;{req.quizTitle}&quot;</div>
@@ -481,7 +549,7 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       )}
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Active Students</div>
           <div className="text-2xl font-extrabold text-emerald-500 font-[family-name:var(--font-display)]">{feeds.length}</div>
@@ -501,14 +569,14 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
 
       {/* Main Monitor Grid */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)] flex items-center gap-2">
             <Camera className="w-4 h-4 text-indigo-500" />
-            Live AI Surveillance — 1-Second Snapshot Feed
+            Live AI Surveillance — Adaptive Snapshot Feed
           </h3>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-extrabold text-emerald-500 uppercase tracking-wide font-mono">1s AUTO-REFRESH</span>
+            <span className="text-[10px] font-extrabold text-emerald-500 uppercase tracking-wide font-mono">ADAPTIVE REFRESH</span>
           </div>
         </div>
         <div className="p-6">
@@ -535,13 +603,13 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
       {/* LIVE STUDENT INSPECTOR MODAL */}
       {selectedStudentModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-fade-in"
+          className="app-modal-backdrop bg-black/80 backdrop-blur-md animate-fade-in"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedStudentModal(null);
           }}
         >
           <div
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-modal"
+            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -577,13 +645,13 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   <div className="flex flex-col items-center gap-2 p-6 text-center">
                     <Camera className="w-10 h-10 text-slate-500 mb-1 opacity-50" />
                     <p className="text-xs font-bold text-slate-300">Live Snapshot Initializing</p>
-                    <p className="text-[11px] text-slate-500">Waiting for 1-second camera sync...</p>
+                    <p className="text-[11px] text-slate-500">Waiting for camera sync...</p>
                   </div>
                 )}
 
                 <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 bg-black/85 backdrop-blur-md rounded-full text-[10px] font-extrabold border border-white/10 text-emerald-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>1s AI SURVEILLANCE FEED</span>
+                  <span>LIVE AI SURVEILLANCE FEED</span>
                 </div>
               </div>
 
@@ -597,6 +665,16 @@ export default function LiveMonitorContent({ teacherId }: { teacherId: string })
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Violations</div>
                   <div className={`text-xs font-bold ${selectedStudentModal.violationCount > 0 ? "text-red-500" : "text-emerald-500"}`}>
                     {selectedStudentModal.violationCount}/3 Violations
+                  </div>
+                </div>
+                <div className="p-3.5 bg-[var(--surface2)] border border-[var(--border)] rounded-xl">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Device</div>
+                  <div className="text-xs font-bold text-indigo-500 capitalize">{selectedStudentModal.deviceType || "desktop"}</div>
+                </div>
+                <div className="p-3.5 bg-[var(--surface2)] border border-[var(--border)] rounded-xl">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Monitoring</div>
+                  <div className={`text-xs font-bold ${selectedStudentModal.monitoringLevel === "reduced" ? "text-violet-500" : "text-emerald-500"}`}>
+                    {selectedStudentModal.monitoringLevel === "reduced" ? "Reduced Assurance" : "Strict"}
                   </div>
                 </div>
               </div>

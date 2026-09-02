@@ -39,7 +39,7 @@ const features = [
     icon: <Mic className="w-6 h-6" />,
     title: "Audio Monitoring",
     desc: "Microphone activity analysis detects suspicious background conversations or external assistance during quizzes.",
-    color: "bg-violet-500/15 text-violet-400",
+    color: "bg-sky-500/15 text-sky-400",
   },
   {
     icon: <PlayCircle className="w-6 h-6" />,
@@ -57,12 +57,12 @@ const steps = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="marketing-shell min-h-screen bg-slate-950 text-slate-100">
       {/* ── NAVBAR ──────────────────────────────────── */}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-50 bg-slate-950/80">
+      <nav className="flex items-center justify-between px-4 sm:px-6 md:px-12 py-4 border-b border-blue-400/10 backdrop-blur-xl sticky top-0 z-50 bg-slate-950/75">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-lg shadow-sm">
-            🛡️
+            <Shield className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
             <span className="font-bold text-white text-lg font-[family-name:var(--font-display)] tracking-tight">
@@ -79,13 +79,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/join"
-            className="px-4 py-2 text-sm font-semibold text-white/60 hover:text-white transition-all flex items-center gap-1.5"
+            className="hidden sm:flex px-4 py-2 text-sm font-semibold text-white/60 hover:text-white transition-all items-center gap-1.5"
           >
             Enter Code
           </Link>
           <Link
             href="/login"
-            className="px-4 py-2 text-sm font-semibold text-slate-300 border border-slate-800 rounded-lg hover:bg-slate-900 hover:text-white transition-all"
+            className="hidden md:inline-flex px-4 py-2 text-sm font-semibold text-slate-300 border border-slate-800 rounded-lg hover:bg-slate-900 hover:text-white transition-all"
           >
             Log In
           </Link>
@@ -119,7 +119,7 @@ export default function LandingPage() {
             AI proctoring that detects cheating in real-time, captures evidence automatically,
             and delivers an intelligent verdict — so educators can focus on teaching.
           </p>
-          <div className="flex items-center justify-center gap-4 mt-10">
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-10">
             <Link
               href="/login"
               className="px-8 py-4 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/25 flex items-center gap-2"
@@ -270,7 +270,7 @@ export default function LandingPage() {
         <p className="text-slate-400 text-base mt-4 mb-10">
           Join ProctorShield-AI now for reliable AI proctoring!
         </p>
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-4">
           <Link
             href="/login/student"
             className="px-8 py-4 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/25"

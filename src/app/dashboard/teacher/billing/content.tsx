@@ -47,6 +47,7 @@ export default function BillingContent() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [paymentMode, setPaymentMode] = useState<"test" | "live">("test");
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<"success" | "cancelled" | null>(null);
 
@@ -59,6 +60,7 @@ export default function BillingContent() {
         setIsSubscribed(data.isSubscribed);
         setSubscription(data.subscription);
         setPayments(data.payments || []);
+        setPaymentMode(data.paymentMode === "live" ? "live" : "test");
       }
     } catch (err) {
       console.error("Failed to load billing:", err);
@@ -123,13 +125,20 @@ export default function BillingContent() {
 
   return (
     <div className="animate-fade-in space-y-6 max-w-4xl mx-auto">
-      {/* Sandbox Test Banner */}
-      <div className="flex items-center justify-between p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-400">
+      {/* Payment environment banner */}
+      <div className={`flex items-center justify-between p-3.5 rounded-xl text-xs ${
+        paymentMode === "live"
+          ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500"
+          : "bg-blue-500/10 border border-blue-500/20 text-blue-400"
+      }`}>
         <span className="flex items-center gap-2 font-semibold">
-          <Shield className="w-4 h-4" /> PayMongo Sandbox Active (Test Mode Only — No real money charged)
+          <Shield className="w-4 h-4" />
+          {paymentMode === "live"
+            ? "PayMongo Live Payments Active"
+            : "PayMongo Sandbox Active (Test Mode Only — No real money charged)"}
         </span>
-        <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-[10px] font-bold">
-          TEST KEYS
+        <span className="px-2 py-0.5 rounded-full bg-current/10 text-[10px] font-bold">
+          {paymentMode === "live" ? "LIVE" : "TEST KEYS"}
         </span>
       </div>
 
@@ -248,7 +257,7 @@ export default function BillingContent() {
                 ) : (
                   <>
                     <Crown className="w-4 h-4" />
-                    Pay with PayMongo Sandbox (₱500)
+                    Pay with PayMongo ({paymentMode === "live" ? "₱500" : "Test ₱500"})
                   </>
                 )}
               </button>
@@ -307,7 +316,7 @@ export default function BillingContent() {
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                        p.status === "completed"
+                        p.status === "completed" || p.status === "paid"
                           ? "bg-emerald-500/15 text-emerald-600"
                           : p.status === "pending"
                           ? "bg-amber-500/15 text-amber-600"

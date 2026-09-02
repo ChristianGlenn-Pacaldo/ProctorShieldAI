@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { expireSubscriptions } from "@/lib/maintenance";
+import { getPayMongoMode, getPayMongoSecretKey } from "@/lib/paymongo";
 
 // GET: Check teacher's current subscription status
 export async function GET() {
@@ -11,12 +12,15 @@ export async function GET() {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await expireSubscriptions(session.userId);
 
     // Find active subscription
     const subscription = await prisma.userSubscription.findFirst({
       where: {
         userId: session.userId,
         subscriptionStatus: "active",
+        endDate: { gt: new Date() },
+        plan: { yearlyPrice: { gt: 0 } },
       },
       include: {
         plan: true,
@@ -28,11 +32,7 @@ export async function GET() {
     });
 
     // Check if subscription is still valid (not expired)
-    let isActive = false;
-    if (subscription) {
-      const now = new Date();
-      isActive = subscription.endDate >= now && subscription.subscriptionStatus === "active";
-    }
+    const isActive = Boolean(subscription);
 
     // Get all payment history
     const payments = await prisma.payment.findMany({
@@ -47,6 +47,7 @@ export async function GET() {
 
     return NextResponse.json({
       isSubscribed: isActive,
+      paymentMode: getPayMongoMode(),
       subscription: subscription
         ? {
             id: subscription.id,
@@ -73,21 +74,27 @@ export async function GET() {
 }
 
 // POST: Create PayMongo checkout session for Premium upgrade
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
     const appUrlValue = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
 
-    if (!PAYMONGO_SECRET_KEY || !appUrlValue) {
+    if (!appUrlValue) {
       return NextResponse.json(
-        { error: "PayMongo is not configured. Please add PAYMONGO_SECRET_KEY to your .env file." },
+        { error: "Application URL is not configured." },
         { status: 500 }
       );
+    }
+    let paymongoSecretKey: string;
+    try {
+      paymongoSecretKey = getPayMongoSecretKey();
+    } catch (error) {
+      console.error("PayMongo configuration error:", error instanceof Error ? error.message : error);
+      return NextResponse.json({ error: "PayMongo test mode is not configured correctly." }, { status: 500 });
     }
     await expireSubscriptions(session.userId);
 
@@ -106,7 +113,8 @@ export async function POST(req: NextRequest) {
       where: {
         userId: session.userId,
         subscriptionStatus: "active",
-        endDate: { gte: new Date() },
+        endDate: { gt: new Date() },
+        plan: { yearlyPrice: { gt: 0 } },
       },
     });
 
@@ -138,7 +146,7 @@ export async function POST(req: NextRequest) {
     const response = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
       method: "POST",
       headers: {
-        Authorization: "Basic " + Buffer.from(PAYMONGO_SECRET_KEY + ":").toString("base64"),
+        Authorization: "Basic " + Buffer.from(paymongoSecretKey + ":").toString("base64"),
         "Content-Type": "application/json",
         "Idempotency-Key": crypto.randomUUID(),
       },

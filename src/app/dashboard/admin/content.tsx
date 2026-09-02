@@ -202,7 +202,7 @@ export default function AdminDashboardContent() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
@@ -373,8 +373,8 @@ export default function AdminDashboardContent() {
       </div>
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[var(--surface)] border border-[var(--border)] p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
+        <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-6 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto">
             <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
             <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
             

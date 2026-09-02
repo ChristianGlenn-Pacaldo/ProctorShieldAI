@@ -79,16 +79,16 @@ export default function StudentDashboardContent() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Join Quiz Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-600/10 to-violet-600/10 border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-600/12 to-sky-500/10 border border-blue-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-blue-900/5">
         <div>
-          <h3 className="font-bold text-indigo-600 mb-1 text-lg">Got a join code?</h3>
+          <h3 className="font-bold text-blue-600 mb-1 text-lg">Got a join code?</h3>
           <p className="text-sm text-[var(--muted)]">
             Head to the dedicated join page to enter your instructor's code and start your proctored session instantly.
           </p>
         </div>
         <Link
           href="/join"
-          className="px-6 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 whitespace-nowrap"
+          className="ui-primary px-6 py-3 text-sm font-bold text-white rounded-xl transition-all whitespace-nowrap"
         >
           Join a Quiz ➔
         </Link>

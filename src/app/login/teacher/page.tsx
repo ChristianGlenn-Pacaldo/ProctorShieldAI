@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Target, Camera, Brain, Lock } from "lucide-react";
+import { Target, Camera, Brain, Lock, Eye, EyeOff } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 type Panel = "login" | "register";
@@ -12,6 +12,7 @@ export default function TeacherLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -190,7 +191,7 @@ export default function TeacherLoginPage() {
 
   return (
     <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
-      <div className="min-h-screen flex">
+      <div className="auth-shell min-h-screen flex">
         {/* ── LEFT PANEL ───────────────────────────── */}
         <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-950/40 via-slate-950 to-slate-900 pointer-events-none" />
@@ -229,7 +230,7 @@ export default function TeacherLoginPage() {
         </div>
 
         {/* ── RIGHT PANEL ──────────────────────────── */}
-        <div className="w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-6 border-l border-slate-800/50">
+        <div className="auth-panel w-full lg:w-1/2 bg-slate-900 flex items-center justify-center p-6 border-l border-slate-800/50">
           <div className="w-full max-w-md">
             {/* Mobile Header */}
             <div className="lg:hidden text-center mb-6">
@@ -370,15 +371,27 @@ export default function TeacherLoginPage() {
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="text-xs font-semibold text-slate-300">Password</label>
+                          <Link
+                            href="/login/forgot-password?role=teacher"
+                            className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            Forgot password?
+                          </Link>
                         </div>
+                        <div className="relative">
                         <input
-                          type="password"
+                          type={showPassword ? "text" : "password"}
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
+                          autoComplete="current-password"
                           placeholder="••••••••"
-                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                          className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                           required
                         />
+                        <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute inset-y-0 right-0 px-4 text-slate-500 hover:text-blue-300">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        </div>
                       </div>
                       <button
                         type="submit"

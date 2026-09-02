@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getSnapshotsForTeacher, saveSnapshot, type SnapshotRecord } from "@/lib/snapshot-store";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
 const MAX_SNAPSHOT_LENGTH = 2_000_000;
 
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest) {
       quizTitle: enrollment.quiz.title,
       quizId: numericQuizId,
       teacherId: enrollment.quiz.teacherId,
+      deviceType: enrollment.deviceType === "mobile" ? "mobile" : "desktop",
+      monitoringLevel: enrollment.monitoringLevel === "strict" ? "strict" : "reduced",
+      connectionStatus: "online",
       updatedAt: Date.now(),
     };
     await saveSnapshot(record);
@@ -60,6 +64,9 @@ export async function POST(req: NextRequest) {
           studentName: record.studentName,
           quizTitle: record.quizTitle,
           snapshot: record.snapshot,
+          deviceType: record.deviceType,
+          monitoringLevel: record.monitoringLevel,
+          connectionStatus: record.connectionStatus,
           timestamp: record.updatedAt,
         }
       );
@@ -80,13 +87,22 @@ export async function GET() {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!await hasActiveProSubscription(session.userId)) {
+      return NextResponse.json(
+        { error: "Live monitoring requires an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
+    }
 
     const snapshots = (await getSnapshotsForTeacher(session.userId))
-      .map(({ studentId, studentName, quizTitle, snapshot, updatedAt }) => ({
+      .map(({ studentId, studentName, quizTitle, snapshot, deviceType, monitoringLevel, connectionStatus, updatedAt }) => ({
         studentId,
         studentName,
         quizTitle,
         snapshot,
+        deviceType,
+        monitoringLevel,
+        connectionStatus,
         updatedAt,
       }));
 

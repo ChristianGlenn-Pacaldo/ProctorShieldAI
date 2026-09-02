@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getNotificationDestination } from "@/lib/notification-destination";
 
 // GET /api/notifications — Fetch unread notifications for current user
 export async function GET(req: NextRequest) {
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
         message: n.message,
         isRead: n.isRead,
         createdAt: n.createdAt.toISOString(),
+        actionUrl: getNotificationDestination(session.role, n.title),
       })),
       unreadCount,
     });
@@ -43,7 +45,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await req.json();
+    let id: unknown = "all";
+    try {
+      const body: unknown = await req.json();
+      if (body && typeof body === "object" && "id" in body) {
+        id = body.id;
+      }
+    } catch {
+      // Backward compatibility: an empty PUT means mark all as read.
+    }
 
     if (id === "all") {
       await prisma.notification.updateMany({

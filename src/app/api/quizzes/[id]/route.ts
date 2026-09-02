@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { canStudentEnterQuiz } from "@/lib/quiz-access";
 
 // Seeded random number generator (Mulberry32 variant)
 function seededRandom(seed: string) {
@@ -77,9 +78,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "This quiz has already ended." }, { status: 403 });
       }
 
-      const isDraftOrScheduled = quiz.quizStatus === "draft" || quiz.quizStatus === "scheduled";
+      const canEnterQuiz = canStudentEnterQuiz({
+        quizStatus: quiz.quizStatus,
+        studentQuizStatus: studentQuiz.quizStatus,
+        startTime: studentQuiz.startTime,
+        endTime: studentQuiz.endTime,
+      });
 
-      if (!isDraftOrScheduled && quiz.shuffleQuestions) {
+      if (canEnterQuiz && quiz.shuffleQuestions) {
         // Shuffle questions deterministically using the student's unique studentQuiz.id
         questions = shuffleArray(quiz.questions, studentQuiz.id);
         
@@ -91,14 +97,43 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const isDraftOrScheduled = session.role === "student" && (quiz.quizStatus === "draft" || quiz.quizStatus === "scheduled");
-    const safeQuestions = isDraftOrScheduled ? [] : questions;
+    const canEnterQuiz = session.role === "student"
+      ? canStudentEnterQuiz({
+          quizStatus: quiz.quizStatus,
+          studentQuizStatus: studentQuiz?.quizStatus,
+          startTime: studentQuiz?.startTime,
+          endTime: studentQuiz?.endTime,
+        })
+      : true;
+    const safeQuestions = session.role === "student" && !canEnterQuiz ? [] : questions;
+    const savedAnswers = session.role === "student" && studentQuiz && canEnterQuiz
+      ? await prisma.answer.findMany({
+          where: { studentQuizId: studentQuiz.id },
+          select: { questionId: true, answerText: true },
+        })
+      : [];
+    const remainingSeconds = session.role === "student" && studentQuiz?.startTime
+      ? Math.max(
+          0,
+          Math.ceil(
+            (studentQuiz.startTime.getTime() + (quiz.duration ?? 60) * 60_000 - Date.now()) / 1000,
+          ),
+        )
+      : undefined;
 
     return NextResponse.json({
       success: true,
       userId: session.userId,
       studentQuizStatus: session.role === "student" ? studentQuiz?.quizStatus : undefined,
       studentQuizId: session.role === "student" ? studentQuiz?.id : undefined,
+      canEnterQuiz: session.role === "student" ? canEnterQuiz : undefined,
+      remainingSeconds,
+      deviceType: session.role === "student" ? studentQuiz?.deviceType : undefined,
+      monitoringLevel: session.role === "student" ? studentQuiz?.monitoringLevel : undefined,
+      savedAnswers: savedAnswers.flatMap((answer) => {
+        const choiceId = Number(answer.answerText);
+        return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
+      }),
       quiz: {
         id: quiz.id,
         title: quiz.title,

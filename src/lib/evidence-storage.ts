@@ -14,6 +14,14 @@ type StorageConfig = {
 
 let cachedConfig: StorageConfig | null | undefined;
 
+const evidenceExtensions: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "video/webm": "webm",
+  "video/mp4": "mp4",
+};
+
 function getStorageConfig(): StorageConfig | null {
   if (cachedConfig !== undefined) return cachedConfig;
   const endpoint = process.env.S3_ENDPOINT?.trim();
@@ -37,22 +45,33 @@ function getStorageConfig(): StorageConfig | null {
 }
 
 export async function uploadEvidence(dataUrl: string, studentQuizId: string) {
-  const config = getStorageConfig();
-  if (!config) return null;
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
   if (!match) throw new Error("Invalid evidence data URL");
   const bytes = Buffer.from(match[2], "base64");
-  if (bytes.length > 2_000_000) throw new Error("Evidence exceeds 2 MB");
-  const extension = match[1] === "image/png" ? "png" : match[1] === "image/webp" ? "webp" : "jpg";
+  return uploadEvidenceBytes(bytes, match[1], studentQuizId);
+}
+
+export async function uploadEvidenceBytes(
+  bytes: Uint8Array,
+  contentType: string,
+  studentQuizId: string,
+) {
+  const config = getStorageConfig();
+  if (!config) return null;
+  const normalizedContentType = contentType.split(";", 1)[0].trim().toLowerCase();
+  const extension = evidenceExtensions[normalizedContentType];
+  if (!extension) throw new Error("Unsupported evidence type");
+  const maxBytes = normalizedContentType.startsWith("video/") ? 6_000_000 : 2_000_000;
+  if (bytes.byteLength > maxBytes) throw new Error(`Evidence exceeds ${maxBytes / 1_000_000} MB`);
   const key = `evidence/${studentQuizId}/${crypto.randomUUID()}.${extension}`;
   await config.client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: bytes,
-    ContentType: match[1],
+    ContentType: normalizedContentType,
     ServerSideEncryption: "AES256",
   }));
-  return { key, contentType: match[1] };
+  return { key, contentType: normalizedContentType };
 }
 
 export async function readEvidence(key: string) {

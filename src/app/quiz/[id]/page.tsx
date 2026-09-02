@@ -2,6 +2,13 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getUnauthorizedDeviceConfidence, isScreenshotShortcut } from "@/lib/proctoring-detection";
+import {
+  getBrowserDeviceCapabilities,
+  monitoringLabel,
+  type DeviceCapabilities,
+  type MonitoringLevel,
+} from "@/lib/device-capabilities";
 import { 
   Camera, 
   AlertTriangle, 
@@ -15,7 +22,12 @@ import {
   Trophy, 
   ShieldCheck, 
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Smartphone,
+  Monitor,
+  Wifi,
+  WifiOff,
+  Save,
 } from "lucide-react";
 
 export default function QuizRoom() {
@@ -43,10 +55,18 @@ export default function QuizRoom() {
   const isReportingRef = useRef(false);
   const isAlertingRef = useRef(false);
   const isStartupGracePeriodRef = useRef(true);
+  const lastViolationAtRef = useRef(0);
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
   const [preWarning, setPreWarning] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
+  const [monitoringLevel, setMonitoringLevel] = useState<MonitoringLevel>("unsupported");
+  const [preflightPassed, setPreflightPassed] = useState(false);
+  const [isCheckingDevice, setIsCheckingDevice] = useState(false);
+  const [deviceCheckError, setDeviceCheckError] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "offline" | "error">("idle");
   const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [headPos, setHeadPos] = useState({ x: 50, y: 50 });
   const [aiLogs, setAiLogs] = useState<{ id: string; text: string; time: string; isError?: boolean }[]>([
@@ -58,9 +78,12 @@ export default function QuizRoom() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [quizError, setQuizError] = useState("");
+  const [lobbyError, setLobbyError] = useState("");
+  const [canEnterQuiz, setCanEnterQuiz] = useState(false);
+  const [isEnteringQuiz, setIsEnteringQuiz] = useState(false);
   const [answersState, setAnswersState] = useState<Record<number, number>>({});
   const [studentQuizStatus, setStudentQuizStatus] = useState<string>("");
-  const [studentQuizId, setStudentQuizId] = useState<number | null>(null);
+  const [studentQuizId, setStudentQuizId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string>("");
 
   // ── PROCTORSHIELD GAMIFICATION STATE ──────────────────
@@ -270,11 +293,116 @@ export default function QuizRoom() {
 
   // Detect mobile device on mount
   useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase();
-    const mobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
-    const mobileScreen = window.innerWidth < 768;
-    setIsMobile(mobileUA || mobileScreen);
+    const capabilities = getBrowserDeviceCapabilities();
+    setDeviceCapabilities(capabilities);
+    setIsMobile(capabilities.deviceType === "mobile");
+    setIsOnline(navigator.onLine);
   }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setAutosaveStatus("idle");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setAutosaveStatus("offline");
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const restoreSavedAnswers = useCallback((data: any) => {
+    const restored: Record<number, number> = {};
+    if (Array.isArray(data.savedAnswers)) {
+      for (const answer of data.savedAnswers) {
+        const questionId = Number(answer.questionId);
+        const choiceId = Number(answer.choiceId);
+        if (Number.isInteger(questionId) && Number.isInteger(choiceId)) restored[questionId] = choiceId;
+      }
+    }
+    const attemptId = typeof data.studentQuizId === "string" ? data.studentQuizId : "";
+    if (attemptId) {
+      try {
+        const local = JSON.parse(localStorage.getItem(`proctorshield:answers:${attemptId}`) || "{}") as Record<string, unknown>;
+        for (const [questionId, choiceId] of Object.entries(local)) {
+          const numericQuestionId = Number(questionId);
+          const numericChoiceId = Number(choiceId);
+          if (Number.isInteger(numericQuestionId) && Number.isInteger(numericChoiceId)) {
+            restored[numericQuestionId] = numericChoiceId;
+          }
+        }
+      } catch {}
+    }
+    if (Object.keys(restored).length > 0) {
+      setAnswersState((current) => Object.keys(current).length > 0 ? current : restored);
+    }
+  }, []);
+
+  const runDevicePreflight = useCallback(async () => {
+    if (isCheckingDevice) return false;
+    setIsCheckingDevice(true);
+    setDeviceCheckError("");
+    let testStream: MediaStream | null = null;
+
+    try {
+      const capabilities = getBrowserDeviceCapabilities();
+      setDeviceCapabilities(capabilities);
+      setIsMobile(capabilities.deviceType === "mobile");
+      if (!capabilities.secureContext) {
+        throw new Error("Camera monitoring requires HTTPS. Open the secure exam URL on this device.");
+      }
+      if (!capabilities.cameraSupported) {
+        throw new Error("This browser does not provide camera access. Use current Chrome, Safari, or Edge.");
+      }
+
+      let microphonePermission = false;
+      try {
+        testStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: true,
+        });
+        microphonePermission = testStream.getAudioTracks().length > 0;
+      } catch {
+        testStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+      }
+
+      const verified: DeviceCapabilities = {
+        ...capabilities,
+        cameraPermission: testStream.getVideoTracks().length > 0,
+        microphonePermission,
+      };
+      const response = await fetch("/api/quizzes/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: Number(quizId), capabilities: verified }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Device check failed.");
+      }
+
+      setDeviceCapabilities(verified);
+      setMonitoringLevel(result.monitoringLevel);
+      setPreflightPassed(true);
+      return true;
+    } catch (error) {
+      setPreflightPassed(false);
+      setMonitoringLevel("unsupported");
+      setDeviceCheckError(error instanceof Error ? error.message : "Device check failed.");
+      return false;
+    } finally {
+      testStream?.getTracks().forEach((track) => track.stop());
+      setIsCheckingDevice(false);
+    }
+  }, [isCheckingDevice, quizId]);
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -286,10 +414,15 @@ export default function QuizRoom() {
           setQuestions(data.questions || []);
           setStudentQuizStatus(data.studentQuizStatus || "");
           setStudentQuizId(data.studentQuizId || null);
+          setCanEnterQuiz(data.canEnterQuiz === true);
           setUserId(data.userId || "");
-          if (data.quiz.duration) {
-            setTimeLeft(data.quiz.duration * 60);
+          restoreSavedAnswers(data);
+          if (data.deviceType) setIsMobile(data.deviceType === "mobile");
+          if (data.monitoringLevel === "strict" || data.monitoringLevel === "reduced") {
+            setMonitoringLevel(data.monitoringLevel);
           }
+          if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
+          else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
         } else {
           setQuizError(data.error || "Failed to load quiz");
         }
@@ -309,9 +442,13 @@ export default function QuizRoom() {
           .then((data) => {
             if (data.success && data.quiz) {
               setQuiz(data.quiz);
-              if (data.questions && data.questions.length > 0) {
-                setQuestions(data.questions);
-              }
+              setQuestions(data.questions || []);
+              setStudentQuizStatus(data.studentQuizStatus || "");
+              setStudentQuizId(data.studentQuizId || null);
+              setCanEnterQuiz(data.canEnterQuiz === true);
+              restoreSavedAnswers(data);
+              if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
+              else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
             }
           })
           .catch(() => {});
@@ -319,7 +456,7 @@ export default function QuizRoom() {
     }, 3000);
 
     return () => clearInterval(pollInterval);
-  }, [quizId, hasStarted]);
+  }, [quizId, hasStarted, restoreSavedAnswers]);
 
   // Handle pusher lobby real-time updates
   useEffect(() => {
@@ -342,6 +479,12 @@ export default function QuizRoom() {
             if (freshData.success) {
               setQuiz(freshData.quiz);
               setQuestions(freshData.questions || []);
+              setStudentQuizStatus(freshData.studentQuizStatus || "");
+              setStudentQuizId(freshData.studentQuizId || null);
+              setCanEnterQuiz(freshData.canEnterQuiz === true);
+              restoreSavedAnswers(freshData);
+              if (Number.isInteger(freshData.remainingSeconds)) setTimeLeft(freshData.remainingSeconds);
+              else if (freshData.quiz.duration) setTimeLeft(freshData.quiz.duration * 60);
             }
           })
           .catch(() => {});
@@ -351,6 +494,7 @@ export default function QuizRoom() {
       studentChannel.bind("approval-status", (data: any) => {
         if (data.quizId === parseInt(quizId)) {
           setStudentQuizStatus(data.status);
+          setCanEnterQuiz(false);
           if (data.status === "rejected") {
             setQuizError("Your request to join late was rejected by the teacher.");
           }
@@ -364,7 +508,46 @@ export default function QuizRoom() {
         pusherClient.unsubscribe(`private-student-${userId}`);
       }
     };
-  }, [quizId, userId]);
+  }, [quizId, userId, restoreSavedAnswers]);
+
+  const handleEnterQuiz = async () => {
+    if (isEnteringQuiz) return;
+    setIsEnteringQuiz(true);
+    setLobbyError("");
+
+    try {
+      if (!preflightPassed && !await runDevicePreflight()) {
+        setLobbyError("Complete the device and camera check before starting the quiz.");
+        return;
+      }
+      const response = await fetch(`/api/quizzes/${quizId}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setLobbyError(data.error || "Unable to verify the quiz start status.");
+        return;
+      }
+
+      setQuiz(data.quiz);
+      setQuestions(data.questions || []);
+      setStudentQuizStatus(data.studentQuizStatus || "");
+      setStudentQuizId(data.studentQuizId || null);
+      setCanEnterQuiz(data.canEnterQuiz === true);
+      restoreSavedAnswers(data);
+
+      if (data.canEnterQuiz !== true || !data.questions?.length) {
+        setLobbyError("The teacher has not started this quiz yet. Please remain in the lobby.");
+        return;
+      }
+
+      if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
+      else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
+      setHasStarted(true);
+    } catch {
+      setLobbyError("Could not verify the quiz status. Check your connection and try again.");
+    } finally {
+      setIsEnteringQuiz(false);
+    }
+  };
 
   const handleSelectChoice = (questionId: number, choiceId: number) => {
     // If choice is eliminated by 50/50, ignore click
@@ -432,9 +615,65 @@ export default function QuizRoom() {
     violationCountStateRef.current = violationCount;
   }, [answersState, xp, streak, questions, studentQuizId, violationCount]);
 
+  const autosaveAnswers = useCallback(async () => {
+    const currentStudentQuizId = studentQuizIdRef.current;
+    if (!hasStarted || !currentStudentQuizId) return false;
+    if (!navigator.onLine) {
+      setAutosaveStatus("offline");
+      return false;
+    }
+
+    const payloadAnswers = Object.entries(answersStateRef.current).map(([questionId, choiceId]) => ({
+      questionId: Number(questionId),
+      choiceId,
+    }));
+    setAutosaveStatus("saving");
+    try {
+      const response = await fetch("/api/quizzes/autosave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: Number(quizId), answers: payloadAnswers }),
+      });
+      if (!response.ok) {
+        setAutosaveStatus("error");
+        return false;
+      }
+      setAutosaveStatus("saved");
+      return true;
+    } catch {
+      setAutosaveStatus(navigator.onLine ? "error" : "offline");
+      return false;
+    }
+  }, [hasStarted, quizId]);
+
+  useEffect(() => {
+    if (!studentQuizId) return;
+    try {
+      localStorage.setItem(`proctorshield:answers:${studentQuizId}`, JSON.stringify(answersState));
+    } catch {}
+  }, [answersState, studentQuizId]);
+
+  useEffect(() => {
+    if (!hasStarted || !studentQuizId) return;
+    const debounce = window.setTimeout(() => void autosaveAnswers(), 900);
+    return () => window.clearTimeout(debounce);
+  }, [answersState, autosaveAnswers, hasStarted, studentQuizId]);
+
+  useEffect(() => {
+    if (!hasStarted || !studentQuizId) return;
+    const heartbeat = window.setInterval(() => void autosaveAnswers(), 15_000);
+    if (isOnline && autosaveStatus === "offline") void autosaveAnswers();
+    return () => window.clearInterval(heartbeat);
+  }, [autosaveAnswers, autosaveStatus, hasStarted, isOnline, studentQuizId]);
+
   // ── Submit quiz to backend ────────────────────────────
   const submitQuiz = useCallback(async () => {
     if (isSubmitting) return;
+    if (!navigator.onLine) {
+      setAutosaveStatus("offline");
+      setPreWarning("You are offline. Your answers are safe on this device and submission will resume when the connection returns.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const currentAnswers = answersStateRef.current;
@@ -463,6 +702,9 @@ export default function QuizRoom() {
 
       const data = await res.json();
       if (res.ok) {
+        if (currentStudentQuizId) {
+          try { localStorage.removeItem(`proctorshield:answers:${currentStudentQuizId}`); } catch {}
+        }
         playTone([523, 659, 783, 1046, 1318], "triangle", 0.25);
         setQuizSubmittedResult({
           score: data.score || Object.keys(currentAnswers).length * 10,
@@ -486,29 +728,127 @@ export default function QuizRoom() {
     submitQuizRef.current = submitQuiz;
   }, [submitQuiz]);
 
-  // ── Report Violation to Backend ───────────────────────
-  const reportViolation = useCallback(async (type: string) => {
-    if (isReportingRef.current || isAlertingRef.current || isStartupGracePeriodRef.current) return;
-    isReportingRef.current = true;
+  const captureEvidenceClip = useCallback(async (durationMs = 4_000): Promise<{
+    blob: Blob;
+    durationMs: number;
+    extension: "webm" | "mp4";
+  } | null> => {
+    const sourceStream = mediaStreamRef.current;
+    if (!sourceStream || typeof MediaRecorder === "undefined") return null;
+
+    const liveTracks = sourceStream.getTracks().filter((track) => track.readyState === "live");
+    if (!liveTracks.some((track) => track.kind === "video")) return null;
+
+    const candidates = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4",
+    ];
+    const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    if (!mimeType) return null;
 
     try {
-      const currentCount = violationCountRef.current + 1;
-      violationCountRef.current = currentCount;
-      setViolationCount(currentCount);
+      const recorder = new MediaRecorder(new MediaStream(liveTracks), {
+        mimeType,
+        videoBitsPerSecond: 350_000,
+        audioBitsPerSecond: 32_000,
+      });
+      const chunks: BlobPart[] = [];
 
+      return await new Promise((resolve) => {
+        let finished = false;
+        const finish = (clip: { blob: Blob; durationMs: number; extension: "webm" | "mp4" } | null) => {
+          if (finished) return;
+          finished = true;
+          resolve(clip);
+        };
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) chunks.push(event.data);
+        };
+        recorder.onerror = () => finish(null);
+        recorder.onstop = () => {
+          if (chunks.length === 0) return finish(null);
+          const normalizedType = mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
+          finish({
+            blob: new Blob(chunks, { type: normalizedType }),
+            durationMs,
+            extension: normalizedType === "video/mp4" ? "mp4" : "webm",
+          });
+        };
+
+        recorder.start(500);
+        window.setTimeout(() => {
+          if (recorder.state !== "inactive") recorder.stop();
+        }, durationMs);
+      });
+    } catch (error) {
+      console.warn("Evidence video recording is unavailable:", error);
+      return null;
+    }
+  }, []);
+
+  // ── Report Violation to Backend ───────────────────────
+  const reportViolation = useCallback(async (type: string, confidenceScore = 92): Promise<boolean> => {
+    const now = Date.now();
+    if (
+      isReportingRef.current ||
+      isAlertingRef.current ||
+      now - lastViolationAtRef.current < 1_500
+    ) return false;
+
+    isReportingRef.current = true;
+    lastViolationAtRef.current = now;
+
+    try {
+      const evidenceClipPromise = captureEvidenceClip();
       const base64Img = captureSnapshot();
 
-      await fetch("/api/live/violation", {
+      const response = await fetch("/api/live/violation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId: parseInt(quizId),
           studentQuizId: studentQuizIdRef.current,
           violationType: type,
-          confidenceScore: 92,
+          confidenceScore,
           screenshot: base64Img,
         }),
       });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        console.error("Violation API rejected event:", type, response.status, data?.error);
+        return false;
+      }
+
+      const violationId = String(data.violation?.id || "");
+      if (/^\d+$/.test(violationId)) {
+        void evidenceClipPromise.then(async (clip) => {
+          if (!clip) {
+            console.warn("This browser could not record violation video evidence; the snapshot fallback was retained.");
+            return;
+          }
+          const formData = new FormData();
+          formData.append("evidence", clip.blob, `violation-${violationId}.${clip.extension}`);
+          formData.append("durationMs", String(clip.durationMs));
+          const uploadResponse = await fetch(`/api/live/violation/${violationId}/evidence`, {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadResponse.ok) {
+            const uploadError = await uploadResponse.json().catch(() => null);
+            console.error("Violation video upload failed:", uploadResponse.status, uploadError?.error);
+          }
+        }).catch((error) => console.error("Violation video capture failed:", error));
+      }
+
+      const serverCount = Number(data.violationCount);
+      const currentCount = Number.isInteger(serverCount) && serverCount > 0
+        ? serverCount
+        : violationCountRef.current + 1;
+      violationCountRef.current = currentCount;
+      setViolationCount(currentCount);
 
       playTone([250, 180], "sawtooth", 0.2);
 
@@ -521,7 +861,7 @@ export default function QuizRoom() {
         });
         setTimeout(() => {
           submitQuizRef.current();
-        }, 3000);
+        }, 4500);
       } else {
         isAlertingRef.current = true;
         setWarningModal({
@@ -530,14 +870,14 @@ export default function QuizRoom() {
           isFinal: false,
         });
       }
+      return true;
     } catch (err) {
       console.error("Failed to report violation:", err);
+      return false;
     } finally {
-      setTimeout(() => {
-        isReportingRef.current = false;
-      }, 2500);
+      isReportingRef.current = false;
     }
-  }, [quizId, captureSnapshot, playTone]);
+  }, [quizId, captureEvidenceClip, captureSnapshot, playTone]);
 
   const reportViolationRef = useRef(reportViolation);
   useEffect(() => {
@@ -626,6 +966,16 @@ export default function QuizRoom() {
           mobileVideoRef.current.play().catch(() => {});
         }
         setCameraActive(true);
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.addEventListener("ended", () => {
+            setCameraActive(false);
+            setAiStatus("Camera disconnected");
+            setDeviceStatus("Camera disconnected ✗");
+            setPreWarning("Camera feed was disconnected. Reconnect it immediately.");
+            void reportViolationRef.current("camera_unavailable", 100);
+          }, { once: true });
+        }
 
         setTimeout(() => notifyTeacherJoined(), 1500);
 
@@ -633,7 +983,7 @@ export default function QuizRoom() {
         uploadSnapshot();
         snapshotInterval = setInterval(() => {
           uploadSnapshot();
-        }, 1000);
+        }, isMobile ? 2_000 : 1_000);
 
         // Load Edge AI Models
         try {
@@ -643,7 +993,7 @@ export default function QuizRoom() {
 
           await tf.ready();
           const [cocoModel] = await Promise.all([
-            cocoSsd.load(),
+            cocoSsd.load({ base: "mobilenet_v2" }),
             faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
             faceapi.nets.faceLandmark68Net.loadFromUri('/models')
           ]);
@@ -654,12 +1004,25 @@ export default function QuizRoom() {
           let noFaceFrames = 0;
           let multipleFacesFrames = 0;
           let phoneDetectedFrames = 0;
+          let phoneAbsentFrames = 0;
+          let phoneIncidentReported = false;
           let tickCounter = 0;
+          let detectionBusy = false;
 
           faceDetectionInterval = setInterval(async () => {
-            if (violationCountRef.current >= 3 || isAlertingRef.current || isReportingRef.current) return;
-            const activeVideo = mobileVideoRef.current || videoRef.current;
-            if (!activeVideo || activeVideo.readyState < 2) return;
+            if (
+              detectionBusy ||
+              violationCountRef.current >= 3 ||
+              isAlertingRef.current ||
+              isReportingRef.current
+            ) return;
+            const activeVideo = [videoRef.current, mobileVideoRef.current].find(
+              (video): video is HTMLVideoElement => Boolean(
+                video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0
+              )
+            );
+            if (!activeVideo) return;
+            detectionBusy = true;
 
             if (tickCounter % 2 === 0) {
               try {
@@ -671,15 +1034,15 @@ export default function QuizRoom() {
                 if (detections.length === 0) {
                   noFaceFrames++;
                   if (noFaceFrames > 4) {
-                    reportViolation("no_face");
-                    noFaceFrames = 0;
+                    const persisted = await reportViolation("no_face");
+                    noFaceFrames = persisted ? 0 : 4;
                   }
                   setFaceStatus("Not Detected ✗");
                 } else if (detections.length > 1) {
                   multipleFacesFrames++;
                   if (multipleFacesFrames > 3) {
-                    reportViolation("multiple_faces");
-                    multipleFacesFrames = 0;
+                    const persisted = await reportViolation("multiple_faces");
+                    multipleFacesFrames = persisted ? 0 : 3;
                   }
                   setFaceStatus("Multiple ✗");
                 } else {
@@ -737,9 +1100,9 @@ export default function QuizRoom() {
                       setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
                     }
                     if (lookingAwayFrames >= 5) {
-                      reportViolation(violationReason);
-                      lookingAwayFrames = 0;
-                      setPreWarning(null);
+                      const persisted = await reportViolation(violationReason);
+                      lookingAwayFrames = persisted ? 0 : 4;
+                      if (persisted) setPreWarning(null);
                     }
                   } else {
                     if (lookingAwayFrames > 0) {
@@ -748,31 +1111,50 @@ export default function QuizRoom() {
                     }
                   }
                 }
-              } catch (faceErr) {}
+              } catch (faceErr) {
+                console.warn("Face detection frame failed:", faceErr);
+              }
             } else {
               try {
-                const predictions = await cocoModel.detect(activeVideo);
-                const phoneDetected = predictions.some(
-                  (p) => (["cell phone", "remote", "mobile phone"].includes(p.class) && p.score > 0.58)
-                );
+                const predictions = await cocoModel.detect(activeVideo, 20, 0.25);
+                const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
 
-                if (phoneDetected) {
-                  setDeviceStatus("Phone Detected ✗");
-                  if (phoneDetectedFrames === 0) {
+                if (deviceConfidence > 0) {
+                  phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
+                  phoneAbsentFrames = 0;
+                  setDeviceStatus(`Phone ${Math.round(deviceConfidence * 100)}% ✗`);
+                  if (phoneDetectedFrames >= 2 && !phoneIncidentReported) {
                     setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
-                    reportViolation("device_detected");
+                    const persisted = await reportViolation(
+                      "device_detected",
+                      Math.round(deviceConfidence * 100)
+                    );
+                    if (persisted) phoneIncidentReported = true;
                   }
-                  phoneDetectedFrames++;
                 } else {
-                  phoneDetectedFrames = 0;
+                  phoneDetectedFrames = Math.max(0, phoneDetectedFrames - 1);
+                  phoneAbsentFrames++;
+                  if (phoneAbsentFrames >= 3) {
+                    phoneDetectedFrames = 0;
+                    phoneIncidentReported = false;
+                    if (!isAlertingRef.current) setPreWarning(null);
+                  }
                   setDeviceStatus("None ✓");
                 }
-              } catch (cocoErr) {}
+              } catch (cocoErr) {
+                console.warn("Object detection frame failed:", cocoErr);
+              }
             }
             tickCounter++;
-          }, 450);
+            detectionBusy = false;
+          }, isMobile ? 900 : 450);
 
-        } catch (err) {}
+        } catch (err) {
+          console.error("Proctoring AI model initialization failed:", err);
+          setAiStatus("Detection unavailable");
+          setDeviceStatus("AI unavailable ✗");
+          setPreWarning("AI detection could not initialize. Check your connection and reload the exam.");
+        }
 
         // Audio Analysis
         if (audioActive && stream.getAudioTracks().length > 0) {
@@ -814,19 +1196,26 @@ export default function QuizRoom() {
                   setPreWarning("⚠️ Pre-Warning: Audio anomaly / speaking detected. Please remain quiet.");
                 }
                 if (violationConsecutiveCount >= 5) {
-                  reportViolation("audio_anomaly");
-                  violationConsecutiveCount = 0;
-                  setPreWarning(null);
+                  const persisted = await reportViolation("audio_anomaly");
+                  violationConsecutiveCount = persisted ? 0 : 4;
+                  if (persisted) setPreWarning(null);
                 }
               } else {
                 if (violationConsecutiveCount > 0) violationConsecutiveCount--;
               }
-            }, 400);
-          } catch (e) {}
+            }, isMobile ? 750 : 400);
+          } catch (e) {
+            console.warn("Audio monitoring initialization failed:", e);
+          }
         }
       })
       .catch((err) => {
-        setAiStatus("Error");
+        console.error("Camera or microphone initialization failed:", err);
+        setCameraActive(false);
+        setAiStatus("Camera unavailable");
+        setDeviceStatus("Camera unavailable ✗");
+        setPreWarning("Camera access was lost or denied. Allow camera access and reload the exam.");
+        void reportViolation("camera_unavailable", 100);
       });
 
     return () => {
@@ -839,7 +1228,7 @@ export default function QuizRoom() {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [hasStarted, quiz?.teacherId, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot, reportViolation]);
+  }, [hasStarted, isMobile, quiz?.teacherId, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot, reportViolation]);
 
   // ── Timer Countdown ──
   useEffect(() => {
@@ -855,7 +1244,7 @@ export default function QuizRoom() {
     if (hasStarted && timeLeft === 0 && !isSubmitting) {
       submitQuiz();
     }
-  }, [hasStarted, timeLeft, isSubmitting, submitQuiz]);
+  }, [hasStarted, isOnline, timeLeft, isSubmitting, submitQuiz]);
 
   // ── Fullscreen & Anti-Cheat Lockdown ──
   useEffect(() => {
@@ -867,6 +1256,7 @@ export default function QuizRoom() {
     }, 5000);
 
     const requestFS = async () => {
+      if (monitoringLevel !== "strict") return;
       try {
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
@@ -875,80 +1265,125 @@ export default function QuizRoom() {
     };
     requestFS();
 
-    let tabSwitchTimer: NodeJS.Timeout | null = null;
+    let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
     let fullscreenExitTimer: NodeJS.Timeout | null = null;
+    let focusIncidentActive = false;
+    let lastShortcutReportAt = 0;
 
     const handleFullscreenChange = () => {
+      if (monitoringLevel !== "strict") return;
       if (isStartupGracePeriodRef.current) return;
       if (!document.fullscreenElement) {
         setPreWarning("⚠️ PRE-WARNING: Exiting full screen is prohibited. Please re-enter full screen.");
         if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
-        fullscreenExitTimer = setTimeout(() => {
-          if (!document.fullscreenElement && violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
-            reportViolation("fullscreen_exit");
+        fullscreenExitTimer = setTimeout(async () => {
+          if (!document.fullscreenElement && violationCountRef.current < 3) {
+            const persisted = await reportViolation("fullscreen_exit", 100);
+            if (!persisted && !document.fullscreenElement && !isStartupGracePeriodRef.current) {
+              fullscreenExitTimer = setTimeout(handleFullscreenChange, 1_000);
+            }
           } else {
             setPreWarning(null);
           }
-        }, 3000);
+        }, 1_000);
       } else {
         if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
         setPreWarning(null);
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (isStartupGracePeriodRef.current) return;
-      if (document.hidden) {
-        setPreWarning("⚠️ PRE-WARNING: Leaving exam tab detected. Please return to the quiz window.");
-        if (tabSwitchTimer) clearTimeout(tabSwitchTimer);
-        tabSwitchTimer = setTimeout(() => {
-          if (document.hidden && violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
-            reportViolation("tab_switch");
-          } else {
-            setPreWarning(null);
-          }
-        }, 2500);
-      } else {
-        if (tabSwitchTimer) clearTimeout(tabSwitchTimer);
-        setPreWarning(null);
+    const attemptFocusLossReport = async () => {
+      focusLossTimer = null;
+      const examLostFocus = document.hidden || !document.hasFocus();
+      if (!examLostFocus || focusIncidentActive || violationCountRef.current >= 3) return;
+
+      focusIncidentActive = await reportViolation("tab_switch", 100);
+      if (!focusIncidentActive && (document.hidden || !document.hasFocus())) {
+        focusLossTimer = setTimeout(attemptFocusLossReport, 1_000);
       }
     };
 
-    const preventCopy = (e: ClipboardEvent) => { e.preventDefault(); };
+    const scheduleFocusLossReport = (delayMs: number) => {
+      if (isStartupGracePeriodRef.current) return;
+      setPreWarning("⚠️ PRE-WARNING: Leaving or minimizing the exam window is prohibited.");
+      if (focusLossTimer) return;
+      focusLossTimer = setTimeout(attemptFocusLossReport, delayMs);
+    };
+
+    const clearFocusLossReport = () => {
+      if (focusLossTimer) clearTimeout(focusLossTimer);
+      focusLossTimer = null;
+      if (!document.hidden && document.hasFocus()) {
+        focusIncidentActive = false;
+        if (!isAlertingRef.current) setPreWarning(null);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) scheduleFocusLossReport(0);
+      else clearFocusLossReport();
+    };
+    const handleWindowBlur = () => {
+      if (!isMobile) scheduleFocusLossReport(650);
+    };
+
+    const handleClipboard = (e: ClipboardEvent) => {
+      e.preventDefault();
+      if (!isStartupGracePeriodRef.current) void reportViolation("clipboard_attempt", 100);
+    };
     const preventContextMenu = (e: MouseEvent) => { e.preventDefault(); };
     const preventShortcuts = (e: KeyboardEvent) => {
-      if (
-        e.key === "PrintScreen" ||
-        (e.ctrlKey && (e.key === "c" || e.key === "v" || e.key === "p" || e.key === "s")) ||
-        e.key === "F12"
-      ) {
-        e.preventDefault();
-        if (isStartupGracePeriodRef.current) return;
-        if (violationCountRef.current < 3 && !isAlertingRef.current && !isReportingRef.current) {
-          reportViolation("attempted_screenshot");
-        }
-      }
+      const key = e.key.toLowerCase();
+      const modifier = e.ctrlKey || e.metaKey;
+      const screenshotOrCapture = isScreenshotShortcut(e) || (modifier && (key === "p" || key === "s"));
+      const clipboardShortcut = modifier && (key === "c" || key === "v" || key === "x");
+      const developerShortcut = e.key === "F12" || (modifier && e.shiftKey && (key === "i" || key === "j"));
+      if (!screenshotOrCapture && !clipboardShortcut && !developerShortcut) return;
+
+      e.preventDefault();
+      if (isStartupGracePeriodRef.current || Date.now() - lastShortcutReportAt < 1_000) return;
+      lastShortcutReportAt = Date.now();
+      const violationType = developerShortcut
+        ? "developer_tools"
+        : clipboardShortcut
+          ? "clipboard_attempt"
+          : "attempted_screenshot";
+      void reportViolation(violationType, 100);
+    };
+
+    const handleBeforePrint = () => {
+      if (!isStartupGracePeriodRef.current) void reportViolation("attempted_screenshot", 100);
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    document.addEventListener("copy", preventCopy);
-    document.addEventListener("cut", preventCopy as any);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", clearFocusLossReport);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    document.addEventListener("copy", handleClipboard);
+    document.addEventListener("cut", handleClipboard);
+    document.addEventListener("paste", handleClipboard);
     document.addEventListener("contextmenu", preventContextMenu);
     document.addEventListener("keydown", preventShortcuts);
+    document.addEventListener("keyup", preventShortcuts);
 
     return () => {
       if (graceTimer) clearTimeout(graceTimer);
-      if (tabSwitchTimer) clearTimeout(tabSwitchTimer);
+      if (focusLossTimer) clearTimeout(focusLossTimer);
       if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      document.removeEventListener("copy", preventCopy);
-      document.removeEventListener("cut", preventCopy as any);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", clearFocusLossReport);
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      document.removeEventListener("copy", handleClipboard);
+      document.removeEventListener("cut", handleClipboard);
+      document.removeEventListener("paste", handleClipboard);
       document.removeEventListener("contextmenu", preventContextMenu);
       document.removeEventListener("keydown", preventShortcuts);
+      document.removeEventListener("keyup", preventShortcuts);
     };
-  }, [hasStarted]);
+  }, [hasStarted, isMobile, monitoringLevel, reportViolation]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -959,7 +1394,7 @@ export default function QuizRoom() {
   // ─── POST-QUIZ PROCTORSHIELD CELEBRATORY PODIUM SCREEN ────────────────
   if (quizSubmittedResult) {
     return (
-      <div className="min-h-screen bg-[#0d0f18] text-white flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="exam-shell min-h-screen bg-[#0d0f18] text-white flex items-center justify-center p-4 relative overflow-hidden">
         {/* Glow backdrop */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-600/20 via-violet-600/20 to-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -1036,17 +1471,53 @@ export default function QuizRoom() {
   // ─── PRE-START SCREEN ────────────────────────────
   if (!hasStarted) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+      <div className="exam-shell min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
         <div className="bg-[#111] p-8 rounded-2xl border border-gray-800 max-w-lg w-full text-center">
           {isMobile && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-left">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="mb-4 flex items-start gap-3 bg-violet-500/10 border border-violet-500/30 rounded-xl px-4 py-3 text-left">
+              <Smartphone className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-bold text-amber-400">Mobile Device Detected</p>
-                <p className="text-xs text-amber-300/80 mt-0.5">This quiz requires a desktop or laptop computer. AI proctoring may not function correctly on mobile devices.</p>
+                <p className="text-sm font-bold text-violet-300">Mobile Compatible Mode</p>
+                <p className="text-xs text-violet-200/70 mt-0.5">Front-camera and app-switch monitoring are enabled. Mobile screenshot and fullscreen enforcement are not guaranteed, so your teacher will see Reduced Assurance.</p>
               </div>
             </div>
           )}
+          <div className="mb-6 rounded-xl border border-gray-800 bg-[#171717] p-4 text-left space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {isMobile ? <Smartphone className="w-4 h-4 text-violet-400" /> : <Monitor className="w-4 h-4 text-blue-400" />}
+                <span className="text-xs font-bold text-white">Device & Camera Check</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                preflightPassed ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+              }`}>
+                {preflightPassed ? monitoringLabel(monitoringLevel) : "Required"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+              <span className={deviceCapabilities?.secureContext ? "text-emerald-400" : "text-rose-400"}>
+                {deviceCapabilities?.secureContext ? "✓ Secure HTTPS" : "✕ HTTPS required"}
+              </span>
+              <span className={deviceCapabilities?.cameraPermission ? "text-emerald-400" : "text-slate-400"}>
+                {deviceCapabilities?.cameraPermission ? "✓ Camera allowed" : "○ Camera not tested"}
+              </span>
+              <span className={deviceCapabilities?.mediaRecorderSupported ? "text-emerald-400" : "text-amber-400"}>
+                {deviceCapabilities?.mediaRecorderSupported ? "✓ Video evidence" : "△ Snapshot evidence"}
+              </span>
+              <span className={deviceCapabilities?.visibilitySupported ? "text-emerald-400" : "text-rose-400"}>
+                {deviceCapabilities?.visibilitySupported ? "✓ App-switch checks" : "✕ App-switch unavailable"}
+              </span>
+            </div>
+            {deviceCheckError && <p role="alert" className="text-[11px] font-semibold text-rose-400">{deviceCheckError}</p>}
+            <button
+              type="button"
+              onClick={() => void runDevicePreflight()}
+              disabled={isCheckingDevice}
+              className="w-full py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors disabled:opacity-60"
+            >
+              {isCheckingDevice ? "Testing camera and microphone..." : preflightPassed ? "Run Device Check Again" : "Test Camera & Device"}
+            </button>
+          </div>
           {loadingQuiz ? (
             <div className="py-20 text-gray-400">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -1082,15 +1553,46 @@ export default function QuizRoom() {
               </p>
               <div className="space-y-2.5 text-left mb-8 bg-[#1a1a1a] p-4 rounded-xl text-xs text-gray-300">
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Do not leave the browser window or switch tabs.</p>
-                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Copying, pasting, and screenshots are strictly prohibited.</p>
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Copying and pasting are prohibited. Mobile screenshots cannot be reliably detected.</p>
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Cellphones and other devices are not allowed in the frame.</p>
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Keep your face visible and facing the screen at all times.</p>
-                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> The quiz will enter fullscreen mode automatically.</p>
+                <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> {isMobile ? "Keep the exam visible and do not switch apps." : "The quiz will enter fullscreen mode automatically."}</p>
                 <p className="flex items-center gap-2 text-red-400 mt-3 pt-3 border-t border-gray-800"><AlertTriangle className="w-4 h-4 shrink-0" /> Quiz will auto-terminate after 3 violations.</p>
               </div>
 
               {/* LOBBY / WAITING FOR TEACHER STATUS */}
-              {quiz?.quizStatus === "draft" || quiz?.quizStatus === "scheduled" ? (
+              {studentQuizStatus === "pending_approval" ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2">
+                    <p className="text-sm font-bold text-amber-300">Late Entry Approval Pending</p>
+                    <p className="text-xs text-slate-400">Waiting for teacher approval to join this in-progress quiz.</p>
+                  </div>
+                  <button disabled className="w-full py-3.5 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Waiting for Teacher Approval...
+                  </button>
+                </div>
+              ) : studentQuizStatus === "rejected" ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-center">
+                    <p className="text-sm font-bold text-rose-300">Late Entry Request Rejected</p>
+                    <p className="text-xs text-slate-400 mt-1">Your teacher did not approve entry to this quiz.</p>
+                  </div>
+                  <button onClick={() => router.push("/dashboard/student/quizzes")} className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">
+                    Return to My Quizzes
+                  </button>
+                </div>
+              ) : studentQuizStatus === "completed" ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center">
+                    <p className="text-sm font-bold text-emerald-300">Quiz Already Completed</p>
+                    <p className="text-xs text-slate-400 mt-1">This attempt has already been submitted.</p>
+                  </div>
+                  <button onClick={() => router.push("/dashboard/student/results")} className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">
+                    View My Results
+                  </button>
+                </div>
+              ) : !canEnterQuiz ? (
                 <div className="space-y-3.5 animate-fade-in">
                   <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2.5">
                     <div className="relative flex items-center justify-center my-1">
@@ -1115,25 +1617,22 @@ export default function QuizRoom() {
                     Waiting for Teacher to Start...
                   </button>
                 </div>
-              ) : studentQuizStatus === "pending_approval" ? (
-                <div className="space-y-3.5 animate-fade-in">
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2">
-                    <p className="text-sm font-bold text-amber-300">Late Entry Approval Pending</p>
-                    <p className="text-xs text-slate-400">Waiting for teacher approval to join this in-progress quiz.</p>
-                  </div>
-                  <button disabled className="w-full py-3.5 bg-amber-600/50 text-white font-bold rounded-xl flex items-center justify-center gap-2 opacity-80 cursor-not-allowed">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Waiting for Teacher Approval...
+              ) : (
+                <div className="space-y-3">
+                  {lobbyError && <p role="alert" className="text-xs font-semibold text-rose-400">{lobbyError}</p>}
+                  <button
+                    onClick={handleEnterQuiz}
+                    disabled={isEnteringQuiz}
+                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black text-sm rounded-xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer animate-fade-in disabled:opacity-60 disabled:cursor-wait"
+                  >
+                    {isEnteringQuiz ? (
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                    )}
+                    {isEnteringQuiz ? "Verifying Start Status..." : preflightPassed ? "I Understand, Start Quiz" : "Check Device & Start Quiz"}
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setHasStarted(true)}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black text-sm rounded-xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer animate-fade-in"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  I Understand, Start Quiz
-                </button>
               )}
             </>
           )}
@@ -1147,7 +1646,7 @@ export default function QuizRoom() {
   const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
+    <div className="exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
       
       {/* Floating Gamification Celebration Banner */}
       {celebrationBanner && (
@@ -1159,8 +1658,8 @@ export default function QuizRoom() {
 
       {/* Security Warning Modal */}
       {warningModal.show && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#151928] border-2 border-red-500/80 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl shadow-red-500/20 animate-fade-in space-y-4">
+        <div className="app-modal-backdrop bg-black/80 backdrop-blur-md">
+          <div className="app-modal-panel bg-[#151928] border-2 border-red-500/80 rounded-3xl p-6 max-w-md text-center shadow-2xl shadow-red-500/20 animate-fade-in space-y-4 overflow-y-auto">
             <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto text-red-500">
               <AlertTriangle className="w-7 h-7" />
             </div>
@@ -1212,6 +1711,26 @@ export default function QuizRoom() {
 
         {/* Gamified HUD Badges */}
         <div className="flex items-center gap-2 lg:gap-4">
+          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${
+            isOnline
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}>
+            {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+            {isOnline ? "Online" : "Offline — answers kept here"}
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-bold">
+            <Save className="w-3.5 h-3.5" />
+            {autosaveStatus === "saving" ? "Saving..." : autosaveStatus === "saved" ? "Saved" : autosaveStatus === "error" ? "Save retrying" : autosaveStatus === "offline" ? "Saved on device" : "Autosave ready"}
+          </div>
+          <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${
+            monitoringLevel === "strict"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-violet-500/10 border-violet-500/30 text-violet-300"
+          }`}>
+            {isMobile ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
+            {monitoringLabel(monitoringLevel)}
+          </div>
           {/* Streak Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
             <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
@@ -1236,10 +1755,10 @@ export default function QuizRoom() {
           {/* Submit Exam Button */}
           <button
             onClick={submitQuiz}
-            disabled={isSubmitting || loadingQuiz || !!quizError}
+            disabled={isSubmitting || loadingQuiz || !!quizError || !isOnline}
             className="px-4 py-2 bg-gradient-to-r from-red-900/80 to-rose-900/80 border border-rose-600/50 hover:bg-rose-800 text-rose-100 font-black text-xs rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? "Submitting..." : "Submit Exam"}
+            {isSubmitting ? "Submitting..." : isOnline ? "Submit Exam" : "Waiting for connection"}
           </button>
         </div>
       </header>
@@ -1269,6 +1788,12 @@ export default function QuizRoom() {
             </div>
             <div className="flex-1 space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">AI Engine:</span>
+                <span className={`font-bold ${aiStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>
+                  {aiStatus}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-semibold">Face AI:</span>
                 <span className={`font-bold ${faceStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>
                   {faceStatus}
@@ -1285,6 +1810,10 @@ export default function QuizRoom() {
                 <span className={`font-bold ${violationCount > 0 ? "text-red-400 font-black" : "text-emerald-400"}`}>
                   {violationCount}/3 ⚠
                 </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Assurance:</span>
+                <span className="font-bold text-violet-300">{monitoringLabel(monitoringLevel)}</span>
               </div>
             </div>
           </div>
@@ -1327,6 +1856,10 @@ export default function QuizRoom() {
           {/* Status Indicators */}
           <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-4 space-y-3 shadow-md">
             <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">AI Engine</span>
+              <span className={`font-bold ${aiStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>{aiStatus}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-[#242a42]">
               <span className="text-slate-400 font-medium">Face Detection</span>
               <span className={`font-bold ${faceStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>{faceStatus}</span>
             </div>

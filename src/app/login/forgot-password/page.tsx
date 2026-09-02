@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Shield } from "lucide-react";
+import { Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 type Step = "email" | "reset" | "done";
 
-export default function ForgotPasswordPage() {
-  const router = useRouter();
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams();
+  const role = searchParams.get("role");
+  const portalRole = role === "teacher" || role === "student" ? role : null;
+  const loginHref = portalRole ? `/login/${portalRole}` : "/login";
+  const portalName = portalRole
+    ? `${portalRole[0].toUpperCase()}${portalRole.slice(1)}`
+    : null;
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -69,7 +75,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)] px-4">
+    <div className="auth-shell app-gradient-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="text-center mb-8">
@@ -77,10 +83,12 @@ export default function ForgotPasswordPage() {
             🛡️
           </div>
           <h1 className="text-2xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">ProctorShield AI</h1>
-          <p className="text-xs text-[var(--muted)] mt-1 uppercase tracking-widest font-semibold">Password Recovery</p>
+          <p className="text-xs text-[var(--muted)] mt-1 uppercase tracking-widest font-semibold">
+            {portalName ? `${portalName} Password Recovery` : "Password Recovery"}
+          </p>
         </div>
 
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-xl overflow-hidden">
+        <div className="auth-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-xl overflow-hidden">
           {/* Progress bar */}
           <div className="h-1 bg-[var(--surface2)]">
             <div
@@ -98,20 +106,22 @@ export default function ForgotPasswordPage() {
                   <p className="text-sm text-[var(--muted)] mt-1">Enter your account email and we'll send you a verification code.</p>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Email Address</label>
+                  <label htmlFor="recovery-email" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Email Address</label>
                   <div className="relative">
                     <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
+                      id="recovery-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your@email.com"
+                      autoComplete="email"
                       className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                       required
                     />
                   </div>
                 </div>
-                {error && <p className="text-xs text-rose-500 font-semibold">{error}</p>}
+                {error && <p role="alert" className="text-xs text-rose-500 font-semibold">{error}</p>}
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -120,8 +130,8 @@ export default function ForgotPasswordPage() {
                   {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                   {isLoading ? "Sending code..." : "Send Verification Code"}
                 </button>
-                <Link href="/login" className="flex items-center justify-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)] transition-colors mt-2">
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back to Login
+                <Link href={loginHref} className="flex items-center justify-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)] transition-colors mt-2">
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to {portalName ? `${portalName} Login` : "Login"}
                 </Link>
               </form>
             )}
@@ -136,12 +146,14 @@ export default function ForgotPasswordPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Verification Code</label>
+                  <label htmlFor="recovery-code" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Verification Code</label>
                   <div className="relative">
                     <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
+                      id="recovery-code"
                       type="text"
                       inputMode="numeric"
+                      autoComplete="one-time-code"
                       maxLength={6}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
@@ -151,14 +163,16 @@ export default function ForgotPasswordPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">New Password</label>
+                  <label htmlFor="new-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">New Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
+                      id="new-password"
                       type={showPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Min. 10 characters with letters and numbers"
+                      autoComplete="new-password"
                       className="w-full pl-10 pr-10 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
@@ -167,14 +181,16 @@ export default function ForgotPasswordPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Confirm New Password</label>
+                  <label htmlFor="confirm-new-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Confirm New Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
-                      type="password"
+                      id="confirm-new-password"
+                      type={showPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter new password"
+                      autoComplete="new-password"
                       className={`w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
                         confirmPassword && confirmPassword !== newPassword
                           ? "border-rose-500"
@@ -186,7 +202,7 @@ export default function ForgotPasswordPage() {
                     <p className="text-xs text-rose-500 mt-1">Passwords do not match.</p>
                   )}
                 </div>
-                {error && <p className="text-xs text-rose-500 font-semibold">{error}</p>}
+                {error && <p role="alert" className="text-xs text-rose-500 font-semibold">{error}</p>}
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -212,10 +228,10 @@ export default function ForgotPasswordPage() {
                   <p className="text-sm text-[var(--muted)] mt-1">Your password has been changed successfully. You can now log in with your new password.</p>
                 </div>
                 <Link
-                  href="/login"
+                  href={loginHref}
                   className="w-full inline-block py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-xs text-center"
                 >
-                  Go to Login
+                  Go to {portalName ? `${portalName} Login` : "Login"}
                 </Link>
               </div>
             )}
@@ -223,5 +239,13 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="app-gradient-shell min-h-screen" aria-busy="true" />}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }

@@ -58,7 +58,7 @@ function JoinContent() {
   }, [initialCode]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-br from-indigo-950/20 via-[var(--dark-bg)] to-violet-950/20 relative overflow-hidden">
+    <div className="auth-shell min-h-screen flex flex-col items-center justify-center bg-[var(--dark-bg)] relative overflow-hidden">
       
       {/* Background Decor */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
@@ -87,7 +87,7 @@ function JoinContent() {
           </p>
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl shadow-2xl">
+        <div className="auth-panel bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl shadow-2xl">
           <form 
             onSubmit={(e) => { e.preventDefault(); handleJoinQuiz(); }}
             className="flex flex-col gap-4"

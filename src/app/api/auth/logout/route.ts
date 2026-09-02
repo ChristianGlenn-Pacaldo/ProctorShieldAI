@@ -5,157 +5,34 @@ import prisma from "@/lib/prisma";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const roleHint = body.role;
-
+    const requestedRole = typeof body.role === "string" ? body.role.toLowerCase() : undefined;
+    const roleHint = requestedRole && ["admin", "teacher", "student"].includes(requestedRole)
+      ? requestedRole
+      : undefined;
     const session = await getSession(roleHint);
+
     if (session) {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: session.userId }
-      });
-
-      if (dbUser) {
-        // Cascade delete user from database on logout to keep it clean
-        await prisma.$transaction(async (tx) => {
-          // A. Deletion of teacher-related data
-          const quizzes = await tx.quiz.findMany({
-            where: { teacherId: session.userId },
-            select: { id: true }
-          });
-          const quizIds = quizzes.map(e => e.id);
-
-          if (quizIds.length > 0) {
-            const questions = await tx.question.findMany({
-              where: { quizId: { in: quizIds } },
-              select: { id: true }
-            });
-            const questionIds = questions.map(q => q.id);
-
-            const studentQuizzes = await tx.studentQuiz.findMany({
-              where: { quizId: { in: quizIds } },
-              select: { id: true }
-            });
-            const studentQuizIds = studentQuizzes.map(se => se.id);
-
-            if (studentQuizIds.length > 0) {
-              const violations = await tx.violation.findMany({
-                where: { studentQuizId: { in: studentQuizIds } },
-                select: { id: true }
-              });
-              const violationIds = violations.map(v => v.id);
-
-              if (violationIds.length > 0) {
-                await tx.evidenceFile.deleteMany({
-                  where: { violationId: { in: violationIds } }
-                });
-              }
-
-              await tx.violation.deleteMany({
-                where: { studentQuizId: { in: studentQuizIds } }
-              });
-
-              await tx.aiAnalysis.deleteMany({
-                where: { studentQuizId: { in: studentQuizIds } }
-              });
-
-              await tx.answer.deleteMany({
-                where: { studentQuizId: { in: studentQuizIds } }
-              });
-
-              await tx.studentQuiz.deleteMany({
-                where: { id: { in: studentQuizIds } }
-              });
-            }
-
-            if (questionIds.length > 0) {
-              await tx.choice.deleteMany({
-                where: { questionId: { in: questionIds } }
-              });
-
-              await tx.question.deleteMany({
-                where: { quizId: { in: quizIds } }
-              });
-            }
-
-            await tx.quiz.deleteMany({
-              where: { teacherId: session.userId }
-            });
-          }
-
-          // Delete subjects created by this teacher
-          await tx.subject.deleteMany({
-            where: { teacherId: session.userId }
-          });
-
-          // B. Deletion of student-related data
-          const studentQuizzesAsStudent = await tx.studentQuiz.findMany({
-            where: { studentId: session.userId },
-            select: { id: true }
-          });
-          const studentQuizIdsAsStudent = studentQuizzesAsStudent.map(se => se.id);
-
-          if (studentQuizIdsAsStudent.length > 0) {
-            const violations = await tx.violation.findMany({
-              where: { studentQuizId: { in: studentQuizIdsAsStudent } },
-              select: { id: true }
-            });
-            const violationIds = violations.map(v => v.id);
-
-            if (violationIds.length > 0) {
-              await tx.evidenceFile.deleteMany({
-                where: { violationId: { in: violationIds } }
-              });
-            }
-
-            await tx.violation.deleteMany({
-              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
-            });
-
-            await tx.aiAnalysis.deleteMany({
-              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
-            });
-
-            await tx.answer.deleteMany({
-              where: { studentQuizId: { in: studentQuizIdsAsStudent } }
-            });
-
-            await tx.studentQuiz.deleteMany({
-              where: { studentId: session.userId }
-            });
-          }
-
-          // C. Delete generic user-related tables
-          await tx.notification.deleteMany({
-            where: { userId: session.userId }
-          });
-
-          await tx.activityLog.deleteMany({
-            where: { userId: session.userId }
-          });
-
-          // Delete subscriptions and payments
-          const subs = await tx.userSubscription.findMany({
-            where: { userId: session.userId },
-            select: { id: true }
-          });
-          const subIds = subs.map(s => s.id);
-
-          if (subIds.length > 0) {
-            await tx.payment.deleteMany({
-              where: { subscriptionId: { in: subIds } }
-            });
-            await tx.userSubscription.deleteMany({
-              where: { userId: session.userId }
-            });
-          }
-
-          // Finally, delete the User record
-          await tx.user.delete({
-            where: { id: session.userId }
-          });
-        });
+      // Logout must only end the browser session. Account, quiz, payment, and
+      // subscription records are durable data and must survive future logins.
+      try {
+        await prisma.$transaction([
+          prisma.user.update({
+            where: { id: session.userId },
+            data: { isOnline: false },
+          }),
+          prisma.activityLog.create({
+            data: {
+              userId: session.userId,
+              activity: `Logged out as ${session.role}`,
+              ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+            },
+          }),
+        ]);
+      } catch (databaseError) {
+        // A logging failure must not trap the user in an authenticated session.
+        console.error("Logout activity update error:", databaseError);
       }
 
-      // Broadcast activity to admin
       try {
         const { pusherServer } = await import("@/lib/pusher");
         await pusherServer.trigger("private-admin-dashboard", "activity", {
@@ -163,21 +40,19 @@ export async function POST(req: NextRequest) {
           userId: session.userId,
           fullName: session.fullName,
           role: session.role,
-          activity: `Logged out as ${session.role} (Account Cleaned Up)`,
+          activity: `Logged out as ${session.role}`,
           timestamp: new Date().toISOString(),
         });
-      } catch (pusherErr) {
-        console.error("Pusher logout broadcast error:", pusherErr);
+      } catch (pusherError) {
+        console.error("Pusher logout broadcast error:", pusherError);
       }
     }
 
-    await clearSession(roleHint);
+    await clearSession(session?.role ?? roleHint);
     return NextResponse.json({ success: true, message: "Logged out" });
   } catch (error) {
     console.error("Logout error:", error);
-    return NextResponse.json(
-      { error: "Failed to logout" },
-      { status: 500 }
-    );
+    await clearSession();
+    return NextResponse.json({ success: true, message: "Logged out" });
   }
 }

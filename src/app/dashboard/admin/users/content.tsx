@@ -99,7 +99,7 @@ export default function UsersContent() {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div>
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
@@ -203,8 +203,8 @@ export default function UsersContent() {
 
       {/* EDIT USER MODAL */}
       {editUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+        <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)]">
               <h3 className="font-bold text-[var(--ink)]">Edit User</h3>
               <button onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>

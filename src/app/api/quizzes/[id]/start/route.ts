@@ -14,6 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
+      include: { _count: { select: { questions: true } } },
     });
 
     if (!quiz || quiz.teacherId !== session.userId) {
@@ -22,6 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (quiz.quizStatus !== "active") {
       return NextResponse.json({ error: "Quiz is not in a startable state" }, { status: 400 });
+    }
+
+    if (quiz._count.questions === 0) {
+      return NextResponse.json({ error: "Add at least one question before starting the quiz" }, { status: 409 });
     }
 
     const startedAt = new Date();

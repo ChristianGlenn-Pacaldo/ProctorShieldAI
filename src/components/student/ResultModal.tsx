@@ -13,8 +13,8 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
   const isClean = result.aiVerdict?.includes("Clean");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
-      <div className="bg-[var(--surface)] w-full max-w-lg rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden animate-modal flex flex-col max-h-[90vh]">
+    <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="app-modal-panel bg-[var(--surface)] max-w-lg rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden animate-modal flex flex-col">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--surface2)]">

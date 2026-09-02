@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { verifyPayMongoSignature } from "@/lib/paymongo";
+import { getPayMongoMode, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
 import { parsePaidCheckout, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
 
 function isUniqueConstraintError(error: unknown) {
@@ -28,6 +28,10 @@ export async function POST(req: NextRequest) {
     if (!event) return NextResponse.json({ error: "Invalid event" }, { status: 400 });
     if ((event.livemode && signatureMode !== "li") || (!event.livemode && signatureMode !== "te")) {
       return NextResponse.json({ error: "Signature mode mismatch" }, { status: 401 });
+    }
+    if (!isPayMongoEventModeAllowed(event.livemode)) {
+      console.error(`Rejected ${event.livemode ? "live" : "test"} PayMongo event while PAYMONGO_MODE=${getPayMongoMode()}`);
+      return NextResponse.json({ error: "Payment mode mismatch" }, { status: 403 });
     }
 
     if (event.type === "checkout_session.payment.paid") {

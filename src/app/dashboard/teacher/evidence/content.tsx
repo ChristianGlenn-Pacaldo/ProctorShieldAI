@@ -13,6 +13,15 @@ interface EvidenceItem {
   bg: string;
   btnClass: string;
   screenshotPath: string | null;
+  evidenceType: string | null;
+  durationSeconds: number | null;
+}
+
+function isVideoEvidence(evidence: EvidenceItem): boolean {
+  return evidence.evidenceType?.startsWith("video/") === true
+    || evidence.screenshotPath?.startsWith("data:video/") === true
+    || evidence.screenshotPath?.endsWith(".webm") === true
+    || evidence.screenshotPath?.endsWith(".mp4") === true;
 }
 
 export default function EvidenceContent({ teacherId }: { teacherId: string }) {
@@ -74,14 +83,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     // Trigger base64 download
     const link = document.createElement("a");
     link.href = selectedEvidence.screenshotPath;
-    link.download = `evidence_${selectedEvidence.name.replace(/\s+/g, "_")}_${selectedEvidence.id}.jpg`;
+    const extension = isVideoEvidence(selectedEvidence)
+      ? selectedEvidence.evidenceType === "video/mp4" ? "mp4" : "webm"
+      : "jpg";
+    link.download = `evidence_${selectedEvidence.name.replace(/\s+/g, "_")}_${selectedEvidence.id}.${extension}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="animate-fade-in grid lg:grid-cols-2 gap-4">
+    <div className="grid lg:grid-cols-2 gap-4">
       {/* Evidence Log */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
@@ -158,17 +170,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                 }}
               >
                 {selectedEvidence.screenshotPath ? (
-                  selectedEvidence.screenshotPath.startsWith("data:video/") ||
-                  selectedEvidence.screenshotPath.endsWith(".webm") ||
-                  selectedEvidence.screenshotPath.endsWith(".mp4") ? (
+                  isVideoEvidence(selectedEvidence) ? (
                     <video
                       src={selectedEvidence.screenshotPath}
                       controls
-                      autoPlay
-                      loop
-                      muted
+                      preload="metadata"
+                      playsInline
+                      aria-label={`Violation evidence video for ${selectedEvidence.name}`}
                       className="w-full h-full object-contain rounded-lg"
-                    />
+                    >
+                      Your browser does not support evidence video playback.
+                    </video>
                   ) : (
                     <>
                       <img
@@ -212,6 +224,12 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                     {new Date(selectedEvidence.timestamp).toLocaleString()}
                   </span>
                 </div>
+                {isVideoEvidence(selectedEvidence) && (
+                  <div className="flex justify-between items-center border-t border-[var(--border)] pt-2">
+                    <span className="text-xs font-bold text-[var(--muted)] uppercase">Evidence Clip</span>
+                    <span className="text-xs font-semibold text-blue-500">{selectedEvidence.durationSeconds || 4} seconds</span>
+                  </div>
+                )}
               </div>
 
               {selectedEvidence.screenshotPath && (
@@ -219,7 +237,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                   onClick={handleDownload}
                   className="w-full py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5"
                 >
-                  <Download className="w-4 h-4" /> Download Evidence Image
+                  <Download className="w-4 h-4" /> Download Evidence {isVideoEvidence(selectedEvidence) ? "Video" : "Image"}
                 </button>
               )}
             </div>
@@ -237,11 +255,11 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
       {/* FULLSCREEN REPLAY MODAL */}
       {isFullscreen && selectedEvidence && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4 lg:p-8"
+          className="app-modal-backdrop bg-black/90 backdrop-blur-md animate-fade-in"
           onClick={() => setIsFullscreen(false)}
         >
           <div 
-            className="w-full max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col max-h-[95vh]"
+            className="app-modal-panel max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a] shrink-0">
@@ -262,16 +280,18 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
             
             <div className="flex-1 bg-black flex items-center justify-center p-4 overflow-hidden relative min-h-[50vh]">
               {selectedEvidence.screenshotPath ? (
-                selectedEvidence.screenshotPath.startsWith("data:video/") ||
-                selectedEvidence.screenshotPath.endsWith(".webm") ||
-                selectedEvidence.screenshotPath.endsWith(".mp4") ? (
+                isVideoEvidence(selectedEvidence) ? (
                   <video
                     src={selectedEvidence.screenshotPath}
                     controls
                     autoPlay
-                    loop
+                    preload="metadata"
+                    playsInline
+                    aria-label={`Violation evidence replay for ${selectedEvidence.name}`}
                     className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
-                  />
+                  >
+                    Your browser does not support evidence video playback.
+                  </video>
                 ) : (
                   <img
                     src={selectedEvidence.screenshotPath}

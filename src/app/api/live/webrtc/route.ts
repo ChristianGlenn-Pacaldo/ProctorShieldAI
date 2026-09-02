@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { pusherServer } from "@/lib/pusher";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
 const SIGNAL_TYPES = new Set([
   "request-stream",
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
         enrollment && targetChannel === `private-teacher-${enrollment.quiz.teacherId}`
       );
     } else if (session.role === "teacher") {
+      if (!await hasActiveProSubscription(session.userId)) {
+        return NextResponse.json(
+          { error: "Live monitoring requires an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+          { status: 403 },
+        );
+      }
       const target = /^private-student-(.+)$/.exec(targetChannel)?.[1];
       if (target) {
         allowed = Boolean(await prisma.studentQuiz.findFirst({

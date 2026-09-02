@@ -5,7 +5,7 @@ import { GraduationCap, Presentation, ArrowLeft } from "lucide-react";
 
 export default function LoginPortalSelector() {
   return (
-    <div className="min-h-screen bg-[var(--dark-bg)] text-white flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="auth-shell min-h-screen bg-[var(--dark-bg)] text-white flex items-center justify-center p-6 relative overflow-hidden">
       {/* Decorative gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-950/30 via-slate-950 to-slate-900 pointer-events-none" />
 
@@ -26,7 +26,7 @@ export default function LoginPortalSelector() {
           {/* Student Card */}
           <Link
             href="/login/student"
-            className="group flex flex-col justify-between p-8 rounded-2xl bg-slate-900/70 hover:bg-slate-900/90 border border-slate-800 hover:border-blue-500/40 transition-all duration-300 transform hover:-translate-y-1 shadow-xl text-left"
+            className="auth-panel group flex flex-col justify-between p-8 rounded-2xl bg-slate-900/70 hover:bg-slate-900/90 border border-slate-800 hover:border-blue-500/40 transition-all duration-300 transform hover:-translate-y-1 shadow-xl text-left"
           >
             <div>
               <div className="w-14 h-14 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-6 group-hover:scale-105 transition-all duration-300">
@@ -45,7 +45,7 @@ export default function LoginPortalSelector() {
           {/* Teacher Card */}
           <Link
             href="/login/teacher"
-            className="group flex flex-col justify-between p-8 rounded-2xl bg-slate-900/70 hover:bg-slate-900/90 border border-slate-800 hover:border-indigo-500/40 transition-all duration-300 transform hover:-translate-y-1 shadow-xl text-left"
+            className="auth-panel group flex flex-col justify-between p-8 rounded-2xl bg-slate-900/70 hover:bg-slate-900/90 border border-slate-800 hover:border-blue-500/40 transition-all duration-300 transform hover:-translate-y-1 shadow-xl text-left"
           >
             <div>
               <div className="w-14 h-14 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-105 transition-all duration-300">

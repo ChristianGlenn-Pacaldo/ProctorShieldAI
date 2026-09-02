@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     });
 
     const formattedEvidence = violations.map((v) => {
+      const primaryEvidence = v.evidenceFiles[0];
       const typeMapping: Record<string, string> = {
         tab_switch: "Tab Switch",
         tab_switching: "Tab Switch",
@@ -87,7 +88,10 @@ export async function GET(req: NextRequest) {
         timestamp: v.timestamp,
         bg,
         btnClass,
-        screenshotPath: v.evidenceFiles.length > 0 ? `/api/evidence/${v.id}` : v.screenshotPath || null,
+        screenshotPath: primaryEvidence ? `/api/evidence/${v.id}` : v.screenshotPath || null,
+        evidenceType: primaryEvidence?.fileType
+          || (/^data:([^;]+);base64,/.exec(v.screenshotPath || "")?.[1] ?? null),
+        durationSeconds: v.durationSeconds,
       };
     });
 

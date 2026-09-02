@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // MFA State
   const [mfaState, setMfaState] = useState({ isPending: false, userId: "", email: "", role: "" });
@@ -99,14 +101,14 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="auth-shell min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
       {/* Decorative gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-rose-950/20 pointer-events-none" />
 
-      <div className="w-full max-w-md p-8 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl relative z-10">
+      <div className="auth-panel w-full max-w-md p-8 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl relative z-10">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-2xl mx-auto mb-4">
-            🔒
+          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto mb-4">
+            <ShieldCheck className="w-7 h-7" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
             Admin Access
@@ -184,19 +186,24 @@ export default function AdminLoginPage() {
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
+              <div className="relative">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 transition-all"
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
                 required
               />
+              <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute inset-y-0 right-0 px-4 text-slate-500 hover:text-blue-300">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+              </div>
             </div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 rounded-xl bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed mt-2"
+              className="ui-primary w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed mt-2"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

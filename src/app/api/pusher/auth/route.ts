@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -17,7 +18,9 @@ export async function POST(req: NextRequest) {
   let allowed = false;
   if (channelName === `private-user-${session.userId}`) allowed = true;
   if (channelName === `private-student-${session.userId}` && session.role === "student") allowed = true;
-  if (channelName === `private-teacher-${session.userId}` && session.role === "teacher") allowed = true;
+  if (channelName === `private-teacher-${session.userId}` && session.role === "teacher") {
+    allowed = await hasActiveProSubscription(session.userId);
+  }
   if (channelName === "private-admin-dashboard" && session.role === "admin") allowed = true;
 
   const quizMatch = /^private-quiz-(\d+)$/.exec(channelName);

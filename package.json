@@ -11,6 +11,8 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.ts",
     "test:e2e": "playwright test",
+    "db:migrate:check": "tsx scripts/check-migration-readiness.ts",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "npx prisma db seed",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "maintenance": "tsx scripts/maintenance.ts",
