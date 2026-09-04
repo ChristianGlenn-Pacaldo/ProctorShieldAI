@@ -30,6 +30,7 @@ export default function TeacherQuizzesPage({
     duration: 60,
     totalQuestions: 10,
     shuffleQuestions: true,
+    allowRetake: true,
     isGamified: true,
   });
 
@@ -281,6 +282,7 @@ export default function TeacherQuizzesPage({
       duration: 60,
       totalQuestions: 1,
       shuffleQuestions: true,
+      allowRetake: true,
       isGamified: true,
     });
     setCreateError("");
@@ -394,6 +396,7 @@ export default function TeacherQuizzesPage({
         duration: 60,
         totalQuestions: data.questions.length,
         shuffleQuestions: true,
+        allowRetake: true,
         isGamified: true,
       });
 
@@ -507,6 +510,7 @@ export default function TeacherQuizzesPage({
         duration: 60,
         totalQuestions: 10,
         shuffleQuestions: true,
+        allowRetake: true,
         isGamified: true,
       });
       fetchQuizzes();
@@ -620,7 +624,7 @@ export default function TeacherQuizzesPage({
                       <div className="text-xs text-[var(--muted)] mt-0.5">{e.duration} mins</div>
                     </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.subject?.subjectName || "N/A"}</td>
-                    <td className="px-5 py-3"><code className="px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md font-mono font-bold text-xs">{e.accessCode}</code></td>
+                    <td className="px-5 py-3"><code className="whitespace-nowrap px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md font-mono font-bold text-xs">{e.accessCode}</code></td>
                     <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.totalQuestions}</td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
@@ -727,6 +731,19 @@ export default function TeacherQuizzesPage({
                       />
                       <label htmlFor="shuffleQuestions" className="text-xs font-semibold text-[var(--ink)] cursor-pointer select-none">
                         Shuffle Questions per Student
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        id="allowRetake"
+                        checked={newQuizForm.allowRetake}
+                        onChange={e => setNewQuizForm({...newQuizForm, allowRetake: e.target.checked})}
+                        className="w-4 h-4 rounded bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 text-indigo-600 focus:ring-0 cursor-pointer"
+                      />
+                      <label htmlFor="allowRetake" className="text-xs font-semibold text-[var(--ink)] cursor-pointer select-none">
+                        Allow students to request a retake
                       </label>
                     </div>
 
@@ -1106,14 +1123,14 @@ export default function TeacherQuizzesPage({
                 <div className="flex gap-2">
                   <button
                     onClick={() => toggleQuizStatus(manageQuiz)}
-                    disabled={isUpdatingStatus || manageQuiz.quizStatus === "ended"}
+                    disabled={isUpdatingStatus || ["in_progress", "ended"].includes(manageQuiz.quizStatus)}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                       manageQuiz.quizStatus === "active" 
                         ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
                         : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
                     } disabled:opacity-50`}
                   >
-                    {isUpdatingStatus ? "Updating..." : manageQuiz.quizStatus === "active" ? "Set to Draft" : manageQuiz.quizStatus === "ended" ? "Ended" : "Make Active"}
+                    {isUpdatingStatus ? "Updating..." : manageQuiz.quizStatus === "active" ? "Set to Draft" : manageQuiz.quizStatus === "ended" ? "Ended" : manageQuiz.quizStatus === "in_progress" ? "In Progress" : "Make Active"}
                   </button>
                   <button
                     onClick={() => endQuiz(manageQuiz)}
@@ -1124,6 +1141,26 @@ export default function TeacherQuizzesPage({
                   </button>
                 </div>
               </div>
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-xs font-semibold text-[var(--ink)]">
+                Allow retake requests
+                <input
+                  type="checkbox"
+                  checked={manageQuiz.allowRetake === true}
+                  onChange={async (event) => {
+                    const allowRetake = event.target.checked;
+                    const response = await fetch(`/api/quizzes/${manageQuiz.id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ allowRetake }),
+                    });
+                    if (response.ok) {
+                      setManageQuiz({ ...manageQuiz, allowRetake });
+                      void fetchQuizzes();
+                    }
+                  }}
+                  className="h-4 w-4"
+                />
+              </label>
             </div>
             <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex justify-between items-center">
               <button
@@ -1178,7 +1215,7 @@ export default function TeacherQuizzesPage({
 
               <div className="text-center mb-5">
                 <span className="text-3xl font-extrabold text-[var(--ink)]">₱500</span>
-                <span className="text-sm text-[var(--muted)]">/month</span>
+                <span className="text-sm text-[var(--muted)]">/year</span>
               </div>
 
               <div className="flex gap-3">

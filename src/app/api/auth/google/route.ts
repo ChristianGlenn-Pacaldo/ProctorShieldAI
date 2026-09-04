@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import prisma from "@/lib/prisma";
 import { sendOtpEmail } from "@/lib/email";
 import { consumeRateLimitGroup, generateOtp, getClientIp, hashOtp } from "@/lib/security";
+import { hashPassword } from "@/lib/auth";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
         data: {
           fullName: name || "Google User",
           email: email.toLowerCase().trim(),
-          password: `GOOGLE_OAUTH_${crypto.randomUUID()}`, // Non-guessable placeholder
+          password: await hashPassword(`GOOGLE_OAUTH_${crypto.randomUUID()}`),
           profileImage: picture || null,
           roleId: dbRole.id,
         },

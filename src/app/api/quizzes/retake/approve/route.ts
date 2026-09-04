@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+class RetakeConflictError extends Error {}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
@@ -23,43 +25,43 @@ export async function POST(req: NextRequest) {
     if (!studentQuiz || studentQuiz.quiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
+    if (studentQuiz.quizStatus !== "pending_retake" || !studentQuiz.endTime) {
+      return NextResponse.json({ error: "This retake request is no longer pending" }, { status: 409 });
+    }
 
     if (action === "accept") {
-      // 1. Delete all previous answers
-      await prisma.answer.deleteMany({
-        where: { studentQuizId: studentQuizId },
-      });
-
-      // 2. Delete all previous violations
-      await prisma.violation.deleteMany({
-        where: { studentQuizId: studentQuizId },
-      });
-
-      // 3. Delete previous AI analysis if it exists
-      await prisma.aiAnalysis.deleteMany({
-        where: { studentQuizId: studentQuizId },
-      });
-
-      // 4. Reset the student quiz status so they can take it again
-      await prisma.studentQuiz.update({
-        where: { id: studentQuizId },
-        data: {
-          quizStatus: "enrolled",
-          score: null,
-          aiVerdict: null,
-          cheatingProbability: null,
-          startTime: null,
-          endTime: null,
-        },
+      // Preserve the completed attempt and its evidence. A retake is a new
+      // attempt, not a destructive reset of academic history.
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`retake:${studentQuiz.studentId}:${studentQuiz.quizId}`}))`;
+        const claimed = await tx.studentQuiz.updateMany({
+          where: { id: studentQuiz.id, quizStatus: "pending_retake", endTime: { not: null } },
+          data: { quizStatus: "completed" },
+        });
+        if (claimed.count !== 1) throw new RetakeConflictError();
+        const latest = await tx.studentQuiz.findFirst({
+          where: { studentId: studentQuiz.studentId, quizId: studentQuiz.quizId },
+          orderBy: { attemptNumber: "desc" },
+          select: { attemptNumber: true },
+        });
+        await tx.studentQuiz.create({
+          data: {
+            studentId: studentQuiz.studentId,
+            quizId: studentQuiz.quizId,
+            attemptNumber: (latest?.attemptNumber ?? studentQuiz.attemptNumber) + 1,
+            quizStatus: "in_progress",
+            startTime: new Date(),
+          },
+        });
       });
     } else {
-      // Rejecting the retake request means it stays ended
-      await prisma.studentQuiz.update({
-        where: { id: studentQuizId },
-        data: {
-          quizStatus: "ended",
-        },
+      const rejected = await prisma.studentQuiz.updateMany({
+        where: { id: studentQuizId, quizStatus: "pending_retake", endTime: { not: null } },
+        data: { quizStatus: "completed" },
       });
+      if (rejected.count !== 1) {
+        return NextResponse.json({ error: "This retake request is no longer pending" }, { status: 409 });
+      }
     }
 
     // 1. Create DB Notification for Student
@@ -94,6 +96,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof RetakeConflictError) {
+      return NextResponse.json({ error: "This retake request is no longer pending" }, { status: 409 });
+    }
     console.error("Retake approval error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

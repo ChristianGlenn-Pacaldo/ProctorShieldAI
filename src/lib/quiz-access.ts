@@ -12,10 +12,9 @@ export function canStudentEnterQuiz({
   endTime,
 }: StudentQuizAccessState): boolean {
   return (
-    quizStatus === "in_progress" &&
+    (quizStatus === "in_progress" || quizStatus === "ended") &&
     studentQuizStatus === "in_progress" &&
     Boolean(startTime) &&
     !endTime
   );
 }
-

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
 
 function JoinContent() {
   const router = useRouter();
@@ -15,8 +16,8 @@ function JoinContent() {
   const [message, setMessage] = useState("");
 
   const handleJoinQuiz = async (codeToUse?: string) => {
-    const code = codeToUse || joinCode;
-    if (!code.trim()) {
+    const code = normalizeQuizAccessCode(codeToUse || joinCode);
+    if (!code) {
       setMessage("Please enter an access code.");
       return;
     }
@@ -28,7 +29,7 @@ function JoinContent() {
       const res = await fetch("/api/quizzes/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessCode: code.toUpperCase() }),
+        body: JSON.stringify({ accessCode: code }),
       });
 
       const data = await res.json();
@@ -38,7 +39,7 @@ function JoinContent() {
         router.push(`/quiz/${data.quiz.id}`);
       } else if (res.status === 401) {
         // Not logged in. Save code and redirect to student login.
-        localStorage.setItem("pendingJoinCode", code.toUpperCase());
+        localStorage.setItem("pendingJoinCode", code);
         router.push("/login/student");
       } else {
         setMessage(data.error || "Failed to join quiz");
@@ -83,7 +84,7 @@ function JoinContent() {
             Join a Quiz
           </h1>
           <p className="text-sm text-white/50">
-            Enter the 7-character access code provided by your instructor.
+            Enter the access code provided by your instructor.
           </p>
         </div>
 
@@ -95,10 +96,16 @@ function JoinContent() {
             <input
               type="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setJoinCode(e.target.value.toUpperCase());
+                setMessage("");
+              }}
               placeholder="Enter join code"
-              className="w-full px-6 py-5 text-center text-2xl font-bold tracking-[0.2em] rounded-2xl bg-black/20 border border-white/10 text-white placeholder:text-white/20 placeholder:tracking-normal focus:outline-none focus:border-indigo-500/50 focus:bg-black/40 transition-all uppercase"
-              maxLength={10}
+              className="w-full min-w-0 px-3 sm:px-6 py-5 text-center text-lg sm:text-2xl font-mono font-bold tracking-[0.05em] sm:tracking-[0.15em] rounded-2xl bg-black/20 border border-white/10 text-white placeholder:text-white/20 placeholder:tracking-normal focus:outline-none focus:border-indigo-500/50 focus:bg-black/40 transition-all uppercase"
+              maxLength={QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
               autoFocus
             />
 

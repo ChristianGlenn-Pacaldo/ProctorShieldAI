@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Camera, AlertCircle, PlayCircle, Download, Trash2 } from "lucide-react";
 
 interface EvidenceItem {
@@ -53,36 +53,43 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     }
   };
 
-  const fetchEvidence = async () => {
+  const fetchEvidence = useCallback(async (background = false) => {
     try {
       const res = await fetch("/api/dashboard/teacher/evidence");
       if (res.ok) {
         const data = await res.json();
-        setEvidenceList(data.evidence || []);
-        if (data.evidence && data.evidence.length > 0) {
-          // Select the first one by default
-          setSelectedEvidence(data.evidence[0]);
-        }
+        const nextEvidence: EvidenceItem[] = data.evidence || [];
+        setEvidenceList(nextEvidence);
+        setSelectedEvidence((current) => {
+          if (current) return nextEvidence.find((item) => item.id === current.id) || nextEvidence[0] || null;
+          return nextEvidence[0] || null;
+        });
       }
     } catch (err) {
       console.error("Failed to fetch evidence logs:", err);
     } finally {
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (teacherId && teacherId !== "unknown") {
-      fetchEvidence();
+      void fetchEvidence();
+      // A clip takes four seconds to record. Refresh in the background so a
+      // snapshot already visible to the teacher is replaced by its video.
+      const refreshTimer = window.setInterval(() => void fetchEvidence(true), 5_000);
+      return () => window.clearInterval(refreshTimer);
     }
-  }, [teacherId]);
+  }, [teacherId, fetchEvidence]);
 
   const handleDownload = () => {
     if (!selectedEvidence || !selectedEvidence.screenshotPath) return;
     
     // Trigger base64 download
     const link = document.createElement("a");
-    link.href = selectedEvidence.screenshotPath;
+    link.href = selectedEvidence.screenshotPath.startsWith("/api/evidence/")
+      ? `${selectedEvidence.screenshotPath}?download=1`
+      : selectedEvidence.screenshotPath;
     const extension = isVideoEvidence(selectedEvidence)
       ? selectedEvidence.evidenceType === "video/mp4" ? "mp4" : "webm"
       : "jpg";

@@ -11,7 +11,7 @@ export async function PUT(req: NextRequest) {
 
     const { fullName } = await req.json();
 
-    if (!fullName || !fullName.includes(",")) {
+    if (typeof fullName !== "string" || fullName.length > 150 || !fullName.includes(",")) {
       return NextResponse.json({ error: "Invalid name format" }, { status: 400 });
     }
 

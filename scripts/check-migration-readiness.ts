@@ -17,11 +17,22 @@ async function main() {
       WHERE table_schema = 'public' AND table_name = 'payments' AND column_name = 'provider_payment_id'
     ) AS exists`;
   const hasProviderPaymentId = paymentColumn[0]?.exists === true;
+  const attemptColumn = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'student_quizzes' AND column_name = 'attempt_number'
+    ) AS exists`;
+  const hasAttemptNumber = attemptColumn[0]?.exists === true;
 
   const [enrollmentDuplicates, answerDuplicates, subscriptionDuplicates, paymentProviderDuplicates] = await Promise.all([
-    count`SELECT COUNT(*)::bigint AS count FROM (
-      SELECT student_id, quiz_id FROM student_quizzes GROUP BY student_id, quiz_id HAVING COUNT(*) > 1
-    ) duplicate_groups`,
+    hasAttemptNumber
+      ? count`SELECT COUNT(*)::bigint AS count FROM (
+          SELECT student_id, quiz_id, attempt_number FROM student_quizzes
+          GROUP BY student_id, quiz_id, attempt_number HAVING COUNT(*) > 1
+        ) duplicate_groups`
+      : count`SELECT COUNT(*)::bigint AS count FROM (
+          SELECT student_id, quiz_id FROM student_quizzes GROUP BY student_id, quiz_id HAVING COUNT(*) > 1
+        ) duplicate_groups`,
     count`SELECT COUNT(*)::bigint AS count FROM (
       SELECT student_quiz_id, question_id FROM answers GROUP BY student_quiz_id, question_id HAVING COUNT(*) > 1
     ) duplicate_groups`,

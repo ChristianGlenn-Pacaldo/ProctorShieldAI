@@ -38,20 +38,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         });
         
         if (premiumPlan) {
-          // Deactivate any existing active subscriptions
+          // Deactivate any other active plan before granting Premium.
           await prisma.userSubscription.updateMany({
-            where: { userId: id, subscriptionStatus: "active" },
+            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
             data: { subscriptionStatus: "cancelled" }
           });
 
-          // Create new premium subscription
-          await prisma.userSubscription.create({
-            data: {
+          const startDate = new Date();
+          const endDate = new Date(startDate);
+          endDate.setFullYear(endDate.getFullYear() + 1);
+          await prisma.userSubscription.upsert({
+            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
+            update: {
+              startDate,
+              endDate,
+              paymentStatus: "paid_manual",
+              subscriptionStatus: "active",
+            },
+            create: {
               userId: id,
               planId: premiumPlan.id,
-              startDate: new Date(),
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
-              paymentStatus: "paid",
+              startDate,
+              endDate,
+              paymentStatus: "paid_manual",
               subscriptionStatus: "active",
             }
           });

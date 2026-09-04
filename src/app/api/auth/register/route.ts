@@ -41,6 +41,19 @@ export async function POST(req: NextRequest) {
         { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
       );
     }
+    if (
+      typeof fullName !== "string"
+      || fullName.trim().length < 2
+      || fullName.trim().length > 150
+      || typeof email !== "string"
+      || email.length > 254
+      || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Enter a valid name and email address" },
+        { status: 400 },
+      );
+    }
 
     const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },

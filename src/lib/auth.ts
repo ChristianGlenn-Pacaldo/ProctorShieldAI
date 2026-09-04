@@ -34,6 +34,7 @@ export interface TokenPayload {
   email: string;
   role: string;
   fullName: string;
+  sessionVersion: number;
 }
 
 export function createToken(payload: TokenPayload): string {
@@ -49,6 +50,7 @@ export function verifyToken(token: string): TokenPayload | null {
     if (
       !payload.userId ||
       !payload.role ||
+      !Number.isInteger(payload.sessionVersion) ||
       !VALID_ROLES.includes(payload.role.toLowerCase() as (typeof VALID_ROLES)[number])
     ) {
       return null;
@@ -62,8 +64,15 @@ export function verifyToken(token: string): TokenPayload | null {
 
 // ── COOKIE / SESSION ────────────────────────────────────
 
-export async function setSessionCookie(payload: TokenPayload) {
-  const token = createToken(payload);
+export async function setSessionCookie(payload: Omit<TokenPayload, "sessionVersion">) {
+  const { default: prisma } = await import("@/lib/prisma");
+  const user = await prisma.user.update({
+    where: { id: payload.userId },
+    data: { isOnline: true, lastSeenAt: new Date() },
+    select: { sessionVersion: true },
+  });
+  if (!user) throw new Error("Cannot create a session for a missing user");
+  const token = createToken({ ...payload, sessionVersion: user.sessionVersion });
   const cookieStore = await cookies();
 
   // Clear existing session cookies for all roles to prevent stale cross-role cookie conflicts
@@ -102,20 +111,31 @@ export async function getSession(roleHint?: string): Promise<TokenPayload | null
         email: true,
         fullName: true,
         status: true,
+        lastSeenAt: true,
+        sessionVersion: true,
         role: { select: { roleName: true } },
       },
     });
 
     if (!user || user.status !== "active") return null;
+    if (payload.sessionVersion !== user.sessionVersion) return null;
 
     const currentRole = user.role.roleName.toLowerCase();
     if (currentRole !== payload.role.toLowerCase()) return null;
+
+    if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 30_000) {
+      await prisma.user.update({
+        where: { id: payload.userId },
+        data: { isOnline: true, lastSeenAt: new Date() },
+      });
+    }
 
     return {
       userId: payload.userId,
       email: user.email,
       role: currentRole,
       fullName: user.fullName,
+      sessionVersion: user.sessionVersion,
     };
   }
 

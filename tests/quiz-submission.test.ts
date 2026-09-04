@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   fallbackVerdict,
   gradeSubmission,
+  mergeLockedAnswers,
   normalizeSubmittedAnswers,
   parseVerdict,
 } from "../src/lib/quiz-submission.ts";
@@ -32,6 +33,16 @@ test("grading ignores choices that do not belong to the quiz question", () => {
   assert.equal(result.score, 40);
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].isCorrect, true);
+});
+
+test("server-locked answers override later client changes", () => {
+  const answers = mergeLockedAnswers(
+    [{ questionId: 1, choiceId: 10 }, { questionId: 2, choiceId: 21 }],
+    [{ questionId: 1, choiceId: 11 }],
+  );
+  const result = gradeSubmission(questions, answers);
+  assert.equal(result.score, 60);
+  assert.equal(result.records.find((record) => record.questionId === 1)?.isCorrect, false);
 });
 
 test("empty quizzes cannot receive random fallback scores", () => {

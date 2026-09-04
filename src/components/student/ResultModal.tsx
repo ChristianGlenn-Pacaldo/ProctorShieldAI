@@ -100,7 +100,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         
         {/* Footer */}
         <div className="px-6 py-4 border-t border-[var(--border)] bg-[var(--surface2)] flex justify-end gap-3">
-          {result.quizStatus !== "pending_retake" ? (
+          {result.quiz?.allowRetake && result.quizStatus !== "pending_retake" ? (
             <button 
               onClick={async (e) => {
                 const btn = e.currentTarget;
@@ -131,11 +131,11 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
             >
               Request Retake
             </button>
-          ) : (
+          ) : result.quizStatus === "pending_retake" ? (
             <button disabled className="px-4 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg opacity-80 cursor-not-allowed">
               Retake Pending...
             </button>
-          )}
+          ) : null}
 
           <button 
             onClick={onClose}

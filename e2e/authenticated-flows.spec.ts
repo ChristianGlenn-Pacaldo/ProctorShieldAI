@@ -8,6 +8,15 @@ test.describe("authenticated entitlement and quiz flows", () => {
     "Set RUN_AUTHENTICATED_E2E=true and use a disposable E2E_DATABASE_URL to run authenticated flows",
   );
 
+  test("student join input retains a complete current-format access code", async ({ context, page }) => {
+    await authenticateAsExistingRole(context, "student");
+    await page.goto("/join");
+    const input = page.getByPlaceholder("Enter join code");
+    await input.fill("PS-1CD0309D3B");
+    await expect(input).toHaveValue("PS-1CD0309D3B");
+    await expect(input).toHaveAttribute("maxlength", "64");
+  });
+
   test("free teacher sees AI and sixth-manual-quiz paywalls", async ({ context, page }) => {
     await authenticateAsExistingRole(context, "teacher");
     await page.route("**/api/billing/status", (route) => route.fulfill({

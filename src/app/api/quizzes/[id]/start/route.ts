@@ -14,7 +14,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
-      include: { _count: { select: { questions: true } } },
+      include: {
+        questions: { select: { choices: { select: { isCorrect: true } } } },
+      },
     });
 
     if (!quiz || quiz.teacherId !== session.userId) {
@@ -25,21 +27,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Quiz is not in a startable state" }, { status: 400 });
     }
 
-    if (quiz._count.questions === 0) {
+    if (quiz.questions.length === 0) {
       return NextResponse.json({ error: "Add at least one question before starting the quiz" }, { status: 409 });
+    }
+    if (quiz.questions.some((question) => (
+      question.choices.length < 2
+      || question.choices.filter((choice) => choice.isCorrect).length !== 1
+    ))) {
+      return NextResponse.json(
+        { error: "Every question needs at least two choices and exactly one correct answer" },
+        { status: 409 },
+      );
     }
 
     const startedAt = new Date();
-    await prisma.$transaction([
-      prisma.quiz.update({
-        where: { id: quizId },
+    const started = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.quiz.updateMany({
+        where: { id: quizId, teacherId: session.userId, quizStatus: "active" },
         data: { quizStatus: "in_progress" },
-      }),
-      prisma.studentQuiz.updateMany({
+      });
+      if (claimed.count !== 1) return false;
+      await tx.studentQuiz.updateMany({
         where: { quizId, quizStatus: "enrolled" },
         data: { quizStatus: "in_progress", startTime: startedAt },
-      }),
-    ]);
+      });
+      return true;
+    });
+    if (!started) {
+      return NextResponse.json({ error: "Quiz was already started or changed" }, { status: 409 });
+    }
 
     // Notify all students in the lobby
     try {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
+import { deleteEvidence } from "@/lib/evidence-storage";
 
 // Seeded random number generator (Mulberry32 variant)
 function seededRandom(seed: string) {
@@ -67,14 +68,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         where: {
           studentId: session.userId,
           quizId: quiz.id
-        }
+        },
+        orderBy: { attemptNumber: "desc" },
       });
 
       if (!studentQuiz) {
         return NextResponse.json({ error: "You are not enrolled in this quiz" }, { status: 403 });
       }
 
-      if (quiz.quizStatus === "ended") {
+      if (quiz.quizStatus === "ended" && studentQuiz.quizStatus !== "in_progress") {
         return NextResponse.json({ error: "This quiz has already ended." }, { status: 403 });
       }
 
@@ -109,9 +111,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const savedAnswers = session.role === "student" && studentQuiz && canEnterQuiz
       ? await prisma.answer.findMany({
           where: { studentQuizId: studentQuiz.id },
-          select: { questionId: true, answerText: true },
+          select: { questionId: true, answerText: true, isCorrect: true },
         })
       : [];
+    const violationCount = session.role === "student" && studentQuiz
+      ? await prisma.violation.count({ where: { studentQuizId: studentQuiz.id } })
+      : undefined;
     const remainingSeconds = session.role === "student" && studentQuiz?.startTime
       ? Math.max(
           0,
@@ -130,9 +135,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       remainingSeconds,
       deviceType: session.role === "student" ? studentQuiz?.deviceType : undefined,
       monitoringLevel: session.role === "student" ? studentQuiz?.monitoringLevel : undefined,
+      violationCount: session.role === "student" ? Math.min(violationCount ?? 0, 3) : undefined,
       savedAnswers: savedAnswers.flatMap((answer) => {
         const choiceId = Number(answer.answerText);
-        return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
+        return Number.isInteger(choiceId)
+          ? [{ questionId: answer.questionId, choiceId, isCorrect: answer.isCorrect }]
+          : [];
       }),
       quiz: {
         id: quiz.id,
@@ -178,6 +186,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const quizId = parseInt(id);
     const body = await req.json();
 
+    if (!Number.isInteger(quizId) || !body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid quiz update" }, { status: 400 });
+    }
+
     const existingQuiz = await prisma.quiz.findUnique({
       where: { id: quizId },
     });
@@ -186,21 +198,55 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
     }
 
+    const requestedStatus = body.quizStatus;
+    if (requestedStatus !== undefined) {
+      const allowedTransitions: Record<string, string[]> = {
+        draft: ["active"],
+        active: ["draft"],
+        in_progress: ["ended"],
+        ended: [],
+      };
+      if (
+        typeof requestedStatus !== "string"
+        || !allowedTransitions[existingQuiz.quizStatus]?.includes(requestedStatus)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid quiz status transition. Use the Start action to begin a quiz." },
+          { status: 409 },
+        );
+      }
+    }
+
+    let requestedDuration: number | undefined;
+    if (body.duration !== undefined) {
+      requestedDuration = Number(body.duration);
+      if (!Number.isInteger(requestedDuration) || requestedDuration < 1 || requestedDuration > 480) {
+        return NextResponse.json({ error: "Duration must be between 1 and 480 minutes" }, { status: 400 });
+      }
+      if (["in_progress", "ended"].includes(existingQuiz.quizStatus)) {
+        return NextResponse.json({ error: "Duration cannot be changed after a quiz starts" }, { status: 409 });
+      }
+    }
+    if (body.allowRetake !== undefined && typeof body.allowRetake !== "boolean") {
+      return NextResponse.json({ error: "allowRetake must be a boolean" }, { status: 400 });
+    }
+
     const updatedQuiz = await prisma.quiz.update({
       where: { id: quizId },
       data: {
-        quizStatus: body.quizStatus !== undefined ? body.quizStatus : existingQuiz.quizStatus,
-        duration: body.duration !== undefined ? parseInt(body.duration) : existingQuiz.duration,
+        quizStatus: requestedStatus ?? existingQuiz.quizStatus,
+        duration: requestedDuration ?? existingQuiz.duration,
+        allowRetake: body.allowRetake ?? existingQuiz.allowRetake,
       },
     });
 
     // Broadcast quiz status update to all waiting students in lobby
-    if (body.quizStatus) {
+    if (requestedStatus) {
       try {
         const { pusherServer } = await import("@/lib/pusher");
         await pusherServer.trigger(`private-quiz-${quizId}`, "quiz-started", {
           quizId,
-          quizStatus: body.quizStatus,
+          quizStatus: requestedStatus,
         });
       } catch (e) {
         console.error("Failed to broadcast quiz status update:", e);
@@ -236,6 +282,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (session.role !== "admin" && existingQuiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
+
+    const storedEvidence = await prisma.evidenceFile.findMany({
+      where: { violation: { studentQuiz: { quizId } } },
+      select: { filePath: true },
+    });
+    // Delete private objects first. If the later database transaction fails,
+    // retrying this endpoint is safe because S3 deletion is idempotent.
+    await deleteEvidence(storedEvidence.map((file) => file.filePath));
 
     // Perform cascade delete in a transaction
     await prisma.$transaction(async (tx) => {

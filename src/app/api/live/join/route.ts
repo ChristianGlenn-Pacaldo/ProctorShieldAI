@@ -2,14 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
-import { logDebug } from "@/lib/debug-logger";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    logDebug(`POST /api/live/join: session=${JSON.stringify(session)}`);
     if (!session || session.role !== "student") {
-      logDebug(`POST /api/live/join: Unauthorized role=${session?.role}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -20,8 +17,16 @@ export async function POST(req: NextRequest) {
     }
 
     const enrollment = await prisma.studentQuiz.findFirst({
-      where: { studentId: session.userId, quizId: Number(quizId) },
+      where: {
+        studentId: session.userId,
+        quizId: Number(quizId),
+        quizStatus: "in_progress",
+        startTime: { not: null },
+        endTime: null,
+        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+      },
       include: { quiz: true },
+      orderBy: { attemptNumber: "desc" },
     });
 
     if (!enrollment) {
@@ -56,14 +61,11 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       console.error("Failed to broadcast join to admin:", e);
-      logDebug(`POST /api/live/join: Pusher admin broadcast error: ${e}`);
     }
 
-    logDebug(`POST /api/live/join: Student ${session.fullName} successfully joined quiz ${quiz.title}`);
     return NextResponse.json({ success: true, teacherId: quiz.teacherId });
   } catch (error) {
     console.error("Live join error:", error);
-    logDebug(`POST /api/live/join ERROR: ${error}`);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
     await prisma.$transaction(async (tx) => {
       const consumed = await tx.otpCode.deleteMany({ where: { id: otpRecord.id } });
       if (consumed.count !== 1) throw new Error("OTP already consumed");
-      await tx.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+      await tx.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword, sessionVersion: { increment: 1 } },
+      });
       await tx.activityLog.create({
         data: {
           userId: user.id,

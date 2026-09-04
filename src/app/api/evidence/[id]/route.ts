@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { readEvidence } from "@/lib/evidence-storage";
+import { expireSubscriptions } from "@/lib/maintenance";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
-function evidenceResponse(request: Request, bytes: Uint8Array, contentType: string) {
+function evidenceResponse(request: Request, bytes: Uint8Array, contentType: string, evidenceId: string) {
   const headers: Record<string, string> = {
     "Content-Type": contentType,
     "Cache-Control": "private, no-store",
@@ -11,6 +13,18 @@ function evidenceResponse(request: Request, bytes: Uint8Array, contentType: stri
     "X-Content-Type-Options": "nosniff",
     "Accept-Ranges": "bytes",
   };
+  if (new URL(request.url).searchParams.get("download") === "1") {
+    const extension = contentType === "video/mp4"
+      ? "mp4"
+      : contentType === "video/webm"
+        ? "webm"
+        : contentType === "image/png"
+          ? "png"
+          : contentType === "image/webp"
+            ? "webp"
+            : "jpg";
+    headers["Content-Disposition"] = `attachment; filename="evidence-${evidenceId}.${extension}"`;
+  }
   const range = request.headers.get("range");
   if (contentType.startsWith("video/") && range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -35,6 +49,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!session || !["teacher", "admin"].includes(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.role === "teacher") {
+    await expireSubscriptions(session.userId);
+    if (!await hasActiveProSubscription(session.userId)) {
+      return NextResponse.json(
+        { error: "Evidence Replay requires an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
+    }
+  }
   const { id } = await params;
   if (!/^\d+$/.test(id)) return NextResponse.json({ error: "Invalid evidence id" }, { status: 400 });
 
@@ -55,12 +78,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (violation.screenshotPath?.startsWith("data:")) {
       const match = /^data:([^;]+);base64,(.+)$/.exec(violation.screenshotPath);
       if (match) {
-        return evidenceResponse(request, Buffer.from(match[2], "base64"), match[1]);
+        return evidenceResponse(request, Buffer.from(match[2], "base64"), match[1], id);
       }
     }
     return NextResponse.json({ error: "Evidence content has expired" }, { status: 404 });
   }
   const object = await readEvidence(file.filePath);
   if (!object) return NextResponse.json({ error: "Evidence storage unavailable" }, { status: 503 });
-  return evidenceResponse(request, object.bytes, object.contentType);
+  return evidenceResponse(request, object.bytes, object.contentType, id);
 }

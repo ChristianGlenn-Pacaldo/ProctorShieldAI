@@ -6,6 +6,7 @@ import { generateGeminiWithFallback } from "@/lib/gemini";
 import {
   fallbackVerdict,
   gradeSubmission,
+  mergeLockedAnswers,
   normalizeSubmittedAnswers,
   parseVerdict,
 } from "@/lib/quiz-submission";
@@ -34,13 +35,14 @@ export async function POST(req: NextRequest) {
         quiz: true,
         violations: true,
       },
+      orderBy: { attemptNumber: "desc" },
     });
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
-    if (studentQuiz.quiz.quizStatus !== "in_progress") {
+    if (!["in_progress", "ended"].includes(studentQuiz.quiz.quizStatus)) {
       return NextResponse.json({ error: "This quiz is not accepting submissions" }, { status: 409 });
     }
     if (studentQuiz.quizStatus === "completed" || studentQuiz.endTime) {
@@ -67,7 +69,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This quiz has no gradable questions" }, { status: 409 });
     }
     const submittedAnswers = normalizeSubmittedAnswers(answers);
-    const grading = gradeSubmission(dbQuestions, submittedAnswers);
+    const persistedLockedAnswers = await prisma.answer.findMany({
+      where: { studentQuizId: studentQuiz.id, isCorrect: { not: null } },
+      select: { questionId: true, answerText: true },
+    });
+    const lockedAnswers = persistedLockedAnswers.flatMap((answer) => {
+      const choiceId = Number(answer.answerText);
+      return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
+    });
+    const grading = gradeSubmission(
+      dbQuestions,
+      mergeLockedAnswers(submittedAnswers, lockedAnswers),
+    );
     const score = grading.score;
 
     // 3. AI Verdict Logic (Gemini with Robust Fallback)
@@ -122,7 +135,7 @@ Return ONLY the valid JSON object.`;
             id: studentQuiz.id,
             endTime: null,
             quizStatus: { notIn: ["completed", "submitting", "pending_approval", "rejected"] },
-            quiz: { quizStatus: "in_progress" },
+            quiz: { quizStatus: { in: ["in_progress", "ended"] } },
           },
           data: { quizStatus: "submitting" },
         });

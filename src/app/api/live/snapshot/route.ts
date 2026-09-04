@@ -31,13 +31,22 @@ export async function POST(req: NextRequest) {
       where: {
         studentId: session.userId,
         quizId: numericQuizId,
-        quizStatus: { notIn: ["rejected", "pending_approval", "completed"] },
-        quiz: { quizStatus: "in_progress" },
+        quizStatus: "in_progress",
+        startTime: { not: null },
+        endTime: null,
+        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
       include: { quiz: { select: { title: true, teacherId: true } } },
+      orderBy: { attemptNumber: "desc" },
     });
     if (!enrollment) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 403 });
+    }
+    if (!await hasActiveProSubscription(enrollment.quiz.teacherId)) {
+      return NextResponse.json(
+        { error: "Live monitoring requires the teacher's active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
     }
 
     const record: SnapshotRecord = {
@@ -53,26 +62,6 @@ export async function POST(req: NextRequest) {
       updatedAt: Date.now(),
     };
     await saveSnapshot(record);
-
-    try {
-      const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger(
-        `private-teacher-${record.teacherId}`,
-        "live-snapshot",
-        {
-          studentId: record.studentId,
-          studentName: record.studentName,
-          quizTitle: record.quizTitle,
-          snapshot: record.snapshot,
-          deviceType: record.deviceType,
-          monitoringLevel: record.monitoringLevel,
-          connectionStatus: record.connectionStatus,
-          timestamp: record.updatedAt,
-        }
-      );
-    } catch (error: unknown) {
-      console.error("Snapshot broadcast failed:", error);
-    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

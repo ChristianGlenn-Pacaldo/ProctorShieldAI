@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { expireSubscriptions } from "@/lib/maintenance";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,12 +10,21 @@ export async function GET(req: NextRequest) {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await expireSubscriptions(session.userId);
+    if (!await hasActiveProSubscription(session.userId)) {
+      return NextResponse.json(
+        { error: "AI Reports require an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
+    }
 
     const teacherId = session.userId;
 
     // Fetch all student quiz sessions for this teacher
     const studentQuizzes = await prisma.studentQuiz.findMany({
       where: {
+        quizStatus: "completed",
+        endTime: { not: null },
         quiz: {
           teacherId: teacherId,
         },

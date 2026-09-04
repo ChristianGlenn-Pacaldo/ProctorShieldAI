@@ -51,27 +51,47 @@ export async function POST(req: NextRequest) {
         quizId: numericQuizId,
         quizStatus: "in_progress",
         endTime: null,
+        startTime: { not: null },
+        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
       include: {
         quiz: true,
       },
+      orderBy: { attemptNumber: "desc" },
     });
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
-    // Record metadata first, then persist image content outside PostgreSQL.
-    const violation = await prisma.violation.create({
-      data: {
-        studentQuizId: studentQuiz.id,
-        violationType: violationType,
-        confidenceScore: Math.max(0, Math.min(100, Number(confidenceScore) || 100)),
-        timestamp: new Date(),
-        durationSeconds: 5,
-        screenshotPath: null,
-      },
+    // Serialize violations per attempt. The three-strike contract must be
+    // enforced by the server, not only by browser code that can be bypassed.
+    const violationResult = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-violations:${studentQuiz.id}`}))`;
+      const existingCount = await tx.violation.count({ where: { studentQuizId: studentQuiz.id } });
+      if (existingCount >= 3) return { violation: null, count: existingCount };
+
+      const violation = await tx.violation.create({
+        data: {
+          studentQuizId: studentQuiz.id,
+          violationType: violationType,
+          confidenceScore: Math.max(0, Math.min(100, Number(confidenceScore) || 100)),
+          timestamp: new Date(),
+          // A duration is only recorded after a real 3-5 second video is stored.
+          durationSeconds: null,
+          screenshotPath: null,
+        },
+      });
+      return { violation, count: existingCount + 1 };
     });
+
+    if (!violationResult.violation) {
+      return NextResponse.json(
+        { error: "Violation limit reached", code: "VIOLATION_LIMIT_REACHED", violationCount: 3 },
+        { status: 409 },
+      );
+    }
+    const violation = violationResult.violation;
 
     if (evidence) {
       try {
@@ -122,13 +142,9 @@ export async function POST(req: NextRequest) {
       console.error("Failed to broadcast violation to admin:", e);
     }
 
-    const violationCount = await prisma.violation.count({
-      where: { studentQuizId: studentQuiz.id },
-    });
-
     return NextResponse.json({
       success: true,
-      violationCount,
+      violationCount: violationResult.count,
       violation: {
         id: String(violation.id),
         studentQuizId: String(violation.studentQuizId),

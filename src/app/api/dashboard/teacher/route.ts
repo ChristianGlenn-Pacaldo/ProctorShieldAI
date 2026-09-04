@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
           violations: violationSummaryList,
           verdict: verdictText,
           verdictClass,
-          score: se.score !== null ? `${Number(se.score)}%` : "100%",
+          score: se.score !== null ? `${Number(se.score)}%` : "N/A",
         };
       });
 

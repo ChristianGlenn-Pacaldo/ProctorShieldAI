@@ -25,9 +25,10 @@ export async function POST(req: NextRequest) {
         quizId,
         endTime: null,
         quizStatus: "in_progress",
-        quiz: { quizStatus: "in_progress" },
+        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
       select: { id: true, startTime: true, quiz: { select: { duration: true } } },
+      orderBy: { attemptNumber: "desc" },
     });
     if (!studentQuiz || !studentQuiz.startTime) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
@@ -57,13 +58,23 @@ export async function POST(req: NextRequest) {
           id: studentQuiz.id,
           endTime: null,
           quizStatus: "in_progress",
-          quiz: { quizStatus: "in_progress" },
+          quiz: { quizStatus: { in: ["in_progress", "ended"] } },
         },
         data: { lastHeartbeatAt: savedAt },
       });
       if (heartbeat.count !== 1) throw new AutosaveConflictError();
 
       for (const answer of accepted) {
+        const existing = await tx.answer.findUnique({
+          where: {
+            studentQuizId_questionId: {
+              studentQuizId: studentQuiz.id,
+              questionId: answer.questionId,
+            },
+          },
+          select: { isCorrect: true },
+        });
+        if (existing?.isCorrect !== null && existing?.isCorrect !== undefined) continue;
         await tx.answer.upsert({
           where: {
             studentQuizId_questionId: {

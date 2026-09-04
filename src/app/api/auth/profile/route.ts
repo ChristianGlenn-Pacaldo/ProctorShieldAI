@@ -23,10 +23,20 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
     }
 
-    const updateData: { fullName?: string; password?: string } = {};
+    const updateData: { fullName?: string; password?: string; sessionVersion?: { increment: number } } = {};
 
     // Update name if provided
-    if (fullName && fullName.trim() && fullName.trim() !== user.fullName) {
+    if (fullName !== undefined && (
+      typeof fullName !== "string"
+      || fullName.trim().length < 2
+      || fullName.trim().length > 150
+    )) {
+      return NextResponse.json(
+        { success: false, message: "Name must be between 2 and 150 characters." },
+        { status: 400 },
+      );
+    }
+    if (fullName && fullName.trim() !== user.fullName) {
       updateData.fullName = fullName.trim();
     }
 
@@ -52,6 +62,7 @@ export async function PUT(req: NextRequest) {
         );
       }
       updateData.password = await hashPassword(newPassword);
+      updateData.sessionVersion = { increment: 1 };
     }
 
     if (Object.keys(updateData).length === 0) {

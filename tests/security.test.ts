@@ -10,6 +10,7 @@ import {
   VALID_VIOLATION_TYPES,
 } from "../src/lib/proctoring-detection.ts";
 import { getNotificationDestination } from "../src/lib/notification-destination.ts";
+import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "../src/lib/quiz-access-code.ts";
 
 test("password policy rejects weak values", () => {
   assert.equal(isStrongPassword("short1"), false);
@@ -31,7 +32,17 @@ test("students cannot enter until both teacher and enrollment are started", () =
   assert.equal(canStudentEnterQuiz({ quizStatus: "in_progress", studentQuizStatus: "enrolled", startTime }), false);
   assert.equal(canStudentEnterQuiz({ quizStatus: "in_progress", studentQuizStatus: "pending_approval", startTime }), false);
   assert.equal(canStudentEnterQuiz({ quizStatus: "in_progress", studentQuizStatus: "in_progress", startTime }), true);
+  assert.equal(canStudentEnterQuiz({ quizStatus: "ended", studentQuizStatus: "in_progress", startTime }), true);
+  assert.equal(canStudentEnterQuiz({ quizStatus: "ended", studentQuizStatus: "enrolled", startTime: null }), false);
   assert.equal(canStudentEnterQuiz({ quizStatus: "in_progress", studentQuizStatus: "in_progress", startTime, endTime: new Date() }), false);
+});
+
+test("current and legacy quiz codes survive mobile clipboard normalization", () => {
+  const currentCode = "PS-1234567890";
+  assert.ok(currentCode.length <= QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH);
+  assert.equal(normalizeQuizAccessCode(currentCode), currentCode);
+  assert.equal(normalizeQuizAccessCode(" ps\u2013 12345 67890\n"), currentCode);
+  assert.equal(normalizeQuizAccessCode("ps-8430"), "PS-8430");
 });
 
 test("phone detection accepts repeated COCO phone labels at practical confidence", () => {

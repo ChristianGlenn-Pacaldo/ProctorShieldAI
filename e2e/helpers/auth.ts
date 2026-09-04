@@ -9,16 +9,23 @@ interface AuthenticatedUser {
   id: string;
   email: string;
   fullName: string;
+  sessionVersion: number;
 }
 
 async function findExistingUser(role: Role): Promise<AuthenticatedUser | null> {
-  const connectionString = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("E2E_DATABASE_URL or DATABASE_URL is required for authenticated E2E tests");
+  const configuredUrl = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  if (!configuredUrl) throw new Error("E2E_DATABASE_URL or DATABASE_URL is required for authenticated E2E tests");
+
+  const databaseUrl = new URL(configuredUrl);
+  if (databaseUrl.searchParams.get("sslmode") === "require") {
+    databaseUrl.searchParams.set("sslmode", "verify-full");
+  }
+  const connectionString = databaseUrl.toString();
 
   const pool = new Pool({ connectionString, max: 1 });
   try {
     const result = await pool.query<AuthenticatedUser>(
-      `SELECT u.id, u.email, u.full_name AS "fullName"
+      `SELECT u.id, u.email, u.full_name AS "fullName", u.session_version AS "sessionVersion"
        FROM users u
        INNER JOIN roles r ON r.id = u.role_id
        WHERE r.role_name = $1 AND u.status = 'active'
@@ -40,7 +47,7 @@ export async function authenticateAsExistingRole(context: BrowserContext, role: 
   if (!user) throw new Error(`No active ${role} account exists for authenticated E2E testing`);
 
   const token = jwt.sign(
-    { userId: user.id, email: user.email, role, fullName: user.fullName },
+    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion },
     secret,
     { algorithm: "HS256", expiresIn: "15m" },
   );

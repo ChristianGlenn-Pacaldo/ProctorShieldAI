@@ -2,12 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { generateGeminiWithFallback } from "@/lib/gemini";
+import { expireSubscriptions } from "@/lib/maintenance";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
+import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
+import { fallbackVerdict, parseVerdict } from "@/lib/quiz-submission";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || (session.role !== "teacher" && session.role !== "admin")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.role === "teacher") {
+      await expireSubscriptions(session.userId);
+      if (!await hasActiveProSubscription(session.userId)) {
+        return NextResponse.json(
+          { error: "AI reports require an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+          { status: 403 },
+        );
+      }
+    }
+    const rateLimit = await consumeRateLimitGroup(
+      [`ai-verdict:user:${session.userId}`, `ai-verdict:ip:${getClientIp(req)}`],
+      20,
+      60 * 60_000,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "AI report limit reached. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+      );
     }
 
     if (!process.env.GEMINI_API_KEY) {
@@ -31,6 +55,10 @@ export async function POST(req: NextRequest) {
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
+    }
+
+    if (studentQuiz.quizStatus !== "completed" || !studentQuiz.endTime) {
+      return NextResponse.json({ error: "AI reports are available only for completed attempts" }, { status: 409 });
     }
 
     if (session.role === "teacher" && studentQuiz.quiz.teacherId !== session.userId) {
@@ -75,7 +103,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const verdictData = JSON.parse(text);
+    const verdictData = parseVerdict(JSON.parse(text), fallbackVerdict(violations.length));
 
     // Save the verdict in the database
     const aiAnalysis = await prisma.aiAnalysis.upsert({

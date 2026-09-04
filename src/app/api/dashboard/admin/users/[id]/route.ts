@@ -56,33 +56,27 @@ export async function PUT(
           const endDate = new Date();
           endDate.setFullYear(endDate.getFullYear() + 1); // Give 1 year of access
 
-          // Upsert active subscription
-          const existingSub = await prisma.userSubscription.findFirst({
-            where: { userId: id }
+          await prisma.userSubscription.updateMany({
+            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
+            data: { subscriptionStatus: "cancelled" },
           });
-
-          if (existingSub) {
-            await prisma.userSubscription.update({
-              where: { id: existingSub.id },
-              data: {
-                subscriptionStatus: "active",
-                planId: premiumPlan.id,
-                startDate,
-                endDate,
-              }
-            });
-          } else {
-            await prisma.userSubscription.create({
-              data: {
+          await prisma.userSubscription.upsert({
+            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
+            update: {
+              subscriptionStatus: "active",
+              paymentStatus: "paid_manual",
+              startDate,
+              endDate,
+            },
+            create: {
                 userId: id,
                 planId: premiumPlan.id,
                 startDate,
                 endDate,
                 subscriptionStatus: "active",
                 paymentStatus: "paid_manual",
-              }
-            });
-          }
+            },
+          });
 
           await prisma.activityLog.create({
             data: {

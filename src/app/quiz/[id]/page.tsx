@@ -82,6 +82,10 @@ export default function QuizRoom() {
   const [canEnterQuiz, setCanEnterQuiz] = useState(false);
   const [isEnteringQuiz, setIsEnteringQuiz] = useState(false);
   const [answersState, setAnswersState] = useState<Record<number, number>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answerFeedback, setAnswerFeedback] = useState<Record<number, { choiceId: number; isCorrect: boolean }>>({});
+  const [isCheckingAnswer, setIsCheckingAnswer] = useState(false);
+  const advanceTimerRef = useRef<number | null>(null);
   const [studentQuizStatus, setStudentQuizStatus] = useState<string>("");
   const [studentQuizId, setStudentQuizId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string>("");
@@ -318,11 +322,17 @@ export default function QuizRoom() {
 
   const restoreSavedAnswers = useCallback((data: any) => {
     const restored: Record<number, number> = {};
+    const restoredFeedback: Record<number, { choiceId: number; isCorrect: boolean }> = {};
     if (Array.isArray(data.savedAnswers)) {
       for (const answer of data.savedAnswers) {
         const questionId = Number(answer.questionId);
         const choiceId = Number(answer.choiceId);
-        if (Number.isInteger(questionId) && Number.isInteger(choiceId)) restored[questionId] = choiceId;
+        if (Number.isInteger(questionId) && Number.isInteger(choiceId)) {
+          restored[questionId] = choiceId;
+          if (typeof answer.isCorrect === "boolean") {
+            restoredFeedback[questionId] = { choiceId, isCorrect: answer.isCorrect };
+          }
+        }
       }
     }
     const attemptId = typeof data.studentQuizId === "string" ? data.studentQuizId : "";
@@ -341,6 +351,16 @@ export default function QuizRoom() {
     if (Object.keys(restored).length > 0) {
       setAnswersState((current) => Object.keys(current).length > 0 ? current : restored);
     }
+    if (Object.keys(restoredFeedback).length > 0) {
+      setAnswerFeedback((current) => Object.keys(current).length > 0 ? current : restoredFeedback);
+    }
+    if (Array.isArray(data.questions) && data.questions.length > 0) {
+      const firstUnlocked = data.questions.findIndex((question: { id: number }) => !restoredFeedback[question.id]);
+      setCurrentQuestionIndex(firstUnlocked >= 0 ? firstUnlocked : data.questions.length - 1);
+    }
+    const restoredViolationCount = Math.min(3, Math.max(0, Number(data.violationCount) || 0));
+    violationCountRef.current = restoredViolationCount;
+    setViolationCount(restoredViolationCount);
   }, []);
 
   const runDevicePreflight = useCallback(async () => {
@@ -549,25 +569,6 @@ export default function QuizRoom() {
     }
   };
 
-  const handleSelectChoice = (questionId: number, choiceId: number) => {
-    // If choice is eliminated by 50/50, ignore click
-    if (eliminatedChoices[questionId]?.includes(choiceId)) return;
-
-    playTone([523, 659], "sine", 0.08);
-
-    setAnswersState((prev: Record<number, number>) => {
-      const isNew = prev[questionId] !== choiceId;
-      if (isNew) {
-        setXp((x) => x + (powerUps.doublePoints.active ? 100 : 50) * Math.min(streak, 3));
-        setStreak((s) => Math.min(s + 1, 5));
-      }
-      return {
-        ...prev,
-        [questionId]: choiceId
-      };
-    });
-  };
-
   // ── Capture webcam snapshot as base64 ──────────────────
   const captureSnapshot = useCallback((): string | null => {
     const video = (videoRef.current && videoRef.current.videoWidth > 0)
@@ -605,6 +606,7 @@ export default function QuizRoom() {
   const questionsRef = useRef(questions);
   const studentQuizIdRef = useRef(studentQuizId);
   const violationCountStateRef = useRef(violationCount);
+  const pendingEvidenceUploadRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     answersStateRef.current = answersState;
@@ -676,6 +678,11 @@ export default function QuizRoom() {
     }
     setIsSubmitting(true);
     try {
+      // A page transition can cancel MediaRecorder/upload work on mobile. Keep the
+      // quiz alive until an in-progress evidence clip has finished persisting.
+      if (pendingEvidenceUploadRef.current) {
+        await pendingEvidenceUploadRef.current;
+      }
       const currentAnswers = answersStateRef.current;
       const currentXp = xpRef.current;
       const currentStreak = streakRef.current;
@@ -707,8 +714,8 @@ export default function QuizRoom() {
         }
         playTone([523, 659, 783, 1046, 1318], "triangle", 0.25);
         setQuizSubmittedResult({
-          score: data.score || Object.keys(currentAnswers).length * 10,
-          total: currentQuestions.length * 10,
+          score: Number(data.studentQuiz?.score ?? 0),
+          total: 100,
           xp: currentXp,
           streak: currentStreak,
           violations: currentViolations,
@@ -727,6 +734,82 @@ export default function QuizRoom() {
   useEffect(() => {
     submitQuizRef.current = submitQuiz;
   }, [submitQuiz]);
+
+  useEffect(() => {
+    if (!hasStarted || violationCount < 3 || isAlertingRef.current || isSubmitting) return;
+    isAlertingRef.current = true;
+    setWarningModal({
+      show: true,
+      message: "You have accumulated 3 security violations. Your quiz is now being submitted automatically.",
+      isFinal: true,
+    });
+    const timer = window.setTimeout(() => void submitQuizRef.current(), 1_500);
+    return () => window.clearTimeout(timer);
+  }, [hasStarted, isSubmitting, violationCount]);
+
+  const handleSelectChoice = useCallback(async (
+    questionId: number,
+    choiceId: number,
+    questionIndex: number,
+  ) => {
+    if (
+      isCheckingAnswer
+      || answerFeedback[questionId]
+      || eliminatedChoices[questionId]?.includes(choiceId)
+    ) return;
+
+    setIsCheckingAnswer(true);
+    setPreWarning(null);
+    try {
+      const response = await fetch("/api/quizzes/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: Number(quizId), questionId, choiceId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setPreWarning(data.error || "Your answer could not be recorded. Please try again.");
+        setIsCheckingAnswer(false);
+        return;
+      }
+
+      const recordedChoiceId = Number(data.choiceId);
+      const isCorrect = data.isCorrect === true;
+      const nextAnswers = { ...answersStateRef.current, [questionId]: recordedChoiceId };
+      answersStateRef.current = nextAnswers;
+      setAnswersState(nextAnswers);
+      setAnswerFeedback((current) => ({
+        ...current,
+        [questionId]: { choiceId: recordedChoiceId, isCorrect },
+      }));
+
+      if (isCorrect) {
+        playTone([523, 659, 784], "sine", 0.08);
+        setXp((current) => current + (powerUps.doublePoints.active ? 100 : 50) * Math.min(streak, 3));
+        setStreak((current) => Math.min(current + 1, 5));
+      } else {
+        playTone([220, 165], "sawtooth", 0.12);
+        setStreak(1);
+      }
+
+      if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = window.setTimeout(() => {
+        setIsCheckingAnswer(false);
+        if (questionIndex >= questionsRef.current.length - 1) {
+          void submitQuizRef.current();
+        } else {
+          setCurrentQuestionIndex(questionIndex + 1);
+        }
+      }, 1_100);
+    } catch {
+      setPreWarning("Network error. Your answer was not recorded; please tap it again.");
+      setIsCheckingAnswer(false);
+    }
+  }, [answerFeedback, eliminatedChoices, isCheckingAnswer, playTone, powerUps.doublePoints.active, quizId, streak]);
+
+  useEffect(() => () => {
+    if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
+  }, []);
 
   const captureEvidenceClip = useCallback(async (durationMs = 4_000): Promise<{
     blob: Blob;
@@ -801,6 +884,12 @@ export default function QuizRoom() {
     isReportingRef.current = true;
     lastViolationAtRef.current = now;
 
+    let finishEvidenceUpload!: () => void;
+    const evidenceUploadCompletion = new Promise<void>((resolve) => {
+      finishEvidenceUpload = resolve;
+    });
+    pendingEvidenceUploadRef.current = evidenceUploadCompletion;
+
     try {
       const evidenceClipPromise = captureEvidenceClip();
       const base64Img = captureSnapshot();
@@ -824,11 +913,10 @@ export default function QuizRoom() {
 
       const violationId = String(data.violation?.id || "");
       if (/^\d+$/.test(violationId)) {
-        void evidenceClipPromise.then(async (clip) => {
-          if (!clip) {
-            console.warn("This browser could not record violation video evidence; the snapshot fallback was retained.");
-            return;
-          }
+        const clip = await evidenceClipPromise;
+        if (!clip) {
+          console.warn("This browser could not record violation video evidence; the snapshot fallback was retained.");
+        } else {
           const formData = new FormData();
           formData.append("evidence", clip.blob, `violation-${violationId}.${clip.extension}`);
           formData.append("durationMs", String(clip.durationMs));
@@ -840,7 +928,7 @@ export default function QuizRoom() {
             const uploadError = await uploadResponse.json().catch(() => null);
             console.error("Violation video upload failed:", uploadResponse.status, uploadError?.error);
           }
-        }).catch((error) => console.error("Violation video capture failed:", error));
+        }
       }
 
       const serverCount = Number(data.violationCount);
@@ -875,6 +963,10 @@ export default function QuizRoom() {
       console.error("Failed to report violation:", err);
       return false;
     } finally {
+      finishEvidenceUpload();
+      if (pendingEvidenceUploadRef.current === evidenceUploadCompletion) {
+        pendingEvidenceUploadRef.current = null;
+      }
       isReportingRef.current = false;
     }
   }, [quizId, captureEvidenceClip, captureSnapshot, playTone]);
@@ -1644,6 +1736,7 @@ export default function QuizRoom() {
   // ─── ACTIVE EXAM ROOM (WITH PROCTORSHIELD GAMIFICATION) ────────────
   const answeredCount = Object.keys(answersState).length;
   const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
+  const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <div className="exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
@@ -1693,8 +1786,8 @@ export default function QuizRoom() {
       )}
 
       {/* TOP HEADER WITH PROCTORSHIELD GAMIFICATION HUD */}
-      <header className="py-2.5 px-4 lg:px-8 bg-[#131627] border-b border-[#242a42] flex flex-wrap items-center justify-between shrink-0 shadow-md gap-3">
-        <div className="flex items-center gap-3">
+      <header className="py-2.5 px-3 sm:px-4 lg:px-8 bg-[#131627] border-b border-[#242a42] flex flex-wrap items-center justify-between shrink-0 shadow-md gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <h1 className="text-base lg:text-xl font-black text-white tracking-tight font-[family-name:var(--font-display)] truncate max-w-[180px] sm:max-w-none">
             {quiz?.title || "Proctored Exam"}
           </h1>
@@ -1710,7 +1803,7 @@ export default function QuizRoom() {
         </div>
 
         {/* Gamified HUD Badges */}
-        <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-1.5 sm:gap-2 lg:gap-4">
           <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${
             isOnline
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
@@ -1732,19 +1825,19 @@ export default function QuizRoom() {
             {monitoringLabel(monitoringLevel)}
           </div>
           {/* Streak Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
             <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
             <span>Streak {streak}x</span>
           </div>
 
           {/* XP Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-extrabold text-xs shadow-xs">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-extrabold text-xs shadow-xs">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>{xp} XP</span>
           </div>
 
           {/* Exam Timer */}
-          <div className={`px-4 py-1.5 rounded-xl text-base font-bold font-mono shadow-md border ${
+          <div className={`px-3 sm:px-4 py-1.5 rounded-xl text-sm sm:text-base font-bold font-mono shadow-md border ${
             isTimeFrozen 
               ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse" 
               : "bg-[#1c2138] border-[#2e375e] text-amber-400"
@@ -1756,7 +1849,7 @@ export default function QuizRoom() {
           <button
             onClick={submitQuiz}
             disabled={isSubmitting || loadingQuiz || !!quizError || !isOnline}
-            className="px-4 py-2 bg-gradient-to-r from-red-900/80 to-rose-900/80 border border-rose-600/50 hover:bg-rose-800 text-rose-100 font-black text-xs rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
+            className="hidden lg:block px-4 py-2 bg-gradient-to-r from-red-900/80 to-rose-900/80 border border-rose-600/50 hover:bg-rose-800 text-rose-100 font-black text-xs rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? "Submitting..." : isOnline ? "Submit Exam" : "Waiting for connection"}
           </button>
@@ -1775,7 +1868,7 @@ export default function QuizRoom() {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* MAIN EXAM LAYOUT */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)]">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 pb-28 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)]">
         
         {/* MOBILE PROCTORING BAR */}
         <div className="block lg:hidden bg-[#141724] border border-[#212638] rounded-2xl p-3 space-y-3 shrink-0 shadow-md">
@@ -1917,7 +2010,7 @@ export default function QuizRoom() {
                 type="button"
                 onClick={() => {
                   if (questions.length > 0) {
-                    handleUseFiftyFifty(questions[0].id);
+                    handleUseFiftyFifty(currentQuestion?.id ?? questions[0].id);
                   }
                 }}
                 disabled={powerUps.fiftyFifty.used}
@@ -1975,65 +2068,111 @@ export default function QuizRoom() {
                 <p className="font-bold text-lg mb-2">No Questions Available</p>
                 <p>No questions have been configured for this assessment.</p>
               </div>
-            ) : (
-              questions.map((q, qi) => {
-                const isEliminated = (choiceId: number) => eliminatedChoices[q.id]?.includes(choiceId);
+            ) : currentQuestion ? (
+              <div key={currentQuestion.id} className="bg-[#1b2038] border border-[#2e375e] rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
+                <div className="flex items-center justify-between gap-3 text-[11px] sm:text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                  <span>QUESTION {currentQuestionIndex + 1} OF {questions.length}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono shrink-0">
+                    {currentQuestion.points || 1} PT
+                  </span>
+                </div>
 
-                return (
-                  <div key={q.id} className="bg-[#1b2038] border border-[#2e375e] rounded-2xl p-6 shadow-md space-y-4">
-                    <div className="flex items-center justify-between text-xs font-bold text-indigo-400 uppercase tracking-wider">
-                      <span>QUESTION {qi + 1} OF {questions.length}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
-                        {q.points || 1} PT
-                      </span>
-                    </div>
+                <h3 className="text-base sm:text-lg font-bold text-white leading-snug break-words">
+                  {currentQuestion.questionText}
+                </h3>
 
-                    <h3 className="text-base font-bold text-white leading-snug">
-                      {q.questionText}
-                    </h3>
+                <div className="space-y-2.5 sm:space-y-3 pt-1 sm:pt-2">
+                  {currentQuestion.choices.map((choice: any, choiceIndex: number) => {
+                    const optionLetter = String.fromCharCode(65 + choiceIndex);
+                    const feedback = answerFeedback[currentQuestion.id];
+                    const isSelected = feedback?.choiceId === choice.id || answersState[currentQuestion.id] === choice.id;
+                    const eliminated = eliminatedChoices[currentQuestion.id]?.includes(choice.id);
+                    const isLocked = Boolean(feedback) || isCheckingAnswer;
+                    const selectedCorrect = isSelected && feedback?.isCorrect === true;
+                    const selectedWrong = isSelected && feedback?.isCorrect === false;
 
-                    <div className="space-y-3 pt-2">
-                      {q.choices.map((choice: any, ci: number) => {
-                        const optionLetter = String.fromCharCode(65 + ci);
-                        const isSelected = answersState[q.id] === choice.id;
-                        const eliminated = isEliminated(choice.id);
+                    return (
+                      <button
+                        type="button"
+                        key={choice.id}
+                        onClick={() => void handleSelectChoice(currentQuestion.id, choice.id, currentQuestionIndex)}
+                        disabled={eliminated || isLocked}
+                        className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl border text-left transition-all disabled:cursor-not-allowed ${
+                          eliminated
+                            ? "opacity-30 line-through bg-slate-900/50 border-dashed border-slate-700"
+                            : selectedCorrect
+                            ? "bg-emerald-500/20 border-emerald-400 shadow-md shadow-emerald-500/20"
+                            : selectedWrong
+                            ? "bg-rose-500/20 border-rose-400 shadow-md shadow-rose-500/20"
+                            : isSelected
+                            ? "bg-[#283158] border-indigo-500 shadow-md shadow-indigo-500/20"
+                            : "bg-[#141728] border-[#283152] hover:bg-[#202746] hover:border-indigo-500/50"
+                        }`}
+                      >
+                        <span
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-all ${
+                            selectedCorrect
+                              ? "bg-emerald-500 text-white"
+                              : selectedWrong
+                              ? "bg-rose-500 text-white"
+                              : isSelected
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                              : "bg-[#222846] text-slate-400"
+                          }`}
+                        >
+                          {optionLetter}
+                        </span>
+                        <span className={`min-w-0 break-words text-sm font-medium ${isSelected ? "text-white font-bold" : "text-slate-300"}`}>
+                          {choice.choiceText}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                        return (
-                          <div
-                            key={choice.id}
-                            onClick={() => !eliminated && handleSelectChoice(q.id, choice.id)}
-                            className={`flex items-center gap-4 p-3.5 rounded-xl border transition-all ${
-                              eliminated
-                                ? "opacity-30 line-through bg-slate-900/50 border-dashed border-slate-700 cursor-not-allowed"
-                                : isSelected
-                                ? "bg-[#283158] border-indigo-500 shadow-md shadow-indigo-500/20 cursor-pointer"
-                                : "bg-[#141728] border-[#283152] hover:bg-[#202746] hover:border-indigo-500/50 cursor-pointer"
-                            }`}
-                          >
-                            <div
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-all ${
-                                isSelected
-                                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                                  : "bg-[#222846] text-slate-400"
-                              }`}
-                            >
-                              {optionLetter}
-                            </div>
-                            <span className={`text-sm font-medium ${isSelected ? "text-white font-bold" : "text-slate-300"}`}>
-                              {choice.choiceText}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                {answerFeedback[currentQuestion.id] && (
+                  <div
+                    role="status"
+                    className={`rounded-xl border px-4 py-3 text-center text-sm font-black ${
+                      answerFeedback[currentQuestion.id].isCorrect
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                        : "bg-rose-500/15 border-rose-500/40 text-rose-300"
+                    }`}
+                  >
+                    {answerFeedback[currentQuestion.id].isCorrect ? "Correct!" : "Incorrect — answer recorded."}
+                    <span className="block mt-1 text-[11px] font-semibold opacity-80">
+                      {currentQuestionIndex === questions.length - 1 ? "Submitting your quiz..." : "Loading the next question..."}
+                    </span>
                   </div>
-                );
-              })
-            )}
+                )}
+              </div>
+            ) : null}
           </div>
 
         </div>
 
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#2d3558] bg-[#101322]/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-lg items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-bold text-slate-400">
+              <span>{answeredCount}/{questions.length} answered</span>
+              <span>{Math.round(progressPercent)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[#242a42]">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void submitQuiz()}
+            disabled={isSubmitting || loadingQuiz || Boolean(quizError) || !isOnline}
+            className="shrink-0 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 px-4 py-3 text-xs font-black text-white shadow-lg disabled:opacity-50"
+          >
+            {isSubmitting ? "Submitting..." : "Submit Quiz"}
+          </button>
+        </div>
       </div>
     </div>
   );

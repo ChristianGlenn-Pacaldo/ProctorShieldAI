@@ -33,7 +33,8 @@ export async function runMaintenance(now = new Date()) {
   });
   await deleteEvidence(expiredEvidenceFiles.map((file) => file.filePath));
 
-  const [expiredSubscriptions, expiredOtps, removedEvidenceFiles, clearedSnapshots, removedWebhookEvents] =
+  const presenceCutoff = new Date(now.getTime() - 2 * 60_000);
+  const [expiredSubscriptions, expiredOtps, removedEvidenceFiles, clearedSnapshots, removedWebhookEvents, clearedPresence] =
     await prisma.$transaction([
       prisma.userSubscription.updateMany({
         where: { subscriptionStatus: "active", endDate: { lt: now } },
@@ -46,6 +47,13 @@ export async function runMaintenance(now = new Date()) {
         data: { screenshotPath: null },
       }),
       prisma.webhookEvent.deleteMany({ where: { processedAt: { lt: webhookCutoff } } }),
+      prisma.user.updateMany({
+        where: {
+          isOnline: true,
+          OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: presenceCutoff } }],
+        },
+        data: { isOnline: false },
+      }),
     ]);
 
   return {
@@ -56,5 +64,6 @@ export async function runMaintenance(now = new Date()) {
     removedEvidenceFiles: removedEvidenceFiles.count,
     clearedSnapshots: clearedSnapshots.count,
     removedWebhookEvents: removedWebhookEvents.count,
+    clearedPresence: clearedPresence.count,
   };
 }

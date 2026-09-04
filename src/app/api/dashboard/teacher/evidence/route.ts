@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { expireSubscriptions } from "@/lib/maintenance";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
+
+async function requireEvidenceAccess(userId: string) {
+  await expireSubscriptions(userId);
+  return hasActiveProSubscription(userId);
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,7 +15,12 @@ export async function GET(req: NextRequest) {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
+    if (!await requireEvidenceAccess(session.userId)) {
+      return NextResponse.json(
+        { error: "Evidence Replay requires an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
+    }
     const teacherId = session.userId;
 
     // Fetch violations for quizzes created by this teacher
@@ -40,6 +52,7 @@ export async function GET(req: NextRequest) {
       orderBy: {
         timestamp: "desc",
       },
+      take: 200,
     });
 
     const formattedEvidence = violations.map((v) => {
@@ -108,7 +121,6 @@ export async function DELETE(req: NextRequest) {
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const teacherId = session.userId;
 
     // Find all violation IDs for quizzes created by this teacher

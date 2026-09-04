@@ -30,6 +30,19 @@ export function normalizeSubmittedAnswers(value: unknown): SubmittedAnswer[] {
   return Array.from(byQuestion.values());
 }
 
+export function mergeLockedAnswers(
+  submittedAnswers: SubmittedAnswer[],
+  lockedAnswers: SubmittedAnswer[],
+) {
+  const byQuestion = new Map(
+    submittedAnswers.map((answer) => [answer.questionId, answer]),
+  );
+  for (const answer of lockedAnswers) {
+    byQuestion.set(answer.questionId, answer);
+  }
+  return Array.from(byQuestion.values());
+}
+
 export function gradeSubmission(questions: GradingQuestion[], answers: SubmittedAnswer[]) {
   if (questions.length === 0) throw new Error("Quiz has no questions");
   const submittedByQuestion = new Map(answers.map((answer) => [answer.questionId, answer.choiceId]));

@@ -24,15 +24,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 
+    const latestAttempt = await prisma.studentQuiz.findFirst({
+      where: { studentId: session.userId, quizId: studentQuiz.quizId },
+      orderBy: { attemptNumber: "desc" },
+      select: { id: true },
+    });
+    if (latestAttempt?.id !== studentQuiz.id) {
+      return NextResponse.json({ error: "Only the latest attempt can be retaken" }, { status: 409 });
+    }
+    if (!studentQuiz.quiz.allowRetake) {
+      return NextResponse.json({ error: "Retakes are not enabled for this quiz" }, { status: 403 });
+    }
     if (studentQuiz.quizStatus === "pending_retake") {
       return NextResponse.json({ error: "Retake already requested" }, { status: 400 });
     }
+    if (studentQuiz.quizStatus !== "completed" || !studentQuiz.endTime) {
+      return NextResponse.json({ error: "Only a completed attempt can be retaken" }, { status: 409 });
+    }
 
     // Update status to pending_retake
-    await prisma.studentQuiz.update({
-      where: { id: studentQuizId },
+    const updated = await prisma.studentQuiz.updateMany({
+      where: { id: studentQuizId, quizStatus: "completed", endTime: { not: null } },
       data: { quizStatus: "pending_retake" },
     });
+    if (updated.count !== 1) {
+      return NextResponse.json({ error: "Retake request state changed; refresh and try again" }, { status: 409 });
+    }
 
     // 1. Create DB Notification for Teacher
     try {

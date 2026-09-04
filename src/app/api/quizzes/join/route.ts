@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
+import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,9 +14,13 @@ export async function POST(req: NextRequest) {
 
     const { accessCode } = await req.json();
 
-    if (!accessCode) {
+    if (typeof accessCode !== "string" || !accessCode.trim()) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
     }
+    if (accessCode.length > QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH) {
+      return NextResponse.json({ error: "Invalid access code. Quiz not found." }, { status: 404 });
+    }
+    const normalizedAccessCode = normalizeQuizAccessCode(accessCode);
     const rateLimit = await consumeRateLimitGroup(
       [`quiz-join:user:${session.userId}`, `quiz-join:ip:${getClientIp(req)}`],
       15,
@@ -38,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     // Find the quiz by access code
     const quiz = await prisma.quiz.findUnique({
-      where: { accessCode: accessCode.trim().toUpperCase() },
+      where: { accessCode: normalizedAccessCode },
       include: { subject: true },
     });
 
@@ -60,6 +65,7 @@ export async function POST(req: NextRequest) {
         studentId: session.userId,
         quizId: quiz.id,
       },
+      orderBy: { attemptNumber: "desc" },
     });
 
     if (existingEnrollment) {
@@ -148,7 +154,7 @@ export async function POST(req: NextRequest) {
     await prisma.activityLog.create({
       data: {
         userId: session.userId,
-        activity: `Joined quiz: ${quiz.title} (${accessCode})`,
+        activity: `Joined quiz: ${quiz.title} (${normalizedAccessCode})`,
         ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       },
     });

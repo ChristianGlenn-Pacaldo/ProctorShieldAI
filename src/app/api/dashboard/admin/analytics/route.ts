@@ -17,7 +17,11 @@ export async function GET(req: NextRequest) {
 
     // ── Subscription stats
     const proTeachers = await prisma.userSubscription.count({
-      where: { subscriptionStatus: "active", user: { role: { roleName: "teacher" } } },
+      where: {
+        subscriptionStatus: "active",
+        endDate: { gt: new Date() },
+        user: { role: { roleName: "teacher" } },
+      },
     });
     const freeTeachers = Math.max(0, totalTeachers - proTeachers);
     const subConversionPct = totalTeachers > 0 ? Math.round((proTeachers / totalTeachers) * 100) : 0;

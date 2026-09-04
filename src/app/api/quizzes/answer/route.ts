@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getSession("student");
+    if (!session || session.role !== "student") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const quizId = Number(body.quizId);
+    const questionId = Number(body.questionId);
+    const choiceId = Number(body.choiceId);
+    if (![quizId, questionId, choiceId].every(Number.isInteger)) {
+      return NextResponse.json({ error: "Invalid answer" }, { status: 400 });
+    }
+
+    const attempt = await prisma.studentQuiz.findFirst({
+      where: {
+        studentId: session.userId,
+        quizId,
+        endTime: null,
+        quizStatus: "in_progress",
+        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+      },
+      select: {
+        id: true,
+        startTime: true,
+        quiz: { select: { duration: true } },
+      },
+      orderBy: { attemptNumber: "desc" },
+    });
+    if (!attempt?.startTime) {
+      return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
+    }
+
+    const deadline = attempt.startTime.getTime() + (attempt.quiz.duration ?? 60) * 60_000 + 60_000;
+    if (Date.now() > deadline) {
+      return NextResponse.json({ error: "The answer deadline has passed" }, { status: 409 });
+    }
+
+    const selectedChoice = await prisma.choice.findFirst({
+      where: { id: choiceId, questionId, question: { quizId } },
+      select: { id: true, isCorrect: true, question: { select: { points: true } } },
+    });
+    if (!selectedChoice) {
+      return NextResponse.json({ error: "That choice does not belong to this question" }, { status: 400 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-answer:${attempt.id}:${questionId}`}))`;
+      const existing = await tx.answer.findUnique({
+        where: { studentQuizId_questionId: { studentQuizId: attempt.id, questionId } },
+        select: { answerText: true, isCorrect: true },
+      });
+
+      if (existing?.isCorrect !== null && existing?.isCorrect !== undefined) {
+        return {
+          choiceId: Number(existing.answerText),
+          isCorrect: existing.isCorrect,
+          alreadyAnswered: true,
+        };
+      }
+
+      await tx.answer.upsert({
+        where: { studentQuizId_questionId: { studentQuizId: attempt.id, questionId } },
+        update: {
+          answerText: String(choiceId),
+          isCorrect: selectedChoice.isCorrect,
+          pointsEarned: selectedChoice.isCorrect ? selectedChoice.question.points : 0,
+        },
+        create: {
+          studentQuizId: attempt.id,
+          questionId,
+          answerText: String(choiceId),
+          isCorrect: selectedChoice.isCorrect,
+          pointsEarned: selectedChoice.isCorrect ? selectedChoice.question.points : 0,
+        },
+      });
+      await tx.studentQuiz.update({
+        where: { id: attempt.id },
+        data: { lastHeartbeatAt: new Date() },
+      });
+
+      return { choiceId, isCorrect: selectedChoice.isCorrect, alreadyAnswered: false };
+    }, { timeout: 15_000 });
+
+    return NextResponse.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Record quiz answer error:", error);
+    return NextResponse.json({ error: "Failed to record answer" }, { status: 500 });
+  }
+}

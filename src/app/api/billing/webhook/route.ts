@@ -107,11 +107,12 @@ export async function POST(req: NextRequest) {
           await tx.webhookEvent.create({ data: { provider: "paymongo", eventId: event.id, eventType: event.type } });
           const payment = await tx.payment.findUnique({
             where: { providerPaymentId: refund.providerPaymentId },
-            include: { subscription: true },
+            include: { subscription: { include: { plan: true } } },
           });
           if (!payment) throw new Error("Refunded PayMongo payment was not found");
           const refundedAmount = refund.refundedCentavos / 100;
           const fullyRefunded = refundedAmount >= Number(payment.amount);
+          const wasFullyRefunded = Number(payment.refundedAmount) >= Number(payment.amount);
           await tx.payment.update({
             where: { id: payment.id },
             data: {
@@ -120,10 +121,20 @@ export async function POST(req: NextRequest) {
               paymentStatus: fullyRefunded ? "refunded" : "partially_refunded",
             },
           });
-          if (fullyRefunded) {
+          if (fullyRefunded && !wasFullyRefunded) {
+            const durationDays = payment.subscription.plan.durationDays ?? 30;
+            const now = new Date();
+            const adjustedEndDate = new Date(
+              payment.subscription.endDate.getTime() - durationDays * 86_400_000,
+            );
+            const hasRemainingAccess = adjustedEndDate > now;
             await tx.userSubscription.update({
               where: { id: payment.subscriptionId },
-              data: { subscriptionStatus: "cancelled", paymentStatus: "refunded", endDate: new Date() },
+              data: {
+                subscriptionStatus: hasRemainingAccess ? "active" : "cancelled",
+                paymentStatus: hasRemainingAccess ? "paid" : "refunded",
+                endDate: hasRemainingAccess ? adjustedEndDate : now,
+              },
             });
           }
         });

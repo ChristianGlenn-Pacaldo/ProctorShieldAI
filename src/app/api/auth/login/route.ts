@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user is suspended
-    if (user.status === "suspended") {
+    if (user.status !== "active") {
       return NextResponse.json(
         { success: false, message: "Your account has been suspended. Contact an administrator." },
         { status: 403 }

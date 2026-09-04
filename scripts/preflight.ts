@@ -11,11 +11,25 @@ function requireValue(name: string, minimumLength = 1) {
   return value;
 }
 
+async function withTimeout<T>(label: string, operation: Promise<T>, timeoutMs = 30_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs / 1000} seconds`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function countDuplicateGroups(table: "student_quizzes" | "answers" | "user_subscriptions") {
   if (table === "student_quizzes") {
     const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count FROM (
-        SELECT student_id, quiz_id FROM student_quizzes GROUP BY student_id, quiz_id HAVING COUNT(*) > 1
+        SELECT student_id, quiz_id, attempt_number FROM student_quizzes
+        GROUP BY student_id, quiz_id, attempt_number HAVING COUNT(*) > 1
       ) duplicates`;
     return Number(rows[0]?.count ?? 0);
   }
@@ -54,15 +68,25 @@ async function main() {
   const appUrl = new URL(requireValue("NEXT_PUBLIC_APP_URL"));
   if (appUrl.protocol !== "https:") throw new Error("NEXT_PUBLIC_APP_URL must use HTTPS");
 
-  await prisma.$queryRaw`SELECT 1`;
-  const redis = getRedis();
-  if (!redis || await redis.ping() !== "PONG") throw new Error("Redis readiness check failed");
-  if (!await checkEvidenceStorage()) throw new Error("Evidence storage readiness check failed");
+  console.log("Checking database connectivity...");
+  await withTimeout("Database readiness check", prisma.$queryRaw`SELECT 1`);
 
+  console.log("Checking Redis connectivity...");
+  const redis = getRedis();
+  if (!redis || await withTimeout("Redis readiness check", redis.ping()) !== "PONG") {
+    throw new Error("Redis readiness check failed");
+  }
+
+  console.log("Checking evidence storage...");
+  if (!await withTimeout("Evidence storage readiness check", checkEvidenceStorage())) {
+    throw new Error("Evidence storage readiness check failed");
+  }
+
+  console.log("Checking database uniqueness constraints...");
   const duplicates = {
-    enrollments: await countDuplicateGroups("student_quizzes"),
-    answers: await countDuplicateGroups("answers"),
-    subscriptions: await countDuplicateGroups("user_subscriptions"),
+    enrollments: await withTimeout("Student-attempt duplicate check", countDuplicateGroups("student_quizzes")),
+    answers: await withTimeout("Answer duplicate check", countDuplicateGroups("answers")),
+    subscriptions: await withTimeout("Subscription duplicate check", countDuplicateGroups("user_subscriptions")),
   };
   if (Object.values(duplicates).some((count) => count > 0)) {
     throw new Error(`Duplicate rows must be resolved before schema application: ${JSON.stringify(duplicates)}`);

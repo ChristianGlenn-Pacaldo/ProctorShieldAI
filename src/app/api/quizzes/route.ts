@@ -123,12 +123,19 @@ export async function POST(req: NextRequest) {
       passingScore,
       questions,
       shuffleQuestions,
+      allowRetake,
       isGamified,
       isAiGenerated,
     } = await req.json();
     const isAiQuiz = isAiGenerated === true;
 
-    if (typeof subjectName !== "string" || typeof title !== "string" || !subjectName.trim() || !title.trim()) {
+    if (
+      typeof subjectName !== "string"
+      || typeof title !== "string"
+      || (description !== undefined && description !== null && typeof description !== "string")
+      || !subjectName.trim()
+      || !title.trim()
+    ) {
       return NextResponse.json({ success: false, message: "Subject name and title are required" }, { status: 400 });
     }
     if (subjectName.length > 150 || title.length > 200 || (typeof description === "string" && description.length > 2_000)) {
@@ -158,11 +165,6 @@ export async function POST(req: NextRequest) {
                 isCorrect: Boolean(c.isCorrect),
               }));
 
-            // Ensure at least one choice is marked correct
-            if (validChoices.length > 0 && !validChoices.some((c) => c.isCorrect)) {
-              validChoices[0].isCorrect = true;
-            }
-
             return {
               questionText: String(q.questionText).trim(),
               questionType: typeof q.questionType === "string" ? q.questionType.slice(0, 50) : "multiple_choice",
@@ -173,6 +175,19 @@ export async function POST(req: NextRequest) {
             };
           })
       : [];
+
+    if (validQuestions.length === 0 || !Array.isArray(questions) || validQuestions.length !== Math.min(questions.length, 100)) {
+      return NextResponse.json({ error: "Add at least one complete question" }, { status: 400 });
+    }
+    if (validQuestions.some((question) => (
+      question.choices.create.length < 2
+      || question.choices.create.filter((choice) => choice.isCorrect).length !== 1
+    ))) {
+      return NextResponse.json(
+        { error: "Every question must have at least two choices and exactly one correct answer" },
+        { status: 400 },
+      );
+    }
 
     const creation = await prisma.$transaction(async (tx) => {
       // Serialize quiz creation per teacher so concurrent requests cannot exceed
@@ -224,6 +239,7 @@ export async function POST(req: NextRequest) {
           quizStatus: "draft",
           quizType: isGamified !== false ? "gamified" : "standard",
           shuffleQuestions: Boolean(shuffleQuestions),
+          allowRetake: allowRetake === true,
           questions: validQuestions.length > 0 ? { create: validQuestions } : undefined,
         },
       });

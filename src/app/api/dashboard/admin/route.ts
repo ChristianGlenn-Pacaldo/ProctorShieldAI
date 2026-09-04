@@ -10,24 +10,20 @@ export async function GET(req: NextRequest) {
     }
 
     // 1. Fetch counts for stats (Active Sessions, Active Quizzes, Active Violations, AI Flags)
+    const presenceCutoff = new Date(Date.now() - 45_000);
     const activeSessions = await prisma.user.count({
-      where: { isOnline: true },
+      where: { status: "active", lastSeenAt: { gte: presenceCutoff } },
     });
 
-    const activeQuizzes = await prisma.studentQuiz.count({
-      where: {
-        quizStatus: {
-          not: "completed",
-        },
-      },
+    const activeQuizzes = await prisma.quiz.count({
+      where: { quizStatus: "in_progress" },
     });
 
     const activeViolations = await prisma.violation.count({
       where: {
         studentQuiz: {
-          quizStatus: {
-            not: "completed",
-          },
+          quizStatus: "in_progress",
+          quiz: { quizStatus: "in_progress" },
         },
       },
     });
@@ -84,7 +80,9 @@ export async function GET(req: NextRequest) {
       let subClass = "bg-white/5 text-[var(--muted)]";
 
       if (u.role.roleName === "teacher") {
-        const activeSub = u.userSubscriptions?.find(sub => sub.subscriptionStatus === "active");
+        const activeSub = u.userSubscriptions?.find(
+          sub => sub.subscriptionStatus === "active" && sub.endDate > new Date(),
+        );
         if (activeSub) {
           plan = activeSub.plan?.planName?.includes("Premium") ? "Premium" : "PRO (Active)";
           subscription = "PRO (Active)";
@@ -100,7 +98,7 @@ export async function GET(req: NextRequest) {
         id: u.id,
         name: u.fullName,
         email: u.email,
-        isOnline: u.isOnline,
+        isOnline: u.status === "active" && Boolean(u.lastSeenAt && u.lastSeenAt >= presenceCutoff),
         role: u.role.roleName.charAt(0).toUpperCase() + u.role.roleName.slice(1),
         roleClass,
         plan,
