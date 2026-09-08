@@ -3,6 +3,8 @@ import prisma from "../src/lib/prisma";
 import { getRedis } from "../src/lib/redis.ts";
 import { checkEvidenceStorage } from "../src/lib/evidence-storage";
 
+let redisClient: ReturnType<typeof getRedis> = null;
+
 function requireValue(name: string, minimumLength = 1) {
   const value = process.env[name]?.trim();
   if (!value || value.length < minimumLength) {
@@ -72,8 +74,8 @@ async function main() {
   await withTimeout("Database readiness check", prisma.$queryRaw`SELECT 1`);
 
   console.log("Checking Redis connectivity...");
-  const redis = getRedis();
-  if (!redis || await withTimeout("Redis readiness check", redis.ping()) !== "PONG") {
+  redisClient = getRedis();
+  if (!redisClient || await withTimeout("Redis readiness check", redisClient.ping()) !== "PONG") {
     throw new Error("Redis readiness check failed");
   }
 
@@ -101,5 +103,6 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    redisClient?.disconnect();
     await prisma.$disconnect();
   });

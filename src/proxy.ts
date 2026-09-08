@@ -36,9 +36,9 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://accounts.google.com`,
-    "style-src 'self' 'unsafe-inline' https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com",
-    "font-src 'self' data:",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self' https://accounts.google.com https://storage.googleapis.com https://*.pusher.com wss://*.pusher.com",
     "frame-src https://accounts.google.com",
     "media-src 'self' blob:",
@@ -85,7 +85,11 @@ export function proxy(request: NextRequest) {
   }
 
   if (PUBLIC_PATHS.has(pathname) || PUBLIC_API_PATHS.has(pathname)) {
-    return addSecurityHeaders(NextResponse.next());
+    const response = NextResponse.next();
+    if (pathname.startsWith("/login") || pathname === "/admin/login") {
+      response.headers.set("Cache-Control", "no-store, max-age=0");
+    }
+    return addSecurityHeaders(response);
   }
 
   const targetRole = targetRoleForPage(pathname);

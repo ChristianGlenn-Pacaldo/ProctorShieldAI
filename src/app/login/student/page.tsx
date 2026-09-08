@@ -12,7 +12,7 @@ export default function StudentLoginPage() {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [googleAvailable, setGoogleAvailable] = useState(true);
+  const [googleScriptStatus, setGoogleScriptStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showPassword, setShowPassword] = useState(false);
 
   // Form state
@@ -253,7 +253,14 @@ export default function StudentLoginPage() {
   ];
 
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
+    <GoogleOAuthProvider
+      clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}
+      onScriptLoadSuccess={() => setGoogleScriptStatus("ready")}
+      onScriptLoadError={() => {
+        setGoogleScriptStatus("error");
+        setError("Google sign-in could not load. Check your connection and retry.");
+      }}
+    >
       <div className="auth-shell min-h-screen flex bg-slate-950">
         {/* ── LEFT PANEL (DESKTOP) ─────────────────── */}
         <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
@@ -341,6 +348,55 @@ export default function StudentLoginPage() {
               </div>
             )}
 
+            {!mfaState.isPending && (
+              <div className="mb-5 space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 font-[family-name:var(--font-display)]">
+                    {activePanel === "login" ? "Student Sign In" : "Create Student Account"}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {activePanel === "login"
+                      ? "Sign in to access your proctored quizzes"
+                      : "Register to start taking proctored exams"}
+                  </p>
+                </div>
+
+                <div className="flex min-h-[44px] w-full items-center justify-center">
+                  {!mounted || googleScriptStatus === "loading" ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-400" role="status">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
+                      Loading Google sign-in...
+                    </div>
+                  ) : googleScriptStatus === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="h-11 rounded-lg border border-slate-700 px-5 text-sm font-semibold text-slate-300 transition-colors hover:border-blue-500 hover:text-white"
+                    >
+                      Retry Google sign-in
+                    </button>
+                  ) : (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError("Google sign-in failed. Please retry or use email and password.")}
+                      theme="filled_black"
+                      size="large"
+                      text="continue_with"
+                      shape="rectangular"
+                    />
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-slate-800" />
+                  <span className="text-xs text-slate-500 font-semibold">
+                    {activePanel === "login" ? "OR EMAIL" : "OR REGISTER WITH EMAIL"}
+                  </span>
+                  <div className="flex-1 h-px bg-slate-800" />
+                </div>
+              </div>
+            )}
+
             {/* ── MFA OTP FORM ──────────────────────── */}
             {mfaState.isPending ? (
               <div className="animate-fade-in bg-slate-950/60 p-6 rounded-2xl border border-slate-800">
@@ -395,38 +451,6 @@ export default function StudentLoginPage() {
                 {/* ── 1. LOGIN FORM ───────────────────── */}
                 {activePanel === "login" && (
                   <div className="animate-fade-in space-y-5">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-100 font-[family-name:var(--font-display)]">Student Sign In</h2>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Sign in to access your proctored quizzes
-                      </p>
-                    </div>
-
-                    {/* Google Login Button */}
-                    {mounted && googleAvailable && (
-                      <div className="flex justify-center w-full min-h-[44px]">
-                        <GoogleLogin
-                          onSuccess={handleGoogleSuccess}
-                          onError={() => {
-                            setGoogleAvailable(false);
-                            console.warn("Google login unavailable on current domain.");
-                          }}
-                          theme="filled_black"
-                          size="large"
-                          text="signin_with"
-                          shape="rectangular"
-                        />
-                      </div>
-                    )}
-
-                    {googleAvailable && (
-                      <div className="flex items-center gap-3 my-2">
-                        <div className="flex-1 h-px bg-slate-800" />
-                        <span className="text-xs text-slate-500 font-semibold">OR EMAIL</span>
-                        <div className="flex-1 h-px bg-slate-800" />
-                      </div>
-                    )}
-
                     <form onSubmit={handleLogin} className="space-y-4">
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
@@ -501,38 +525,6 @@ export default function StudentLoginPage() {
                 {/* ── 2. REGISTER FORM ────────────────── */}
                 {activePanel === "register" && (
                   <div className="animate-fade-in space-y-5">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-100 font-[family-name:var(--font-display)]">Create Student Account</h2>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Register to start taking proctored exams
-                      </p>
-                    </div>
-
-                    {/* Google Register Button */}
-                    {mounted && googleAvailable && (
-                      <div className="flex justify-center w-full min-h-[44px]">
-                        <GoogleLogin
-                          onSuccess={handleGoogleSuccess}
-                          onError={() => {
-                            setGoogleAvailable(false);
-                            console.warn("Google sign-up unavailable on current domain.");
-                          }}
-                          theme="filled_black"
-                          size="large"
-                          text="signup_with"
-                          shape="rectangular"
-                        />
-                      </div>
-                    )}
-
-                    {googleAvailable && (
-                      <div className="flex items-center gap-3 my-2">
-                        <div className="flex-1 h-px bg-slate-800" />
-                        <span className="text-xs text-slate-500 font-semibold">OR REGISTER WITH EMAIL</span>
-                        <div className="flex-1 h-px bg-slate-800" />
-                      </div>
-                    )}
-
                     <form onSubmit={handleRegister} className="space-y-3.5">
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Full Name</label>

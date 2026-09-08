@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import crypto from "node:crypto";
@@ -107,6 +107,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -233,6 +234,7 @@ export async function POST(req: NextRequest) {
           description: description ? description.trim() : null,
           accessCode,
           isAiGenerated: isAiQuiz,
+          isGamified: isGamified !== false,
           duration: Math.max(1, Math.min(480, Number(duration) || 60)),
           totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
           passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
@@ -255,8 +257,13 @@ export async function POST(req: NextRequest) {
       return {
         quiz,
         decision,
-        entitlements: await getTeacherEntitlements(session.userId, tx),
+        entitlements,
       };
+    }, {
+      // Neon can occasionally need more than Prisma's short interactive-
+      // transaction defaults, especially when waking a pooled connection.
+      maxWait: 10_000,
+      timeout: 20_000,
     });
 
     if (!creation.quiz) {
@@ -273,27 +280,71 @@ export async function POST(req: NextRequest) {
 
     const quiz = creation.quiz;
 
-    // Broadcast quiz creation to admin
+    // Refresh this outside the write transaction. Keeping reporting queries out
+    // of the critical section reduces lock time and avoids rolling back a quiz
+    // just because an entitlement summary query was slow.
+    let updatedEntitlements = creation.entitlements;
     try {
-      const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("private-admin-dashboard", "activity", {
-        type: "quiz-created",
-        userId: session.userId,
-        fullName: session.fullName,
-        role: "teacher",
-        activity: `${isAiQuiz ? "Created AI quiz" : "Created manual quiz"}: ${title}`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.error("Failed to broadcast quiz creation to admin:", e);
+      updatedEntitlements = await getTeacherEntitlements(session.userId);
+    } catch (error) {
+      console.error(`[quiz-create:${requestId}] Failed to refresh entitlements:`, error);
+      if (!isAiQuiz) {
+        const manualQuizCount = creation.entitlements.manualQuizCount + 1;
+        updatedEntitlements = {
+          ...creation.entitlements,
+          manualQuizCount,
+          manualQuizzesRemaining: creation.entitlements.manualQuizLimit === null
+            ? null
+            : Math.max(0, creation.entitlements.manualQuizLimit - manualQuizCount),
+        };
+      }
     }
 
+    // The realtime notification is a non-critical side effect. Scheduling it
+    // after the response prevents a slow Pusher connection from making quiz
+    // creation look like it failed in the browser.
+    after(async () => {
+      try {
+        const { pusherServer } = await import("@/lib/pusher");
+        await pusherServer.trigger("private-admin-dashboard", "activity", {
+          type: "quiz-created",
+          userId: session.userId,
+          fullName: session.fullName,
+          role: "teacher",
+          activity: `${isAiQuiz ? "Created AI quiz" : "Created manual quiz"}: ${title}`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error(`[quiz-create:${requestId}] Failed to broadcast admin activity:`, error);
+      }
+    });
+
     return NextResponse.json(
-      { success: true, quiz, entitlements: creation.entitlements },
+      { success: true, quiz, entitlements: updatedEntitlements },
       { status: 201 },
     );
   } catch (error: unknown) {
-    console.error("Create quiz error:", error);
-    return NextResponse.json({ error: "Failed to create quiz" }, { status: 500 });
+    console.error(`[quiz-create:${requestId}] Create quiz error:`, error);
+    const errorCode = typeof error === "object" && error !== null && "code" in error
+      ? String(error.code)
+      : "";
+
+    if (errorCode === "P2002") {
+      return NextResponse.json(
+        { error: "A generated quiz code conflicted with an existing quiz. Please try again.", code: "QUIZ_CODE_CONFLICT", requestId },
+        { status: 409 },
+      );
+    }
+    if (errorCode === "P2024" || errorCode === "P2028") {
+      return NextResponse.json(
+        { error: "The database took too long to create the quiz. Please try again.", code: "QUIZ_CREATE_TIMEOUT", requestId },
+        { status: 503 },
+      );
+    }
+
+    return NextResponse.json(
+      { error: `We couldn't create the quiz. Please try again. Reference: ${requestId.slice(0, 8)}`, code: "QUIZ_CREATE_FAILED", requestId },
+      { status: 500 },
+    );
   }
 }

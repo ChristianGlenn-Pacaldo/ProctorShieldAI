@@ -12,6 +12,7 @@ export default function TeacherLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [googleScriptStatus, setGoogleScriptStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -190,7 +191,14 @@ export default function TeacherLoginPage() {
   ];
 
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
+    <GoogleOAuthProvider
+      clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}
+      onScriptLoadSuccess={() => setGoogleScriptStatus("ready")}
+      onScriptLoadError={() => {
+        setGoogleScriptStatus("error");
+        setError("Google sign-in could not load. Check your connection and retry.");
+      }}
+    >
       <div className="auth-shell min-h-screen flex">
         {/* ── LEFT PANEL ───────────────────────────── */}
         <div className="hidden lg:flex lg:w-1/2 bg-slate-950 text-white relative overflow-hidden">
@@ -276,6 +284,51 @@ export default function TeacherLoginPage() {
               </div>
             )}
 
+            {!mfaState.isPending && (
+              <div className="mb-5">
+                <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">
+                  {activePanel === "login" ? "Teacher Sign In" : "Create Teacher Account"}
+                </h2>
+                <p className="text-sm text-slate-400 mb-6">
+                  {activePanel === "login"
+                    ? "Sign in to manage proctored assessments"
+                    : "Join Proctor Shield teacher portal today"}
+                </p>
+
+                <div className="flex min-h-[44px] w-full items-center justify-center">
+                  {!mounted || googleScriptStatus === "loading" ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-400" role="status">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
+                      Loading Google sign-in...
+                    </div>
+                  ) : googleScriptStatus === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="h-11 rounded-lg border border-slate-700 px-5 text-sm font-semibold text-slate-300 transition-colors hover:border-blue-500 hover:text-white"
+                    >
+                      Retry Google sign-in
+                    </button>
+                  ) : (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError("Google sign-in failed. Please retry or use email and password.")}
+                      theme="filled_black"
+                      size="large"
+                      text="continue_with"
+                      shape="rectangular"
+                    />
+                  )}
+                </div>
+
+                <div className="my-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-800" />
+                  <span className="text-xs font-semibold text-slate-500">OR</span>
+                  <div className="h-px flex-1 bg-slate-800" />
+                </div>
+              </div>
+            )}
+
             {/* ── MFA OTP FORM ──────────────────────── */}
             {mfaState.isPending ? (
               <div className="animate-fade-in">
@@ -329,31 +382,6 @@ export default function TeacherLoginPage() {
                 {/* ── LOGIN FORM ──────────────────────── */}
                 {activePanel === "login" && (
                   <div className="animate-fade-in">
-                    <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Teacher Sign In</h2>
-                    <p className="text-sm text-slate-400 mb-6">
-                      Sign in to manage proctored assessments
-                    </p>
-                    
-                    {/* Google Button */}
-                    <div className="mb-4 flex justify-center w-full min-h-[40px]">
-                      {mounted && (
-                        <GoogleLogin
-                          onSuccess={handleGoogleSuccess}
-                          onError={() => setError("Google Login Failed. Please use Email & Password.")}
-                          theme="filled_black"
-                          size="large"
-                          text="signin_with"
-                          shape="rectangular"
-                        />
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 my-5">
-                      <div className="flex-1 h-px bg-slate-800" />
-                      <span className="text-xs text-slate-500 font-semibold">OR</span>
-                      <div className="flex-1 h-px bg-slate-800" />
-                    </div>
-
                     <form onSubmit={handleLogin} className="space-y-4">
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
@@ -425,31 +453,6 @@ export default function TeacherLoginPage() {
                 {/* ── REGISTER FORM ───────────────────── */}
                 {activePanel === "register" && (
                   <div className="animate-fade-in">
-                    <h2 className="text-xl font-bold text-slate-100 mb-1 font-[family-name:var(--font-display)]">Create Teacher Account</h2>
-                    <p className="text-sm text-slate-400 mb-6">
-                      Join Proctor Shield teacher portal today
-                    </p>
-
-                    {/* Google Button */}
-                    <div className="mb-4 flex justify-center w-full min-h-[40px]">
-                      {mounted && (
-                        <GoogleLogin
-                          onSuccess={handleGoogleSuccess}
-                          onError={() => setError("Google Registration Failed. Please use Email & Password.")}
-                          theme="filled_black"
-                          size="large"
-                          text="signup_with"
-                          shape="rectangular"
-                        />
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 my-5">
-                      <div className="flex-1 h-px bg-slate-800" />
-                      <span className="text-xs text-slate-500 font-semibold">OR</span>
-                      <div className="flex-1 h-px bg-slate-800" />
-                    </div>
-
                     <form onSubmit={handleRegister} className="space-y-4">
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
