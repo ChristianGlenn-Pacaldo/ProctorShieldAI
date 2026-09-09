@@ -18,6 +18,26 @@ export interface DeviceCapabilities {
   viewportHeight: number;
 }
 
+export interface ProctoringPerformanceProfile {
+  lowPower: boolean;
+  captureWidth: number;
+  captureHeight: number;
+  frameRate: number;
+  inferenceWidth: number;
+  inferenceHeight: number;
+  faceInputSize: 128 | 160;
+  snapshotIntervalMs: number;
+  detectionIntervalMs: number;
+  audioIntervalMs: number;
+  useTinyLandmarks: boolean;
+  objectModelBase: "lite_mobilenet_v2" | "mobilenet_v2";
+}
+
+interface ProctoringPerformanceHints {
+  deviceMemory?: number;
+  hardwareConcurrency?: number;
+}
+
 const MOBILE_USER_AGENT = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i;
 
 function bool(value: unknown) {
@@ -87,6 +107,59 @@ export function monitoringLabel(level: MonitoringLevel) {
   if (level === "strict") return "Strict Monitoring";
   if (level === "reduced") return "Reduced Assurance";
   return "Unsupported Device";
+}
+
+export function getProctoringPerformanceProfile(
+  deviceType: DeviceType,
+  hints: ProctoringPerformanceHints = {},
+): ProctoringPerformanceProfile {
+  if (deviceType === "desktop") {
+    return {
+      lowPower: false,
+      captureWidth: 640,
+      captureHeight: 480,
+      frameRate: 24,
+      inferenceWidth: 480,
+      inferenceHeight: 360,
+      faceInputSize: 160,
+      snapshotIntervalMs: 2_000,
+      detectionIntervalMs: 500,
+      audioIntervalMs: 500,
+      useTinyLandmarks: false,
+      objectModelBase: "mobilenet_v2",
+    };
+  }
+
+  const memory = Number(hints.deviceMemory);
+  const cores = Number(hints.hardwareConcurrency);
+  const lowPower = (Number.isFinite(memory) && memory > 0 && memory <= 4)
+    || (Number.isFinite(cores) && cores > 0 && cores <= 4);
+
+  return {
+    lowPower,
+    captureWidth: 320,
+    captureHeight: 240,
+    frameRate: lowPower ? 10 : 12,
+    inferenceWidth: lowPower ? 224 : 256,
+    inferenceHeight: lowPower ? 168 : 192,
+    faceInputSize: 128,
+    snapshotIntervalMs: lowPower ? 8_000 : 5_000,
+    detectionIntervalMs: lowPower ? 2_800 : 1_800,
+    audioIntervalMs: lowPower ? 1_500 : 1_000,
+    useTinyLandmarks: true,
+    objectModelBase: "lite_mobilenet_v2",
+  };
+}
+
+export function getBrowserProctoringPerformanceProfile(deviceType: DeviceType) {
+  const runtimeNavigator = typeof navigator === "undefined"
+    ? undefined
+    : navigator as Navigator & { deviceMemory?: number };
+
+  return getProctoringPerformanceProfile(deviceType, {
+    deviceMemory: runtimeNavigator?.deviceMemory,
+    hardwareConcurrency: runtimeNavigator?.hardwareConcurrency,
+  });
 }
 
 export function getBrowserDeviceCapabilities(): DeviceCapabilities {

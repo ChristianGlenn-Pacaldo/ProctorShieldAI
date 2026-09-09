@@ -1,11 +1,19 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import typescriptEslint from "@typescript-eslint/eslint-plugin";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    plugins: {
+      react,
+      "react-hooks": reactHooks,
+      "@typescript-eslint": typescriptEslint,
+    },
     // Legacy UI modules are incrementally typed. Keep these visible without
     // blocking security patches and production builds.
     rules: {

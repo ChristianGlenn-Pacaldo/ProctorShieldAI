@@ -12,6 +12,11 @@ import {
 import { getNotificationDestination } from "../src/lib/notification-destination.ts";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "../src/lib/quiz-access-code.ts";
 import { hasVerifiedGoogleEmail } from "../src/lib/google-identity.ts";
+import { getProctoringPerformanceProfile } from "../src/lib/device-capabilities.ts";
+import {
+  DEFAULT_TEACHER_WARNING,
+  normalizeTeacherWarningMessage,
+} from "../src/lib/live-warning-store.ts";
 
 test("password policy rejects weak values", () => {
   assert.equal(isStrongPassword("short1"), false);
@@ -33,6 +38,27 @@ test("Google authentication accepts only explicitly verified email identities", 
   assert.equal(hasVerifiedGoogleEmail({ email: "student@example.com" }), false);
   assert.equal(hasVerifiedGoogleEmail({ email: "", email_verified: true }), false);
   assert.equal(hasVerifiedGoogleEmail(null), false);
+});
+
+test("mobile proctoring uses a bounded low-power workload", () => {
+  const mobile = getProctoringPerformanceProfile("mobile", {
+    deviceMemory: 4,
+    hardwareConcurrency: 4,
+  });
+  const desktop = getProctoringPerformanceProfile("desktop");
+
+  assert.equal(mobile.lowPower, true);
+  assert.equal(mobile.objectModelBase, "lite_mobilenet_v2");
+  assert.equal(mobile.useTinyLandmarks, true);
+  assert.ok(mobile.captureWidth < desktop.captureWidth);
+  assert.ok(mobile.snapshotIntervalMs > desktop.snapshotIntervalMs);
+  assert.ok(mobile.detectionIntervalMs > desktop.detectionIntervalMs);
+});
+
+test("teacher warnings are normalized and bounded before realtime delivery", () => {
+  assert.equal(normalizeTeacherWarningMessage("  Keep   your face visible.  "), "Keep your face visible.");
+  assert.equal(normalizeTeacherWarningMessage(""), DEFAULT_TEACHER_WARNING);
+  assert.equal(normalizeTeacherWarningMessage("x".repeat(300)).length, 240);
 });
 
 test("students cannot enter until both teacher and enrollment are started", () => {

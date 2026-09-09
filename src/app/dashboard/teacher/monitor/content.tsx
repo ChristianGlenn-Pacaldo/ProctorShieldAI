@@ -31,7 +31,7 @@ function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void 
       className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}
     >
       <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
-        {/* Live 1-Second Snapshot Stream */}
+        {/* Adaptive snapshot stream */}
         {hasValidSnapshot ? (
           <img 
             key={feed.snapshot?.slice(-20)}
@@ -56,7 +56,7 @@ function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void 
           {hasValidSnapshot ? (
             <>
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
-              <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT (1s)</span>
+              <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT · LIVE SYNC</span>
             </>
           ) : (
             <>
@@ -102,6 +102,8 @@ export default function LiveMonitorContent({
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
   const [selectedStudentModal, setSelectedStudentModal] = useState<Feed | null>(null);
+  const [warningSendState, setWarningSendState] = useState<"idle" | "sending" | "sent" | "queued" | "error">("idle");
+  const [warningSendMessage, setWarningSendMessage] = useState("");
 
   // Subscription gating
   const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
@@ -123,6 +125,39 @@ export default function LiveMonitorContent({
     };
     checkSub();
   }, []);
+
+  const openStudentModal = (feed: Feed) => {
+    setWarningSendState("idle");
+    setWarningSendMessage("");
+    setSelectedStudentModal(feed);
+  };
+
+  const handleSendWarning = async () => {
+    if (!selectedStudentModal || warningSendState === "sending") return;
+    setWarningSendState("sending");
+    setWarningSendMessage("");
+
+    try {
+      const response = await fetch("/api/live/warning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: selectedStudentModal.id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to send the warning.");
+
+      if (data.realtimeDelivered) {
+        setWarningSendState("sent");
+        setWarningSendMessage("Warning delivered to the student's active quiz.");
+      } else {
+        setWarningSendState("queued");
+        setWarningSendMessage("Realtime delivery was interrupted. The warning is queued and will appear after the student's next sync.");
+      }
+    } catch (error) {
+      setWarningSendState("error");
+      setWarningSendMessage(error instanceof Error ? error.message : "Unable to send the warning.");
+    }
+  };
 
   const handleApprove = async (studentQuizId: number, action: "accept" | "reject") => {
     try {
@@ -154,7 +189,7 @@ export default function LiveMonitorContent({
     }
   };
 
-  // ── Pusher for real-time 1-second snapshots, joins & violations ──
+  // ── Pusher for real-time joins, approvals, violations, and optional snapshots ──
   useEffect(() => {
     if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
@@ -165,7 +200,7 @@ export default function LiveMonitorContent({
 
     const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
 
-    // Real-Time 1-Second Snapshot Receiver
+    // Optional server-pushed snapshot receiver
     const handleLiveSnapshot = (data: any) => {
       const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
       const studentNameLower = String(data.studentName || "").toLowerCase().trim();
@@ -357,7 +392,7 @@ export default function LiveMonitorContent({
     return () => window.clearInterval(connectionCheck);
   }, [isSubscribed]);
 
-  // ── Poll 1-second snapshots as automatic background sync ──
+  // ── Poll the snapshot store as an adaptive background sync ──
   useEffect(() => {
     if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
@@ -585,14 +620,14 @@ export default function LiveMonitorContent({
               <div className="col-span-full h-44 flex flex-col items-center justify-center border border-dashed border-[var(--border)] rounded-2xl text-[var(--muted)]">
                 <Camera className="w-8 h-8 text-indigo-500 mb-2 opacity-50" />
                 <p className="text-sm font-bold text-[var(--ink)] mb-1">Waiting for active students to join...</p>
-                <p className="text-xs text-[var(--muted)]">Student webcam photos will appear here automatically every 1 second once they start a quiz.</p>
+                <p className="text-xs text-[var(--muted)]">Student webcam snapshots will appear automatically while a quiz is active. Refresh speed adapts to each device and connection.</p>
               </div>
             ) : (
               feeds.map((f) => (
                 <StudentVideoFeed
                   key={f.id}
                   feed={f}
-                  onClick={() => setSelectedStudentModal(f)}
+                  onClick={() => openStudentModal(f)}
                 />
               ))
             )}
@@ -680,16 +715,29 @@ export default function LiveMonitorContent({
               </div>
 
               {/* Action Buttons */}
+              {warningSendMessage && (
+                <div
+                  role="status"
+                  className={`rounded-xl border px-3.5 py-2.5 text-xs font-semibold ${
+                    warningSendState === "error"
+                      ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : warningSendState === "queued"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  }`}
+                >
+                  {warningSendMessage}
+                </div>
+              )}
               <div className="pt-2 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    alert(`Security alert sent to ${selectedStudentModal.name}'s active exam screen.`);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  onClick={() => void handleSendWarning()}
+                  disabled={warningSendState === "sending"}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-wait disabled:opacity-60"
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  Send Warning Pop-Up
+                  {warningSendState === "sending" ? "Sending..." : warningSendState === "sent" ? "Send Again" : "Send Warning Pop-Up"}
                 </button>
                 <button
                   type="button"
