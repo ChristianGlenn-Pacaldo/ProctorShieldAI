@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp, hashOtp } from "@/lib/security";
@@ -80,60 +80,52 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
     });
 
-    // Set user online in database
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { isOnline: true },
-    });
-
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        activity: `Logged in via Google with MFA as ${user.role.roleName}`,
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
-    });
-
-    // Broadcast activity to admin
-    try {
-      const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("private-admin-dashboard", "activity", {
-        type: "login",
-        userId: user.id,
-        fullName: user.fullName,
-        role: user.role.roleName,
-        activity: `Logged in via Google with MFA as ${user.role.roleName}`,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Send a personal notification to the admin if it's a student (or teacher)
-      const adminUser = await prisma.user.findFirst({
-        where: { role: { roleName: "admin" } },
-      });
-
-      if (adminUser) {
-        let notificationId = null;
-        const notification = await prisma.notification.create({
+    const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
+    after(async () => {
+      const results = await Promise.allSettled([
+        prisma.activityLog.create({
           data: {
-            userId: adminUser.id,
+            userId: user.id,
+            activity: `Logged in via Google with MFA as ${user.role.roleName}`,
+            ipAddress,
+          },
+        }),
+        (async () => {
+          const { pusherServer } = await import("@/lib/pusher");
+          await pusherServer.trigger("private-admin-dashboard", "activity", {
+            type: "login",
+            userId: user.id,
+            fullName: user.fullName,
+            role: user.role.roleName,
+            activity: `Logged in via Google with MFA as ${user.role.roleName}`,
+            timestamp: new Date().toISOString(),
+          });
+
+          const adminUser = await prisma.user.findFirst({
+            where: { role: { roleName: "admin" } },
+          });
+          if (!adminUser) return;
+
+          const notification = await prisma.notification.create({
+            data: {
+              userId: adminUser.id,
+              title: "New Login",
+              message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+              isRead: false,
+            },
+          });
+          await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
+            id: notification.id.toString(),
             title: "New Login",
             message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-            isRead: false,
-          },
-        });
-        notificationId = notification.id;
-
-        await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
-          id: notificationId?.toString(),
-          title: "New Login",
-          message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-          createdAt: new Date().toISOString(),
-        });
+            createdAt: new Date().toISOString(),
+          });
+        })(),
+      ]);
+      for (const result of results) {
+        if (result.status === "rejected") console.error("Post-MFA-login side effect failed:", result.reason);
       }
-    } catch (e) {
-      console.error("Failed to broadcast MFA login to admin:", e);
-    }
+    });
 
     return NextResponse.json({
       success: true,

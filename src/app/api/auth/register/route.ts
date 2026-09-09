@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp, isStrongPassword } from "@/lib/security";
@@ -109,39 +109,36 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
     });
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        activity: `New ${roleName} account created`,
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
+    const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
+    after(async () => {
+      const results = await Promise.allSettled([
+        prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            activity: `New ${roleName} account created`,
+            ipAddress,
+          },
+        }),
+        (async () => {
+          const { pusherServer } = await import("@/lib/pusher");
+          await pusherServer.trigger("private-admin-dashboard", "activity", {
+            type: "register",
+            userId: user.id,
+            fullName: user.fullName,
+            role: user.role.roleName,
+            activity: `New ${user.role.roleName} account created`,
+            timestamp: new Date().toISOString(),
+          });
+        })(),
+        (async () => {
+          const { sendWelcomeEmail } = await import("@/lib/email");
+          await sendWelcomeEmail(user.email, user.fullName, user.role.roleName);
+        })(),
+      ]);
+      for (const result of results) {
+        if (result.status === "rejected") console.error("Post-registration side effect failed:", result.reason);
+      }
     });
-
-    // Broadcast activity to admin
-    try {
-      const { pusherServer } = await import("@/lib/pusher");
-      await pusherServer.trigger("private-admin-dashboard", "activity", {
-        type: "register",
-        userId: user.id,
-        fullName: user.fullName,
-        role: user.role.roleName,
-        activity: `New ${user.role.roleName} account created`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.error("Failed to broadcast activity to admin:", e);
-    }
-
-    // Send welcome email (non-blocking)
-    try {
-      const { sendWelcomeEmail } = await import("@/lib/email");
-      sendWelcomeEmail(user.email, user.fullName, user.role.roleName).catch((e) =>
-        console.error("Failed to send welcome email:", e)
-      );
-    } catch (e) {
-      console.error("Failed to import sendWelcomeEmail:", e);
-    }
 
     return NextResponse.json(
       {

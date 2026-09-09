@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import prisma from "@/lib/prisma";
 import { sendOtpEmail } from "@/lib/email";
 import { consumeRateLimitGroup, generateOtp, getClientIp, hashOtp } from "@/lib/security";
 import { hashPassword } from "@/lib/auth";
+import { hasVerifiedGoogleEmail } from "@/lib/google-identity";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     });
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
+    if (!hasVerifiedGoogleEmail(payload)) {
       return NextResponse.json({ success: false, message: "Invalid Google token" }, { status: 401 });
     }
 
@@ -82,54 +83,53 @@ export async function POST(req: NextRequest) {
         include: { role: true },
       });
 
-      // Log activity
-      await prisma.activityLog.create({
-        data: {
-          userId: user.id,
-          activity: `New ${requestedRole} account created via Google`,
-          ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-        },
-      });
-
-      // Broadcast activity to admin
-      try {
-        const { pusherServer } = await import("@/lib/pusher");
-        await pusherServer.trigger("private-admin-dashboard", "activity", {
-          type: "register",
-          userId: user.id,
-          fullName: user.fullName,
-          role: user.role.roleName,
-          activity: `New ${user.role.roleName} account created via Google`,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Send a personal notification to the admin
-        const adminUser = await prisma.user.findFirst({
-          where: { role: { roleName: "admin" } },
-        });
-
-        if (adminUser) {
-          let notificationId = null;
-          const notification = await prisma.notification.create({
+      const createdUser = user;
+      const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
+      after(async () => {
+        const results = await Promise.allSettled([
+          prisma.activityLog.create({
             data: {
-              userId: adminUser.id,
-              title: "New Google Sign-Up",
-              message: `${user.fullName} just registered as a ${user.role.roleName}.`,
-              isRead: false,
+              userId: createdUser.id,
+              activity: `New ${requestedRole} account created via Google`,
+              ipAddress,
             },
-          });
-          notificationId = notification.id;
+          }),
+          (async () => {
+            const { pusherServer } = await import("@/lib/pusher");
+            await pusherServer.trigger("private-admin-dashboard", "activity", {
+              type: "register",
+              userId: createdUser.id,
+              fullName: createdUser.fullName,
+              role: createdUser.role.roleName,
+              activity: `New ${createdUser.role.roleName} account created via Google`,
+              timestamp: new Date().toISOString(),
+            });
 
-          await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
-            id: notificationId?.toString(),
-            title: "New Google Sign-Up",
-            message: `${user.fullName} just registered as a ${user.role.roleName}.`,
-            createdAt: new Date().toISOString(),
-          });
+            const adminUser = await prisma.user.findFirst({
+              where: { role: { roleName: "admin" } },
+            });
+            if (!adminUser) return;
+
+            const notification = await prisma.notification.create({
+              data: {
+                userId: adminUser.id,
+                title: "New Google Sign-Up",
+                message: `${createdUser.fullName} just registered as a ${createdUser.role.roleName}.`,
+                isRead: false,
+              },
+            });
+            await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
+              id: notification.id.toString(),
+              title: "New Google Sign-Up",
+              message: `${createdUser.fullName} just registered as a ${createdUser.role.roleName}.`,
+              createdAt: new Date().toISOString(),
+            });
+          })(),
+        ]);
+        for (const result of results) {
+          if (result.status === "rejected") console.error("Post-Google-registration side effect failed:", result.reason);
         }
-      } catch (e) {
-        console.error("Failed to broadcast activity to admin:", e);
-      }
+      });
     } else {
       if (user.role.roleName.toLowerCase() !== requestedRole) {
         return NextResponse.json(

@@ -11,6 +11,7 @@ import {
 } from "../src/lib/proctoring-detection.ts";
 import { getNotificationDestination } from "../src/lib/notification-destination.ts";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "../src/lib/quiz-access-code.ts";
+import { hasVerifiedGoogleEmail } from "../src/lib/google-identity.ts";
 
 test("password policy rejects weak values", () => {
   assert.equal(isStrongPassword("short1"), false);
@@ -24,6 +25,14 @@ test("OTP hashes are scoped by user and purpose", () => {
   assert.notEqual(login, "123456");
   assert.notEqual(login, hashOtp("user-b", "123456", "login"));
   assert.notEqual(login, hashOtp("user-a", "123456", "password-reset"));
+});
+
+test("Google authentication accepts only explicitly verified email identities", () => {
+  assert.equal(hasVerifiedGoogleEmail({ email: "student@example.com", email_verified: true }), true);
+  assert.equal(hasVerifiedGoogleEmail({ email: "student@example.com", email_verified: false }), false);
+  assert.equal(hasVerifiedGoogleEmail({ email: "student@example.com" }), false);
+  assert.equal(hasVerifiedGoogleEmail({ email: "", email_verified: true }), false);
+  assert.equal(hasVerifiedGoogleEmail(null), false);
 });
 
 test("students cannot enter until both teacher and enrollment are started", () => {
