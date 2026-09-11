@@ -25,6 +25,8 @@ const PUBLIC_API_PATHS = new Set([
   "/api/internal/maintenance",
 ]);
 
+const PUBLIC_API_PREFIXES = ["/api/models/coco/"];
+
 const ROLE_PATHS: Record<string, string> = {
   student: "/dashboard/student",
   teacher: "/dashboard/teacher",
@@ -84,7 +86,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (PUBLIC_PATHS.has(pathname) || PUBLIC_API_PATHS.has(pathname)) {
+  if (
+    PUBLIC_PATHS.has(pathname)
+    || PUBLIC_API_PATHS.has(pathname)
+    || PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  ) {
     const response = NextResponse.next();
     if (pathname.startsWith("/login") || pathname === "/admin/login") {
       response.headers.set("Cache-Control", "no-store, max-age=0");

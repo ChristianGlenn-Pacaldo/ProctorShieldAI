@@ -86,6 +86,9 @@ export function getMonitoringLevel(capabilities: DeviceCapabilities): Monitoring
     !capabilities.secureContext ||
     !capabilities.cameraSupported ||
     !capabilities.cameraPermission ||
+    !capabilities.microphoneSupported ||
+    !capabilities.microphonePermission ||
+    !capabilities.mediaRecorderSupported ||
     !capabilities.visibilitySupported
   ) {
     return "unsupported";
@@ -144,8 +147,8 @@ export function getProctoringPerformanceProfile(
     inferenceHeight: lowPower ? 168 : 192,
     faceInputSize: 128,
     snapshotIntervalMs: lowPower ? 8_000 : 5_000,
-    detectionIntervalMs: lowPower ? 2_800 : 1_800,
-    audioIntervalMs: lowPower ? 1_500 : 1_000,
+    detectionIntervalMs: lowPower ? 1_600 : 1_100,
+    audioIntervalMs: lowPower ? 700 : 550,
     useTinyLandmarks: true,
     objectModelBase: "lite_mobilenet_v2",
   };

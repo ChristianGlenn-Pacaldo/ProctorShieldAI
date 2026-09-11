@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProctorShield AI Use Cases</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1000px; min-height: 1500px; font-family: Arial, Helvetica, sans-serif; color: #182235; background: #f8fafc; }
+    body { padding: 42px; }
+    h1 { margin: 0; font-size: 34px; text-align: center; color: #172554; }
+    .subtitle { margin: 8px 0 32px; text-align: center; color: #64748b; font-size: 17px; }
+    .system { border: 3px solid #4f46e5; border-radius: 26px; padding: 30px; background: #fff; box-shadow: 0 18px 48px rgba(30, 41, 59, .12); }
+    .system-title { margin: -49px auto 25px; width: 350px; padding: 12px; border-radius: 30px; background: linear-gradient(135deg, #4338ca, #7c3aed); color: white; font-size: 22px; font-weight: 800; text-align: center; }
+    .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 26px; }
+    .role { border: 2px solid #cbd5e1; border-radius: 18px; padding: 18px; background: #f8fafc; }
+    .role h2 { margin: 0 0 12px; font-size: 22px; color: #312e81; text-align: center; }
+    .actor { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center; background: #e0e7ff; font-size: 28px; }
+    ul { margin: 0; padding-left: 20px; }
+    li { margin: 8px 0; line-height: 1.3; font-size: 14px; }
+    .core-title, .external-title { margin: 28px 0 14px; text-align: center; font-size: 19px; font-weight: 800; color: #334155; }
+    .core { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .capability { padding: 16px; border-radius: 15px; border: 1px solid #c7d2fe; background: linear-gradient(135deg, #eef2ff, #f5f3ff); }
+    .capability strong { display: block; color: #3730a3; margin-bottom: 5px; font-size: 16px; }
+    .capability span { font-size: 13px; line-height: 1.35; color: #475569; }
+    .external { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .service { min-height: 96px; padding: 14px; border: 2px dashed #94a3b8; border-radius: 14px; text-align: center; background: #fff; }
+    .service strong { display: block; margin-bottom: 7px; color: #0f172a; }
+    .service span { font-size: 12px; line-height: 1.35; color: #64748b; }
+    .flow { margin: 26px 0; text-align: center; color: #6366f1; font-size: 24px; letter-spacing: 8px; }
+    .note { margin-top: 24px; padding: 15px 18px; border-left: 5px solid #f59e0b; background: #fffbeb; color: #713f12; font-size: 13px; line-height: 1.45; }
+    .legend { margin-top: 18px; text-align: center; color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>ProctorShield AI — Current Use-Case Model</h1>
+  <p class="subtitle">As-built functional baseline • Version 3.0 • September 2026</p>
+
+  <section class="system">
+    <div class="system-title">ProctorShield AI System</div>
+
+    <div class="roles">
+      <article class="role">
+        <div class="actor">🎓</div>
+        <h2>Student</h2>
+        <ul>
+          <li>Register, sign in, and recover a password</li>
+          <li>Join with an access code and wait for teacher start</li>
+          <li>Take a responsive desktop/mobile quiz</li>
+          <li>Grant camera consent and receive device assurance</li>
+          <li>Save answers, submit, and view results</li>
+          <li>Request an allowed retake</li>
+        </ul>
+      </article>
+
+      <article class="role">
+        <div class="actor">🧑‍🏫</div>
+        <h2>Teacher</h2>
+        <ul>
+          <li>Create manual or Gemini-assisted quizzes</li>
+          <li>Activate, start, manage, and end quiz sessions</li>
+          <li>Monitor students and receive violation alerts</li>
+          <li>Play or download protected incident evidence</li>
+          <li>Review grades, AI reports, and integrity verdicts</li>
+          <li>Approve/reject retakes and manage Pro billing</li>
+        </ul>
+      </article>
+
+      <article class="role">
+        <div class="actor">🛡️</div>
+        <h2>Administrator</h2>
+        <ul>
+          <li>Manage users and account status</li>
+          <li>Review platform analytics and activity logs</li>
+          <li>Inspect active quizzes and violations</li>
+          <li>Administer subscriptions and plans</li>
+          <li>Monitor presence and system readiness</li>
+          <li>Maintain retention and operational settings</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="flow">↓ ↓ ↓</div>
+    <div class="core-title">Core Functional Services</div>
+    <div class="core">
+      <div class="capability"><strong>Identity, Recovery & RBAC</strong><span>JWT HttpOnly sessions, Google OAuth, email OTP recovery, session revocation, and strict role/ownership checks.</span></div>
+      <div class="capability"><strong>Quiz Lifecycle & Attempts</strong><span>Draft → Active → In Progress → Ended, waiting lobby, autosave, server grading, and immutable numbered retakes.</span></div>
+      <div class="capability"><strong>Browser-Side Proctoring</strong><span>face-api.js landmarks, COCO-SSD phone detection, focus/fullscreen/clipboard/shortcut/audio signals, and a three-strike limit.</span></div>
+      <div class="capability"><strong>Evidence & Live Monitoring</strong><span>Redis-backed live snapshots, Pusher metadata alerts, and protected downloadable 3–5 second incident videos in object storage.</span></div>
+      <div class="capability"><strong>Subscriptions & Entitlements</strong><span>Five lifetime manual quizzes on Free; unlimited quizzes, AI Create, Live Monitor, Evidence Replay, and reports on Pro.</span></div>
+      <div class="capability"><strong>Notifications & Reporting</strong><span>Persistent role-scoped notification destinations, dashboard navigation, scores, integrity summaries, and AI-assisted verdicts.</span></div>
+    </div>
+
+    <div class="external-title">Controlled External Services</div>
+    <div class="external">
+      <div class="service"><strong>Gemini AI</strong><span>Quiz generation and post-submission verdict assistance; not continuous webcam analysis.</span></div>
+      <div class="service"><strong>PayMongo — Test Mode</strong><span>Checkout, signed/idempotent webhooks, persistent Pro activation, expiry, and refund handling.</span></div>
+      <div class="service"><strong>Neon • Redis • S3 • Pusher</strong><span>Relational persistence, shared transient state, durable evidence, and lightweight real-time events.</span></div>
+    </div>
+
+    <div class="note"><strong>Assurance boundary:</strong> browser software cannot guarantee detection of every operating-system screenshot, external camera, hardware capture device, or mobile gesture. Supported mobile sessions are explicitly labeled <strong>Reduced Assurance</strong>.</div>
+  </section>
+  <p class="legend">Arrows indicate authorized interactions with server-enforced application services.</p>
+</body>
+</html>

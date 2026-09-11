@@ -22,7 +22,11 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ success: true, results });
+    const normalizedResults = results.map((result) => result.aiVerdict === "cheated"
+      ? { ...result, score: null, integrityInvalidated: true }
+      : { ...result, integrityInvalidated: false });
+
+    return NextResponse.json({ success: true, results: normalizedResults });
   } catch (error) {
     console.error("Error fetching results:", error);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

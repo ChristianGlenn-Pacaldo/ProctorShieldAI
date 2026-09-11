@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 /**
  * Executes a Gemini AI request with an automatic multi-model fallback chain.
  * If one model hits a 429 rate limit or quota error, it automatically falls back
- * to the next model in line: gemini-2.0-flash -> gemini-1.5-flash -> gemini-1.5-pro -> gemini-2.0-flash-lite.
+ * to the next currently supported model in the configured fallback chain.
  */
 export async function generateGeminiWithFallback(prompt: string, jsonMode: boolean = true): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -13,8 +13,11 @@ export async function generateGeminiWithFallback(prompt: string, jsonMode: boole
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Priority fallback model sequence
-  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"];
+  const models = Array.from(new Set([
+    process.env.GEMINI_MODEL?.trim(),
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+  ].filter((model): model is string => Boolean(model))));
   let lastError: any = null;
 
   for (const model of models) {

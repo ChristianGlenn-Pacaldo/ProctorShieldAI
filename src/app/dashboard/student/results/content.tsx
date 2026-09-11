@@ -29,9 +29,10 @@ export default function ResultsContent() {
   }, []);
 
   const calculateAverage = () => {
-    if (results.length === 0) return 0;
-    const total = results.reduce((sum, r) => sum + (Number(r.score) || 0), 0);
-    return Math.round(total / results.length);
+    const recordedResults = results.filter((result) => result.score != null && String(result.aiVerdict || "").toLowerCase() !== "cheated");
+    if (recordedResults.length === 0) return 0;
+    const total = recordedResults.reduce((sum, result) => sum + Number(result.score), 0);
+    return Math.round(total / recordedResults.length);
   };
 
   return (
@@ -79,14 +80,21 @@ export default function ResultsContent() {
                 </tr>
               ) : (
                 results.map((r) => {
-                  const isClean = r.aiVerdict?.includes("Clean");
-                  const verdictClass = isClean ? "bg-emerald-500/15 text-emerald-600" : "bg-rose-500/15 text-rose-600";
+                  const verdict = String(r.aiVerdict || "").toLowerCase();
+                  const isClean = verdict === "clean";
+                  const isSuspicious = verdict === "suspicious";
+                  const isInvalidated = verdict === "cheated";
+                  const verdictClass = isClean
+                    ? "bg-emerald-500/15 text-emerald-600"
+                    : isSuspicious
+                      ? "bg-amber-500/15 text-amber-600"
+                      : "bg-rose-500/15 text-rose-600";
                   return (
                     <tr key={r.id} className="hover:bg-[var(--surface2)] transition-colors">
                       <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.quiz?.title || "Unknown Quiz"}</td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{new Date(r.createdAt).toLocaleDateString()}</td>
-                      <td className="px-5 py-3 text-sm font-bold text-[var(--ink)]">{r.score ? `${r.score}%` : "N/A"}</td>
-                      <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${verdictClass}`}>{r.aiVerdict || "Pending"}</span></td>
+                      <td className={`px-5 py-3 text-sm font-bold ${isInvalidated ? "text-rose-500" : "text-[var(--ink)]"}`}>{isInvalidated ? "Invalidated" : r.score != null ? `${r.score}%` : "Pending"}</td>
+                      <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${verdictClass}`}>{isInvalidated ? "CHEATED" : r.aiVerdict || "Pending"}</span></td>
                       <td className="px-5 py-3">
                         <button 
                           onClick={() => setSelectedResult(r)}

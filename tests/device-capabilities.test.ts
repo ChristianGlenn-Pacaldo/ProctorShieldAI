@@ -42,6 +42,19 @@ test("insecure or camera-denied devices cannot begin proctoring", () => {
   assert.equal(getMonitoringLevel(denied), "unsupported");
 });
 
+test("microphone permission and video recording are required for monitored quizzes", () => {
+  const microphoneDenied = normalizeDeviceCapabilities({
+    ...completeCapabilities,
+    microphonePermission: false,
+  });
+  const recorderMissing = normalizeDeviceCapabilities({
+    ...completeCapabilities,
+    mediaRecorderSupported: false,
+  });
+  assert.equal(getMonitoringLevel(microphoneDenied), "unsupported");
+  assert.equal(getMonitoringLevel(recorderMissing), "unsupported");
+});
+
 test("server user-agent detection prevents phones from claiming desktop mode", () => {
   assert.equal(isMobileUserAgent("Mozilla/5.0 (Linux; Android 15; Pixel 9) Mobile"), true);
   const capabilities = normalizeDeviceCapabilities(

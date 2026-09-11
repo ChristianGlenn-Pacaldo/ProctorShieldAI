@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { expireSubscriptions } from "@/lib/maintenance";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
+import { getViolationLabel } from "@/lib/proctoring-detection";
 
 async function requireEvidenceAccess(userId: string) {
   await expireSubscriptions(userId);
@@ -57,20 +58,13 @@ export async function GET(req: NextRequest) {
 
     const formattedEvidence = violations.map((v) => {
       const primaryEvidence = v.evidenceFiles[0];
-      const typeMapping: Record<string, string> = {
-        tab_switch: "Tab Switch",
-        tab_switching: "Tab Switch",
-        no_face: "No Face Detected",
-        multiple_faces: "Multiple Faces",
-        looking_away: "Looking Away",
-        device_detected: "Device Detected",
-        phone_detected: "Device Detected",
-        attempted_screenshot: "Screenshot/Copy",
-        audio_anomaly: "Audio Anomaly",
-        window_resize: "Window Resized",
+      const legacyTypeMapping: Record<string, string> = {
+        tab_switching: "App/tab switch or window minimized",
+        phone_detected: "Unauthorized phone/device detected",
+        window_resize: "Window resized",
       };
-
-      const displayType = typeMapping[v.violationType || ""] || "Violation";
+      const displayType = legacyTypeMapping[v.violationType || ""]
+        || (v.violationType ? getViolationLabel(v.violationType) : "Violation");
       
       const dateObj = new Date(v.timestamp);
       const formattedTime = dateObj.toLocaleTimeString([], { 

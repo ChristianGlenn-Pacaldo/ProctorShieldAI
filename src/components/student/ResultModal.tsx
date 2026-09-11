@@ -10,7 +10,9 @@ interface ResultModalProps {
 export default function ResultModal({ isOpen, onClose, result }: ResultModalProps) {
   if (!isOpen || !result) return null;
 
-  const isClean = result.aiVerdict?.includes("Clean");
+  const verdict = String(result.aiVerdict || "").toLowerCase();
+  const isClean = verdict === "clean";
+  const isInvalidated = verdict === "cheated";
 
   return (
     <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -41,7 +43,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
             <div className="bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)] text-center">
               <div className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-1">Final Score</div>
               <div className="text-2xl font-black text-indigo-500">
-                {result.score ? `${result.score}%` : "N/A"}
+                {isInvalidated ? "INVALIDATED" : result.score != null ? `${result.score}%` : "Pending"}
               </div>
             </div>
             <div className={`rounded-xl p-4 border text-center ${
@@ -58,10 +60,16 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
                 isClean ? "text-emerald-600" : "text-rose-600"
               }`}>
                 {isClean ? <CheckCircle className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
-                {result.aiVerdict || "Pending"}
+                {isInvalidated ? "CHEATED" : result.aiVerdict || "Pending"}
               </div>
             </div>
           </div>
+
+          {isInvalidated && (
+            <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-semibold text-rose-600 dark:text-rose-400">
+              This result was invalidated and is not included in academic score averages because the three-strike integrity limit was reached.
+            </div>
+          )}
 
           {result.aiAnalysis && (
             <div className="bg-[var(--surface2)] rounded-xl p-5 border border-[var(--border)] space-y-4">

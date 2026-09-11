@@ -29,12 +29,15 @@ Mobile Compatible Mode requires a public or locally trusted HTTPS URL because ph
 2. Join the quiz with a student account on the phone.
 3. Run **Test Camera & Device** in the student lobby and allow camera/microphone access.
 4. Start the quiz from the teacher portal, then enter it from the phone.
-5. Confirm the teacher sees `Mobile · Reduced`, live snapshots, and connection state.
-6. Select answers, temporarily disconnect the phone, reconnect, and confirm autosave recovery.
+5. Confirm the phone status bar shows `Audio: Active`, then wait for `Device: Scanning` before testing sound or showing a second phone to the camera. The device model can take longer on its first download.
+6. Confirm the teacher sees `Mobile · Reduced`, live snapshots, violations, and connection state.
+7. Select answers, temporarily disconnect the phone, reconnect, and confirm autosave recovery.
 
-Mobile mode intentionally does not claim reliable screenshot or fullscreen enforcement. It uses front-camera AI, visibility/app-switch checks, adaptive 1–2 second snapshots, local answer recovery, and a Reduced Assurance label visible to the teacher.
+Mobile mode intentionally does not claim reliable hardware screenshot or fullscreen enforcement. It uses front-camera face/device AI, adaptive microphone anomaly monitoring, visibility/app-switch checks, periodic snapshots, 3–5 second violation clips, local answer recovery, and a Reduced Assurance label visible to the teacher.
 
-Authenticated Playwright contracts are opt-in. Point `E2E_DATABASE_URL` at a disposable database or branch containing an active teacher and student, set `RUN_AUTHENTICATED_E2E=true`, and run `npm run test:e2e`. The tests use those accounts only for read-only session validation and mock all quiz/subscription mutations.
+The three-strike limit is enforced by the server. An attempt that reaches three persisted integrity violations is retained with its answers and evidence for audit, receives a `cheated` verdict, and has no recorded academic score (`Invalidated`) so it is excluded from score averages.
+
+Authenticated Playwright contracts are opt-in. Point `E2E_DATABASE_URL` at a disposable database or branch containing an active teacher and student, run `npm run test:e2e:db-check`, then set `RUN_AUTHENTICATED_E2E=true` and run `npm run test:e2e`. Authenticated runs reject the production database endpoint, start a dedicated application server on port 3100, use the test database for that server, and do not reuse a server on port 3000. The current contracts use the test accounts only for session validation and mock quiz/subscription mutations.
 
 ## Required production configuration
 

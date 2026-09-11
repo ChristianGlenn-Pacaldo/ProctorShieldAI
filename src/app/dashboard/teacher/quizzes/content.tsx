@@ -402,7 +402,7 @@ export default function TeacherQuizzesPage({
 
       setIsAiModalOpen(false);
       setIsCreateModalOpen(true);
-      
+
       // Reset inputs
       setAiTopic("");
       setUploadedImage(null);
@@ -571,7 +571,7 @@ export default function TeacherQuizzesPage({
                 className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
               />
             </div>
-            <button 
+            <button
               onClick={() => {
                 if (!isSubscribed) {
                   setUpgradeReason("ai");
@@ -589,14 +589,14 @@ export default function TeacherQuizzesPage({
                 {manualQuizCount}/{manualQuizLimit} free quizzes
               </span>
             )}
-            <button 
+            <button
               onClick={openNewQuizModal}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all">
               <Plus className="w-3.5 h-3.5" /> {isSubscribed ? "New Quiz" : "Manual Quiz"}
             </button>
           </div>
         </div>
-        
+
         <div className="overflow-x-auto min-h-[300px]">
           {isLoading ? (
             <div className="flex items-center justify-center h-40">
@@ -627,20 +627,19 @@ export default function TeacherQuizzesPage({
                     <td className="px-5 py-3"><code className="whitespace-nowrap px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md font-mono font-bold text-xs">{e.accessCode}</code></td>
                     <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.totalQuestions}</td>
                     <td className="px-5 py-3">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        e.quizStatus === 'in_progress' ? 'bg-blue-500/15 text-blue-600' :
-                        e.quizStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' : 
-                        e.quizStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
-                        e.quizStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' : 
-                        'bg-slate-500/15 text-slate-400'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${e.quizStatus === 'in_progress' ? 'bg-blue-500/15 text-blue-600' :
+                        e.quizStatus === 'active' ? 'bg-emerald-500/15 text-emerald-600' :
+                          e.quizStatus === 'ended' ? 'bg-red-500/15 text-red-600' :
+                            e.quizStatus === 'draft' ? 'bg-amber-500/15 text-amber-600' :
+                              'bg-slate-500/15 text-slate-400'
+                        }`}>
                         {e.quizStatus.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-5 py-3 flex gap-2">
                       <button onClick={() => setManageQuiz(e)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] hover:text-indigo-500 transition-all">Manage</button>
                       {e.quizStatus === 'active' && (
-                        <button 
+                        <button
                           onClick={async () => {
                             if (!confirm(`Are you sure you want to start "${e.title}"? Students in the lobby will immediately enter the quiz.`)) return;
                             try {
@@ -666,13 +665,13 @@ export default function TeacherQuizzesPage({
 
       {/* CREATE QUIZ MODAL */}
       {isCreateModalOpen && (
-        <div 
+        <div
           className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsCreateModalOpen(false);
           }}
         >
-          <div 
+          <div
             className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
@@ -680,15 +679,15 @@ export default function TeacherQuizzesPage({
               <h2 className="text-base sm:text-lg font-bold text-[var(--ink)] flex items-center gap-2">
                 <span>📝</span> Create New Quiz
               </h2>
-              <button 
-                type="button" 
-                onClick={() => setIsCreateModalOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
-            
+
             <form onSubmit={handleCreateQuiz} className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                 {createError && (
@@ -703,31 +702,31 @@ export default function TeacherQuizzesPage({
                     <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">Quiz Settings</h3>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Quiz Title *</label>
-                      <input required type="text" value={newQuizForm.title} onChange={e => setNewQuizForm({...newQuizForm, title: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Midterm Quizination" />
+                      <input required type="text" value={newQuizForm.title} onChange={e => setNewQuizForm({ ...newQuizForm, title: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Midterm Quizination" />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Subject Name *</label>
-                      <input required type="text" value={newQuizForm.subjectName} onChange={e => setNewQuizForm({...newQuizForm, subjectName: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Computer Science 101" />
+                      <input required type="text" value={newQuizForm.subjectName} onChange={e => setNewQuizForm({ ...newQuizForm, subjectName: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Computer Science 101" />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Description</label>
-                      <textarea value={newQuizForm.description} onChange={e => setNewQuizForm({...newQuizForm, description: e.target.value})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 min-h-[80px]" placeholder="Optional description..." />
+                      <textarea value={newQuizForm.description} onChange={e => setNewQuizForm({ ...newQuizForm, description: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 min-h-[80px]" placeholder="Optional description..." />
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Duration (mins)</label>
-                      <input required type="number" min="5" value={newQuizForm.duration} onChange={e => setNewQuizForm({...newQuizForm, duration: parseInt(e.target.value)})} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" />
+                      <input required type="number" min="5" value={newQuizForm.duration} onChange={e => setNewQuizForm({ ...newQuizForm, duration: parseInt(e.target.value) })} className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500" />
                     </div>
 
                     <div className="flex items-center gap-2 py-1">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         id="shuffleQuestions"
-                        checked={newQuizForm.shuffleQuestions} 
-                        onChange={e => setNewQuizForm({...newQuizForm, shuffleQuestions: e.target.checked})}
-                        className="w-4 h-4 rounded bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 text-indigo-600 focus:ring-0 cursor-pointer" 
+                        checked={newQuizForm.shuffleQuestions}
+                        onChange={e => setNewQuizForm({ ...newQuizForm, shuffleQuestions: e.target.checked })}
+                        className="w-4 h-4 rounded bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 text-indigo-600 focus:ring-0 cursor-pointer"
                       />
                       <label htmlFor="shuffleQuestions" className="text-xs font-semibold text-[var(--ink)] cursor-pointer select-none">
                         Shuffle Questions per Student
@@ -739,7 +738,7 @@ export default function TeacherQuizzesPage({
                         type="checkbox"
                         id="allowRetake"
                         checked={newQuizForm.allowRetake}
-                        onChange={e => setNewQuizForm({...newQuizForm, allowRetake: e.target.checked})}
+                        onChange={e => setNewQuizForm({ ...newQuizForm, allowRetake: e.target.checked })}
                         className="w-4 h-4 rounded bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 text-indigo-600 focus:ring-0 cursor-pointer"
                       />
                       <label htmlFor="allowRetake" className="text-xs font-semibold text-[var(--ink)] cursor-pointer select-none">
@@ -748,11 +747,11 @@ export default function TeacherQuizzesPage({
                     </div>
 
                     <div className="flex items-center gap-2 py-1 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         id="isGamified"
-                        checked={newQuizForm.isGamified ?? true} 
-                        onChange={e => setNewQuizForm({...newQuizForm, isGamified: e.target.checked})}
+                        checked={newQuizForm.isGamified ?? true}
+                        onChange={e => setNewQuizForm({ ...newQuizForm, isGamified: e.target.checked })}
                         className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer"
                       />
                       <label htmlFor="isGamified" className="text-xs font-bold text-blue-500 cursor-pointer select-none flex items-center gap-1.5 py-1">
@@ -817,11 +816,10 @@ export default function TeacherQuizzesPage({
                                   <button
                                     type="button"
                                     onClick={() => setCorrectChoice(qIndex, cIndex)}
-                                    className={`w-5 h-5 rounded-full flex items-center justify-center border text-[10px] transition-all ${
-                                      c.isCorrect 
-                                        ? 'bg-emerald-500 border-emerald-500 text-white font-bold' 
-                                        : 'border-gray-300 dark:border-gray-800 text-transparent hover:border-emerald-500/50'
-                                    }`}
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center border text-[10px] transition-all ${c.isCorrect
+                                      ? 'bg-emerald-500 border-emerald-500 text-white font-bold'
+                                      : 'border-gray-300 dark:border-gray-800 text-transparent hover:border-emerald-500/50'
+                                      }`}
                                     title="Mark as correct choice"
                                   >
                                     ✓
@@ -832,11 +830,10 @@ export default function TeacherQuizzesPage({
                                     value={c.choiceText}
                                     onChange={e => updateChoiceText(qIndex, cIndex, e.target.value)}
                                     placeholder={`Choice ${String.fromCharCode(65 + cIndex)}`}
-                                    className={`flex-1 px-3 py-1 bg-white dark:bg-[#111] border rounded-lg text-xs focus:outline-none transition-all ${
-                                      c.isCorrect 
-                                        ? 'border-emerald-500 focus:border-emerald-500 text-emerald-700 dark:text-emerald-400 font-medium' 
-                                        : 'border-gray-300 dark:border-gray-800 focus:border-indigo-500 text-gray-900 dark:text-white'
-                                    }`}
+                                    className={`flex-1 px-3 py-1 bg-white dark:bg-[#111] border rounded-lg text-xs focus:outline-none transition-all ${c.isCorrect
+                                      ? 'border-emerald-500 focus:border-emerald-500 text-emerald-700 dark:text-emerald-400 font-medium'
+                                      : 'border-gray-300 dark:border-gray-800 focus:border-indigo-500 text-gray-900 dark:text-white'
+                                      }`}
                                   />
                                 </div>
                               ))}
@@ -869,7 +866,7 @@ export default function TeacherQuizzesPage({
 
       {/* AI GENERATE MODAL */}
       {isAiModalOpen && (
-        <div 
+        <div
           className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -878,18 +875,18 @@ export default function TeacherQuizzesPage({
             }
           }}
         >
-          <div 
+          <div
             className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden relative animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 opacity-50 pointer-events-none" />
-            
+
             <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] relative z-10">
               <h2 className="text-lg font-bold text-[var(--ink)] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-violet-500" /> Auto-Generate with AI
               </h2>
-              <button 
-                onClick={() => { setIsAiModalOpen(false); stopCamera(); }} 
+              <button
+                onClick={() => { setIsAiModalOpen(false); stopCamera(); }}
                 className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
               >
                 ✕
@@ -898,21 +895,21 @@ export default function TeacherQuizzesPage({
 
             {/* Input Selection Tabs */}
             <div className="px-6 py-2 border-b border-[var(--border)] flex gap-4 bg-[var(--surface2)] relative z-10 text-xs font-bold text-[var(--muted)]">
-              <button 
+              <button
                 type="button"
                 onClick={() => { setActiveTab("text"); stopCamera(); }}
                 className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "text" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
               >
                 Text Topic
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => { setActiveTab("upload"); stopCamera(); }}
                 className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "upload" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
               >
                 <Upload className="w-3.5 h-3.5" /> Upload File
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => { setActiveTab("webcam"); }}
                 className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "webcam" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
@@ -920,7 +917,7 @@ export default function TeacherQuizzesPage({
                 <Camera className="w-3.5 h-3.5" /> Webcam Capture
               </button>
             </div>
-            
+
             <form onSubmit={handleAiGenerate} className="p-6 space-y-4 relative z-10">
               <p className="text-xs text-[var(--muted)] mb-4 leading-relaxed">
                 Provide a topic description, upload a document page, or use your webcam to capture questions. ProctorShield AI will instantly structure and generate your quiz.
@@ -929,12 +926,12 @@ export default function TeacherQuizzesPage({
               {activeTab === "text" && (
                 <div>
                   <label className="block text-xs font-semibold text-[var(--ink)] mb-1.5">Quiz Topic / Subject *</label>
-                  <textarea 
-                    required 
-                    value={aiTopic} 
-                    onChange={e => setAiTopic(e.target.value)} 
-                    className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-violet-500 min-h-[100px]" 
-                    placeholder="e.g. Advanced Data Structures and Algorithms in Java" 
+                  <textarea
+                    required
+                    value={aiTopic}
+                    onChange={e => setAiTopic(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#111] border border-gray-300 dark:border-gray-800 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:border-violet-500 min-h-[100px]"
+                    placeholder="e.g. Advanced Data Structures and Algorithms in Java"
                   />
                 </div>
               )}
@@ -944,11 +941,11 @@ export default function TeacherQuizzesPage({
                   <label className="block text-xs font-semibold text-[var(--ink)]">Upload Material Image *</label>
                   {!uploadedImage ? (
                     <div className="border-2 border-dashed border-[var(--border)] hover:border-violet-500/50 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer relative bg-[var(--surface2)]">
-                      <input 
-                        type="file" 
+                      <input
+                        type="file"
                         accept="image/*"
-                        onChange={handleFileUpload} 
-                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
                       />
                       <Upload className="w-8 h-8 text-[var(--muted)] mb-2" />
                       <span className="text-xs text-[var(--muted)] text-center">Drag & drop or click to upload syllabus/notes image</span>
@@ -956,9 +953,9 @@ export default function TeacherQuizzesPage({
                   ) : (
                     <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black/40 p-2">
                       <img src={uploadedImage} alt="Uploaded preview" className="w-full max-h-[180px] object-contain rounded-lg" />
-                      <button 
-                        type="button" 
-                        onClick={() => setUploadedImage(null)} 
+                      <button
+                        type="button"
+                        onClick={() => setUploadedImage(null)}
                         className="absolute top-4 right-4 bg-red-500/90 text-white p-1.5 rounded-lg hover:bg-red-600 transition-colors shadow-lg"
                       >
                         <Trash className="w-4 h-4" />
@@ -974,8 +971,8 @@ export default function TeacherQuizzesPage({
                   {!capturedImage ? (
                     <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black aspect-video flex items-center justify-center">
                       <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={handleCapture}
                         className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-violet-600/30 transition-all"
                       >
@@ -985,9 +982,9 @@ export default function TeacherQuizzesPage({
                   ) : (
                     <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black/40 p-2">
                       <img src={capturedImage} alt="Captured preview" className="w-full max-h-[180px] object-contain rounded-lg" />
-                      <button 
-                        type="button" 
-                        onClick={() => setCapturedImage(null)} 
+                      <button
+                        type="button"
+                        onClick={() => setCapturedImage(null)}
                         className="absolute top-4 right-4 bg-red-500/90 text-white p-1.5 rounded-lg hover:bg-red-600 transition-colors shadow-lg"
                       >
                         <Trash className="w-4 h-4" />
@@ -998,9 +995,9 @@ export default function TeacherQuizzesPage({
               )}
 
               <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => { setIsAiModalOpen(false); stopCamera(); }} 
+                <button
+                  type="button"
+                  onClick={() => { setIsAiModalOpen(false); stopCamera(); }}
                   className="flex-1 py-2 rounded-lg font-semibold text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#222] transition-all"
                 >
                   Cancel
@@ -1024,11 +1021,11 @@ export default function TeacherQuizzesPage({
       )}
 
       {manageQuiz && (
-        <div 
+        <div
           className="app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={() => setManageQuiz(null)}
         >
-          <div 
+          <div
             className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1036,7 +1033,7 @@ export default function TeacherQuizzesPage({
               <h2 className="text-lg font-bold text-[var(--ink)]">Manage Quiz</h2>
               <button onClick={() => setManageQuiz(null)} className="p-2 -mr-2 text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
             </div>
-            
+
             <div className="p-6 space-y-6 overflow-y-auto">
               <div>
                 <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageQuiz.title}</h3>
@@ -1049,7 +1046,7 @@ export default function TeacherQuizzesPage({
                   <code className="text-2xl font-mono font-bold text-indigo-500 tracking-wider">
                     {manageQuiz.accessCode}
                   </code>
-                  <button 
+                  <button
                     onClick={() => {
                       navigator.clipboard.writeText(manageQuiz.accessCode);
                       alert("Join code copied to clipboard!");
@@ -1068,8 +1065,8 @@ export default function TeacherQuizzesPage({
                 </div>
                 <div className="border border-[var(--border)] rounded-xl p-3">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase mb-1">Duration (mins)</div>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     min="1"
                     className="w-full px-2 py-1.5 bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-lg font-semibold text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
                     defaultValue={manageQuiz.duration}
@@ -1124,11 +1121,10 @@ export default function TeacherQuizzesPage({
                   <button
                     onClick={() => toggleQuizStatus(manageQuiz)}
                     disabled={isUpdatingStatus || ["in_progress", "ended"].includes(manageQuiz.quizStatus)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                      manageQuiz.quizStatus === "active" 
-                        ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
-                        : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                    } disabled:opacity-50`}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${manageQuiz.quizStatus === "active"
+                      ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+                      : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                      } disabled:opacity-50`}
                   >
                     {isUpdatingStatus ? "Updating..." : manageQuiz.quizStatus === "active" ? "Set to Draft" : manageQuiz.quizStatus === "ended" ? "Ended" : manageQuiz.quizStatus === "in_progress" ? "In Progress" : "Make Active"}
                   </button>

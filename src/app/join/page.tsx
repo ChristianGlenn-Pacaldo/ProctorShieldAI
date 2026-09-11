@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
 
@@ -72,8 +72,8 @@ function JoinContent() {
           </div>
           <span className="font-bold text-white font-[var(--font-display)]">Proctor Shield AI</span>
         </Link>
-        <Link href="/login/student" className="text-sm font-semibold text-white/60 hover:text-white transition-colors">
-          Log in
+        <Link href="/dashboard/student" className="flex items-center gap-1.5 text-sm font-semibold text-white/70 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </Link>
       </div>
 
@@ -134,6 +134,12 @@ function JoinContent() {
             </button>
           </form>
         </div>
+        <Link
+          href="/dashboard/student"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-sm font-semibold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Student Dashboard
+        </Link>
       </div>
     </div>
   );

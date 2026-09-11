@@ -13,6 +13,22 @@ export type Verdict = {
   aiExplanation: string;
 };
 
+export const INTEGRITY_INVALIDATION_THRESHOLD = 3;
+
+export function isIntegrityInvalidated(violationCount: number): boolean {
+  return Number.isInteger(violationCount) && violationCount >= INTEGRITY_INVALIDATION_THRESHOLD;
+}
+
+export function enforceIntegrityPolicy(verdict: Verdict, violationCount: number): Verdict {
+  if (!isIntegrityInvalidated(violationCount)) return verdict;
+  return {
+    cheatingProbability: 100,
+    riskLevel: "high",
+    finalVerdict: "cheated",
+    aiExplanation: `Result invalidated after ${violationCount} recorded integrity violations reached the three-strike limit.`,
+  };
+}
+
 export function normalizeSubmittedAnswers(value: unknown): SubmittedAnswer[] {
   if (!Array.isArray(value)) return [];
   const byQuestion = new Map<number, SubmittedAnswer>();

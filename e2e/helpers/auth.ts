@@ -13,10 +13,17 @@ interface AuthenticatedUser {
 }
 
 async function findExistingUser(role: Role): Promise<AuthenticatedUser | null> {
-  const configuredUrl = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
-  if (!configuredUrl) throw new Error("E2E_DATABASE_URL or DATABASE_URL is required for authenticated E2E tests");
+  const configuredUrl = process.env.E2E_DATABASE_URL;
+  if (!configuredUrl) {
+    throw new Error("E2E_DATABASE_URL is required for authenticated E2E tests; DATABASE_URL fallback is intentionally disabled");
+  }
 
   const databaseUrl = new URL(configuredUrl);
+  const productionUrl = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : null;
+  const normalizeNeonHost = (host: string) => host.toLowerCase().replace("-pooler.", ".");
+  if (productionUrl && normalizeNeonHost(databaseUrl.hostname) === normalizeNeonHost(productionUrl.hostname)) {
+    throw new Error("E2E_DATABASE_URL resolves to the production database endpoint; use a separate disposable Neon branch");
+  }
   if (databaseUrl.searchParams.get("sslmode") === "require") {
     databaseUrl.searchParams.set("sslmode", "verify-full");
   }

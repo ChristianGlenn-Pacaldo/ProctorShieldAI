@@ -5,7 +5,9 @@ import { pusherServer } from "@/lib/pusher";
 import { generateGeminiWithFallback } from "@/lib/gemini";
 import {
   fallbackVerdict,
+  enforceIntegrityPolicy,
   gradeSubmission,
+  isIntegrityInvalidated,
   mergeLockedAnswers,
   normalizeSubmittedAnswers,
   parseVerdict,
@@ -120,6 +122,10 @@ Return ONLY the valid JSON object.`;
       }
     }
 
+    verdictData = enforceIntegrityPolicy(verdictData, violations.length);
+    const integrityInvalidated = isIntegrityInvalidated(violations.length);
+    const recordedScore = integrityInvalidated ? null : score;
+
     const completedAt = new Date();
     if (completedAt.getTime() > deadline) {
       return NextResponse.json({ error: "The submission deadline has passed" }, { status: 409 });
@@ -159,7 +165,10 @@ Return ONLY the valid JSON object.`;
           data: {
             endTime: completedAt,
             quizStatus: "completed",
-            score,
+            score: recordedScore,
+            ...(integrityInvalidated
+              ? { remarks: `Result invalidated after ${violations.length} integrity violations.` }
+              : {}),
             aiVerdict: verdictData.finalVerdict,
             cheatingProbability: verdictData.cheatingProbability,
           },
@@ -170,12 +179,16 @@ Return ONLY the valid JSON object.`;
             {
               userId: studentQuiz.quiz.teacherId,
               title: "Quiz Submission Received",
-              message: `${session.fullName} submitted "${studentQuiz.quiz.title}" with a score of ${score}%.`,
+              message: integrityInvalidated
+                ? `${session.fullName}'s result for "${studentQuiz.quiz.title}" was invalidated after ${violations.length} integrity violations.`
+                : `${session.fullName} submitted "${studentQuiz.quiz.title}" with a score of ${score}%.`,
             },
             {
               userId: session.userId,
               title: "Quiz Completed",
-              message: `You completed "${studentQuiz.quiz.title}". Score: ${score}%.`,
+              message: integrityInvalidated
+                ? `Your result for "${studentQuiz.quiz.title}" was invalidated because the three-strike integrity limit was reached.`
+                : `You completed "${studentQuiz.quiz.title}". Score: ${score}%.`,
             },
           ],
         });
@@ -198,7 +211,8 @@ Return ONLY the valid JSON object.`;
         quizTitle: studentQuiz.quiz.title,
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
-        score: score,
+        score: recordedScore,
+        integrityInvalidated,
         timestamp: new Date().toISOString(),
       });
 

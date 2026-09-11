@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import {
+  DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
@@ -10,6 +11,7 @@ import {
 type StorageConfig = {
   bucket: string;
   client: S3Client;
+  serverSideEncryption?: "AES256" | "aws:kms";
 };
 
 let cachedConfig: StorageConfig | null | undefined;
@@ -32,8 +34,16 @@ function getStorageConfig(): StorageConfig | null {
     cachedConfig = null;
     return null;
   }
-  cachedConfig = {
+  const requestedEncryption = process.env.S3_SERVER_SIDE_ENCRYPTION?.trim();
+  let serverSideEncryption: StorageConfig["serverSideEncryption"];
+  if (requestedEncryption === "AES256" || requestedEncryption === "aws:kms") {
+    serverSideEncryption = requestedEncryption;
+  } else if (requestedEncryption) {
+    throw new Error("S3_SERVER_SIDE_ENCRYPTION must be AES256, aws:kms, or empty");
+  }
+  const config: StorageConfig = {
     bucket,
+    serverSideEncryption,
     client: new S3Client({
       endpoint,
       region: process.env.S3_REGION?.trim() || "us-east-1",
@@ -41,7 +51,8 @@ function getStorageConfig(): StorageConfig | null {
       credentials: { accessKeyId, secretAccessKey },
     }),
   };
-  return cachedConfig;
+  cachedConfig = config;
+  return config;
 }
 
 export async function uploadEvidence(dataUrl: string, studentQuizId: string) {
@@ -69,7 +80,9 @@ export async function uploadEvidenceBytes(
     Key: key,
     Body: bytes,
     ContentType: normalizedContentType,
-    ServerSideEncryption: "AES256",
+    ...(config.serverSideEncryption
+      ? { ServerSideEncryption: config.serverSideEncryption }
+      : {}),
   }));
   return { key, contentType: normalizedContentType };
 }
@@ -100,5 +113,26 @@ export async function checkEvidenceStorage() {
   const config = getStorageConfig();
   if (!config) return false;
   await config.client.send(new HeadBucketCommand({ Bucket: config.bucket }));
-  return true;
+  const key = `healthchecks/${crypto.randomUUID()}.txt`;
+  const expected = Buffer.from("proctorshield-evidence-healthcheck", "utf8");
+  try {
+    await config.client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: expected,
+      ContentType: "text/plain",
+      ...(config.serverSideEncryption
+        ? { ServerSideEncryption: config.serverSideEncryption }
+        : {}),
+    }));
+    const stored = await config.client.send(new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+    }));
+    if (!stored.Body) return false;
+    const bytes = await stored.Body.transformToByteArray();
+    return Buffer.from(bytes).equals(expected);
+  } finally {
+    await config.client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+  }
 }

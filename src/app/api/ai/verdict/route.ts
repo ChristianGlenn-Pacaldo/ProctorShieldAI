@@ -5,7 +5,7 @@ import { generateGeminiWithFallback } from "@/lib/gemini";
 import { expireSubscriptions } from "@/lib/maintenance";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
-import { fallbackVerdict, parseVerdict } from "@/lib/quiz-submission";
+import { enforceIntegrityPolicy, fallbackVerdict, isIntegrityInvalidated, parseVerdict } from "@/lib/quiz-submission";
 
 export async function POST(req: NextRequest) {
   try {
@@ -103,7 +103,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const verdictData = parseVerdict(JSON.parse(text), fallbackVerdict(violations.length));
+    const verdictData = enforceIntegrityPolicy(
+      parseVerdict(JSON.parse(text), fallbackVerdict(violations.length)),
+      violations.length,
+    );
+    const integrityInvalidated = isIntegrityInvalidated(violations.length);
 
     // Save the verdict in the database
     const aiAnalysis = await prisma.aiAnalysis.upsert({
@@ -131,6 +135,12 @@ export async function POST(req: NextRequest) {
       data: {
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
+        ...(integrityInvalidated
+          ? {
+              score: null,
+              remarks: `Result invalidated after ${violations.length} integrity violations.`,
+            }
+          : {}),
       },
     });
 

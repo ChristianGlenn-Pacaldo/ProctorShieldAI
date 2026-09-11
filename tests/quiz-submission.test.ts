@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  enforceIntegrityPolicy,
   fallbackVerdict,
   gradeSubmission,
   mergeLockedAnswers,
   normalizeSubmittedAnswers,
   parseVerdict,
+  isIntegrityInvalidated,
 } from "../src/lib/quiz-submission.ts";
 
 const questions = [
@@ -66,4 +68,21 @@ test("AI verdicts are accepted only within the strict verdict contract", () => {
       aiExplanation: "Evidence reviewed.",
     },
   );
+});
+
+test("the three-strike integrity policy invalidates a scored attempt", () => {
+  const attemptedOverride = {
+    cheatingProbability: 5,
+    riskLevel: "low" as const,
+    finalVerdict: "clean" as const,
+    aiExplanation: "Model attempted a clean verdict.",
+  };
+  assert.equal(isIntegrityInvalidated(2), false);
+  assert.equal(isIntegrityInvalidated(3), true);
+  assert.deepEqual(enforceIntegrityPolicy(attemptedOverride, 3), {
+    cheatingProbability: 100,
+    riskLevel: "high",
+    finalVerdict: "cheated",
+    aiExplanation: "Result invalidated after 3 recorded integrity violations reached the three-strike limit.",
+  });
 });

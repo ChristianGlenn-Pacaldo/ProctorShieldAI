@@ -5,6 +5,9 @@ import { consumeRateLimit, consumeRateLimitGroup, hashOtp, isStrongPassword } fr
 import { verifyPayMongoSignature } from "../src/lib/paymongo.ts";
 import { canStudentEnterQuiz } from "../src/lib/quiz-access.ts";
 import {
+  getAudioAnomalyThreshold,
+  getAudioSignalLevel,
+  getViolationLabel,
   getUnauthorizedDeviceConfidence,
   isScreenshotShortcut,
   VALID_VIOLATION_TYPES,
@@ -81,10 +84,27 @@ test("current and legacy quiz codes survive mobile clipboard normalization", () 
 });
 
 test("phone detection accepts repeated COCO phone labels at practical confidence", () => {
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.29 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.14 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.19 }]), 0.19);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.29 }]), 0.29);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.61 }]), 0.61);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.54 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.34 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.44 }]), 0.44);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.54 }]), 0.54);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.72 }]), 0.72);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "tv", score: 0.52 }]), 0.52);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.48 }]), 0.48);
+});
+
+test("audio monitoring converts PCM samples into a bounded adaptive signal", () => {
+  assert.equal(getAudioSignalLevel(new Uint8Array(32).fill(128)), 0);
+  assert.ok(getAudioSignalLevel(Uint8Array.from([64, 192, 64, 192])) > 50);
+  assert.equal(getAudioAnomalyThreshold(0), 5);
+  assert.ok(getAudioAnomalyThreshold(12) > getAudioAnomalyThreshold(2));
+  assert.equal(getAudioAnomalyThreshold(100), 30);
+  assert.equal(getAudioAnomalyThreshold(Number.NaN), 5);
+  assert.equal(getViolationLabel("audio_anomaly"), "Sustained loud audio detected");
+  assert.equal(getViolationLabel("tab_switch"), "App/tab switch or window minimized");
 });
 
 test("detectable operating-system screenshot shortcuts are recognized", () => {

@@ -2,7 +2,14 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getUnauthorizedDeviceConfidence, isScreenshotShortcut } from "@/lib/proctoring-detection";
+import {
+  getViolationLabel,
+  getAudioAnomalyThreshold,
+  getAudioSignalLevel,
+  getUnauthorizedDeviceConfidence,
+  isScreenshotShortcut,
+} from "@/lib/proctoring-detection";
+import { COCO_MODEL_BROWSER_URL } from "@/lib/coco-model";
 import {
   getBrowserDeviceCapabilities,
   getBrowserProctoringPerformanceProfile,
@@ -63,6 +70,7 @@ export default function QuizRoom() {
   const [teacherWarningModal, setTeacherWarningModal] = useState({ show: false, message: "" });
   const [preWarning, setPreWarning] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [audioStatus, setAudioStatus] = useState("Starting...");
   const [isMobile, setIsMobile] = useState(false);
   const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
   const [monitoringLevel, setMonitoringLevel] = useState<MonitoringLevel>("unsupported");
@@ -1013,11 +1021,12 @@ export default function QuizRoom() {
 
       playTone([250, 180], "sawtooth", 0.2);
 
+      const violationLabel = getViolationLabel(type);
       if (currentCount >= 3) {
         isAlertingRef.current = true;
         setWarningModal({
           show: true,
-          message: "You have accumulated 3 security violations. Your quiz is now being submitted automatically.",
+          message: `Violation ${currentCount}/3: ${violationLabel}. Your quiz is now being submitted automatically.`,
           isFinal: true,
         });
         setTimeout(() => {
@@ -1027,7 +1036,7 @@ export default function QuizRoom() {
         isAlertingRef.current = true;
         setWarningModal({
           show: true,
-          message: `Security Warning ${currentCount}/3: Please ensure your face is visible, looking at the screen, and no unauthorized devices are present.`,
+          message: `Violation ${currentCount}/3: ${violationLabel}. Please correct this before continuing.`,
           isFinal: false,
         });
       }
@@ -1072,12 +1081,13 @@ export default function QuizRoom() {
 
     const performanceProfile = getBrowserProctoringPerformanceProfile(isMobile ? "mobile" : "desktop");
     let snapshotInterval: NodeJS.Timeout | null = null;
-    const aiInterval: NodeJS.Timeout | null = null;
     let faceDetectionInterval: NodeJS.Timeout | null = null;
+    let objectModelSlowTimer: NodeJS.Timeout | null = null;
     let audioInterval: NodeJS.Timeout | null = null;
     let audioContext: AudioContext | null = null;
     let analyser: AnalyserNode | null = null;
     let microphone: MediaStreamAudioSourceNode | null = null;
+    let audioResumeListener: (() => void) | null = null;
     let cancelled = false;
     let loadedFaceApi: any = null;
     let loadedCocoModel: any = null;
@@ -1094,6 +1104,90 @@ export default function QuizRoom() {
         loadedFaceApi?.nets?.faceLandmark68Net?.dispose?.();
       }
       loadedFaceApi = null;
+    };
+
+    const startAudioAnalysis = (stream: MediaStream, audioActive: boolean) => {
+      if (!audioActive || stream.getAudioTracks().length === 0) {
+        setAudioLevel(0);
+        setAudioStatus("Microphone unavailable ✗");
+        setPreWarning("Microphone monitoring is unavailable. Enable microphone permission, then reload and run the device check again.");
+        return;
+      }
+
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) throw new Error("Web Audio is unsupported");
+
+        audioContext = new AudioContextClass();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.35;
+
+        const samples = new Uint8Array(analyser.fftSize);
+        let calibrationSamples = 0;
+        let noiseFloor = 100;
+        let anomalyFrames = 0;
+
+        const resumeAudio = () => {
+          if (!audioContext || audioContext.state !== "suspended") return;
+          void audioContext.resume().then(() => {
+            if (!cancelled && audioContext?.state === "running") setAudioStatus("Active ✓");
+          }).catch(() => {});
+        };
+        audioResumeListener = resumeAudio;
+        window.addEventListener("pointerdown", resumeAudio, { passive: true });
+        resumeAudio();
+        setAudioStatus(audioContext.state === "running" ? "Active ✓" : "Tap to enable audio");
+
+        audioInterval = setInterval(async () => {
+          if (!audioContext || !analyser || cancelled) return;
+          if (audioContext.state === "suspended") {
+            setAudioStatus("Tap to enable audio");
+            await audioContext.resume().catch(() => {});
+            const resumedState: string = audioContext.state;
+            if (resumedState !== "running") return;
+          }
+
+          setAudioStatus("Active ✓");
+          analyser.getByteTimeDomainData(samples);
+          const levelPercent = getAudioSignalLevel(samples);
+          setAudioLevel(levelPercent);
+
+          if (calibrationSamples < 4) {
+            noiseFloor = Math.min(noiseFloor, levelPercent);
+            calibrationSamples++;
+            return;
+          }
+
+          const threshold = getAudioAnomalyThreshold(noiseFloor);
+          if (levelPercent >= threshold) {
+            anomalyFrames++;
+            if (anomalyFrames === 1) {
+              setPreWarning("⚠️ Pre-Warning: Sustained sound or speaking detected. Please remain quiet.");
+            }
+            if (
+              anomalyFrames >= (isMobile ? 2 : 3) &&
+              violationCountRef.current < 3 &&
+              !isAlertingRef.current &&
+              !isReportingRef.current
+            ) {
+              const persisted = await reportViolationRef.current("audio_anomaly");
+              anomalyFrames = persisted ? 0 : 3;
+              if (persisted) setPreWarning(null);
+            }
+          } else {
+            anomalyFrames = Math.max(0, anomalyFrames - 1);
+            noiseFloor = noiseFloor * 0.95 + levelPercent * 0.05;
+          }
+        }, performanceProfile.audioIntervalMs);
+      } catch (error) {
+        console.warn("Audio monitoring initialization failed:", error);
+        setAudioLevel(0);
+        setAudioStatus("Audio unavailable ✗");
+        setPreWarning("Audio monitoring could not initialize. Tap the page once, or reload and allow microphone access.");
+      }
     };
 
     const startMedia = async () => {
@@ -1185,6 +1279,10 @@ export default function QuizRoom() {
           if (!document.hidden && !isReportingRef.current) void uploadSnapshot();
         }, performanceProfile.snapshotIntervalMs);
 
+        // Audio must start independently of the much larger object-detection
+        // model so a slow mobile download cannot silently disable the mic.
+        startAudioAnalysis(stream, audioActive);
+
         // Load Edge AI Models
         try {
           setAiStatus(performanceProfile.lowPower ? "Starting mobile AI..." : "Starting AI...");
@@ -1215,22 +1313,10 @@ export default function QuizRoom() {
             return;
           }
 
-          setAiStatus("Loading device scan...");
-          const cocoSsd = await import("@tensorflow-models/coco-ssd");
-          const cocoModel = await cocoSsd.load({ base: performanceProfile.objectModelBase });
-          loadedCocoModel = cocoModel;
-          if (cancelled) {
-            disposeLoadedModels();
-            return;
-          }
-
-          setAiStatus("Active ✓");
-
-          const inferenceCanvas = document.createElement("canvas");
-          inferenceCanvas.width = performanceProfile.inferenceWidth;
-          inferenceCanvas.height = performanceProfile.inferenceHeight;
-          const inferenceContext = inferenceCanvas.getContext("2d", { alpha: false });
-          if (!inferenceContext) throw new Error("Unable to initialize the AI frame buffer.");
+          setFaceStatus("Scanning...");
+          setGazeStatus("Scanning...");
+          setDeviceStatus("Loading device AI...");
+          setAiStatus("Face active · device loading");
 
           let lookingAwayFrames = 0;
           let noFaceFrames = 0;
@@ -1240,6 +1326,43 @@ export default function QuizRoom() {
           let phoneIncidentReported = false;
           let tickCounter = 0;
           let detectionBusy = false;
+
+          objectModelSlowTimer = setTimeout(() => {
+            if (!cancelled && !loadedCocoModel) setDeviceStatus("Still loading device AI...");
+          }, 15_000);
+          void import("@tensorflow-models/coco-ssd")
+            .then((cocoSsd) => cocoSsd.load({
+              base: performanceProfile.objectModelBase,
+              modelUrl: COCO_MODEL_BROWSER_URL,
+            }))
+            .then((cocoModel) => {
+              if (cancelled) {
+                cocoModel.dispose();
+                return;
+              }
+              loadedCocoModel = cocoModel;
+              noFaceFrames = 0;
+              phoneDetectedFrames = 0;
+              tickCounter = 0;
+              if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
+              objectModelSlowTimer = null;
+              setDeviceStatus("Scanning ✓");
+              setAiStatus("Active ✓");
+            })
+            .catch((error) => {
+              if (cancelled) return;
+              if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
+              objectModelSlowTimer = null;
+              console.warn("Object detection model initialization failed:", error);
+              setDeviceStatus("Device AI unavailable ✗");
+              setAiStatus("Face active · device unavailable");
+            });
+
+          const inferenceCanvas = document.createElement("canvas");
+          inferenceCanvas.width = performanceProfile.inferenceWidth;
+          inferenceCanvas.height = performanceProfile.inferenceHeight;
+          const inferenceContext = inferenceCanvas.getContext("2d", { alpha: false });
+          if (!inferenceContext) throw new Error("Unable to initialize the AI frame buffer.");
 
           faceDetectionInterval = setInterval(async () => {
             if (
@@ -1265,11 +1388,13 @@ export default function QuizRoom() {
               return;
             }
 
-            if (tickCounter % 2 === 0) {
+            // Once device AI is ready, scan it first (tick zero) so a phone
+            // cannot be mislabeled as a faster no-face incident.
+            if (tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
                 const detections = await faceapi.detectAllFaces(
                   inferenceCanvas,
-                  new faceapi.TinyFaceDetectorOptions({
+                    new faceapi.TinyFaceDetectorOptions({
                     inputSize: performanceProfile.faceInputSize,
                     scoreThreshold: 0.5,
                   })
@@ -1277,14 +1402,14 @@ export default function QuizRoom() {
 
                 if (detections.length === 0) {
                   noFaceFrames++;
-                  if (noFaceFrames > 4) {
+                  if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5)) {
                     const persisted = await reportViolationRef.current("no_face");
                     noFaceFrames = persisted ? 0 : 4;
                   }
                   setFaceStatus("Not Detected ✗");
                 } else if (detections.length > 1) {
                   multipleFacesFrames++;
-                  if (multipleFacesFrames > 3) {
+                  if (multipleFacesFrames >= (isMobile ? 2 : 4)) {
                     const persisted = await reportViolationRef.current("multiple_faces");
                     multipleFacesFrames = persisted ? 0 : 3;
                   }
@@ -1343,7 +1468,7 @@ export default function QuizRoom() {
                     if (lookingAwayFrames === 2) {
                       setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
                     }
-                    if (lookingAwayFrames >= 5) {
+                    if (lookingAwayFrames >= (isMobile ? 3 : 5)) {
                       const persisted = await reportViolationRef.current(violationReason);
                       lookingAwayFrames = persisted ? 0 : 4;
                       if (persisted) setPreWarning(null);
@@ -1360,14 +1485,14 @@ export default function QuizRoom() {
               }
             } else {
               try {
-                const predictions = await cocoModel.detect(inferenceCanvas, 10, 0.25);
+                const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, isMobile ? 0.2 : 0.25);
                 const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
 
                 if (deviceConfidence > 0) {
                   phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
                   phoneAbsentFrames = 0;
                   setDeviceStatus(`Phone ${Math.round(deviceConfidence * 100)}% ✗`);
-                  if (phoneDetectedFrames >= 2 && !phoneIncidentReported) {
+                   if (phoneDetectedFrames >= (isMobile ? 1 : 2) && !phoneIncidentReported) {
                     setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
                     const persisted = await reportViolationRef.current(
                       "device_detected",
@@ -1401,58 +1526,6 @@ export default function QuizRoom() {
           setPreWarning("AI detection could not initialize. Check your connection and reload the exam.");
         }
 
-        // Audio Analysis
-        if (audioActive && stream.getAudioTracks().length > 0) {
-          try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            audioContext = new AudioContextClass();
-            if (audioContext.state === "suspended") {
-              await audioContext.resume().catch(() => {});
-            }
-            analyser = audioContext.createAnalyser();
-            microphone = audioContext.createMediaStreamSource(stream);
-            microphone.connect(analyser);
-            analyser.fftSize = 512;
-            analyser.smoothingTimeConstant = 0.5;
-
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            let violationConsecutiveCount = 0;
-
-            audioInterval = setInterval(async () => {
-              if (violationCountRef.current >= 3 || isAlertingRef.current || isReportingRef.current) return;
-              if (audioContext && audioContext.state === "suspended") {
-                await audioContext.resume().catch(() => {});
-              }
-              if (!analyser) return;
-
-              analyser.getByteFrequencyData(dataArray);
-              let sum = 0;
-              for (let i = 0; i < bufferLength; i++) {
-                sum += dataArray[i];
-              }
-              const avg = sum / bufferLength;
-              const levelPercent = Math.min(100, Math.floor((avg / 128) * 100));
-              setAudioLevel(levelPercent);
-
-              if (levelPercent > 48) {
-                violationConsecutiveCount++;
-                if (violationConsecutiveCount === 2) {
-                  setPreWarning("⚠️ Pre-Warning: Audio anomaly / speaking detected. Please remain quiet.");
-                }
-                if (violationConsecutiveCount >= 5) {
-                  const persisted = await reportViolationRef.current("audio_anomaly");
-                  violationConsecutiveCount = persisted ? 0 : 4;
-                  if (persisted) setPreWarning(null);
-                }
-              } else {
-                if (violationConsecutiveCount > 0) violationConsecutiveCount--;
-              }
-            }, performanceProfile.audioIntervalMs);
-          } catch (e) {
-            console.warn("Audio monitoring initialization failed:", e);
-          }
-        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -1467,9 +1540,10 @@ export default function QuizRoom() {
     return () => {
       cancelled = true;
       if (snapshotInterval) clearInterval(snapshotInterval);
-      if (aiInterval) clearInterval(aiInterval);
+      if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
       if (faceDetectionInterval) clearInterval(faceDetectionInterval);
       if (audioInterval) clearInterval(audioInterval);
+      if (audioResumeListener) window.removeEventListener("pointerdown", audioResumeListener);
       if (audioContext) audioContext.close().catch(() => {});
       disposeLoadedModels();
       if (mediaStreamRef.current) {
@@ -1519,6 +1593,8 @@ export default function QuizRoom() {
     let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
     let fullscreenExitTimer: NodeJS.Timeout | null = null;
     let focusIncidentActive = false;
+    let focusLossStartedAt = 0;
+    let focusReportInFlight = false;
     let lastShortcutReportAt = 0;
 
     const handleFullscreenChange = () => {
@@ -1543,30 +1619,46 @@ export default function QuizRoom() {
       }
     };
 
-    const attemptFocusLossReport = async () => {
+    const attemptFocusLossReport = async (reportAfterReturn = false) => {
       focusLossTimer = null;
       const examLostFocus = document.hidden || !document.hasFocus();
-      if (!examLostFocus || focusIncidentActive || violationCountRef.current >= 3) return;
+      if ((!examLostFocus && !reportAfterReturn) || focusIncidentActive || focusReportInFlight || violationCountRef.current >= 3) return;
 
-      focusIncidentActive = await reportViolation("tab_switch", 100);
+      focusReportInFlight = true;
+      try {
+        focusIncidentActive = await reportViolation("tab_switch", 100);
+        // If the browser resumed while the evidence clip/upload was still in
+        // flight, close this incident now so a later app switch can be caught.
+        if (focusIncidentActive && !document.hidden && document.hasFocus()) {
+          focusIncidentActive = false;
+        }
+      } finally {
+        focusReportInFlight = false;
+      }
       if (!focusIncidentActive && (document.hidden || !document.hasFocus())) {
-        focusLossTimer = setTimeout(attemptFocusLossReport, 1_000);
+        focusLossTimer = setTimeout(() => void attemptFocusLossReport(), 1_000);
       }
     };
 
     const scheduleFocusLossReport = (delayMs: number) => {
-      if (isStartupGracePeriodRef.current) return;
+      if (!focusLossStartedAt) focusLossStartedAt = Date.now();
       setPreWarning("⚠️ PRE-WARNING: Leaving or minimizing the exam window is prohibited.");
       if (focusLossTimer) return;
-      focusLossTimer = setTimeout(attemptFocusLossReport, delayMs);
+      focusLossTimer = setTimeout(() => void attemptFocusLossReport(), delayMs);
     };
 
     const clearFocusLossReport = () => {
+      const hiddenDuration = focusLossStartedAt ? Date.now() - focusLossStartedAt : 0;
       if (focusLossTimer) clearTimeout(focusLossTimer);
       focusLossTimer = null;
+      focusLossStartedAt = 0;
       if (!document.hidden && document.hasFocus()) {
-        focusIncidentActive = false;
-        if (!isAlertingRef.current) setPreWarning(null);
+        if (!focusIncidentActive && !focusReportInFlight && hiddenDuration >= 200) {
+          void attemptFocusLossReport(true);
+        } else {
+          focusIncidentActive = false;
+          if (!isAlertingRef.current) setPreWarning(null);
+        }
       }
     };
 
@@ -1577,6 +1669,8 @@ export default function QuizRoom() {
     const handleWindowBlur = () => {
       if (!isMobile) scheduleFocusLossReport(650);
     };
+    const handlePageHide = () => scheduleFocusLossReport(0);
+    const handlePageShow = () => clearFocusLossReport();
 
     const handleClipboard = (e: ClipboardEvent) => {
       e.preventDefault();
@@ -1610,6 +1704,8 @@ export default function QuizRoom() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("focus", clearFocusLossReport);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("beforeprint", handleBeforePrint);
     document.addEventListener("copy", handleClipboard);
     document.addEventListener("cut", handleClipboard);
@@ -1626,6 +1722,8 @@ export default function QuizRoom() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", clearFocusLossReport);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("beforeprint", handleBeforePrint);
       document.removeEventListener("copy", handleClipboard);
       document.removeEventListener("cut", handleClipboard);
@@ -1752,8 +1850,11 @@ export default function QuizRoom() {
               <span className={deviceCapabilities?.cameraPermission ? "text-emerald-400" : "text-slate-400"}>
                 {deviceCapabilities?.cameraPermission ? "✓ Camera allowed" : "○ Camera not tested"}
               </span>
-              <span className={deviceCapabilities?.mediaRecorderSupported ? "text-emerald-400" : "text-amber-400"}>
-                {deviceCapabilities?.mediaRecorderSupported ? "✓ Video evidence" : "△ Snapshot evidence"}
+              <span className={deviceCapabilities?.microphonePermission ? "text-emerald-400" : "text-slate-400"}>
+                {deviceCapabilities?.microphonePermission ? "✓ Microphone allowed" : "○ Microphone not tested"}
+              </span>
+              <span className={deviceCapabilities?.mediaRecorderSupported ? "text-emerald-400" : "text-rose-400"}>
+                {deviceCapabilities?.mediaRecorderSupported ? "✓ 3–5s video evidence" : "✕ Video evidence unavailable"}
               </span>
               <span className={deviceCapabilities?.visibilitySupported ? "text-emerald-400" : "text-rose-400"}>
                 {deviceCapabilities?.visibilitySupported ? "✓ App-switch checks" : "✕ App-switch unavailable"}
@@ -2084,6 +2185,18 @@ export default function QuizRoom() {
                   {gazeStatus.includes("✓") ? "Focused ✓" : "Away ✗"}
                 </span>
               </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400 font-semibold">Device:</span>
+                <span className={`max-w-[9rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : deviceStatus.includes("Loading") ? "text-amber-400" : "text-red-400"}`}>
+                  {deviceStatus}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400 font-semibold">Audio:</span>
+                <span className={`max-w-[9rem] truncate text-right font-bold ${audioStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>
+                  {audioStatus}{audioStatus.includes("Active") ? ` · ${audioLevel}%` : ""}
+                </span>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-semibold">Violations:</span>
                 <span className={`font-bold ${violationCount > 0 ? "text-red-400 font-black" : "text-emerald-400"}`}>
@@ -2149,7 +2262,9 @@ export default function QuizRoom() {
             <div className="pt-2 border-t border-[#242a42] space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Audio Level</span>
-                <span className="font-bold text-emerald-400 text-[11px]">{audioLevel}%</span>
+                <span className={`font-bold text-[11px] ${audioStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>
+                  {audioStatus.includes("Active") ? `${audioLevel}%` : audioStatus}
+                </span>
               </div>
               <div className="w-full h-1.5 bg-[#1e2338] rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-400 transition-all duration-150" style={{ width: `${audioLevel}%` }} />

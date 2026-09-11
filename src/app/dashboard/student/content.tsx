@@ -58,9 +58,10 @@ export default function StudentDashboardContent() {
   const upcomingCount = upcoming.length;
 
   let avgScore = 0;
-  if (completedCount > 0) {
-    const totalScore = completed.reduce((sum, se) => sum + (Number(se.score) || 0), 0);
-    avgScore = Math.round(totalScore / completedCount);
+  const recordedResults = completed.filter((se) => se.score !== null && se.aiVerdict !== "cheated");
+  if (recordedResults.length > 0) {
+    const totalScore = recordedResults.reduce((sum, se) => sum + Number(se.score), 0);
+    avgScore = Math.round(totalScore / recordedResults.length);
   }
 
   let avgTrust = 100;
@@ -180,7 +181,7 @@ export default function StudentDashboardContent() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <div className="text-xs font-bold text-[var(--ink)]">
-                          Score: {se.score !== null ? `${se.score}%` : "—"}
+                          Score: {se.aiVerdict === "cheated" ? "Invalidated" : se.score !== null ? `${se.score}%` : "—"}
                         </div>
                         {se.cheatingProbability !== undefined && se.cheatingProbability !== null && (
                           <div className="text-[10px] font-semibold text-rose-500/80 dark:text-rose-400/80">

@@ -169,7 +169,9 @@ export async function GET(req: NextRequest) {
           violations: violationSummaryList,
           verdict: verdictText,
           verdictClass,
-          score: se.score !== null ? `${Number(se.score)}%` : "N/A",
+          score: se.aiVerdict === "cheated"
+            ? "Invalidated"
+            : se.score !== null ? `${Number(se.score)}%` : "N/A",
         };
       });
 
