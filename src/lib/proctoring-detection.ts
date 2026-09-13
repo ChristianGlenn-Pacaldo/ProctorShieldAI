@@ -95,7 +95,10 @@ export function getAudioAnomalyThreshold(noiseFloor: number): number {
   const normalizedFloor = Number.isFinite(noiseFloor)
     ? Math.max(0, Math.min(100, noiseFloor))
     : 0;
-  return Math.max(5, Math.min(30, Math.round(normalizedFloor + 5)));
+  // A small non-zero RMS value is normal on phone microphones because of
+  // automatic gain control. Requiring at least 8% avoids treating ordinary
+  // ambient noise as speech while still detecting sustained voices/shouting.
+  return Math.max(8, Math.min(30, Math.round(normalizedFloor + 5)));
 }
 
 export function isScreenshotShortcut(event: ShortcutEvent): boolean {

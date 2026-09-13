@@ -644,18 +644,18 @@ export default function LiveMonitorContent({
           }}
         >
           <div
-            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden flex flex-col animate-modal"
+            className="app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
-              <div className="flex items-center gap-2.5">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/30 flex items-center justify-center text-indigo-500 font-bold text-xs">
                   {selectedStudentModal.name.slice(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--ink)] leading-none">{selectedStudentModal.name}</h3>
-                  <p className="text-[11px] text-[var(--muted)] mt-1">{selectedStudentModal.quizTitle}</p>
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-bold leading-none text-[var(--ink)]">{selectedStudentModal.name}</h3>
+                  <p className="mt-1 truncate text-[11px] text-[var(--muted)]">{selectedStudentModal.quizTitle}</p>
                 </div>
               </div>
               <button
@@ -667,7 +667,7 @@ export default function LiveMonitorContent({
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-5 overflow-y-auto">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
               {/* Snapshot View */}
               <div className="relative rounded-2xl overflow-hidden border-2 border-[var(--border)] bg-slate-950 aspect-[4/3] flex items-center justify-center shadow-lg">
                 {selectedStudentModal.snapshot && selectedStudentModal.snapshot.startsWith("data:image/") ? (
@@ -691,7 +691,7 @@ export default function LiveMonitorContent({
               </div>
 
               {/* Status & Violation Breakdown */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="p-3.5 bg-[var(--surface2)] border border-[var(--border)] rounded-xl">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Status</div>
                   <div className="text-xs font-bold text-emerald-500">{selectedStudentModal.status}</div>
@@ -729,7 +729,7 @@ export default function LiveMonitorContent({
                   {warningSendMessage}
                 </div>
               )}
-              <div className="pt-2 flex gap-3">
+              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:gap-3">
                 <button
                   type="button"
                   onClick={() => void handleSendWarning()}
@@ -742,7 +742,7 @@ export default function LiveMonitorContent({
                 <button
                   type="button"
                   onClick={() => setSelectedStudentModal(null)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                  className="w-full px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 cursor-pointer sm:w-auto"
                 >
                   Done
                 </button>

@@ -672,10 +672,10 @@ export default function TeacherQuizzesPage({
           }}
         >
           <div
-            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl shadow-2xl overflow-hidden flex flex-col animate-modal"
+            className="app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
               <h2 className="text-base sm:text-lg font-bold text-[var(--ink)] flex items-center gap-2">
                 <span>📝</span> Create New Quiz
               </h2>
@@ -846,9 +846,9 @@ export default function TeacherQuizzesPage({
                 </div>
               </div>
 
-              <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex gap-3">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all cursor-pointer">Cancel</button>
-                <button type="submit" disabled={isCreating} className="ui-primary flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:gap-3">
+                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="w-full flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isCreating} className="ui-primary w-full flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
                   {isCreating ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -876,13 +876,13 @@ export default function TeacherQuizzesPage({
           }}
         >
           <div
-            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg shadow-2xl overflow-hidden relative animate-modal"
+            className="app-modal-panel relative flex min-h-0 max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 opacity-50 pointer-events-none" />
 
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] relative z-10">
-              <h2 className="text-lg font-bold text-[var(--ink)] flex items-center gap-2">
+            <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
+              <h2 className="min-w-0 text-base font-bold text-[var(--ink)] flex items-center gap-2 sm:text-lg">
                 <Sparkles className="w-5 h-5 text-violet-500" /> Auto-Generate with AI
               </h2>
               <button
@@ -894,31 +894,31 @@ export default function TeacherQuizzesPage({
             </div>
 
             {/* Input Selection Tabs */}
-            <div className="px-6 py-2 border-b border-[var(--border)] flex gap-4 bg-[var(--surface2)] relative z-10 text-xs font-bold text-[var(--muted)]">
+            <div className="relative z-10 flex shrink-0 gap-4 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-2 text-xs font-bold text-[var(--muted)] sm:px-6">
               <button
                 type="button"
                 onClick={() => { setActiveTab("text"); stopCamera(); }}
-                className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "text" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
+                className={`flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 pb-2 transition-all ${activeTab === "text" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
               >
                 Text Topic
               </button>
               <button
                 type="button"
                 onClick={() => { setActiveTab("upload"); stopCamera(); }}
-                className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "upload" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
+                className={`flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 pb-2 transition-all ${activeTab === "upload" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
               >
                 <Upload className="w-3.5 h-3.5" /> Upload File
               </button>
               <button
                 type="button"
                 onClick={() => { setActiveTab("webcam"); }}
-                className={`pb-2 border-b-2 transition-all flex items-center gap-1 ${activeTab === "webcam" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
+                className={`flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 pb-2 transition-all ${activeTab === "webcam" ? "border-violet-500 text-violet-500 font-bold" : "border-transparent"}`}
               >
                 <Camera className="w-3.5 h-3.5" /> Webcam Capture
               </button>
             </div>
 
-            <form onSubmit={handleAiGenerate} className="p-6 space-y-4 relative z-10">
+            <form onSubmit={handleAiGenerate} className="relative z-10 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               <p className="text-xs text-[var(--muted)] mb-4 leading-relaxed">
                 Provide a topic description, upload a document page, or use your webcam to capture questions. ProctorShield AI will instantly structure and generate your quiz.
               </p>
@@ -994,7 +994,7 @@ export default function TeacherQuizzesPage({
                 </div>
               )}
 
-              <div className="pt-4 flex gap-3">
+              <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:gap-3">
                 <button
                   type="button"
                   onClick={() => { setIsAiModalOpen(false); stopCamera(); }}
@@ -1026,15 +1026,15 @@ export default function TeacherQuizzesPage({
           onClick={() => setManageQuiz(null)}
         >
           <div
-            className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden flex flex-col animate-modal"
+            className="app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden flex flex-col animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)] shrink-0">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
               <h2 className="text-lg font-bold text-[var(--ink)]">Manage Quiz</h2>
               <button onClick={() => setManageQuiz(null)} className="p-2 -mr-2 text-[var(--muted)] hover:text-[var(--ink)] transition-colors">✕</button>
             </div>
 
-            <div className="p-6 space-y-6 overflow-y-auto">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:space-y-6 sm:p-6">
               <div>
                 <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{manageQuiz.title}</h3>
                 <p className="text-sm text-[var(--muted)]">{manageQuiz.subject?.subjectName || "No Subject"}</p>
@@ -1042,8 +1042,8 @@ export default function TeacherQuizzesPage({
 
               <div className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl p-4 flex flex-col items-center justify-center space-y-2">
                 <span className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest">Share this code with students</span>
-                <div className="flex items-center gap-3">
-                  <code className="text-2xl font-mono font-bold text-indigo-500 tracking-wider">
+                <div className="flex min-w-0 flex-col items-center gap-3 sm:flex-row">
+                  <code className="max-w-full break-all text-center font-mono text-lg font-bold tracking-wide text-indigo-500 sm:text-2xl sm:tracking-wider">
                     {manageQuiz.accessCode}
                   </code>
                   <button
@@ -1058,7 +1058,7 @@ export default function TeacherQuizzesPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="border border-[var(--border)] rounded-xl p-3">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Questions</div>
                   <div className="text-lg font-semibold text-[var(--ink)]">{manageQuiz.totalQuestions}</div>
@@ -1095,7 +1095,7 @@ export default function TeacherQuizzesPage({
                     manageQuizDetails.questions.map((q: any, qi: number) => (
                       <div key={q.id} className="p-3 bg-[var(--surface2)] border border-[var(--border)] rounded-xl text-xs space-y-1.5">
                         <div className="font-bold text-[var(--ink)]">{qi + 1}. {q.questionText}</div>
-                        <div className="grid grid-cols-2 gap-2 pl-2">
+                        <div className="grid grid-cols-1 gap-2 pl-2 sm:grid-cols-2">
                           {q.choices.map((c: any) => (
                             <div key={c.id} className={`flex items-center gap-1 ${c.isCorrect ? 'text-emerald-500 font-bold' : 'text-[var(--muted)]'}`}>
                               <span className="shrink-0">{c.isCorrect ? '✓' : '•'}</span>
@@ -1115,9 +1115,9 @@ export default function TeacherQuizzesPage({
                 </div>
               )}
 
-              <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
+              <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-[var(--muted)] font-medium">Quiz Status:</div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => toggleQuizStatus(manageQuiz)}
                     disabled={isUpdatingStatus || ["in_progress", "ended"].includes(manageQuiz.quizStatus)}
@@ -1158,15 +1158,15 @@ export default function TeacherQuizzesPage({
                 />
               </label>
             </div>
-            <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] shrink-0 flex justify-between items-center">
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:items-center sm:justify-between">
               <button
                 onClick={() => deleteQuiz(manageQuiz)}
                 disabled={isDeleting}
-                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-all shadow-md shadow-red-600/20 flex items-center gap-1.5 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-red-600/20 transition-all hover:bg-red-500 disabled:opacity-50 sm:w-auto"
               >
                 <Trash className="w-3.5 h-3.5" /> {isDeleting ? "Deleting..." : "Delete Quiz"}
               </button>
-              <button onClick={() => setManageQuiz(null)} className="px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors">
+              <button onClick={() => setManageQuiz(null)} className="w-full px-5 py-2 bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg font-bold text-sm hover:bg-[var(--surface2)] transition-colors sm:w-auto">
                 Close
               </button>
             </div>
@@ -1177,10 +1177,10 @@ export default function TeacherQuizzesPage({
       {/* BILLING / SUBSCRIPTION GATE MODAL */}
       {showBillingModal && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md shadow-2xl overflow-hidden relative">
+          <div className="app-modal-panel relative flex min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-violet-600/10 to-amber-500/5 pointer-events-none" />
 
-            <div className="relative z-10 p-8 text-center">
+            <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5 text-center sm:p-8">
               <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-amber-500/20">
                 <Crown className="w-8 h-8 text-white" />
               </div>
@@ -1214,7 +1214,7 @@ export default function TeacherQuizzesPage({
                 <span className="text-sm text-[var(--muted)]">/year</span>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                 <button
                   onClick={() => setShowBillingModal(false)}
                   className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)] transition-all"

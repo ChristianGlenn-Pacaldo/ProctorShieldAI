@@ -59,13 +59,14 @@ export async function authenticateAsExistingRole(context: BrowserContext, role: 
     { algorithm: "HS256", expiresIn: "15m" },
   );
 
+  const baseUrl = new URL(process.env.E2E_BASE_URL ?? "http://localhost:3100");
+
   await context.addCookies([{
     name: `ps_session_${role}`,
     value: token,
-    domain: "localhost",
-    path: "/",
+    url: baseUrl.origin,
     httpOnly: true,
-    secure: false,
+    secure: baseUrl.protocol === "https:",
     sameSite: "Lax",
   }]);
 }

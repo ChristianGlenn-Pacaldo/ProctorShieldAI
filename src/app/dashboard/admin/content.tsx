@@ -374,7 +374,7 @@ export default function AdminDashboardContent() {
       {/* Edit User Modal */}
       {editingUser && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-6 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto">
+          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-4 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto sm:p-6">
             <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
             <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
             
@@ -404,18 +404,18 @@ export default function AdminDashboardContent() {
                 </select>
               </div>
               
-              <div className="flex gap-3 justify-end mt-6">
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button 
                   type="button" 
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] transition-colors"
+                  className="w-full px-4 py-2 rounded-xl text-sm font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] transition-colors sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                  className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 sm:w-auto"
                 >
                   {isSaving ? "Saving..." : "Save Changes"}
                 </button>

@@ -30,13 +30,17 @@ export type PaidCheckout = {
   reference: string;
   amountCentavos: number;
   paymentMethod: string;
+  paymentStatus: string;
 };
 
 export function parsePaidCheckout(resource: Record<string, unknown>): PaidCheckout | null {
   const checkout = asRecord(resource.attributes);
   const metadata = asRecord(checkout?.metadata);
   const payments = Array.isArray(checkout?.payments) ? checkout.payments : [];
-  const payment = asRecord(payments[0]);
+  const payment = payments
+    .map(asRecord)
+    .find((candidate) => asRecord(candidate?.attributes)?.status === "paid")
+    ?? asRecord(payments[0]);
   const paymentAttributes = asRecord(payment?.attributes);
   const source = asRecord(paymentAttributes?.source);
   const planId = Number(metadata?.planId);
@@ -55,6 +59,7 @@ export function parsePaidCheckout(resource: Record<string, unknown>): PaidChecko
     reference: typeof checkout?.reference_number === "string" ? checkout.reference_number : payment.id,
     amountCentavos,
     paymentMethod: typeof source?.type === "string" ? source.type : "paymongo",
+    paymentStatus: typeof paymentAttributes?.status === "string" ? paymentAttributes.status : "unknown",
   };
 }
 

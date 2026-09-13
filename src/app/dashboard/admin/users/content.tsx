@@ -204,19 +204,19 @@ export default function UsersContent() {
       {/* EDIT USER MODAL */}
       {editUser && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
-            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface2)]">
+          <div className="app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
               <h3 className="font-bold text-[var(--ink)]">Edit User</h3>
               <button onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Name</label>
                 <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.name}</div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Email</label>
-                <div className="text-sm text-[var(--muted)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.email}</div>
+                <div className="break-all text-sm text-[var(--muted)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.email}</div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Role</label>
@@ -225,8 +225,8 @@ export default function UsersContent() {
               {editUser.role.toLowerCase() === "teacher" && (
                 <div className="pt-4 border-t border-[var(--border)]">
                   <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Subscription Status</label>
-                  <div className="flex items-center justify-between bg-[var(--surface2)] p-4 rounded-xl border border-[var(--border)] mt-2">
-                    <div>
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface2)] p-4">
+                    <div className="min-w-0">
                       <h4 className="text-sm font-bold text-[var(--ink)]">AI Pro Subscription</h4>
                       <p className="text-xs text-[var(--muted)] mt-0.5">Manually grant or revoke Pro access</p>
                     </div>
@@ -238,8 +238,8 @@ export default function UsersContent() {
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-[var(--border)] bg-[var(--surface2)] flex justify-end gap-3">
-              <button onClick={() => setEditUser(null)} className="px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all">Cancel</button>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:justify-end sm:gap-3">
+              <button onClick={() => setEditUser(null)} className="w-full px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all sm:w-auto">Cancel</button>
               <button
                 disabled={isSaving}
                 onClick={async () => {
@@ -264,7 +264,7 @@ export default function UsersContent() {
                     setIsSaving(false);
                   }
                 }}
-                className="px-6 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50 flex items-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
               >
                 {isSaving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 {isSaving ? "Saving..." : "Save Changes"}

@@ -99,10 +99,10 @@ test("phone detection accepts repeated COCO phone labels at practical confidence
 test("audio monitoring converts PCM samples into a bounded adaptive signal", () => {
   assert.equal(getAudioSignalLevel(new Uint8Array(32).fill(128)), 0);
   assert.ok(getAudioSignalLevel(Uint8Array.from([64, 192, 64, 192])) > 50);
-  assert.equal(getAudioAnomalyThreshold(0), 5);
+  assert.equal(getAudioAnomalyThreshold(0), 8);
   assert.ok(getAudioAnomalyThreshold(12) > getAudioAnomalyThreshold(2));
   assert.equal(getAudioAnomalyThreshold(100), 30);
-  assert.equal(getAudioAnomalyThreshold(Number.NaN), 5);
+  assert.equal(getAudioAnomalyThreshold(Number.NaN), 8);
   assert.equal(getViolationLabel("audio_anomaly"), "Sustained loud audio detected");
   assert.equal(getViolationLabel("tab_switch"), "App/tab switch or window minimized");
 });

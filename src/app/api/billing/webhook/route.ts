@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getPayMongoMode, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
 import { parsePaidCheckout, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
+import { activatePaidCheckout } from "@/lib/paymongo-subscription";
+import { Prisma } from "@prisma/client";
 
 function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -37,64 +38,17 @@ export async function POST(req: NextRequest) {
     if (event.type === "checkout_session.payment.paid") {
       const paid = parsePaidCheckout(event.resource);
       if (!paid) return NextResponse.json({ success: true, message: "Ignored invalid payment data" });
-      const [user, plan] = await Promise.all([
-        prisma.user.findFirst({ where: { id: paid.userId, role: { roleName: "teacher" } } }),
-        prisma.subscriptionPlan.findUnique({ where: { id: paid.planId } }),
-      ]);
-      if (!user || !plan || plan.yearlyPrice === null) {
-        console.error("PayMongo webhook referenced an invalid user or plan", event.id);
-        return NextResponse.json({ success: true, message: "Ignored invalid metadata" });
+      const activation = await activatePaidCheckout(paid, {
+        id: event.id,
+        type: event.type,
+        source: "paymongo-webhook",
+      });
+      if (activation === "invalid") {
+        console.error("PayMongo webhook referenced invalid payment metadata", event.id);
+        return NextResponse.json({ success: true, message: "Ignored invalid payment metadata" });
       }
-      const expectedCentavos = Math.round(Number(plan.yearlyPrice) * 100);
-      if (paid.amountCentavos !== expectedCentavos) {
-        console.error("PayMongo amount mismatch", { eventId: event.id, expectedCentavos, received: paid.amountCentavos });
-        return NextResponse.json({ success: true, message: "Ignored amount mismatch" });
-      }
-
-      try {
-        await prisma.$transaction(async (tx) => {
-          await tx.webhookEvent.create({ data: { provider: "paymongo", eventId: event.id, eventType: event.type } });
-          const now = new Date();
-          const durationDays = plan.durationDays ?? 30;
-          const existing = await tx.userSubscription.findUnique({
-            where: { userId_planId: { userId: paid.userId, planId: paid.planId } },
-          });
-          const baseDate = existing && existing.endDate > now ? existing.endDate : now;
-          const endDate = new Date(baseDate.getTime() + durationDays * 86_400_000);
-          const subscription = await tx.userSubscription.upsert({
-            where: { userId_planId: { userId: paid.userId, planId: paid.planId } },
-            update: { endDate, paymentStatus: "paid", subscriptionStatus: "active" },
-            create: {
-              userId: paid.userId,
-              planId: paid.planId,
-              startDate: now,
-              endDate,
-              paymentStatus: "paid",
-              subscriptionStatus: "active",
-            },
-          });
-          await tx.payment.create({
-            data: {
-              subscriptionId: subscription.id,
-              amount: paid.amountCentavos / 100,
-              paymentMethod: paid.paymentMethod,
-              paymentStatus: "paid",
-              transactionReference: paid.reference,
-              providerPaymentId: paid.providerPaymentId,
-              paidAt: now,
-            },
-          });
-          await tx.activityLog.create({
-            data: {
-              userId: paid.userId,
-              activity: `Subscribed to ${plan.planName} for ${durationDays} days via ${paid.paymentMethod}`,
-              ipAddress: "paymongo-webhook",
-            },
-          });
-        });
-      } catch (error) {
-        if (isUniqueConstraintError(error)) return NextResponse.json({ success: true, message: "Already processed" });
-        throw error;
+      if (activation === "already_processed") {
+        return NextResponse.json({ success: true, message: "Already processed" });
       }
       return NextResponse.json({ success: true });
     }

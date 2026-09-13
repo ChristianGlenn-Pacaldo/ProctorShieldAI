@@ -18,7 +18,7 @@ test("paid checkout parsing preserves provider payment identity and amount", () 
       metadata: { userId: "user-1", planId: "2" },
       payments: [{
         id: "pay_1",
-        attributes: { amount: 50000, source: { type: "gcash" } },
+        attributes: { amount: 50000, status: "paid", source: { type: "gcash" } },
       }],
     },
   });
@@ -29,7 +29,23 @@ test("paid checkout parsing preserves provider payment identity and amount", () 
     reference: "PS-123",
     amountCentavos: 50000,
     paymentMethod: "gcash",
+    paymentStatus: "paid",
   });
+});
+
+test("paid checkout parsing selects the successful payment attempt", () => {
+  const paid = parsePaidCheckout({
+    id: "cs_1",
+    attributes: {
+      metadata: { userId: "user-1", planId: "2" },
+      payments: [
+        { id: "pay_failed", attributes: { amount: 50000, status: "failed" } },
+        { id: "pay_paid", attributes: { amount: 50000, status: "paid", source: { type: "card" } } },
+      ],
+    },
+  });
+  assert.equal(paid?.providerPaymentId, "pay_paid");
+  assert.equal(paid?.paymentStatus, "paid");
 });
 
 test("refund parsing requires a provider payment id and positive amount", () => {

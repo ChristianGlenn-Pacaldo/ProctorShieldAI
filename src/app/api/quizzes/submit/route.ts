@@ -58,9 +58,7 @@ export async function POST(req: NextRequest) {
     }
     const durationMinutes = studentQuiz.quiz.duration ?? 60;
     const deadline = studentQuiz.startTime.getTime() + durationMinutes * 60_000 + 60_000;
-    if (Date.now() > deadline) {
-      return NextResponse.json({ error: "The submission deadline has passed" }, { status: 409 });
-    }
+    const deadlineExpired = Date.now() > deadline;
 
     // 2. Dynamic Grading and Saving Answers
     const dbQuestions = await prisma.question.findMany({
@@ -70,7 +68,9 @@ export async function POST(req: NextRequest) {
     if (dbQuestions.length === 0) {
       return NextResponse.json({ error: "This quiz has no gradable questions" }, { status: 409 });
     }
-    const submittedAnswers = normalizeSubmittedAnswers(answers);
+    // Once time has expired, grade only answers already locked on the server.
+    // This finalizes stale attempts without accepting late client-side changes.
+    const submittedAnswers = deadlineExpired ? [] : normalizeSubmittedAnswers(answers);
     const persistedLockedAnswers = await prisma.answer.findMany({
       where: { studentQuizId: studentQuiz.id, isCorrect: { not: null } },
       select: { questionId: true, answerText: true },
@@ -127,9 +127,6 @@ Return ONLY the valid JSON object.`;
     const recordedScore = integrityInvalidated ? null : score;
 
     const completedAt = new Date();
-    if (completedAt.getTime() > deadline) {
-      return NextResponse.json({ error: "The submission deadline has passed" }, { status: 409 });
-    }
 
     // Claim and complete the attempt atomically. A concurrent request cannot
     // pass the conditional update after the first transaction commits.
@@ -168,7 +165,9 @@ Return ONLY the valid JSON object.`;
             score: recordedScore,
             ...(integrityInvalidated
               ? { remarks: `Result invalidated after ${violations.length} integrity violations.` }
-              : {}),
+              : deadlineExpired
+                ? { remarks: "Quiz submitted automatically after the time limit expired." }
+                : {}),
             aiVerdict: verdictData.finalVerdict,
             cheatingProbability: verdictData.cheatingProbability,
           },
@@ -232,6 +231,14 @@ Return ONLY the valid JSON object.`;
     return NextResponse.json({
       success: true,
       studentQuiz: updatedStudentQuiz,
+      result: {
+        score: recordedScore,
+        violationCount: violations.length,
+        integrityInvalidated,
+        deadlineExpired,
+        aiVerdict: verdictData.finalVerdict,
+        cheatingProbability: verdictData.cheatingProbability,
+      },
     });
 
   } catch (error) {

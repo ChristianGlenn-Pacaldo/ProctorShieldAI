@@ -370,8 +370,8 @@ body {
 }
 
 @keyframes pageEnter {
-  from { opacity: 0; transform: translateY(9px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes ambientGradient {
@@ -417,8 +417,29 @@ body {
 
 .app-modal-panel {
   width: 100%;
+  min-width: 0;
   max-height: calc(100dvh - 2rem);
   margin-block: auto;
+}
+
+.app-modal-panel > * {
+  min-width: 0;
+}
+
+.app-modal-panel :where(h1, h2, h3, h4, p, code) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .app-modal-backdrop {
+    padding: 0.5rem;
+  }
+
+  .app-modal-panel {
+    max-width: 100% !important;
+    max-height: calc(100dvh - 1rem);
+    border-radius: 1rem !important;
+  }
 }
 
 /* Shared tactile feedback for interactive controls and dashboard surfaces. */

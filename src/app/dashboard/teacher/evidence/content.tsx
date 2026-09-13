@@ -266,12 +266,12 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
           onClick={() => setIsFullscreen(false)}
         >
           <div 
-            className="app-modal-panel max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col"
+            className="app-modal-panel min-h-0 max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a] shrink-0">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-800 bg-[#0a0a0a] px-4 py-3 sm:items-center sm:px-6 sm:py-4">
+              <div className="min-w-0">
+                <h2 className="flex min-w-0 items-center gap-2 text-base font-bold text-white sm:text-lg">
                   <Camera className="w-5 h-5 text-indigo-400" />
                   Evidence Replay — {selectedEvidence.name}
                 </h2>
@@ -285,7 +285,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               </button>
             </div>
             
-            <div className="flex-1 bg-black flex items-center justify-center p-4 overflow-hidden relative min-h-[50vh]">
+            <div className="relative flex min-h-[35vh] min-w-0 flex-1 items-center justify-center overflow-hidden bg-black p-2 sm:min-h-[50vh] sm:p-4">
               {selectedEvidence.screenshotPath ? (
                 isVideoEvidence(selectedEvidence) ? (
                   <video
@@ -311,17 +311,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               )}
             </div>
             
-            <div className="p-4 bg-[#0a0a0a] border-t border-gray-800 shrink-0 flex justify-end gap-3">
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-800 bg-[#0a0a0a] p-3 sm:flex-row sm:justify-end sm:gap-3 sm:p-4">
               <button 
                 onClick={handleDownload}
                 disabled={!selectedEvidence.screenshotPath}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500 disabled:opacity-50 sm:w-auto"
               >
                 <Download className="w-4 h-4" /> Download
               </button>
               <button 
                 onClick={() => setIsFullscreen(false)} 
-                className="px-5 py-2.5 bg-[#222] hover:bg-[#333] text-white border border-gray-700 rounded-xl font-bold text-sm transition-colors"
+                className="w-full rounded-xl border border-gray-700 bg-[#222] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#333] sm:w-auto"
               >
                 Close Replay
               </button>

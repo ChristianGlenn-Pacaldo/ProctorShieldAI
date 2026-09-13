@@ -59,3 +59,104 @@ export function verifyPayMongoSignature(
   }
   return null;
 }
+
+const PENDING_CHECKOUT_TTL_SECONDS = 60 * 60;
+
+export type PendingPayMongoCheckout = {
+  checkoutSessionId: string;
+  userId: string;
+  planId: number;
+  expiresAt: number;
+};
+
+function getPendingCheckoutSecret(env: PayMongoEnvironment) {
+  const secret = env.NEXTAUTH_SECRET?.trim();
+  if (!secret || secret.length < 32) {
+    throw new Error("NEXTAUTH_SECRET must be configured with at least 32 characters");
+  }
+  return secret;
+}
+
+function signPendingCheckoutPayload(payload: string, secret: string) {
+  return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+export function createPendingPayMongoCheckoutToken(
+  checkout: Omit<PendingPayMongoCheckout, "expiresAt">,
+  env: PayMongoEnvironment = process.env,
+  nowMs = Date.now(),
+) {
+  const payload = Buffer.from(JSON.stringify({
+    ...checkout,
+    expiresAt: Math.floor(nowMs / 1000) + PENDING_CHECKOUT_TTL_SECONDS,
+  })).toString("base64url");
+  const signature = signPendingCheckoutPayload(payload, getPendingCheckoutSecret(env));
+  return `${payload}.${signature}`;
+}
+
+export function verifyPendingPayMongoCheckoutToken(
+  token: string | undefined,
+  env: PayMongoEnvironment = process.env,
+  nowMs = Date.now(),
+): PendingPayMongoCheckout | null {
+  if (!token) return null;
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra) return null;
+
+  const expected = signPendingCheckoutPayload(payload, getPendingCheckoutSecret(env));
+  if (signature.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<PendingPayMongoCheckout>;
+    if (
+      typeof parsed.checkoutSessionId !== "string"
+      || !parsed.checkoutSessionId.startsWith("cs_")
+      || typeof parsed.userId !== "string"
+      || !Number.isInteger(parsed.planId)
+      || typeof parsed.expiresAt !== "number"
+      || parsed.expiresAt < Math.floor(nowMs / 1000)
+    ) return null;
+
+    return parsed as PendingPayMongoCheckout;
+  } catch {
+    return null;
+  }
+}
+
+type PublicOriginInput = {
+  originHeader?: string | null;
+  forwardedHost?: string | null;
+  host?: string | null;
+  forwardedProto?: string | null;
+  requestUrl: string;
+  nodeEnv?: string;
+};
+
+function firstForwardedValue(value: string | null | undefined) {
+  return value?.split(",")[0]?.trim() || "";
+}
+
+export function resolvePayMongoReturnOrigin(input: PublicOriginInput) {
+  const requestUrl = new URL(input.requestUrl);
+  const host = firstForwardedValue(input.forwardedHost)
+    || firstForwardedValue(input.host)
+    || requestUrl.host;
+  const protocol = firstForwardedValue(input.forwardedProto)
+    || requestUrl.protocol.replace(":", "");
+  const headerOrigin = input.originHeader ? new URL(input.originHeader) : null;
+
+  let origin: URL;
+  if (headerOrigin && headerOrigin.host === host) {
+    origin = headerOrigin;
+  } else {
+    origin = new URL(`${protocol}://${host}`);
+  }
+
+  const isLocalhost = origin.hostname === "localhost" || origin.hostname === "127.0.0.1";
+  if (origin.protocol !== "https:" && !(input.nodeEnv !== "production" && isLocalhost)) {
+    throw new Error("Payment return URLs require a secure HTTPS origin");
+  }
+
+  return origin.origin;
+}

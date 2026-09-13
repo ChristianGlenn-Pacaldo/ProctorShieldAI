@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   CreditCard,
   Crown,
@@ -52,7 +52,7 @@ export default function BillingContent() {
   const [paymentResult, setPaymentResult] = useState<"success" | "cancelled" | null>(null);
 
   // Fetch billing data
-  const fetchBilling = async () => {
+  const fetchBilling = useCallback(async () => {
     try {
       const res = await fetch("/api/billing");
       if (res.ok) {
@@ -61,38 +61,47 @@ export default function BillingContent() {
         setSubscription(data.subscription);
         setPayments(data.payments || []);
         setPaymentMode(data.paymentMode === "live" ? "live" : "test");
+        return Boolean(data.isSubscribed);
       }
     } catch (err) {
       console.error("Failed to load billing:", err);
     } finally {
       setIsLoading(false);
     }
-  };
+    return false;
+  }, []);
 
   // Check URL params for payment result
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    let cancelled = false;
+
+    const loadBilling = async () => {
       const params = new URLSearchParams(window.location.search);
       const payment = params.get("payment");
       if (payment === "success") {
         setPaymentResult("success");
-        fetchBilling();
-
-        const url = new URL(window.location.href);
-        url.searchParams.delete("payment");
-        window.history.replaceState({}, "", url.pathname);
+        for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+          const active = await fetchBilling();
+          if (active) break;
+          await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+        }
       } else if (payment === "cancelled") {
         setPaymentResult("cancelled");
+        await fetchBilling();
+      } else {
+        await fetchBilling();
+      }
+
+      if (!cancelled && payment) {
         const url = new URL(window.location.href);
         url.searchParams.delete("payment");
-        window.history.replaceState({}, "", url.pathname);
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
       }
-    }
-  }, []);
+    };
 
-  useEffect(() => {
-    fetchBilling();
-  }, []);
+    void loadBilling();
+    return () => { cancelled = true; };
+  }, [fetchBilling]);
 
   // Standard PayMongo Test Checkout
   const handleUpgrade = async () => {

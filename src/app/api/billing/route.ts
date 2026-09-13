@@ -1,18 +1,79 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { expireSubscriptions } from "@/lib/maintenance";
-import { getPayMongoMode, getPayMongoSecretKey } from "@/lib/paymongo";
+import {
+  createPendingPayMongoCheckoutToken,
+  getPayMongoMode,
+  getPayMongoSecretKey,
+  isPayMongoEventModeAllowed,
+  resolvePayMongoReturnOrigin,
+  verifyPendingPayMongoCheckoutToken,
+} from "@/lib/paymongo";
+import { parsePaidCheckout } from "@/lib/paymongo-events";
+import { activatePaidCheckout } from "@/lib/paymongo-subscription";
+
+const PENDING_CHECKOUT_COOKIE = "ps_pending_paymongo_checkout";
+
+function checkoutResourceIsLive(resource: Record<string, unknown>) {
+  const attributes = typeof resource.attributes === "object" && resource.attributes !== null
+    ? resource.attributes as Record<string, unknown>
+    : null;
+  return typeof attributes?.livemode === "boolean" ? attributes.livemode : null;
+}
+
+async function reconcilePendingCheckout(req: NextRequest, userId: string) {
+  const pending = verifyPendingPayMongoCheckoutToken(
+    req.cookies.get(PENDING_CHECKOUT_COOKIE)?.value,
+  );
+  if (!pending || pending.userId !== userId) return { clearCookie: Boolean(req.cookies.get(PENDING_CHECKOUT_COOKIE)) };
+
+  const response = await fetch(
+    `https://api.paymongo.com/v1/checkout_sessions/${encodeURIComponent(pending.checkoutSessionId)}`,
+    {
+      headers: {
+        Authorization: "Basic " + Buffer.from(getPayMongoSecretKey() + ":").toString("base64"),
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) return { clearCookie: true };
+  if (!response.ok) return { clearCookie: false };
+
+  const body = await response.json() as { data?: Record<string, unknown> };
+  const resource = body.data;
+  if (!resource) return { clearCookie: true };
+  const livemode = checkoutResourceIsLive(resource);
+  if (livemode === null || !isPayMongoEventModeAllowed(livemode)) return { clearCookie: true };
+
+  const paid = parsePaidCheckout(resource);
+  if (!paid || paid.paymentStatus !== "paid") return { clearCookie: false };
+  if (paid.userId !== userId || paid.planId !== pending.planId) return { clearCookie: true };
+
+  const activation = await activatePaidCheckout(paid, {
+    id: `checkout-confirm:${pending.checkoutSessionId}:${paid.providerPaymentId}`,
+    type: "checkout_session.payment.confirmed",
+    source: "paymongo-api-confirmation",
+  });
+  return { clearCookie: activation !== "invalid" };
+}
 
 // GET: Check teacher's current subscription status
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await expireSubscriptions(session.userId);
+    let pendingCheckout = { clearCookie: false };
+    try {
+      pendingCheckout = await reconcilePendingCheckout(req, session.userId);
+    } catch (error) {
+      console.error("PayMongo checkout reconciliation error:", error);
+    }
 
     // Find active subscription
     const subscription = await prisma.userSubscription.findFirst({
@@ -45,7 +106,7 @@ export async function GET() {
       take: 20,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       isSubscribed: isActive,
       paymentMode: getPayMongoMode(),
       subscription: subscription
@@ -67,6 +128,8 @@ export async function GET() {
         paidAt: p.paidAt,
       })),
     });
+    if (pendingCheckout.clearCookie) response.cookies.delete(PENDING_CHECKOUT_COOKIE);
+    return response;
   } catch (error) {
     console.error("Billing GET error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -74,21 +137,13 @@ export async function GET() {
 }
 
 // POST: Create PayMongo checkout session for Premium upgrade
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const appUrlValue = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
-
-    if (!appUrlValue) {
-      return NextResponse.json(
-        { error: "Application URL is not configured." },
-        { status: 500 }
-      );
-    }
     let paymongoSecretKey: string;
     try {
       paymongoSecretKey = getPayMongoSecretKey();
@@ -100,12 +155,17 @@ export async function POST() {
 
     let appUrl: URL;
     try {
-      appUrl = new URL(appUrlValue);
-    } catch {
-      return NextResponse.json({ error: "Application URL is not configured correctly." }, { status: 500 });
-    }
-    if (process.env.NODE_ENV === "production" && appUrl.protocol !== "https:") {
-      return NextResponse.json({ error: "Production payment redirects require HTTPS." }, { status: 500 });
+      appUrl = new URL(resolvePayMongoReturnOrigin({
+        originHeader: req.headers.get("origin"),
+        forwardedHost: req.headers.get("x-forwarded-host"),
+        host: req.headers.get("host"),
+        forwardedProto: req.headers.get("x-forwarded-proto"),
+        requestUrl: req.url,
+        nodeEnv: process.env.NODE_ENV,
+      }));
+    } catch (error) {
+      console.error("PayMongo return URL error:", error);
+      return NextResponse.json({ error: "Checkout must be opened from the secure application URL." }, { status: 400 });
     }
 
     // Check if already subscribed
@@ -185,14 +245,39 @@ export async function POST() {
       );
     }
 
-    const checkoutUrl = paymongoData.data.attributes.checkout_url;
-    const checkoutSessionId = paymongoData.data.id;
+    const checkoutUrl = paymongoData?.data?.attributes?.checkout_url;
+    const checkoutSessionId = paymongoData?.data?.id;
+    if (
+      typeof checkoutUrl !== "string"
+      || !checkoutUrl.startsWith("https://checkout.paymongo.com/")
+      || typeof checkoutSessionId !== "string"
+      || !checkoutSessionId.startsWith("cs_")
+    ) {
+      console.error("PayMongo returned an invalid checkout session response");
+      return NextResponse.json({ error: "Payment provider returned an invalid checkout session" }, { status: 502 });
+    }
 
-    return NextResponse.json({
+    const result = NextResponse.json({
       success: true,
       checkoutUrl,
       checkoutSessionId,
     });
+    result.cookies.set(
+      PENDING_CHECKOUT_COOKIE,
+      createPendingPayMongoCheckoutToken({
+        checkoutSessionId,
+        userId: session.userId,
+        planId: plan.id,
+      }),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60,
+      },
+    );
+    return result;
   } catch (error: unknown) {
     console.error("Billing POST error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

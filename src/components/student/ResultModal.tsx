@@ -16,11 +16,11 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
 
   return (
     <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="app-modal-panel bg-[var(--surface)] max-w-lg rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden animate-modal flex flex-col">
+      <div className="app-modal-panel bg-[var(--surface)] max-w-lg rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden animate-modal flex min-h-0 flex-col">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--surface2)]">
-          <h2 className="text-lg font-bold text-[var(--ink)]">Quiz Result Details</h2>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
+          <h2 className="min-w-0 text-base font-bold text-[var(--ink)] sm:text-lg">Quiz Result Details</h2>
           <button 
             onClick={onClose}
             className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--border)] hover:text-[var(--ink)] transition-colors"
@@ -30,7 +30,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 custom-scrollbar sm:p-6">
           
           <div className="mb-6 text-center">
             <h3 className="text-xl font-bold text-[var(--ink)] mb-1">{result.quiz?.title || "Unknown Quiz"}</h3>
@@ -39,14 +39,14 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)] text-center">
+          <div className="mb-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface2)] p-4 text-center">
               <div className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-1">Final Score</div>
-              <div className="text-2xl font-black text-indigo-500">
+              <div className="max-w-full break-words text-xl font-black leading-tight text-indigo-500 sm:text-2xl">
                 {isInvalidated ? "INVALIDATED" : result.score != null ? `${result.score}%` : "Pending"}
               </div>
             </div>
-            <div className={`rounded-xl p-4 border text-center ${
+            <div className={`min-w-0 rounded-xl p-4 border text-center ${
               isClean 
                 ? "bg-emerald-500/10 border-emerald-500/20" 
                 : "bg-rose-500/10 border-rose-500/20"
@@ -56,7 +56,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
               }`}>
                 AI Verdict
               </div>
-              <div className={`text-xl font-black flex items-center justify-center gap-2 ${
+              <div className={`flex min-w-0 items-center justify-center gap-2 break-words text-lg font-black sm:text-xl ${
                 isClean ? "text-emerald-600" : "text-rose-600"
               }`}>
                 {isClean ? <CheckCircle className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
@@ -79,17 +79,17 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
               </h4>
               
               <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--muted)]">Cheating Probability</span>
-                  <span className="font-semibold text-[var(--ink)]">{result.aiAnalysis.cheatingProbability}%</span>
+                <div className="flex min-w-0 justify-between gap-3 text-sm">
+                  <span className="min-w-0 text-[var(--muted)]">Cheating Probability</span>
+                  <span className="shrink-0 font-semibold text-[var(--ink)]">{result.aiAnalysis.cheatingProbability}%</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--muted)]">Total Violations Flagged</span>
-                  <span className="font-semibold text-[var(--ink)]">{result.aiAnalysis.totalViolations}</span>
+                <div className="flex min-w-0 justify-between gap-3 text-sm">
+                  <span className="min-w-0 text-[var(--muted)]">Total Violations Flagged</span>
+                  <span className="shrink-0 font-semibold text-[var(--ink)]">{result.aiAnalysis.totalViolations}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--muted)]">Risk Level</span>
-                  <span className="font-semibold text-[var(--ink)]">{result.aiAnalysis.riskLevel}</span>
+                <div className="flex min-w-0 justify-between gap-3 text-sm">
+                  <span className="min-w-0 text-[var(--muted)]">Risk Level</span>
+                  <span className="shrink-0 font-semibold text-[var(--ink)]">{result.aiAnalysis.riskLevel}</span>
                 </div>
                 
                 {result.aiAnalysis.aiExplanation && (
@@ -107,7 +107,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
         </div>
         
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[var(--border)] bg-[var(--surface2)] flex justify-end gap-3">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:py-4">
           {result.quiz?.allowRetake && result.quizStatus !== "pending_retake" ? (
             <button 
               onClick={async (e) => {
@@ -135,19 +135,19 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
                   btn.innerText = "Request Retake";
                 }
               }}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-lg transition-colors"
+              className="w-full px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-lg transition-colors sm:w-auto"
             >
               Request Retake
             </button>
           ) : result.quizStatus === "pending_retake" ? (
-            <button disabled className="px-4 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg opacity-80 cursor-not-allowed">
+            <button disabled className="w-full px-4 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg opacity-80 cursor-not-allowed sm:w-auto">
               Retake Pending...
             </button>
           ) : null}
 
           <button 
             onClick={onClose}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
+            className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors sm:w-auto"
           >
             Close
           </button>

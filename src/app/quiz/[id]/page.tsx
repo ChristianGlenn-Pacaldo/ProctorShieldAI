@@ -38,6 +38,16 @@ import {
   Save,
 } from "lucide-react";
 
+type QuizSubmittedResult = {
+  score: number | null;
+  total: number;
+  xp: number;
+  streak: number;
+  violations: number;
+  integrityInvalidated: boolean;
+  aiVerdict: "clean" | "suspicious" | "cheated";
+};
+
 export default function QuizRoom() {
   const params = useParams();
   const quizId = params.id as string;
@@ -62,10 +72,13 @@ export default function QuizRoom() {
   const lastTeacherWarningIdRef = useRef("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
+  const autoSubmitAttemptedRef = useRef(false);
   const isReportingRef = useRef(false);
   const isAlertingRef = useRef(false);
   const isStartupGracePeriodRef = useRef(true);
   const lastViolationAtRef = useRef(0);
+  const fullscreenMonitoringRef = useRef(false);
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
   const [teacherWarningModal, setTeacherWarningModal] = useState({ show: false, message: "" });
   const [preWarning, setPreWarning] = useState<string | null>(null);
@@ -108,7 +121,7 @@ export default function QuizRoom() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [celebrationBanner, setCelebrationBanner] = useState<string | null>(null);
   const [isTimeFrozen, setIsTimeFrozen] = useState(false);
-  const [quizSubmittedResult, setQuizSubmittedResult] = useState<any>(null);
+  const [quizSubmittedResult, setQuizSubmittedResult] = useState<QuizSubmittedResult | null>(null);
 
   // Power-Up inventory (Usable 1x per quiz)
   const [powerUps, setPowerUps] = useState({
@@ -618,6 +631,20 @@ export default function QuizRoom() {
         setLobbyError("Complete the device and camera check before starting the quiz.");
         return;
       }
+
+      // Some Android/OEM Chrome builds keep reporting the page as visible when
+      // the user presses Home. Entering fullscreen from this direct user action
+      // provides a second lifecycle signal because Android exits fullscreen
+      // when the exam is backgrounded.
+      if (isMobile && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        try {
+          await document.documentElement.requestFullscreen();
+          fullscreenMonitoringRef.current = Boolean(document.fullscreenElement);
+        } catch {
+          fullscreenMonitoringRef.current = false;
+        }
+      }
+
       const response = await fetch(`/api/quizzes/${quizId}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok || !data.success) {
@@ -751,12 +778,13 @@ export default function QuizRoom() {
 
   // ── Submit quiz to backend ────────────────────────────
   const submitQuiz = useCallback(async () => {
-    if (isSubmitting) return;
+    if (submissionInFlightRef.current) return;
     if (!navigator.onLine) {
       setAutosaveStatus("offline");
       setPreWarning("You are offline. Your answers are safe on this device and submission will resume when the connection returns.");
       return;
     }
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     try {
       // A page transition can cancel MediaRecorder/upload work on mobile. Keep the
@@ -790,26 +818,51 @@ export default function QuizRoom() {
 
       const data = await res.json();
       if (res.ok) {
+        // Stop autosave, monitoring, and heartbeat effects as soon as the server
+        // accepts the final submission. This prevents late mobile requests from
+        // racing the completed attempt and producing avoidable 409 responses.
+        setHasStarted(false);
         if (currentStudentQuizId) {
           try { localStorage.removeItem(`proctorshield:answers:${currentStudentQuizId}`); } catch {}
         }
         playTone([523, 659, 783, 1046, 1318], "triangle", 0.25);
+        const serverViolationCount = Number.isInteger(Number(data.result?.violationCount))
+          ? Math.max(0, Number(data.result.violationCount))
+          : currentViolations;
+        const serverVerdict = ["clean", "suspicious", "cheated"].includes(data.result?.aiVerdict)
+          ? data.result.aiVerdict as QuizSubmittedResult["aiVerdict"]
+          : serverViolationCount >= 3
+            ? "cheated"
+            : serverViolationCount > 0
+              ? "suspicious"
+              : "clean";
+        const integrityInvalidated = data.result?.integrityInvalidated === true
+          || serverVerdict === "cheated"
+          || serverViolationCount >= 3;
         setQuizSubmittedResult({
-          score: Number(data.studentQuiz?.score ?? 0),
+          score: data.result?.score == null ? null : Number(data.result.score),
           total: 100,
           xp: currentXp,
           streak: currentStreak,
-          violations: currentViolations,
+          violations: serverViolationCount,
+          integrityInvalidated,
+          aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
         });
       } else {
-        alert(data.error || "Submission failed");
+        if (res.status === 409 && /already (?:been )?(?:submitted|completed)|already being submitted/i.test(data.error || "")) {
+          router.replace("/dashboard/student/results");
+          return;
+        }
+        setPreWarning(data.error || "Submission failed. Please try again.");
+        submissionInFlightRef.current = false;
         setIsSubmitting(false);
       }
     } catch (err) {
-      alert("Network error submitting quiz");
+      setPreWarning("Network error submitting quiz. Your saved answers are safe; please try again.");
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [isSubmitting, quizId, playTone]);
+  }, [quizId, playTone, router]);
 
   const submitQuizRef = useRef(submitQuiz);
   useEffect(() => {
@@ -1089,21 +1142,23 @@ export default function QuizRoom() {
     let microphone: MediaStreamAudioSourceNode | null = null;
     let audioResumeListener: (() => void) | null = null;
     let cancelled = false;
-    let loadedFaceApi: any = null;
     let loadedCocoModel: any = null;
     const desktopVideoElement = videoRef.current;
     const mobileVideoElement = mobileVideoRef.current;
 
     const disposeLoadedModels = () => {
-      loadedCocoModel?.dispose?.();
-      loadedCocoModel = null;
-      loadedFaceApi?.nets?.tinyFaceDetector?.dispose?.();
-      if (performanceProfile.useTinyLandmarks) {
-        loadedFaceApi?.nets?.faceLandmark68TinyNet?.dispose?.();
-      } else {
-        loadedFaceApi?.nets?.faceLandmark68Net?.dispose?.();
+      try {
+        loadedCocoModel?.dispose?.();
+      } catch {
+        // The object model may already have been released during a fast remount.
       }
-      loadedFaceApi = null;
+      loadedCocoModel = null;
+
+      // face-api's network objects are module-level singletons shared by every
+      // effect instance. Disposing them here lets an earlier React cleanup tear
+      // down weights that a newer active monitor is already using, which can
+      // crash the quiz with "model has no loaded params" on mobile remounts.
+      // Keep those small shared weights cached for the lifetime of the page.
     };
 
     const startAudioAnalysis = (stream: MediaStream, audioActive: boolean) => {
@@ -1143,6 +1198,13 @@ export default function QuizRoom() {
 
         audioInterval = setInterval(async () => {
           if (!audioContext || !analyser || cancelled) return;
+          if (document.hidden) {
+            // Browsers may keep audio callbacks alive briefly after the app is
+            // backgrounded. Let the dedicated tab/app-switch detector own that
+            // incident instead of mislabeling it as an audio violation.
+            anomalyFrames = 0;
+            return;
+          }
           if (audioContext.state === "suspended") {
             setAudioStatus("Tap to enable audio");
             await audioContext.resume().catch(() => {});
@@ -1168,7 +1230,7 @@ export default function QuizRoom() {
               setPreWarning("⚠️ Pre-Warning: Sustained sound or speaking detected. Please remain quiet.");
             }
             if (
-              anomalyFrames >= (isMobile ? 2 : 3) &&
+              anomalyFrames >= (isMobile ? 4 : 3) &&
               violationCountRef.current < 3 &&
               !isAlertingRef.current &&
               !isReportingRef.current
@@ -1296,7 +1358,6 @@ export default function QuizRoom() {
           // default face-api browser bundle embeds a second runtime and can
           // exhaust the memory available to a mobile browser tab.
           const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
-          loadedFaceApi = faceapi;
           const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs");
           sharedTf.enableProdMode();
           await sharedTf.ready();
@@ -1366,6 +1427,7 @@ export default function QuizRoom() {
 
           faceDetectionInterval = setInterval(async () => {
             if (
+              document.hidden ||
               detectionBusy ||
               violationCountRef.current >= 3 ||
               isAlertingRef.current ||
@@ -1566,10 +1628,15 @@ export default function QuizRoom() {
 
   // ── Auto Submit on Time Up ──
   useEffect(() => {
-    if (hasStarted && timeLeft === 0 && !isSubmitting) {
-      submitQuiz();
+    if (timeLeft > 0) {
+      autoSubmitAttemptedRef.current = false;
+      return;
     }
-  }, [hasStarted, isOnline, timeLeft, isSubmitting, submitQuiz]);
+    if (hasStarted && !isSubmitting && !autoSubmitAttemptedRef.current) {
+      autoSubmitAttemptedRef.current = true;
+      void submitQuiz();
+    }
+  }, [hasStarted, timeLeft, isSubmitting, submitQuiz]);
 
   // ── Fullscreen & Anti-Cheat Lockdown ──
   useEffect(() => {
@@ -1585,6 +1652,7 @@ export default function QuizRoom() {
       try {
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
+          fullscreenMonitoringRef.current = Boolean(document.fullscreenElement);
         }
       } catch {}
     };
@@ -1598,7 +1666,7 @@ export default function QuizRoom() {
     let lastShortcutReportAt = 0;
 
     const handleFullscreenChange = () => {
-      if (monitoringLevel !== "strict") return;
+      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
       if (isStartupGracePeriodRef.current) return;
       if (!document.fullscreenElement) {
         setPreWarning("⚠️ PRE-WARNING: Exiting full screen is prohibited. Please re-enter full screen.");
@@ -1652,7 +1720,12 @@ export default function QuizRoom() {
       if (focusLossTimer) clearTimeout(focusLossTimer);
       focusLossTimer = null;
       focusLossStartedAt = 0;
-      if (!document.hidden && document.hasFocus()) {
+      // Android Chrome can make the document visible before hasFocus() turns
+      // true (and on some WebViews it remains false). Visibility is the
+      // reliable lifecycle signal on mobile, so persist the completed app
+      // switch as soon as the page returns to the foreground.
+      const isForegrounded = !document.hidden && (isMobile || document.hasFocus());
+      if (isForegrounded) {
         if (!focusIncidentActive && !focusReportInFlight && hiddenDuration >= 200) {
           void attemptFocusLossReport(true);
         } else {
@@ -1742,33 +1815,47 @@ export default function QuizRoom() {
 
   // ─── POST-QUIZ PROCTORSHIELD CELEBRATORY PODIUM SCREEN ────────────────
   if (quizSubmittedResult) {
+    const resultInvalidated = quizSubmittedResult.integrityInvalidated
+      || quizSubmittedResult.aiVerdict === "cheated"
+      || quizSubmittedResult.violations >= 3;
+    const resultFlagged = !resultInvalidated && quizSubmittedResult.violations > 0;
     return (
-      <div className="exam-shell min-h-screen bg-[#0d0f18] text-white flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="exam-shell relative flex min-h-screen items-center justify-center overflow-x-hidden overflow-y-auto bg-[#0d0f18] p-3 text-white sm:p-4">
         {/* Glow backdrop */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-600/20 via-violet-600/20 to-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="bg-[#141726]/90 backdrop-blur-xl border border-[#2b3252] rounded-3xl p-8 max-w-xl w-full text-center relative z-10 shadow-2xl space-y-6 animate-fade-in">
+        <div className="relative z-10 my-auto w-full max-w-xl space-y-5 rounded-3xl border border-[#2b3252] bg-[#141726]/90 p-5 text-center shadow-2xl backdrop-blur-xl animate-fade-in sm:space-y-6 sm:p-8">
           {/* Trophy & Podium */}
           <div className="relative inline-block mx-auto">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center mx-auto shadow-xl shadow-amber-500/30 animate-bounce">
-              <Trophy className="w-10 h-10 text-white" />
+            <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mx-auto shadow-xl animate-bounce ${
+              resultInvalidated
+                ? "bg-gradient-to-tr from-rose-600 to-red-500 shadow-rose-500/30"
+                : "bg-gradient-to-tr from-amber-400 to-amber-600 shadow-amber-500/30"
+            }`}>
+              {resultInvalidated
+                ? <AlertTriangle className="w-10 h-10 text-white" />
+                : <Trophy className="w-10 h-10 text-white" />}
             </div>
-            <span className="absolute -bottom-2 -right-2 px-2.5 py-0.5 rounded-full bg-emerald-500 text-[10px] font-black tracking-wider text-slate-950 uppercase shadow-md">
-              RANK #1
+            <span className={`absolute -bottom-2 -right-2 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase shadow-md ${
+              resultInvalidated ? "bg-rose-500 text-white" : "bg-emerald-500 text-slate-950"
+            }`}>
+              {resultInvalidated ? "INVALIDATED" : "RANK #1"}
             </span>
           </div>
 
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white font-[family-name:var(--font-display)]">
-              Assessment Completed!
+              {resultInvalidated ? "Cheating Detected" : "Assessment Completed!"}
             </h1>
             <p className="text-sm text-slate-400 mt-1 font-medium">
-              ProctorShield Gamified Integrity Score Recorded
+              {resultInvalidated
+                ? "Three-strike integrity limit reached — academic score not recorded"
+                : "ProctorShield Gamified Integrity Score Recorded"}
             </p>
           </div>
 
           {/* Gamified Stats Grid */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
               <div className="text-[10px] font-bold text-slate-400 uppercase">XP Earned</div>
               <div className="text-xl font-black text-amber-400 mt-1 flex items-center justify-center gap-1">
@@ -1785,21 +1872,41 @@ export default function QuizRoom() {
 
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Integrity Score</div>
-              <div className={`text-xl font-black mt-1 ${quizSubmittedResult.violations === 0 ? "text-emerald-400" : "text-amber-400"}`}>
-                {quizSubmittedResult.violations === 0 ? "100%" : "Clean"}
+              <div className={`max-w-full break-words text-lg font-black leading-tight mt-1 sm:text-xl ${
+                resultInvalidated ? "text-rose-400" : resultFlagged ? "text-amber-400" : "text-emerald-400"
+              }`}>
+                {resultInvalidated ? "CHEATED" : resultFlagged ? "REVIEW" : "100%"}
               </div>
             </div>
           </div>
 
           {/* Guardian Trust Shield Banner */}
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-left">
-            <ShieldCheck className="w-8 h-8 text-emerald-400 shrink-0" />
+          <div className={`flex min-w-0 items-start gap-3 rounded-2xl border p-4 text-left sm:items-center ${
+            resultInvalidated
+              ? "bg-rose-500/10 border-rose-500/30"
+              : resultFlagged
+                ? "bg-amber-500/10 border-amber-500/30"
+                : "bg-emerald-500/10 border-emerald-500/30"
+          }`}>
+            {resultInvalidated
+              ? <AlertTriangle className="w-8 h-8 text-rose-400 shrink-0" />
+              : <ShieldCheck className={`w-8 h-8 shrink-0 ${resultFlagged ? "text-amber-400" : "text-emerald-400"}`} />}
             <div>
-              <h4 className="text-xs font-bold text-emerald-400">Guardian Verified Submission</h4>
+              <h4 className={`text-xs font-bold ${
+                resultInvalidated ? "text-rose-400" : resultFlagged ? "text-amber-400" : "text-emerald-400"
+              }`}>
+                {resultInvalidated
+                  ? "Result Invalidated"
+                  : resultFlagged
+                    ? "Submission Flagged for Review"
+                    : "Guardian Verified Submission"}
+              </h4>
               <p className="text-[11px] text-slate-300">
-                {quizSubmittedResult.violations === 0
+                {resultInvalidated
+                  ? `This attempt is recorded as cheated after ${quizSubmittedResult.violations} integrity violations. Its academic score is not counted.`
+                  : quizSubmittedResult.violations === 0
                   ? "Zero violations recorded. Your exam was submitted with 100% verified integrity."
-                  : `Exam proctoring completed with ${quizSubmittedResult.violations} flag(s) logged.`}
+                  : `Exam proctoring completed with ${quizSubmittedResult.violations} flag(s) and requires instructor review.`}
               </p>
             </div>
           </div>
@@ -1831,6 +1938,7 @@ export default function QuizRoom() {
               </div>
             </div>
           )}
+          {!loadingQuiz && !quizError && !["completed", "rejected", "pending_retake"].includes(studentQuizStatus) && (
           <div className="mb-6 rounded-xl border border-gray-800 bg-[#171717] p-4 text-left space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -1870,6 +1978,7 @@ export default function QuizRoom() {
               {isCheckingDevice ? "Testing camera and microphone..." : preflightPassed ? "Run Device Check Again" : "Test Camera & Device"}
             </button>
           </div>
+          )}
           {loadingQuiz ? (
             <div className="py-20 text-gray-400">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -2012,7 +2121,7 @@ export default function QuizRoom() {
       {/* Security Warning Modal */}
       {teacherWarningModal.show && !warningModal.show && (
         <div className="app-modal-backdrop bg-black/80 backdrop-blur-md">
-          <div className="app-modal-panel bg-[#151928] border-2 border-amber-500/80 rounded-3xl p-6 max-w-md text-center shadow-2xl shadow-amber-500/20 animate-fade-in space-y-4 overflow-y-auto">
+          <div className="app-modal-panel bg-[#151928] border-2 border-amber-500/80 rounded-3xl p-5 max-w-md text-center shadow-2xl shadow-amber-500/20 animate-fade-in space-y-4 overflow-y-auto sm:p-6">
             <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
               <AlertTriangle className="w-7 h-7" />
             </div>
@@ -2039,7 +2148,7 @@ export default function QuizRoom() {
       {/* Automated proctoring violation modal */}
       {warningModal.show && (
         <div className="app-modal-backdrop bg-black/80 backdrop-blur-md">
-          <div className="app-modal-panel bg-[#151928] border-2 border-red-500/80 rounded-3xl p-6 max-w-md text-center shadow-2xl shadow-red-500/20 animate-fade-in space-y-4 overflow-y-auto">
+          <div className="app-modal-panel bg-[#151928] border-2 border-red-500/80 rounded-3xl p-5 max-w-md text-center shadow-2xl shadow-red-500/20 animate-fade-in space-y-4 overflow-y-auto sm:p-6">
             <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto text-red-500">
               <AlertTriangle className="w-7 h-7" />
             </div>
@@ -2054,6 +2163,9 @@ export default function QuizRoom() {
                 onClick={() => {
                   setWarningModal({ show: false, message: "", isFinal: false });
                   isAlertingRef.current = false;
+                  if (fullscreenMonitoringRef.current && !document.fullscreenElement) {
+                    void document.documentElement.requestFullscreen().catch(() => {});
+                  }
                 }}
                 className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer"
               >

@@ -36,8 +36,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 debug.log
+cloudflared*.log
 .tmp-cloudflared*.log
 .tmp-cloudflared*.pid
+.tmp-app-*.log
+
+# Local controlled-browser profiles
+/.tmp-teacher-browser/
+
+# Microsoft Office temporary lock files
+~$*.docx
 
 # generated document QA and extraction artifacts
 /docs/_working/

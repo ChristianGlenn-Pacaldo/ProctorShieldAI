@@ -55,7 +55,7 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
 
   return (
     <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm">
-      <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md p-8 shadow-2xl animate-fade-in-up overflow-y-auto">
+      <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md p-5 shadow-2xl animate-fade-in-up overflow-y-auto sm:p-8">
         <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 mb-6 mx-auto">
           <AlertCircle className="w-6 h-6" />
         </div>
