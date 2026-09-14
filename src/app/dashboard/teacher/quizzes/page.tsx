@@ -18,6 +18,7 @@ export default async function Page() {
       isSubscribed={entitlements.isSubscribed}
       initialManualQuizCount={entitlements.manualQuizCount}
       initialManualQuizLimit={entitlements.manualQuizLimit ?? FREE_MANUAL_QUIZ_LIMIT}
+      teacherName={session?.fullName || "Teacher"}
     />
   );
 }

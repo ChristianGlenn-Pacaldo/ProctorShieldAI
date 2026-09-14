@@ -13,6 +13,11 @@ import {
 } from "@/lib/paymongo";
 import { parsePaidCheckout } from "@/lib/paymongo-events";
 import { activatePaidCheckout } from "@/lib/paymongo-subscription";
+import {
+  PRO_MONTHLY_PRICE_PHP,
+  PRO_STUDENT_LIMIT_PER_QUIZ,
+  PRO_SUBSCRIPTION_DURATION_DAYS,
+} from "@/lib/subscription-rules";
 
 const PENDING_CHECKOUT_COOKIE = "ps_pending_paymongo_checkout";
 
@@ -182,18 +187,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You already have an active subscription" }, { status: 400 });
     }
 
-    // Upsert the Premium plan in the database
+    // Normalize the paid plan before checkout. Existing active subscriptions
+    // keep their current end date; new payments purchase one 30-day period.
     let plan = await prisma.subscriptionPlan.findFirst({
-      where: { planName: "Premium Yearly" },
+      where: {
+        OR: [
+          { planName: "Premium Monthly" },
+          { planName: "Premium Yearly" },
+        ],
+      },
     });
 
-    if (!plan) {
+    const monthlyFeatures = `AI Quiz Generation, Live Monitoring, Evidence Replay, AI Reports, Unlimited Quizzes, Up to ${PRO_STUDENT_LIMIT_PER_QUIZ} students per quiz`;
+    if (plan) {
+      plan = await prisma.subscriptionPlan.update({
+        where: { id: plan.id },
+        data: {
+          planName: "Premium Monthly",
+          yearlyPrice: PRO_MONTHLY_PRICE_PHP,
+          features: monthlyFeatures,
+          durationDays: PRO_SUBSCRIPTION_DURATION_DAYS,
+        },
+      });
+    } else {
       plan = await prisma.subscriptionPlan.create({
         data: {
-          planName: "Premium Yearly",
-          yearlyPrice: 500.0,
-          features: "AI Quiz Generation, Live Monitoring, Evidence Replay, AI Reports, Unlimited Quizzes",
-          durationDays: 365,
+          planName: "Premium Monthly",
+          yearlyPrice: PRO_MONTHLY_PRICE_PHP,
+          features: monthlyFeatures,
+          durationDays: PRO_SUBSCRIPTION_DURATION_DAYS,
         },
       });
     }
@@ -215,8 +237,8 @@ export async function POST(req: NextRequest) {
           attributes: {
             line_items: [
               {
-                name: "ProctorShield AI — Premium Yearly",
-                description: "Full AI proctoring, live monitoring, evidence replay, AI reports, and unlimited quizzes for 1 year.",
+                name: "ProctorShield AI — Premium Monthly",
+                description: `Full AI proctoring, live monitoring, evidence replay, AI reports, unlimited quizzes, and up to ${PRO_STUDENT_LIMIT_PER_QUIZ} students per quiz for 30 days.`,
                 amount: checkoutAmount,
                 currency: "PHP",
                 quantity: 1,

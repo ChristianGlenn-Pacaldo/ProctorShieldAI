@@ -83,26 +83,27 @@ test("current and legacy quiz codes survive mobile clipboard normalization", () 
   assert.equal(normalizeQuizAccessCode("ps-8430"), "PS-8430");
 });
 
-test("phone detection accepts repeated COCO phone labels at practical confidence", () => {
+test("device detection rejects weak and stationary-screen false positives", () => {
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.14 }]), 0);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.19 }]), 0.19);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.19 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.29 }]), 0.29);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.61 }]), 0.61);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.34 }]), 0);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.44 }]), 0.44);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.54 }]), 0.54);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.44 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.54 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.72 }]), 0.72);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "tv", score: 0.52 }]), 0.52);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.48 }]), 0.48);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "tv", score: 0.92 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.48 }]), 0);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.76 }]), 0.76);
 });
 
 test("audio monitoring converts PCM samples into a bounded adaptive signal", () => {
   assert.equal(getAudioSignalLevel(new Uint8Array(32).fill(128)), 0);
   assert.ok(getAudioSignalLevel(Uint8Array.from([64, 192, 64, 192])) > 50);
-  assert.equal(getAudioAnomalyThreshold(0), 8);
+  assert.equal(getAudioAnomalyThreshold(0), 20);
   assert.ok(getAudioAnomalyThreshold(12) > getAudioAnomalyThreshold(2));
-  assert.equal(getAudioAnomalyThreshold(100), 30);
-  assert.equal(getAudioAnomalyThreshold(Number.NaN), 8);
+  assert.equal(getAudioAnomalyThreshold(100), 40);
+  assert.equal(getAudioAnomalyThreshold(Number.NaN), 20);
   assert.equal(getViolationLabel("audio_anomaly"), "Sustained loud audio detected");
   assert.equal(getViolationLabel("tab_switch"), "App/tab switch or window minimized");
 });

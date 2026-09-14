@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -45,8 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           });
 
           const startDate = new Date();
-          const endDate = new Date(startDate);
-          endDate.setFullYear(endDate.getFullYear() + 1);
+          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
           await prisma.userSubscription.upsert({
             where: { userId_planId: { userId: id, planId: premiumPlan.id } },
             update: {

@@ -1,7 +1,7 @@
 import "dotenv/config";
-import prisma from "../src/lib/prisma";
+import prisma from "../src/lib/prisma.ts";
 import { getRedis } from "../src/lib/redis.ts";
-import { checkEvidenceStorage } from "../src/lib/evidence-storage";
+import { checkEvidenceStorage } from "../src/lib/evidence-storage.ts";
 
 let redisClient: ReturnType<typeof getRedis> = null;
 

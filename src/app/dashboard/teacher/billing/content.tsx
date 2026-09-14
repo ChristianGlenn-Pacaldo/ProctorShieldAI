@@ -14,6 +14,12 @@ import {
   AlertTriangle,
   CheckCircle,
 } from "lucide-react";
+import {
+  FREE_MANUAL_QUIZ_LIMIT,
+  FREE_STUDENT_LIMIT_PER_QUIZ,
+  PRO_MONTHLY_PRICE_PHP,
+  PRO_STUDENT_LIMIT_PER_QUIZ,
+} from "@/lib/subscription-rules";
 
 interface Subscription {
   id: string;
@@ -39,6 +45,7 @@ const premiumFeatures = [
   { icon: <Camera className="w-4 h-4" />, title: "Evidence & Violation Logs", desc: "Timeline logs of all violations with captured screenshot forensic evidence" },
   { icon: <Brain className="w-4 h-4" />, title: "Gemini AI Verdict Reports", desc: "AI calculates cheating probability verdicts and generates integrity reports" },
   { icon: <ClipboardList className="w-4 h-4" />, title: "Unlimited Quizzes", desc: "Create as many quizzes and assessments as you need with no limits" },
+  { icon: <Shield className="w-4 h-4" />, title: `${PRO_STUDENT_LIMIT_PER_QUIZ} Students per Quiz`, desc: `Enroll up to ${PRO_STUDENT_LIMIT_PER_QUIZ} distinct students in each quiz` },
   { icon: <Shield className="w-4 h-4" />, title: "Live Security & Defense Tools", desc: "Fullscreen lockdown, gaze detection, and multi-device proctoring" },
 ];
 
@@ -157,7 +164,7 @@ export default function BillingContent() {
           <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
           <div>
             <p className="text-sm font-bold text-emerald-500">Payment received</p>
-            <p className="text-xs text-[var(--muted)]">Your plan will activate after PayMongo's signed webhook is verified. Refresh in a few seconds.</p>
+            <p className="text-xs text-[var(--muted)]">Your plan will activate after PayMongo&apos;s signed webhook is verified. Refresh in a few seconds.</p>
           </div>
         </div>
       )}
@@ -217,7 +224,7 @@ export default function BillingContent() {
                 <span className="text-sm font-bold text-amber-500">Limited Access</span>
               </div>
               <p className="text-xs text-[var(--muted)] leading-relaxed">
-                You are currently on the Free plan. AI Quiz Generation and Live Monitoring require a Premium subscription.
+                The Free plan includes {FREE_MANUAL_QUIZ_LIMIT} lifetime manual quizzes and up to {FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz. AI Quiz Generation, Live Monitoring, Evidence Replay, and AI Reports require Pro.
               </p>
             </div>
           )}
@@ -266,7 +273,7 @@ export default function BillingContent() {
                 ) : (
                   <>
                     <Crown className="w-4 h-4" />
-                    Pay with PayMongo ({paymentMode === "live" ? "₱500" : "Test ₱500"})
+                    Pay with PayMongo ({paymentMode === "live" ? `₱${PRO_MONTHLY_PRICE_PHP}/month` : `Test ₱${PRO_MONTHLY_PRICE_PHP}/month`})
                   </>
                 )}
               </button>

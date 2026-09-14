@@ -54,14 +54,17 @@ export function getViolationLabel(type: string): string {
 }
 
 const DEVICE_THRESHOLDS = new Map<string, number>([
-  ["cell phone", 0.15],
-  ["mobile phone", 0.15],
-  ["smartphone", 0.15],
+  ["cell phone", 0.2],
+  ["mobile phone", 0.2],
+  ["smartphone", 0.2],
   // A phone held sideways with its display facing the camera is frequently
-  // classified as a remote or a larger screen by the COCO model.
-  ["remote", 0.35],
-  ["laptop", 0.4],
-  ["tv", 0.4],
+  // classified as a remote. Require much stronger evidence for that generic
+  // label because faces, furniture, and wall fixtures produce false matches.
+  ["remote", 0.55],
+  ["laptop", 0.65],
+  // Do not classify a stationary TV/monitor in the room as a handheld phone.
+  // The browser cannot reliably distinguish a background display from a
+  // second device being used, so those cases remain for teacher review.
 ]);
 
 export function getUnauthorizedDeviceConfidence(predictions: ObjectPrediction[]): number {
@@ -95,10 +98,11 @@ export function getAudioAnomalyThreshold(noiseFloor: number): number {
   const normalizedFloor = Number.isFinite(noiseFloor)
     ? Math.max(0, Math.min(100, noiseFloor))
     : 0;
-  // A small non-zero RMS value is normal on phone microphones because of
-  // automatic gain control. Requiring at least 8% avoids treating ordinary
-  // ambient noise as speech while still detecting sustained voices/shouting.
-  return Math.max(8, Math.min(30, Math.round(normalizedFloor + 5)));
+  // Phone microphones commonly sit between 2% and 18% because of automatic
+  // gain control, fans, handling noise, or nearby conversation. Treat only a
+  // clearly louder sustained signal as anomalous; ordinary room noise should
+  // remain below the 20% floor.
+  return Math.max(20, Math.min(40, Math.round(normalizedFloor + 12)));
 }
 
 export function isScreenshotShortcut(event: ShortcutEvent): boolean {

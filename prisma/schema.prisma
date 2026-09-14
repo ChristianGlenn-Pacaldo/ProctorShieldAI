@@ -45,6 +45,8 @@ model User {
   activityLogs      ActivityLog[]
   userSubscriptions UserSubscription[]
   otpCodes          OtpCode[]
+  gameProfile       StudentGameProfile?
+  coinLedger        StudentCoinLedger[]
 
   @@map("users")
 }
@@ -281,6 +283,36 @@ model UserSubscription {
   @@unique([userId, planId])
   @@index([subscriptionStatus, endDate])
   @@map("user_subscriptions")
+}
+
+model StudentGameProfile {
+  studentId        String   @id @map("student_id")
+  coins            Int      @default(100)
+  unlockedAvatars  String[] @default(["shield", "fox", "owl", "robot", "lightning", "rocket"]) @map("unlocked_avatars")
+  equippedAvatar   String   @default("shield") @map("equipped_avatar")
+  topOneWins       Int      @default(0) @map("top_one_wins")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_game_profiles")
+}
+
+model StudentCoinLedger {
+  id         BigInt   @id @default(autoincrement())
+  studentId  String   @map("student_id")
+  sourceType String   @map("source_type")
+  sourceId   String   @map("source_id")
+  amount     Int
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, sourceType, sourceId])
+  @@index([studentId, createdAt])
+  @@map("student_coin_ledger")
 }
 
 model Payment {

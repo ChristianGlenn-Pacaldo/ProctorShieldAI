@@ -35,7 +35,12 @@ export async function POST(req: NextRequest) {
       }));
     } else if (session.role === "student") {
       allowed = Boolean(await prisma.studentQuiz.findFirst({
-        where: { quizId, studentId: session.userId },
+        where: {
+          quizId,
+          studentId: session.userId,
+          endTime: null,
+          quizStatus: { in: ["enrolled", "in_progress", "pending_approval"] },
+        },
         select: { id: true },
       }));
     }

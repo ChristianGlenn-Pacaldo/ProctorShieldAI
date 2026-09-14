@@ -532,28 +532,28 @@ async function main() {
     create: {
       planName: "Free",
       yearlyPrice: 0,
-      features: "5 quizzes/month, Basic AI proctoring, Email support",
-      durationDays: 365,
+      features: "5 lifetime manual quizzes, Up to 20 students per quiz, Basic proctoring, Email support",
+      durationDays: null,
     },
   });
 
   await prisma.subscriptionPlan.upsert({
     where: { id: 2 },
     update: {
-      planName: "Premium Yearly",
+      planName: "Premium Monthly",
       yearlyPrice: 500,
-      features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
-      durationDays: 365,
+      features: "Unlimited quizzes, Up to 100 students per quiz, Full AI analysis, Live monitoring, Evidence replay, Priority support",
+      durationDays: 30,
     },
     create: {
-      planName: "Premium Yearly",
+      planName: "Premium Monthly",
       yearlyPrice: 500,
-      features: "Unlimited quizzes, Full AI analysis, Evidence replay, Priority support, CCTV replay",
-      durationDays: 365,
+      features: "Unlimited quizzes, Up to 100 students per quiz, Full AI analysis, Live monitoring, Evidence replay, Priority support",
+      durationDays: 30,
     },
   });
 
-  console.log("   ✓ Free plan (₱0)\n   ✓ Premium yearly plan (₱500/year)\n");
+  console.log("   ✓ Free plan (₱0)\n   ✓ Premium monthly plan (₱500/month)\n");
 
   // ── 12. SETTINGS ──────────────────────────────────────
   console.log("⚙️  Creating system settings...");

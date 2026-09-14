@@ -3,6 +3,9 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
+import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
+import { getQuizCapacityDecision } from "@/lib/subscription-rules";
+import { getArenaState } from "@/lib/arena";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,16 +62,83 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This quiz has already ended and is no longer accepting submissions." }, { status: 403 });
     }
 
-    // Check if the student has already joined this quiz
-    const existingEnrollment = await prisma.studentQuiz.findFirst({
-      where: {
-        studentId: session.userId,
-        quizId: quiz.id,
-      },
-      orderBy: { attemptNumber: "desc" },
+    const enrollmentResult = await prisma.$transaction(async (tx) => {
+      // Serialize enrollment for this quiz so simultaneous join requests cannot
+      // exceed the plan capacity.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-enrollment:${quiz.id}`}))`;
+
+      const currentQuiz = await tx.quiz.findUnique({
+        where: { id: quiz.id },
+        select: { quizStatus: true },
+      });
+      if (!currentQuiz || currentQuiz.quizStatus === "ended") {
+        return { kind: "closed" as const };
+      }
+
+      // Returning students and approved retakes do not consume another seat.
+      const existingEnrollment = await tx.studentQuiz.findFirst({
+        where: {
+          studentId: session.userId,
+          quizId: quiz.id,
+        },
+        orderBy: { attemptNumber: "desc" },
+      });
+      if (existingEnrollment) {
+        return { kind: "existing" as const };
+      }
+
+      const isSubscribed = await hasActiveProSubscription(quiz.teacherId, tx);
+      const enrolledStudents = await tx.studentQuiz.findMany({
+        where: { quizId: quiz.id },
+        select: { studentId: true },
+        distinct: ["studentId"],
+      });
+      const capacity = getQuizCapacityDecision(isSubscribed, enrolledStudents.length);
+      if (!capacity.allowed) {
+        return { kind: "full" as const, capacity };
+      }
+
+      const isLateJoin = currentQuiz.quizStatus === "in_progress";
+      const studentQuiz = await tx.studentQuiz.create({
+        data: {
+          studentId: session.userId,
+          quizId: quiz.id,
+          quizStatus: isLateJoin ? "pending_approval" : "enrolled",
+        },
+      });
+
+      return {
+        kind: "created" as const,
+        studentQuiz,
+        isLateJoin,
+        capacity: {
+          limit: capacity.limit,
+          enrolled: enrolledStudents.length + 1,
+          remaining: Math.max(0, capacity.remaining - 1),
+        },
+      };
     });
 
-    if (existingEnrollment) {
+    if (enrollmentResult.kind === "closed") {
+      return NextResponse.json({ error: "This quiz has already ended and is no longer accepting submissions." }, { status: 403 });
+    }
+
+    if (enrollmentResult.kind === "full") {
+      return NextResponse.json(
+        {
+          error: enrollmentResult.capacity.message,
+          code: enrollmentResult.capacity.code,
+          capacity: {
+            limit: enrollmentResult.capacity.limit,
+            enrolled: enrollmentResult.capacity.limit,
+            remaining: 0,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    if (enrollmentResult.kind === "existing") {
       return NextResponse.json({
         success: true,
         message: `Welcome back to ${quiz.title}`,
@@ -80,18 +150,7 @@ export async function POST(req: NextRequest) {
       }, { status: 200 });
     }
 
-    // Determine initial status based on quiz status
-    const isLateJoin = quiz.quizStatus === "in_progress";
-    const initialStudentQuizStatus = isLateJoin ? "pending_approval" : "enrolled";
-
-    // Enroll student
-    const studentQuiz = await prisma.studentQuiz.create({
-      data: {
-        studentId: session.userId,
-        quizId: quiz.id,
-        quizStatus: initialStudentQuizStatus,
-      },
-    });
+    const { studentQuiz, isLateJoin, capacity } = enrollmentResult;
 
     // Create notification for Teacher
     let teacherNotificationId = null;
@@ -146,6 +205,18 @@ export async function POST(req: NextRequest) {
             : `${session.fullName} joined "${quiz.title}".`,
         createdAt: teacherNotificationDate,
       });
+
+      const arena = await getArenaState(quiz.id);
+      if (arena?.status === "active" && arena.teacherId === quiz.teacherId) {
+        await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
+          sessionId: arena.sessionId,
+          quizId: quiz.id,
+          studentId: session.userId,
+          studentName: session.fullName,
+          avatar: "🎓",
+          timestamp: new Date().toISOString(),
+        });
+      }
     } catch (e) {
       console.error("Failed to trigger push event:", e);
     }
@@ -167,6 +238,7 @@ export async function POST(req: NextRequest) {
         title: quiz.title,
         subject: quiz.subject.subjectName,
       },
+      capacity,
     }, { status: 201 });
 
   } catch (error) {

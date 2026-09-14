@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {
   FREE_MANUAL_QUIZ_LIMIT,
+  getStudentLimitPerQuiz,
   type TeacherEntitlementSummary,
 } from "@/lib/subscription-rules";
 
@@ -73,5 +74,6 @@ export async function getTeacherEntitlements(
     manualQuizzesRemaining: isSubscribed
       ? null
       : Math.max(0, FREE_MANUAL_QUIZ_LIMIT - manualQuizCount),
+    studentLimitPerQuiz: getStudentLimitPerQuiz(isSubscribed),
   };
 }

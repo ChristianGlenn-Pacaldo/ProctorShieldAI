@@ -13,6 +13,11 @@ import {
   parseVerdict,
 } from "@/lib/quiz-submission";
 
+import {
+  calculateQuizCoinReward,
+} from "@/lib/student-coins";
+import { ensureStudentGameProfile } from "@/lib/student-game-profile";
+
 class SubmissionConflictError extends Error {}
 
 export async function POST(req: NextRequest) {
@@ -130,9 +135,9 @@ Return ONLY the valid JSON object.`;
 
     // Claim and complete the attempt atomically. A concurrent request cannot
     // pass the conditional update after the first transaction commits.
-    let updatedStudentQuiz;
+    let completion;
     try {
-      updatedStudentQuiz = await prisma.$transaction(async (tx) => {
+      completion = await prisma.$transaction(async (tx) => {
         const claimed = await tx.studentQuiz.updateMany({
           where: {
             id: studentQuiz.id,
@@ -191,7 +196,60 @@ Return ONLY the valid JSON object.`;
             },
           ],
         });
-        return completed;
+        const allSubmissions = await tx.studentQuiz.findMany({
+          where: {
+            quizId: Number(quizId),
+            quizStatus: "completed",
+            aiVerdict: { not: "cheated" },
+          },
+          select: { id: true, score: true },
+          orderBy: [{ score: "desc" }, { endTime: "asc" }],
+        });
+        const foundIndex = allSubmissions.findIndex((submission) => submission.id === studentQuiz.id);
+        const studentRank = foundIndex >= 0 ? foundIndex + 1 : allSubmissions.length + 1;
+        const coinReward = calculateQuizCoinReward({
+          rank: studentRank,
+          score: recordedScore ?? 0,
+          violationsCount: violations.length,
+          isInvalidated: integrityInvalidated,
+        });
+
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
+        const currentProfile = await ensureStudentGameProfile(tx, session.userId);
+        let totalCoins = currentProfile.coins;
+        if (coinReward.coins > 0) {
+          await tx.studentCoinLedger.create({
+            data: {
+              studentId: session.userId,
+              sourceType: "quiz-completion",
+              sourceId: studentQuiz.id,
+              amount: coinReward.coins,
+              metadata: {
+                quizId: studentQuiz.quiz.id,
+                rank: studentRank,
+                score: recordedScore,
+                violations: violations.length,
+              },
+            },
+          });
+          const rewardedProfile = await tx.studentGameProfile.update({
+            where: { studentId: session.userId },
+            data: {
+              coins: { increment: coinReward.coins },
+              topOneWins: coinReward.isTopOne ? { increment: 1 } : undefined,
+            },
+          });
+          totalCoins = rewardedProfile.coins;
+          await tx.notification.create({
+            data: {
+              userId: session.userId,
+              title: coinReward.isTopOne ? "🥇 Top 1 Leaderboard Champion!" : "🪙 Quiz Coins Earned!",
+              message: `You earned +${coinReward.coins} coins for finishing ${coinReward.rankTitle}! Visit the Avatar Shop to unlock new avatars.`,
+            },
+          });
+        }
+
+        return { completed, coinReward, studentRank, totalCoins };
       });
     } catch (error) {
       if (error instanceof SubmissionConflictError) {
@@ -199,6 +257,8 @@ Return ONLY the valid JSON object.`;
       }
       throw error;
     }
+
+    const updatedStudentQuiz = completion.completed;
 
     // Broadcast student-submitted event via Pusher
     const channelName = `private-teacher-${studentQuiz.quiz.teacherId}`;
@@ -228,6 +288,8 @@ Return ONLY the valid JSON object.`;
       console.error("Pusher submit broadcast error:", pusherErr);
     }
 
+    const { coinReward, studentRank, totalCoins } = completion;
+
     return NextResponse.json({
       success: true,
       studentQuiz: updatedStudentQuiz,
@@ -238,6 +300,12 @@ Return ONLY the valid JSON object.`;
         deadlineExpired,
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
+        coinsEarned: coinReward.coins,
+        rank: studentRank,
+        isTopOne: coinReward.isTopOne,
+        rankTitle: coinReward.rankTitle,
+        totalCoins,
+        rewardBreakdown: coinReward.breakdown,
       },
     });
 

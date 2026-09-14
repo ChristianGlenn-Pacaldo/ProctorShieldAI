@@ -1,5 +1,11 @@
 import Link from "next/link";
 import {
+  FREE_MANUAL_QUIZ_LIMIT,
+  FREE_STUDENT_LIMIT_PER_QUIZ,
+  PRO_MONTHLY_PRICE_PHP,
+  PRO_STUDENT_LIMIT_PER_QUIZ,
+} from "@/lib/subscription-rules";
+import {
   Shield,
   Camera,
   Brain,
@@ -227,7 +233,7 @@ export default function LandingPage() {
               <span className="text-sm font-normal text-slate-400"> / forever</span>
             </div>
             <p className="text-xs text-slate-400 mt-3 mb-6 leading-relaxed">
-              For individual teachers trying out the platform.
+              {FREE_MANUAL_QUIZ_LIMIT} lifetime manual quizzes with up to {FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz.
             </p>
             <Link
               href="/login"
@@ -242,7 +248,7 @@ export default function LandingPage() {
             </div>
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-extrabold text-slate-100 font-[family-name:var(--font-display)]">
-                ₱500
+                ₱{PRO_MONTHLY_PRICE_PHP}
                 <span className="text-sm font-normal text-slate-400"> / mo</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-extrabold">
@@ -250,7 +256,7 @@ export default function LandingPage() {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-3 mb-6 leading-relaxed">
-              Full AI analysis, evidence replay, unlimited quizzes.
+              AI creation, live monitoring, evidence replay, unlimited quizzes, and up to {PRO_STUDENT_LIMIT_PER_QUIZ} students per quiz.
             </p>
             <Link
               href="/login"

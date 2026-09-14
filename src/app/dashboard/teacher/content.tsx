@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { FileText, Users, AlertTriangle, Brain, Search, Crown } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
+import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
 
 interface StatCard {
   label: string;
@@ -43,9 +44,11 @@ interface RecentVerdict {
 export default function TeacherDashboardContent({
   teacherId,
   isSubscribed,
+  teacherName = "Teacher",
 }: {
   teacherId: string;
   isSubscribed: boolean;
+  teacherName?: string;
 }) {
   const [stats, setStats] = useState({
     totalQuizzes: 0,
@@ -278,6 +281,32 @@ export default function TeacherDashboardContent({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* ProctorShield Activity Creation Hub */}
+      <ProctorShieldCreateHub
+        teacherName={teacherName}
+        isSubscribed={isSubscribed}
+        onOpenCreateQuiz={() => {
+          window.location.href = "/dashboard/teacher/quizzes?create=true";
+        }}
+        onOpenAiGenerator={() => {
+          if (!isSubscribed) {
+            window.location.href = "/dashboard/teacher/billing";
+            return;
+          }
+          window.location.href = "/dashboard/teacher/quizzes?ai=true";
+        }}
+        onOpenArena={() => {
+          if (!isSubscribed) {
+            window.location.href = "/dashboard/teacher/billing";
+            return;
+          }
+          window.location.href = "/dashboard/teacher/playground";
+        }}
+        onRequirePro={() => {
+          window.location.href = "/dashboard/teacher/billing";
+        }}
+      />
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (

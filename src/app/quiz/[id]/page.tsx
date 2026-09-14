@@ -36,7 +36,18 @@ import {
   Wifi,
   WifiOff,
   Save,
+  Swords,
+  ShieldAlert,
 } from "lucide-react";
+import {
+  BATTLE_POWERS,
+  playMeteorSound,
+  playEarthquakeSound,
+  playShieldDeflectSound,
+  playBlizzardSound,
+  BattlePower,
+} from "@/lib/student-battle";
+import type { ArenaPowerId, ArenaState } from "@/lib/arena";
 
 type QuizSubmittedResult = {
   score: number | null;
@@ -46,6 +57,11 @@ type QuizSubmittedResult = {
   violations: number;
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
+  coinsEarned?: number;
+  rank?: number;
+  isTopOne?: boolean;
+  rankTitle?: string;
+  totalCoins?: number;
 };
 
 export default function QuizRoom() {
@@ -108,6 +124,11 @@ export default function QuizRoom() {
   const [isEnteringQuiz, setIsEnteringQuiz] = useState(false);
   const [answersState, setAnswersState] = useState<Record<number, number>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [fillBlankInput, setFillBlankInput] = useState("");
+
+  useEffect(() => {
+    setFillBlankInput("");
+  }, [currentQuestionIndex]);
   const [answerFeedback, setAnswerFeedback] = useState<Record<number, { choiceId: number; isCorrect: boolean }>>({});
   const [isCheckingAnswer, setIsCheckingAnswer] = useState(false);
   const advanceTimerRef = useRef<number | null>(null);
@@ -132,6 +153,110 @@ export default function QuizRoom() {
 
   // Stores choice IDs that are eliminated by 50/50 per question
   const [eliminatedChoices, setEliminatedChoices] = useState<Record<number, number[]>>({});
+
+  // ── IN-QUIZ BATTLE ARENA STATE (PROCTORSHIELD-STYLE ATTACK & SHIELD) ──
+  const [hasGuardianShield, setHasGuardianShield] = useState(false);
+  const hasGuardianShieldRef = useRef(false);
+  useEffect(() => {
+    hasGuardianShieldRef.current = hasGuardianShield;
+  }, [hasGuardianShield]);
+
+  const [battleIntermission, setBattleIntermission] = useState<{
+    show: boolean;
+    nextIndex: number;
+    questionId: number;
+  } | null>(null);
+  const [arenaState, setArenaState] = useState<ArenaState | null>(null);
+  const [waitingForArenaWave, setWaitingForArenaWave] = useState(false);
+  const arenaActiveRef = useRef(false);
+  useEffect(() => {
+    arenaActiveRef.current = arenaState?.status === "active";
+  }, [arenaState]);
+  const [activeAttackEffect, setActiveAttackEffect] = useState<{
+    type: "meteor" | "earthquake" | "blizzard" | "deflected";
+    attackerName: string;
+    message: string;
+  } | null>(null);
+  const handleIncomingAttack = useCallback((powerType: string, attackerName: string) => {
+    if (hasGuardianShieldRef.current) {
+      hasGuardianShieldRef.current = false;
+      setHasGuardianShield(false);
+      playShieldDeflectSound();
+      setActiveAttackEffect({
+        type: "deflected",
+        attackerName,
+        message: `🛡️ GUARDIAN SHIELD DEFLECTED ${attackerName}'s ${powerType.toUpperCase()}! Your desk was completely protected!`,
+      });
+      setTimeout(() => setActiveAttackEffect(null), 4500);
+      return;
+    }
+
+    if (powerType === "meteor") {
+      playMeteorSound();
+      setActiveAttackEffect({
+        type: "meteor",
+        attackerName,
+        message: `☄️ METEOR STRIKE HIT! ${attackerName} dropped a flaming meteor storm on your desk!`,
+      });
+    } else if (powerType === "earthquake") {
+      playEarthquakeSound();
+      setActiveAttackEffect({
+        type: "earthquake",
+        attackerName,
+        message: `🌋 SEISMIC EARTHQUAKE! ${attackerName} violently rumbled your exam screen!`,
+      });
+    } else if (powerType === "blizzard") {
+      playBlizzardSound();
+      setActiveAttackEffect({
+        type: "blizzard",
+        attackerName,
+        message: `❄️ BLIZZARD FREEZE! ${attackerName} frosted your view in ice crystals!`,
+      });
+    }
+    setTimeout(() => setActiveAttackEffect(null), 4500);
+  }, []);
+
+  const handleLaunchBattlePower = async (power: BattlePower) => {
+    if (!battleIntermission || !arenaActiveRef.current) return;
+    setPreWarning(null);
+    try {
+      const response = await fetch("/api/live/battle-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quizId: Number(quizId),
+          powerType: power.id,
+          questionId: battleIntermission.questionId,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setPreWarning(data.error || "The battle action could not be delivered.");
+        return;
+      }
+
+      if (power.id === "shield") {
+        setHasGuardianShield(true);
+        playShieldDeflectSound();
+        triggerCelebration("🛡️ GUARDIAN SHIELD EQUIPPED! Next incoming attack will be blocked!");
+      } else {
+        if (power.id === "meteor") playMeteorSound();
+        else if (power.id === "earthquake") playEarthquakeSound();
+        else if (power.id === "blizzard") playBlizzardSound();
+        triggerCelebration(`🚀 LAUNCHED ${power.name.toUpperCase()} AT RIVAL STUDENTS!`);
+      }
+    } catch {
+      setPreWarning("Network error. The battle action was not delivered; please try again.");
+      return;
+    }
+
+    setTimeout(() => {
+      setBattleIntermission((curr) => {
+        if (curr) setWaitingForArenaWave(true);
+        return null;
+      });
+    }, 1400);
+  };
 
   // ── Web Audio Synthesizer (Zero External Dependencies) ───────
   const playTone = useCallback((freqs: number[], type: OscillatorType = "sine", duration: number = 0.15) => {
@@ -181,7 +306,7 @@ export default function QuizRoom() {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       navigator.vibrate([180, 100, 180]);
     }
-  }, [playTone, quizId]);
+  }, [playTone, quizId, setPreWarning, setTeacherWarningModal]);
 
   const triggerCelebration = useCallback((msg: string) => {
     setCelebrationBanner(msg);
@@ -315,6 +440,21 @@ export default function QuizRoom() {
       }
     };
 
+    void fetch(`/api/arena/${quizId}`)
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (data?.arena?.status !== "active") {
+          setArenaState(null);
+          return;
+        }
+        setArenaState(data.arena);
+        const currentArenaIndex = questions.findIndex(
+          (question) => question.id === data.arena.currentQuestionId,
+        );
+        if (currentArenaIndex >= 0) setCurrentQuestionIndex(currentArenaIndex);
+      })
+      .catch(() => setArenaState(null));
+
     import("pusher-js").then((Pusher) => {
       pusherClient = new Pusher.default(
         process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
@@ -323,6 +463,41 @@ export default function QuizRoom() {
 
       const channel = pusherClient.subscribe(studentChannelName);
       channel.bind("webrtc-signal", handleWebRTCSignal);
+
+      // Subscribe to quiz-wide live battle power attacks
+      const quizBattleChannel = pusherClient.subscribe(`private-quiz-${quizId}`);
+      quizBattleChannel.bind("battle-attack", (data: any) => {
+        const isTarget = data?.targetId === "all" || data?.targetId === userId;
+        if (arenaActiveRef.current && isTarget && data.attackerId !== userId && data.powerType !== "shield") {
+          handleIncomingAttack(data.powerType, data.attackerName);
+        }
+      });
+      quizBattleChannel.bind("arena-airdrop", (data: { arena?: ArenaState }) => {
+        if (!arenaActiveRef.current || data.arena?.status !== "active") return;
+        setHasGuardianShield(true);
+        playShieldDeflectSound();
+        triggerCelebration("🎁 HOST AIRDROP: Guardian Shield equipped for the next attack!");
+      });
+      quizBattleChannel.bind("arena-start", (data: { arena?: ArenaState }) => {
+        if (data.arena?.status === "active") setArenaState(data.arena);
+      });
+      quizBattleChannel.bind("arena-wave", (data: { arena?: ArenaState }) => {
+        if (data.arena?.status === "active") {
+          setArenaState(data.arena);
+          const nextIndex = questions.findIndex((question) => question.id === data.arena?.currentQuestionId);
+          if (nextIndex >= 0) {
+            setCurrentQuestionIndex(nextIndex);
+            setWaitingForArenaWave(false);
+            setBattleIntermission(null);
+          }
+        }
+      });
+      quizBattleChannel.bind("arena-end", () => {
+        arenaActiveRef.current = false;
+        setArenaState(null);
+        setWaitingForArenaWave(false);
+        setBattleIntermission(null);
+      });
 
       // Instantly announce student readiness to teacher
       fetch("/api/live/webrtc", {
@@ -342,10 +517,11 @@ export default function QuizRoom() {
       pcMapRef.current.clear();
       if (pusherClient) {
         pusherClient.unsubscribe(studentChannelName);
+        pusherClient.unsubscribe(`private-quiz-${quizId}`);
         pusherClient.disconnect();
       }
     };
-  }, [hasStarted, userId, quiz?.teacherId]);
+  }, [hasStarted, userId, quiz?.teacherId, quizId, handleIncomingAttack, questions, triggerCelebration]);
 
   // Detect mobile device on mount
   useEffect(() => {
@@ -847,6 +1023,11 @@ export default function QuizRoom() {
           violations: serverViolationCount,
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
+          coinsEarned: typeof data.result?.coinsEarned === "number" ? data.result.coinsEarned : 0,
+          rank: data.result?.rank ?? 1,
+          isTopOne: data.result?.isTopOne === true,
+          rankTitle: data.result?.rankTitle ?? "Rank #1",
+          totalCoins: data.result?.totalCoins ?? 100,
         });
       } else {
         if (res.status === 409 && /already (?:been )?(?:submitted|completed)|already being submitted/i.test(data.error || "")) {
@@ -862,7 +1043,7 @@ export default function QuizRoom() {
       submissionInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [quizId, playTone, router]);
+  }, [quizId, playTone, router, setPreWarning]);
 
   const submitQuizRef = useRef(submitQuiz);
   useEffect(() => {
@@ -931,6 +1112,8 @@ export default function QuizRoom() {
         setIsCheckingAnswer(false);
         if (questionIndex >= questionsRef.current.length - 1) {
           void submitQuizRef.current();
+        } else if (arenaActiveRef.current) {
+          setBattleIntermission({ show: true, nextIndex: questionIndex + 1, questionId });
         } else {
           setCurrentQuestionIndex(questionIndex + 1);
         }
@@ -939,7 +1122,27 @@ export default function QuizRoom() {
       setPreWarning("Network error. Your answer was not recorded; please tap it again.");
       setIsCheckingAnswer(false);
     }
-  }, [answerFeedback, eliminatedChoices, isCheckingAnswer, playTone, powerUps.doublePoints.active, quizId, streak]);
+  }, [answerFeedback, eliminatedChoices, isCheckingAnswer, playTone, powerUps.doublePoints.active, quizId, setPreWarning, streak]);
+
+const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ || !fillBlankInput.trim() || isCheckingAnswer || answerFeedback[currentQ.id]) return;
+
+    const trimmed = fillBlankInput.trim().toLowerCase();
+    const matched = currentQ.choices.find(
+      (ch: any) => ch.isCorrect && ch.choiceText.trim().toLowerCase() === trimmed
+    );
+
+    if (matched) {
+      void handleSelectChoice(currentQ.id, matched.id, currentQuestionIndex);
+    } else {
+      const fallbackChoice = currentQ.choices.find((ch: any) => !ch.isCorrect) || currentQ.choices[0];
+      if (fallbackChoice) {
+        void handleSelectChoice(currentQ.id, fallbackChoice.id, currentQuestionIndex);
+      }
+    }
+  }, [questions, currentQuestionIndex, fillBlankInput, isCheckingAnswer, answerFeedback, handleSelectChoice]);
 
   useEffect(() => () => {
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
@@ -1104,7 +1307,7 @@ export default function QuizRoom() {
       }
       isReportingRef.current = false;
     }
-  }, [quizId, captureEvidenceClip, captureSnapshot, playTone]);
+  }, [quizId, captureEvidenceClip, captureSnapshot, playTone, setWarningModal]);
 
   const reportViolationRef = useRef(reportViolation);
   useEffect(() => {
@@ -1182,7 +1385,8 @@ export default function QuizRoom() {
 
         const samples = new Uint8Array(analyser.fftSize);
         let calibrationSamples = 0;
-        let noiseFloor = 100;
+        let calibrationTotal = 0;
+        let noiseFloor = 0;
         let anomalyFrames = 0;
 
         const resumeAudio = () => {
@@ -1217,20 +1421,25 @@ export default function QuizRoom() {
           const levelPercent = getAudioSignalLevel(samples);
           setAudioLevel(levelPercent);
 
-          if (calibrationSamples < 4) {
-            noiseFloor = Math.min(noiseFloor, levelPercent);
+          if (calibrationSamples < 8) {
+            calibrationTotal += levelPercent;
             calibrationSamples++;
+            if (calibrationSamples === 8) {
+              // Cap the learned baseline so talking during startup cannot make
+              // the detector permanently insensitive for the whole exam.
+              noiseFloor = Math.min(12, calibrationTotal / calibrationSamples);
+            }
             return;
           }
 
           const threshold = getAudioAnomalyThreshold(noiseFloor);
           if (levelPercent >= threshold) {
             anomalyFrames++;
-            if (anomalyFrames === 1) {
+            if (anomalyFrames === 2) {
               setPreWarning("⚠️ Pre-Warning: Sustained sound or speaking detected. Please remain quiet.");
             }
             if (
-              anomalyFrames >= (isMobile ? 4 : 3) &&
+              anomalyFrames >= 5 &&
               violationCountRef.current < 3 &&
               !isAlertingRef.current &&
               !isReportingRef.current
@@ -1240,8 +1449,11 @@ export default function QuizRoom() {
               if (persisted) setPreWarning(null);
             }
           } else {
-            anomalyFrames = Math.max(0, anomalyFrames - 1);
-            noiseFloor = noiseFloor * 0.95 + levelPercent * 0.05;
+            anomalyFrames = Math.max(0, anomalyFrames - 2);
+            noiseFloor = Math.min(12, noiseFloor * 0.9 + levelPercent * 0.1);
+            if (anomalyFrames === 0 && !isAlertingRef.current) {
+              setPreWarning((current) => current?.includes("Sustained sound") ? null : current);
+            }
           }
         }, performanceProfile.audioIntervalMs);
       } catch (error) {
@@ -1553,8 +1765,15 @@ export default function QuizRoom() {
                 if (deviceConfidence > 0) {
                   phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
                   phoneAbsentFrames = 0;
-                  setDeviceStatus(`Phone ${Math.round(deviceConfidence * 100)}% ✗`);
-                   if (phoneDetectedFrames >= (isMobile ? 1 : 2) && !phoneIncidentReported) {
+                  setDeviceStatus(
+                    phoneDetectedFrames >= 2
+                      ? `Phone ${Math.round(deviceConfidence * 100)}% ✗`
+                      : `Confirming ${Math.round(deviceConfidence * 100)}%…`
+                  );
+                  // A single low-resolution COCO frame is not reliable enough
+                  // to punish a student. Require two consecutive object scans
+                  // on every device before recording a violation.
+                  if (phoneDetectedFrames >= 2 && !phoneIncidentReported) {
                     setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
                     const persisted = await reportViolationRef.current(
                       "device_detected",
@@ -1563,7 +1782,9 @@ export default function QuizRoom() {
                     if (persisted) phoneIncidentReported = true;
                   }
                 } else {
-                  phoneDetectedFrames = Math.max(0, phoneDetectedFrames - 1);
+                  // Confirmation must be consecutive; never accumulate weak,
+                  // unrelated matches across several minutes of an exam.
+                  phoneDetectedFrames = 0;
                   phoneAbsentFrames++;
                   if (phoneAbsentFrames >= 3) {
                     phoneDetectedFrames = 0;
@@ -1689,7 +1910,11 @@ export default function QuizRoom() {
 
     const attemptFocusLossReport = async (reportAfterReturn = false) => {
       focusLossTimer = null;
-      const examLostFocus = document.hidden || !document.hasFocus();
+      // Some Android Chrome builds keep reporting visible/hasFocus=true even
+      // after a real tab or app switch. A received lifecycle/blur signal is
+      // therefore evidence of focus loss on mobile even when those APIs lie.
+      const mobileLifecycleSignal = isMobile && focusLossStartedAt > 0;
+      const examLostFocus = document.hidden || !document.hasFocus() || mobileLifecycleSignal;
       if ((!examLostFocus && !reportAfterReturn) || focusIncidentActive || focusReportInFlight || violationCountRef.current >= 3) return;
 
       focusReportInFlight = true;
@@ -1740,10 +1965,46 @@ export default function QuizRoom() {
       else clearFocusLossReport();
     };
     const handleWindowBlur = () => {
-      if (!isMobile) scheduleFocusLossReport(650);
+      scheduleFocusLossReport(isMobile ? 350 : 650);
     };
     const handlePageHide = () => scheduleFocusLossReport(0);
     const handlePageShow = () => clearFocusLossReport();
+    const handlePageFreeze = () => scheduleFocusLossReport(0);
+    const handlePageResume = () => clearFocusLossReport();
+
+    // Android vendors occasionally suppress every normal page lifecycle
+    // signal while changing Chrome tabs. Animation frames still stop when the
+    // exam is no longer being rendered, so use that as an independent mobile
+    // fallback. Two watchdog confirmations avoid treating one slow TensorFlow
+    // inference frame as a tab-switch violation.
+    let lastRenderedFrameAt = performance.now();
+    let stalledRenderChecks = 0;
+    let renderFrameId = 0;
+    const trackRenderedFrame = (timestamp: number) => {
+      lastRenderedFrameAt = timestamp;
+      renderFrameId = window.requestAnimationFrame(trackRenderedFrame);
+    };
+    renderFrameId = window.requestAnimationFrame(trackRenderedFrame);
+    const renderWatchdog = window.setInterval(() => {
+      if (
+        !isMobile
+        || isStartupGracePeriodRef.current
+        || violationCountRef.current >= 3
+        || focusIncidentActive
+        || focusReportInFlight
+      ) {
+        stalledRenderChecks = 0;
+        return;
+      }
+
+      const renderGap = performance.now() - lastRenderedFrameAt;
+      stalledRenderChecks = renderGap >= 1_800 ? stalledRenderChecks + 1 : 0;
+      if (stalledRenderChecks >= 2) {
+        stalledRenderChecks = 0;
+        scheduleFocusLossReport(0);
+        void attemptFocusLossReport(true);
+      }
+    }, 750);
 
     const handleClipboard = (e: ClipboardEvent) => {
       e.preventDefault();
@@ -1779,6 +2040,8 @@ export default function QuizRoom() {
     window.addEventListener("focus", clearFocusLossReport);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("freeze", handlePageFreeze);
+    document.addEventListener("resume", handlePageResume);
     window.addEventListener("beforeprint", handleBeforePrint);
     document.addEventListener("copy", handleClipboard);
     document.addEventListener("cut", handleClipboard);
@@ -1791,12 +2054,16 @@ export default function QuizRoom() {
       if (graceTimer) clearTimeout(graceTimer);
       if (focusLossTimer) clearTimeout(focusLossTimer);
       if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
+      window.cancelAnimationFrame(renderFrameId);
+      window.clearInterval(renderWatchdog);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", clearFocusLossReport);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("freeze", handlePageFreeze);
+      document.removeEventListener("resume", handlePageResume);
       window.removeEventListener("beforeprint", handleBeforePrint);
       document.removeEventListener("copy", handleClipboard);
       document.removeEventListener("cut", handleClipboard);
@@ -1911,14 +2178,63 @@ export default function QuizRoom() {
             </div>
           </div>
 
-          {/* Return Button */}
-          <button
-            onClick={() => router.push("/dashboard/student")}
-            className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white font-extrabold text-sm rounded-2xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <span>Return to Student Dashboard</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {/* Coins Earned Banner (Avatar Shop Rewards) */}
+          {!resultInvalidated && (quizSubmittedResult.coinsEarned ?? 0) > 0 && (
+            <div className={`p-4 rounded-2xl border text-left flex items-center justify-between gap-3 ${
+              quizSubmittedResult.isTopOne
+                ? "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 border-amber-400/50 shadow-lg shadow-amber-500/10"
+                : "bg-indigo-500/15 border-indigo-500/30"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-2xl shrink-0 animate-bounce">
+                  {quizSubmittedResult.isTopOne ? "🥇" : "🪙"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-amber-400">
+                      {quizSubmittedResult.isTopOne ? "Top 1 Leaderboard Champion!" : "Quiz Reward Coins"}
+                    </span>
+                    {quizSubmittedResult.isTopOne && (
+                      <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full">
+                        PODIUM STAR
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-base font-black text-white mt-0.5">
+                    +{quizSubmittedResult.coinsEarned} Coins Earned!
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    Total balance: {quizSubmittedResult.totalCoins ?? 100} Coins • Use them in the Avatar Shop!
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push("/dashboard/student/settings")}
+                className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+              >
+                Avatar Shop 🛍️
+              </button>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              onClick={() => router.push("/dashboard/student/settings")}
+              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>🛍️ Spend Coins in Avatar Shop</span>
+            </button>
+            <button
+              onClick={() => router.push("/dashboard/student")}
+              className="flex-1 py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>Dashboard</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2118,6 +2434,169 @@ export default function QuizRoom() {
         </div>
       )}
 
+      {/* Global CSS for Earthquake Screen Rumble & Meteors */}
+      <style jsx global>{`
+        @keyframes earthquake-rumble {
+          0% { transform: translate(0px, 0px) rotate(0deg); }
+          20% { transform: translate(-6px, 5px) rotate(-0.5deg); }
+          40% { transform: translate(6px, -4px) rotate(0.5deg); }
+          60% { transform: translate(-5px, 3px) rotate(-0.5deg); }
+          80% { transform: translate(5px, -3px) rotate(0.5deg); }
+          100% { transform: translate(0px, 0px) rotate(0deg); }
+        }
+        @keyframes meteor-fall {
+          0% { transform: translateY(-80px) translateX(-40px); opacity: 0; }
+          30% { opacity: 1; }
+          100% { transform: translateY(700px) translateX(350px); opacity: 0; }
+        }
+      `}</style>
+
+      {/* Incoming Battle Attack / Shield Deflection Banner */}
+      {activeAttackEffect && (
+        <div
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] px-6 py-3.5 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-bounce max-w-lg w-[90%] text-center justify-center pointer-events-none"
+          style={{
+            backgroundColor:
+              activeAttackEffect.type === "deflected"
+                ? "rgba(16, 185, 129, 0.95)"
+                : activeAttackEffect.type === "earthquake"
+                ? "rgba(217, 119, 6, 0.95)"
+                : activeAttackEffect.type === "meteor"
+                ? "rgba(225, 29, 72, 0.95)"
+                : "rgba(6, 182, 212, 0.95)",
+            borderColor: "#ffffff",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.8)",
+          }}
+        >
+          <span className="text-2xl">
+            {activeAttackEffect.type === "deflected"
+              ? "🛡️"
+              : activeAttackEffect.type === "earthquake"
+              ? "🌋"
+              : activeAttackEffect.type === "meteor"
+              ? "☄️"
+              : "❄️"}
+          </span>
+          <span className="text-xs sm:text-sm font-black text-white">
+            {activeAttackEffect.message}
+          </span>
+        </div>
+      )}
+
+      {/* Falling Meteors Animation Overlay on Screen */}
+      {activeAttackEffect?.type === "meteor" && (
+        <div className="fixed inset-0 z-[85] pointer-events-none overflow-hidden">
+          <div className="absolute top-10 left-1/4 w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-rose-600 blur-xs animate-ping" />
+          <div
+            className="absolute top-0 left-1/3 w-8 h-8 rounded-full bg-rose-500 shadow-[0_0_50px_#ef4444]"
+            style={{ animation: "meteor-fall 1.5s infinite linear" }}
+          />
+          <div
+            className="absolute top-0 left-2/3 w-10 h-10 rounded-full bg-amber-500 shadow-[0_0_60px_#f59e0b]"
+            style={{ animation: "meteor-fall 1.8s infinite linear 0.4s" }}
+          />
+        </div>
+      )}
+
+      {/* Blizzard Frost Screen Overlay */}
+      {activeAttackEffect?.type === "blizzard" && (
+        <div className="fixed inset-0 z-[85] pointer-events-none bg-cyan-500/10 backdrop-blur-[2px] border-8 border-cyan-300/40 animate-pulse" />
+      )}
+
+      {/* ── BATTLE POWER INTERMISSION MODAL (PROCTORSHIELD ATTACK & SHIELD) ── */}
+      {battleIntermission?.show && (
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
+          <div className="bg-[#11172a] border-2 border-indigo-500/50 rounded-3xl p-5 sm:p-8 max-w-xl w-full text-center shadow-2xl shadow-indigo-950/80 space-y-5 relative overflow-y-auto max-h-[calc(100dvh-2rem)] my-auto flex flex-col">
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/20 blur-[60px] rounded-full pointer-events-none" />
+
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 text-amber-300 font-black text-xs uppercase tracking-wider mb-2">
+                <Swords className="w-3.5 h-3.5" /> Battle Power Phase
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white font-[family-name:var(--font-display)]">
+                Choose Your Move!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                Attack rivals with a Meteor or Earthquake, or deploy a Guardian Shield for defense!
+              </p>
+            </div>
+
+            {/* Battle Powers Grid */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {BATTLE_POWERS.filter((power) => (
+                arenaState?.enabledPowers.includes(power.id as ArenaPowerId)
+              )).map((power) => (
+                <button
+                  key={power.id}
+                  type="button"
+                  onClick={() => void handleLaunchBattlePower(power)}
+                  className="rounded-2xl border-2 p-4 text-left flex flex-col justify-between transition-all hover:scale-[1.03] active:scale-95 cursor-pointer group shadow-lg"
+                  style={{
+                    borderColor: power.border,
+                    backgroundColor: "rgba(20, 26, 48, 0.9)",
+                  }}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-2">
+                      <span className="text-3xl sm:text-4xl group-hover:scale-110 transition-transform">
+                        {power.emoji}
+                      </span>
+                      <span
+                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                          power.type === "defense"
+                            ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/50"
+                            : "bg-rose-500/30 text-rose-300 border border-rose-500/50"
+                        }`}
+                      >
+                        {power.badge}
+                      </span>
+                    </div>
+                    <div className="text-sm sm:text-base font-black text-white">
+                      {power.name}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                      {power.description}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-white/10 text-[10px] font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                    <span>{power.id === "shield" ? "Equip Defense" : "Launch Attack"} ➔</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Skip Option */}
+            <button
+              type="button"
+              onClick={() => {
+                if (battleIntermission) {
+                  setWaitingForArenaWave(true);
+                  setBattleIntermission(null);
+                }
+              }}
+              className="text-xs text-slate-400 hover:text-white underline font-semibold cursor-pointer pt-1"
+            >
+              Skip Power & Wait for Question {battleIntermission.nextIndex + 1} →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {waitingForArenaWave && arenaState?.status === "active" && (
+        <div className="fixed inset-0 z-[95] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto my-auto rounded-3xl border border-indigo-500/40 bg-[#11172a] p-6 sm:p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
+              <Clock className="h-6 w-6 text-indigo-300 animate-pulse" />
+            </div>
+            <h2 className="text-xl font-black text-white">Answer Locked</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              Waiting for your teacher to launch the next arena wave. Keep this quiz open.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Security Warning Modal */}
       {teacherWarningModal.show && !warningModal.show && (
         <div className="app-modal-backdrop bg-black/80 backdrop-blur-md">
@@ -2223,6 +2702,14 @@ export default function QuizRoom() {
             {isMobile ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
             {monitoringLabel(monitoringLevel)}
           </div>
+          {/* Guardian Shield Defense Status */}
+          {hasGuardianShield && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/20 border-2 border-indigo-400 text-indigo-300 font-extrabold text-xs shadow-lg shadow-indigo-500/30 animate-pulse">
+              <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              <span>🛡️ Shield Active (Protected)</span>
+            </div>
+          )}
+
           {/* Streak Badge */}
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
             <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
@@ -2267,7 +2754,10 @@ export default function QuizRoom() {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* MAIN EXAM LAYOUT */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 pb-28 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)]">
+      <div
+        className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 pb-28 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)] transition-all"
+        style={activeAttackEffect?.type === "earthquake" ? { animation: "earthquake-rumble 0.25s infinite" } : undefined}
+      >
         
         {/* MOBILE PROCTORING BAR */}
         <div className="block lg:hidden bg-[#141724] border border-[#212638] rounded-2xl p-3 space-y-3 shrink-0 shadow-md">
@@ -2494,8 +2984,37 @@ export default function QuizRoom() {
                   {currentQuestion.questionText}
                 </h3>
 
-                <div className="space-y-2.5 sm:space-y-3 pt-1 sm:pt-2">
-                  {currentQuestion.choices.map((choice: any, choiceIndex: number) => {
+                {currentQuestion.questionType === "fill_in_blank" ? (
+                  <form onSubmit={handleFillBlankSubmit} className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <span>✏️</span> Type your answer below:
+                      </label>
+                      <input
+                        type="text"
+                        disabled={Boolean(answerFeedback[currentQuestion.id]) || isCheckingAnswer}
+                        value={fillBlankInput}
+                        onChange={(e) => setFillBlankInput(e.target.value)}
+                        placeholder="Type your answer here..."
+                        autoFocus
+                        className="w-full px-5 py-4 rounded-2xl bg-[#141728] border-2 border-[#283152] focus:border-indigo-500 focus:bg-[#1a1f36] text-white text-base sm:text-lg font-bold outline-none transition-all disabled:opacity-60"
+                      />
+                    </div>
+                    {!answerFeedback[currentQuestion.id] && (
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={!fillBlankInput.trim() || isCheckingAnswer}
+                          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-90 disabled:opacity-40 text-white font-black text-sm shadow-md transition-all cursor-pointer flex items-center gap-2"
+                        >
+                          Submit Answer ➔
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                ) : (
+                  <div className="space-y-2.5 sm:space-y-3 pt-1 sm:pt-2">
+                    {currentQuestion.choices.map((choice: any, choiceIndex: number) => {
                     const optionLetter = String.fromCharCode(65 + choiceIndex);
                     const feedback = answerFeedback[currentQuestion.id];
                     const isSelected = feedback?.choiceId === choice.id || answersState[currentQuestion.id] === choice.id;
@@ -2542,6 +3061,7 @@ export default function QuizRoom() {
                     );
                   })}
                 </div>
+                )}
 
                 {answerFeedback[currentQuestion.id] && (
                   <div

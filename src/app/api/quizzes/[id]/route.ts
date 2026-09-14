@@ -231,13 +231,70 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "allowRetake must be a boolean" }, { status: 400 });
     }
 
-    const updatedQuiz = await prisma.quiz.update({
-      where: { id: quizId },
-      data: {
-        quizStatus: requestedStatus ?? existingQuiz.quizStatus,
-        duration: requestedDuration ?? existingQuiz.duration,
-        allowRetake: body.allowRetake ?? existingQuiz.allowRetake,
-      },
+    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
+    const description = typeof body.description === "string" ? body.description.trim() : undefined;
+    const passingScore = typeof body.passingScore === "number" ? Math.max(0, Math.min(100, body.passingScore)) : undefined;
+    const shuffleQuestions = typeof body.shuffleQuestions === "boolean" ? body.shuffleQuestions : undefined;
+    const isGamified = typeof body.isGamified === "boolean" ? body.isGamified : undefined;
+
+    // Transactional update for quiz and optional questions
+    const updatedQuiz = await prisma.$transaction(async (tx) => {
+      // If questions array is passed and quiz is in draft or has no student submissions
+      if (Array.isArray(body.questions) && body.questions.length > 0) {
+        const studentQuizCount = await tx.studentQuiz.count({ where: { quizId } });
+        if (studentQuizCount === 0) {
+          // Delete existing choices & questions
+          await tx.choice.deleteMany({
+            where: { question: { quizId } },
+          });
+          await tx.question.deleteMany({
+            where: { quizId },
+          });
+
+          // Re-create new questions & choices
+          for (const q of body.questions) {
+            if (q && typeof q.questionText === "string" && q.questionText.trim()) {
+              await tx.question.create({
+                data: {
+                  quizId,
+                  questionText: q.questionText.trim(),
+                  points: typeof q.points === "number" ? q.points : 1,
+                  questionType: q.questionType || "multiple_choice",
+                  choices: {
+                    create: (Array.isArray(q.choices) ? q.choices : []).map((c: any) => ({
+                      choiceText: String(c.choiceText || "").trim(),
+                      isCorrect: Boolean(c.isCorrect),
+                    })),
+                  },
+                },
+              });
+            }
+          }
+        }
+      }
+
+      const totalQCount = Array.isArray(body.questions) ? body.questions.length : undefined;
+
+      return tx.quiz.update({
+        where: { id: quizId },
+        data: {
+          title: title ?? existingQuiz.title,
+          description: description !== undefined ? description : existingQuiz.description,
+          quizStatus: requestedStatus ?? existingQuiz.quizStatus,
+          duration: requestedDuration ?? existingQuiz.duration,
+          passingScore: passingScore ?? existingQuiz.passingScore,
+          shuffleQuestions: shuffleQuestions ?? existingQuiz.shuffleQuestions,
+          allowRetake: body.allowRetake ?? existingQuiz.allowRetake,
+          isGamified: isGamified ?? existingQuiz.isGamified,
+          totalQuestions: totalQCount ?? existingQuiz.totalQuestions,
+        },
+        include: {
+          subject: true,
+          questions: {
+            include: { choices: true },
+          },
+        },
+      });
     });
 
     // Broadcast quiz status update to all waiting students in lobby

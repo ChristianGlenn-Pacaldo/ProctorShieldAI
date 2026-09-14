@@ -7,5 +7,11 @@ export default async function TeacherDashboardPage() {
   const userId = session?.userId || "unknown";
   const isSubscribed = session ? await hasActiveProSubscription(session.userId) : false;
 
-  return <TeacherDashboardContent teacherId={userId} isSubscribed={isSubscribed} />;
+  return (
+    <TeacherDashboardContent
+      teacherId={userId}
+      isSubscribed={isSubscribed}
+      teacherName={session?.fullName || "Teacher"}
+    />
+  );
 }

@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   UserRound,
   ArrowUpRight,
+  Swords,
 } from "lucide-react";
 import { clsx } from "clsx";
 import PusherClient from "pusher-js";
@@ -75,6 +76,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       section: "Main",
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/teacher" },
+        { label: "Playground Arena", icon: <Swords className="w-4 h-4 text-amber-400" />, href: "/dashboard/teacher/playground", badge: "PRO" },
         { label: "My Quizzes", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/teacher/quizzes" },
         { label: "Live Monitor", icon: <Radio className="w-4 h-4" />, href: "/dashboard/teacher/monitor" },
         { label: "Evidence Replay", icon: <Camera className="w-4 h-4" />, href: "/dashboard/teacher/evidence" },
@@ -346,7 +348,14 @@ export default function DashboardShell({
                     {item.icon}
                     <span className="flex-1">{item.label}</span>
                     {item.badge && (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-600/15 text-blue-600 dark:text-blue-400 text-[10px] font-bold">
+                      <span
+                        className={clsx(
+                          "px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase",
+                          item.badge === "PRO"
+                            ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-xs shadow-amber-500/40"
+                            : "bg-blue-600/15 text-blue-600 dark:text-blue-400 font-bold"
+                        )}
+                      >
                         {item.badge}
                       </span>
                     )}
@@ -399,11 +408,11 @@ export default function DashboardShell({
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <div>
-              <div className="text-sm font-bold text-[var(--ink)] capitalize">
+            <div className="hidden min-w-0 sm:block">
+              <div className="truncate text-sm font-bold text-[var(--ink)] capitalize">
                 {role === "admin" ? "System Administration" : `${role} Dashboard`}
               </div>
-              <div className="text-xs text-[var(--muted)]">
+              <div className="truncate text-xs text-[var(--muted)]">
                 Welcome, <span className="font-semibold text-[var(--ink2)]">{userName}</span>
               </div>
             </div>
@@ -427,7 +436,7 @@ export default function DashboardShell({
               </button>
               {/* Dropdown */}
               {notifOpen && (
-                <div className="dashboard-dropdown absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-2rem))] bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden animate-dropdown">
+                <div className="dashboard-dropdown fixed inset-x-4 top-[4.5rem] z-50 w-auto overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl animate-dropdown sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]">
                   <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                     <h4 className="text-xs font-bold text-[var(--ink)] uppercase tracking-wide">Notifications</h4>
                     {notifications.length > 0 && (
@@ -454,8 +463,8 @@ export default function DashboardShell({
                           <div className="flex items-start gap-2">
                             {!n.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
                             <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-semibold ${n.isRead ? "text-[var(--muted)]" : "text-[var(--ink)]"}`}>{n.title}</p>
-                              <p className="text-[11px] text-[var(--muted)] mt-0.5 leading-relaxed">{n.message}</p>
+                              <p className={`break-words text-xs font-semibold ${n.isRead ? "text-[var(--muted)]" : "text-[var(--ink)]"}`}>{n.title}</p>
+                              <p className="mt-0.5 break-words text-[11px] leading-relaxed text-[var(--muted)]">{n.message}</p>
                               <p className="text-[10px] text-[var(--muted2)] mt-1">
                                 {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
@@ -477,14 +486,6 @@ export default function DashboardShell({
             >
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
-            {role === "teacher" && (
-              <Link
-                href="/dashboard/teacher/quizzes?new=true"
-                className="ui-primary hidden sm:inline-flex px-4 py-2 text-xs font-bold text-white rounded-xl transition-all"
-              >
-                + New Quiz
-              </Link>
-            )}
             <div className="relative" ref={profileRef}>
               <button
                 type="button"

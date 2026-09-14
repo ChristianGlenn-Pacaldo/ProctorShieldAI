@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
 export async function PUT(
   req: NextRequest,
@@ -48,13 +49,12 @@ export async function PUT(
       if (subscriptionStatus === "active") {
         // Find the premium plan
         const premiumPlan = await prisma.subscriptionPlan.findFirst({
-          where: { planName: "Premium Yearly" },
+          where: { planName: { in: ["Premium Monthly", "Premium Yearly"] } },
         });
 
         if (premiumPlan) {
           const startDate = new Date();
-          const endDate = new Date();
-          endDate.setFullYear(endDate.getFullYear() + 1); // Give 1 year of access
+          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
 
           await prisma.userSubscription.updateMany({
             where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },

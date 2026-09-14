@@ -1,24 +1,96 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  Volume2,
+  VolumeX,
+  Sparkles,
+  Shield,
+  Zap,
+  CheckCircle,
+  HelpCircle,
+} from "lucide-react";
 import Link from "next/link";
-import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
+import { normalizeQuizAccessCode } from "@/lib/quiz-access-code";
+import {
+  MASCOTS,
+  playBloop,
+  playSuccessFanfare,
+  playErrorBuzz,
+  isSoundEnabled,
+  toggleSoundEnabled,
+} from "@/lib/student-gamify";
 
 function JoinContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCode = searchParams.get("code") || "";
-  
-  const [joinCode, setJoinCode] = useState(initialCode);
+
+  const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [soundActive, setSoundActive] = useState(true);
+  const [selectedMascot, setSelectedMascot] = useState(MASCOTS[0]);
+  const [activeQuizzes, setActiveQuizzes] = useState<Array<{ id: number; title: string; accessCode?: string }>>([]);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSoundActive(isSoundEnabled());
+    const saved = localStorage.getItem("proctor_chosen_mascot");
+    if (saved) {
+      const found = MASCOTS.find((m) => m.id === saved);
+      if (found) setSelectedMascot(found);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function loadQuickQuizzes() {
+      try {
+        const res = await fetch("/api/quizzes");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.quizzes)) {
+            const live = data.quizzes
+              .filter((q: any) => q && q.quiz && q.quizStatus !== "completed" && q.quiz.accessCode)
+              .map((q: any) => ({
+                id: q.quiz.id,
+                title: q.quiz.title,
+                accessCode: q.quiz.accessCode,
+              }))
+              .slice(0, 3);
+            setActiveQuizzes(live);
+          }
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+    loadQuickQuizzes();
+  }, []);
+
+  const handleToggleSound = () => {
+    const next = toggleSoundEnabled();
+    setSoundActive(next);
+    if (next) playBloop(640, 0.1);
+  };
+
+  const handleSelectMascot = (m: (typeof MASCOTS)[0]) => {
+    setSelectedMascot(m);
+    localStorage.setItem("proctor_chosen_mascot", m.id);
+    playBloop(480, 0.08);
+  };
 
   const handleJoinQuiz = async (codeToUse?: string) => {
     const code = normalizeQuizAccessCode(codeToUse || joinCode);
     if (!code) {
-      setMessage("Please enter an access code.");
+      playErrorBuzz();
+      setMessage("Please enter an access code to join.");
+      inputRef.current?.focus();
       return;
     }
 
@@ -35,119 +107,423 @@ function JoinContent() {
       const data = await res.json();
 
       if (res.ok && data.quiz?.id) {
-        // Redirect directly into the quiz lobby!
-        router.push(`/quiz/${data.quiz.id}`);
+        playSuccessFanfare();
+        setTimeout(() => {
+          router.push(`/quiz/${data.quiz.id}`);
+        }, 250);
       } else if (res.status === 401) {
-        // Not logged in. Save code and redirect to student login.
         localStorage.setItem("pendingJoinCode", code);
         router.push("/login/student");
       } else {
-        setMessage(data.error || "Failed to join quiz");
+        playErrorBuzz();
+        setMessage(data.error || "Quiz not found. Please verify your code.");
       }
-    } catch (error) {
-      setMessage("Network error. Please try again.");
+    } catch {
+      playErrorBuzz();
+      setMessage("Network connection error. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Automatically attempt join if code is provided in the URL.
   useEffect(() => {
     if (initialCode) {
       handleJoinQuiz(initialCode);
     }
   }, [initialCode]);
 
-  return (
-    <div className="auth-shell min-h-screen flex flex-col items-center justify-center bg-[var(--dark-bg)] relative overflow-hidden">
-      
-      {/* Background Decor */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
+  const handleInputChange = (val: string) => {
+    const clean = val.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16);
+    setJoinCode(clean);
+    setMessage("");
+    if (clean.length > joinCode.length) {
+      playBloop(350 + Math.min(clean.length * 40, 400), 0.05);
+    }
+  };
 
-      {/* Header (Minimal) */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-sm">
-            🛡️
-          </div>
-          <span className="font-bold text-white font-[var(--font-display)]">Proctor Shield AI</span>
-        </Link>
-        <Link href="/dashboard/student" className="flex items-center gap-1.5 text-sm font-semibold text-white/70 hover:text-white transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-        </Link>
+  return (
+    <div
+      className="min-h-screen flex flex-col relative overflow-x-hidden select-none"
+      style={{
+        backgroundColor: "#070b14",
+        backgroundImage: "radial-gradient(circle at 50% 10%, #1e1548 0%, #0e1224 45%, #070b14 85%)",
+        color: "#ffffff",
+      }}
+    >
+      {/* Ambient Lighting Orbs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute top-[-5%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-25"
+          style={{ backgroundColor: "#4f46e5" }}
+        />
+        <div
+          className="absolute bottom-[-10%] right-[-10%] w-[550px] h-[550px] rounded-full blur-[140px] opacity-20"
+          style={{ backgroundColor: "#7c3aed" }}
+        />
+        <div
+          className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{
+            backgroundImage: "radial-gradient(circle at 1px 1px, #6366f1 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
       </div>
 
-      <div className="w-full max-w-md p-8 relative z-10 animate-fade-in-up">
-        
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-white mb-2 font-[family-name:var(--font-display)]">
-            Join a Quiz
-          </h1>
-          <p className="text-sm text-white/50">
-            Enter the access code provided by your instructor.
-          </p>
+      {/* Top Header */}
+      <header
+        className="relative z-20 w-full px-5 sm:px-8 py-4 flex items-center justify-between border-b backdrop-blur-md"
+        style={{
+          backgroundColor: "rgba(10, 15, 30, 0.85)",
+          borderColor: "rgba(99, 102, 241, 0.2)",
+        }}
+      >
+        <Link href="/dashboard/student" className="flex items-center gap-3 group">
+          <div
+            className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
+            style={{
+              background: "linear-gradient(135deg, #3b82f6 0%, #4f46e5 50%, #7c3aed 100%)",
+              boxShadow: "0 8px 20px rgba(79, 70, 229, 0.3)",
+            }}
+          >
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-xl tracking-tight font-[family-name:var(--font-display)] text-white">
+                ProctorShield<span style={{ color: "#818cf8" }}>AI</span>
+              </span>
+              <span
+                className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md"
+                style={{
+                  backgroundColor: "rgba(99, 102, 241, 0.2)",
+                  color: "#a5b4fc",
+                  border: "1px solid rgba(99, 102, 241, 0.35)",
+                }}
+              >
+                Arena
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium -mt-0.5">
+              Gamified Student Join Portal
+            </p>
+          </div>
+        </Link>
+
+        {/* Controls */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleToggleSound}
+            aria-label={soundActive ? "Mute SFX" : "Enable SFX"}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#e2e8f0",
+            }}
+          >
+            {soundActive ? (
+              <>
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline">SFX On</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-slate-400" />
+                <span className="hidden sm:inline text-slate-400">SFX Off</span>
+              </>
+            )}
+          </button>
+
+          <Link
+            href="/dashboard/student"
+            aria-label="Back to Student Dashboard"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 text-white"
+            style={{
+              backgroundColor: "rgba(99, 102, 241, 0.25)",
+              border: "1px solid rgba(99, 102, 241, 0.4)",
+            }}
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 relative z-10 max-w-xl mx-auto w-full">
+        {/* Mascot & Speech Bubble */}
+        <div className="flex flex-col items-center mb-5 text-center">
+          <div className="relative mb-3">
+            <div
+              className={`w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-br ${selectedMascot.color} p-1 shadow-2xl flex items-center justify-center text-4xl sm:text-5xl transition-transform`}
+              style={{
+                boxShadow: "0 10px 30px rgba(79, 70, 229, 0.45)",
+              }}
+            >
+              <span className="drop-shadow-md">{selectedMascot.emoji}</span>
+            </div>
+            <div
+              className="absolute -bottom-1 -right-1 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 text-white"
+              style={{
+                backgroundColor: "#10b981",
+                border: "2px solid #070b14",
+              }}
+            >
+              <Zap className="w-3 h-3 fill-white" /> Ready
+            </div>
+          </div>
+
+          <div
+            className="px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold inline-flex items-center gap-2 max-w-md shadow-lg"
+            style={{
+              backgroundColor: "rgba(18, 24, 46, 0.9)",
+              border: "1px solid rgba(99, 102, 241, 0.3)",
+              color: "#e2e8f0",
+            }}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+            <span>
+              {selectedMascot.name}: <strong>&ldquo;Ready to test your knowledge? Enter your code below!&rdquo;</strong>
+            </span>
+          </div>
         </div>
 
-        <div className="auth-panel bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl shadow-2xl">
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleJoinQuiz(); }}
-            className="flex flex-col gap-4"
-          >
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => {
-                setJoinCode(e.target.value.toUpperCase());
-                setMessage("");
-              }}
-              placeholder="Enter join code"
-              className="w-full min-w-0 px-3 sm:px-6 py-5 text-center text-lg sm:text-2xl font-mono font-bold tracking-[0.05em] sm:tracking-[0.15em] rounded-2xl bg-black/20 border border-white/10 text-white placeholder:text-white/20 placeholder:tracking-normal focus:outline-none focus:border-indigo-500/50 focus:bg-black/40 transition-all uppercase"
-              maxLength={QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              autoFocus
-            />
+        {/* Modal Card */}
+        <div
+          className="w-full rounded-3xl p-6 sm:p-8 relative"
+          style={{
+            backgroundColor: "#11182c",
+            border: "2px solid rgba(99, 102, 241, 0.4)",
+            boxShadow: "0 25px 60px rgba(0, 0, 0, 0.7), 0 0 50px rgba(99, 102, 241, 0.15)",
+          }}
+        >
+          <div className="text-center mb-6">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-[family-name:var(--font-display)]">
+              Enter Join Code
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
+              Enter the room access code provided by your instructor
+            </p>
+          </div>
 
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleJoinQuiz();
+            }}
+            className="flex flex-col items-center gap-5 w-full"
+          >
+            {/* Centered Arcade-Style Input Pill */}
+            <div className="w-full relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={joinCode}
+                onChange={(e) => handleInputChange(e.target.value)}
+                placeholder="ENTER CODE (e.g. PS-123)"
+                autoFocus
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={16}
+                className="w-full py-4 px-6 text-center text-xl sm:text-2xl font-mono font-black tracking-[0.15em] sm:tracking-[0.2em] rounded-2xl text-white placeholder:text-slate-500 placeholder:tracking-normal placeholder:font-sans placeholder:text-base sm:placeholder:text-lg focus:outline-none transition-all uppercase"
+                style={{
+                  backgroundColor: "#090d1a",
+                  border: "2px solid #4f46e5",
+                  boxShadow: "inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.2)",
+                }}
+              />
+              {joinCode.length > 0 && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-mono font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-500/30">
+                  {joinCode.length} chars
+                </div>
+              )}
+            </div>
+
+            {/* Error / Alert Message */}
             {message && (
-              <div className="text-center text-sm font-semibold text-red-400 bg-red-500/10 py-2 rounded-xl border border-red-500/20">
+              <div
+                className="w-full text-center text-xs sm:text-sm font-bold py-2.5 px-4 rounded-xl"
+                style={{
+                  backgroundColor: "rgba(225, 29, 72, 0.15)",
+                  border: "1px solid rgba(225, 29, 72, 0.4)",
+                  color: "#fecdd3",
+                }}
+              >
                 {message}
               </div>
             )}
 
+            {/* Tactile 3D Action Button */}
             <button
               type="submit"
-              disabled={isLoading}
-              className={`w-full py-4 text-white font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 group ${isLoading ? 'bg-indigo-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25'}`}
+              disabled={isLoading || joinCode.trim().length === 0}
+              className="w-full py-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wider flex items-center justify-center gap-3 transition-all duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #7c3aed 100%)",
+                color: "#ffffff",
+                boxShadow: "0 6px 0 #312e81, 0 12px 25px rgba(79, 70, 229, 0.4)",
+              }}
+              onMouseDown={(e) => {
+                if (!isLoading && joinCode.trim().length > 0) {
+                  e.currentTarget.style.transform = "translateY(3px)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #312e81, 0 6px 15px rgba(79, 70, 229, 0.3)";
+                }
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 0 #312e81, 0 12px 25px rgba(79, 70, 229, 0.4)";
+              }}
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Joining...
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
+                  <span>Entering Arena...</span>
                 </>
               ) : (
                 <>
-                  Join Now
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <span>Join Quiz Now</span>
+                  <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </button>
           </form>
+
+          {/* Spirit Mascot Selection */}
+          <div
+            className="mt-6 pt-5"
+            style={{ borderTop: "1px solid rgba(255, 255, 255, 0.1)" }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Choose Your Spirit Mascot
+              </span>
+              <span className="text-xs font-bold text-indigo-300">
+                {selectedMascot.name}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+                gap: "8px",
+              }}
+            >
+              {MASCOTS.map((m) => {
+                const isSelected = selectedMascot.id === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleSelectMascot(m)}
+                    title={`${m.name} - ${m.desc}`}
+                    className="aspect-square rounded-2xl flex items-center justify-center text-xl sm:text-2xl transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: isSelected ? "#4f46e5" : "rgba(255, 255, 255, 0.05)",
+                      border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255, 255, 255, 0.1)",
+                      transform: isSelected ? "scale(1.08)" : "scale(1)",
+                      boxShadow: isSelected ? "0 4px 15px rgba(79, 70, 229, 0.5)" : "none",
+                    }}
+                  >
+                    <span>{m.emoji}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3.5 text-center">
+              <Link
+                href="/join/avatar-shop"
+                className="inline-flex items-center gap-1.5 text-xs font-extrabold text-cyan-400 hover:text-cyan-300 transition-colors py-1 px-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                Open 2D Avatar Shop & Customizer &rarr;
+              </Link>
+            </div>
+          </div>
+
+          {/* Active Assigned Quizzes (Quick Chips) */}
+          {activeQuizzes.length > 0 && (
+            <div
+              className="mt-5 pt-4"
+              style={{ borderTop: "1px solid rgba(255, 255, 255, 0.1)" }}
+            >
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>Active Assignments For You</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeQuizzes.map((quiz) => (
+                  <button
+                    key={quiz.id}
+                    type="button"
+                    onClick={() => {
+                      if (quiz.accessCode) {
+                        setJoinCode(quiz.accessCode);
+                        handleJoinQuiz(quiz.accessCode);
+                      } else {
+                        router.push(`/quiz/${quiz.id}`);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: "rgba(99, 102, 241, 0.2)",
+                      border: "1px solid rgba(99, 102, 241, 0.35)",
+                      color: "#c7d2fe",
+                    }}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="truncate max-w-[140px]">{quiz.title}</span>
+                    <span
+                      className="font-mono text-[10px] px-1.5 py-0.5 rounded font-bold"
+                      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)", color: "#a5b4fc" }}
+                    >
+                      {quiz.accessCode || "JOIN"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <Link
-          href="/dashboard/student"
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-sm font-semibold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Student Dashboard
-        </Link>
-      </div>
+
+        {/* Security & Features Badges */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-slate-400 text-xs font-semibold">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span className="text-slate-300">AI Verified Proctoring</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="text-slate-300">Instant Results</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <HelpCircle className="w-4 h-4 text-blue-400" />
+            <span className="text-slate-300">Anti-Cheating Guard</span>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
 
 export default function JoinPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[var(--dark-bg)]" />}>
+    <Suspense
+      fallback={
+        <div
+          className="min-h-screen flex items-center justify-center text-white font-bold"
+          style={{ backgroundColor: "#070b14" }}
+        >
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+            <span>Loading ProctorShield Arena...</span>
+          </div>
+        </div>
+      }
+    >
       <JoinContent />
     </Suspense>
   );

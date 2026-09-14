@@ -55,10 +55,23 @@ export async function GET(req: NextRequest) {
       });
 
       const entitlements = await getTeacherEntitlements(session.userId);
+      const distinctParticipants = await prisma.studentQuiz.findMany({
+        where: { quizId: { in: quizzes.map((quiz) => quiz.id) } },
+        select: { quizId: true, studentId: true },
+        distinct: ["quizId", "studentId"],
+      });
+      const participantCounts = distinctParticipants.reduce((counts, enrollment) => {
+        counts.set(enrollment.quizId, (counts.get(enrollment.quizId) ?? 0) + 1);
+        return counts;
+      }, new Map<number, number>());
 
       return NextResponse.json({
         success: true,
-        quizzes,
+        quizzes: quizzes.map((quiz) => ({
+          ...quiz,
+          participantCount: participantCounts.get(quiz.id) ?? 0,
+          participantLimit: entitlements.studentLimitPerQuiz,
+        })),
         entitlements,
         pendingRetakes: pendingRetakes.map((pr) => ({
           studentQuizId: pr.id,
@@ -180,12 +193,17 @@ export async function POST(req: NextRequest) {
     if (validQuestions.length === 0 || !Array.isArray(questions) || validQuestions.length !== Math.min(questions.length, 100)) {
       return NextResponse.json({ error: "Add at least one complete question" }, { status: 400 });
     }
-    if (validQuestions.some((question) => (
-      question.choices.create.length < 2
-      || question.choices.create.filter((choice) => choice.isCorrect).length !== 1
-    ))) {
+    if (validQuestions.some((question) => {
+      if (question.questionType === "fill_in_blank") {
+        return question.choices.create.length < 1 || !question.choices.create.some((choice) => choice.isCorrect);
+      }
+      return (
+        question.choices.create.length < 2
+        || question.choices.create.filter((choice) => choice.isCorrect).length !== 1
+      );
+    })) {
       return NextResponse.json(
-        { error: "Every question must have at least two choices and exactly one correct answer" },
+        { error: "Every question must have complete answers and a correct answer marked" },
         { status: 400 },
       );
     }

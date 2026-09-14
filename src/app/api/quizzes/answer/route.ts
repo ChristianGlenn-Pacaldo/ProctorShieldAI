@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getArenaState } from "@/lib/arena";
+import { pusherServer } from "@/lib/pusher";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         startTime: true,
-        quiz: { select: { duration: true } },
+        quiz: { select: { duration: true, teacherId: true } },
       },
       orderBy: { attemptNumber: "desc" },
     });
@@ -86,6 +88,25 @@ export async function POST(req: NextRequest) {
 
       return { choiceId, isCorrect: selectedChoice.isCorrect, alreadyAnswered: false };
     }, { timeout: 15_000 });
+
+    if (!result.alreadyAnswered) {
+      try {
+        const arena = await getArenaState(quizId);
+        if (arena?.status === "active" && arena.teacherId === attempt.quiz.teacherId) {
+          await pusherServer.trigger(`private-teacher-${attempt.quiz.teacherId}`, "arena-answer", {
+            sessionId: arena.sessionId,
+            studentId: session.userId,
+            studentName: session.fullName,
+            questionId,
+            choiceId: result.choiceId,
+            isCorrect: result.isCorrect,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.warn("Arena answer broadcast warning:", error);
+      }
+    }
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {

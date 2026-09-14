@@ -14,10 +14,19 @@ function getConfiguredDevOrigin(): string | undefined {
 }
 
 const configuredDevOrigin = getConfiguredDevOrigin();
+const allowedDevOrigins = Array.from(new Set([
+  "localhost",
+  "127.0.0.1",
+  // Quick Tunnel hostnames rotate during physical-device testing. This option
+  // is consumed only by the Next.js development server; production origins
+  // remain governed by the deployed host and application security headers.
+  "*.trycloudflare.com",
+  ...(configuredDevOrigin ? [configuredDevOrigin] : []),
+]));
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  ...(configuredDevOrigin ? { allowedDevOrigins: [configuredDevOrigin] } : {}),
+  allowedDevOrigins,
   ...(isFrontend ? { distDir: '.next-frontend' } : {}),
   async rewrites() {
     if (isFrontend) {

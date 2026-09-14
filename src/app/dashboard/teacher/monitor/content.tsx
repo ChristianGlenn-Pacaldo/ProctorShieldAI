@@ -499,9 +499,9 @@ export default function LiveMonitorContent({
             <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-amber-500/20">
               <Crown className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">Live Monitoring is Premium</h2>
+            <h2 className="text-xl font-extrabold text-[var(--ink)] mb-2">Live Monitoring is a Pro Feature</h2>
             <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
-              Real-time adaptive AI snapshot monitoring of students during quizzes requires a Premium subscription.
+              Real-time adaptive AI snapshot monitoring of students during quizzes requires an active Pro subscription.
             </p>
             <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
               {[
