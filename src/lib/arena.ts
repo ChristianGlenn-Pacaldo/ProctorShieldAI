@@ -3,7 +3,7 @@ import { getRedis } from "./redis.ts";
 
 export const ARENA_MODES = ["battle_royale", "wave_sprint"] as const;
 export const ARENA_POWER_IDS = ["meteor", "earthquake", "blizzard", "shield"] as const;
-export const ARENA_ACTIONS = ["start", "wave", "airdrop", "end"] as const;
+export const ARENA_ACTIONS = ["start", "wave", "airdrop", "end", "reset"] as const;
 
 export type ArenaMode = (typeof ARENA_MODES)[number];
 export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
@@ -90,6 +90,18 @@ function arenaKey(quizId: number) {
 
 export async function setArenaState(state: ArenaState) {
   const redis = getRedis();
+  if (state.status === "ended") {
+    // Clean up ended arenas immediately from local cache and Redis to prevent stale data
+    localArenaState.delete(state.quizId);
+    if (redis) {
+      try {
+        await redis.del(arenaKey(state.quizId));
+      } catch (error) {
+        console.warn("Arena Redis delete failed:", error);
+      }
+    }
+    return;
+  }
   if (redis) {
     try {
       await redis.set(arenaKey(state.quizId), JSON.stringify(state), "EX", ARENA_TTL_SECONDS);
@@ -101,6 +113,18 @@ export async function setArenaState(state: ArenaState) {
     value: state,
     expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
   });
+}
+
+export async function clearArenaState(quizId: number) {
+  localArenaState.delete(quizId);
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.del(arenaKey(quizId));
+    } catch (error) {
+      console.warn("Arena Redis delete failed:", error);
+    }
+  }
 }
 
 export async function getArenaState(quizId: number): Promise<ArenaState | null> {

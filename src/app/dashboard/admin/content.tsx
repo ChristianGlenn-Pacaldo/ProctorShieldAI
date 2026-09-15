@@ -195,27 +195,66 @@ export default function AdminDashboardContent() {
   }, []);
 
   const statCards = [
-    { label: "Active Sessions", value: stats.totalUsers, icon: <Users className="w-5 h-5" />, color: "bg-blue-600/10 text-blue-600 dark:text-blue-400" },
-    { label: "Quizzes In-Progress", value: stats.totalQuizzes, icon: <FileText className="w-5 h-5" />, color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400" },
-    { label: "Violations (Live)", value: stats.totalViolations, icon: <AlertTriangle className="w-5 h-5" />, color: "bg-rose-600/10 text-rose-600 dark:text-rose-400" },
-    { label: "AI Flags", value: stats.aiVerdictsToday, icon: <Brain className="w-5 h-5" />, color: "bg-violet-600/10 text-violet-600 dark:text-violet-400" },
+    {
+      label: "Active Sessions",
+      value: stats.totalUsers,
+      icon: <Users className="w-5 h-5" />,
+      color: "bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+      badge: "LIVE",
+      sub: "Active Classroom Users",
+    },
+    {
+      label: "Quizzes In-Progress",
+      value: stats.totalQuizzes,
+      icon: <FileText className="w-5 h-5" />,
+      color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+      badge: "ACTIVE",
+      sub: "Live Running Quizzes",
+    },
+    {
+      label: "Violations (Live)",
+      value: stats.totalViolations,
+      icon: <AlertTriangle className="w-5 h-5" />,
+      color: "bg-rose-600/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+      badge: "SECURITY",
+      sub: "CCTV Evidence Captures",
+    },
+    {
+      label: "AI Flags Today",
+      value: stats.aiVerdictsToday,
+      icon: <Brain className="w-5 h-5" />,
+      color: "bg-violet-600/10 text-violet-600 dark:text-violet-400 border border-violet-500/20",
+      badge: "GEMINI",
+      sub: "Forensic Risk Analyses",
+    },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5 shadow-xs">
+          <div
+            key={s.label}
+            className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
+          >
             <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}>{s.icon}</div>
+              <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
+                {s.icon}
+              </div>
+              <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-[var(--surface2)] text-[var(--muted)] border border-[var(--border)]">
+                {s.badge}
+              </span>
             </div>
             {isLoading && s.value === 0 ? (
-              <div className="h-8 w-12 bg-[var(--surface2)] animate-pulse rounded-lg mt-1" />
+              <div className="h-8 w-16 bg-[var(--surface2)] animate-pulse rounded-lg mt-1" />
             ) : (
-              <div className="text-2xl font-extrabold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{s.value}</div>
+              <div className="text-2xl sm:text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
+                {s.value}
+              </div>
             )}
-            <div className="text-xs font-medium text-[var(--muted)] mt-0.5">{s.label}</div>
+            <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{s.label}</div>
+            <div className="text-[10px] text-[var(--muted)] mt-0.5">{s.sub}</div>
           </div>
         ))}
       </div>

@@ -593,3 +593,143 @@ body {
   color: #fff;
   border-color: var(--color-indigo);
 }
+
+/* ── PROCTORSHIELD CYBER-SHIELD ATMOSPHERIC SYSTEM ─────── */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(1.5deg);
+  }
+}
+
+@keyframes floatMedium {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(-2deg);
+  }
+}
+
+@keyframes floatReverse {
+  0%, 100% {
+    transform: translateY(-12px) rotate(1deg);
+  }
+  50% {
+    transform: translateY(10px) rotate(-1deg);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes cyberRadar {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cyberScanline {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-float-slow {
+  animation: floatSlow 7s ease-in-out infinite;
+}
+
+.animate-float-medium {
+  animation: floatMedium 5.5s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: floatReverse 6.5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+.animate-cyber-radar {
+  animation: cyberRadar 8s linear infinite;
+}
+
+.animate-scanline {
+  animation: cyberScanline 3.5s ease-in-out infinite;
+}
+
+/* Atmospheric Cyber Mesh & Grid Background */
+.proctor-cyber-background {
+  position: relative;
+  isolation: isolate;
+  background-color: #030712;
+  background-image:
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(37, 99, 235, 0.28), transparent 70%),
+    radial-gradient(circle at 10% 25%, rgba(99, 102, 241, 0.22), transparent 45%),
+    radial-gradient(circle at 90% 30%, rgba(14, 165, 233, 0.2), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(79, 70, 229, 0.15), transparent 60%),
+    linear-gradient(180deg, #02050f 0%, #050b1a 45%, #030712 100%);
+}
+
+.proctor-cyber-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 80% 65% at 50% 35%, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 65% at 50% 35%, black 40%, transparent 85%);
+}
+
+.proctor-cyber-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(147, 197, 253, 0.18) 1.2px, transparent 1.2px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 80%);
+}
+
+/* Floating HUD Card Style */
+.proctor-hud-badge {
+  background: rgba(8, 18, 41, 0.75);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 36px -12px rgba(14, 165, 233, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.proctor-hud-badge:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: 0 20px 45px -10px rgba(56, 189, 248, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: scale(1.04);
+}

@@ -4,9 +4,8 @@ import { getArenaState, isArenaPowerId } from "@/lib/arena";
 import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimit } from "@/lib/security";
-import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 
-// POST /api/live/battle-action — broadcast one earned power per answered wave.
+// POST /api/live/battle-action — broadcast arena power usage against rivals
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession("student");
@@ -17,56 +16,56 @@ export async function POST(req: NextRequest) {
     const body: unknown = await req.json().catch(() => null);
     const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const quizId = Number(record?.quizId);
-    const questionId = Number(record?.questionId);
+    const questionId = Number(record?.questionId) || 0;
     const powerType = record?.powerType;
-    if (!Number.isSafeInteger(quizId) || quizId <= 0 || !Number.isSafeInteger(questionId) || questionId <= 0) {
-      return NextResponse.json({ error: "Valid quizId and questionId are required" }, { status: 400 });
+
+    if (!Number.isSafeInteger(quizId) || quizId <= 0) {
+      return NextResponse.json({ error: "Valid quizId is required" }, { status: 400 });
     }
     if (!isArenaPowerId(powerType)) {
       return NextResponse.json({ error: "Invalid battle power" }, { status: 400 });
     }
 
-    const arena = await getArenaState(quizId);
-    if (!arena || arena.status !== "active") {
-      return NextResponse.json({ error: "The battle arena is not active" }, { status: 409 });
-    }
-    if (!arena.enabledPowers.includes(powerType)) {
-      return NextResponse.json({ error: "That power is disabled for this arena" }, { status: 403 });
-    }
-    if (!(await hasActiveProSubscription(arena.teacherId))) {
-      return NextResponse.json({ error: "The arena host no longer has an active Pro plan" }, { status: 403 });
-    }
-
+    // Verify student is enrolled in this quiz
     const attempt = await prisma.studentQuiz.findFirst({
       where: {
         studentId: session.userId,
         quizId,
-        endTime: null,
-        quizStatus: "in_progress",
-        quiz: { teacherId: arena.teacherId, quizStatus: "in_progress" },
-        answers: { some: { questionId, isCorrect: { not: null } } },
+        quizStatus: { not: "rejected" },
       },
-      select: { id: true },
+      include: {
+        quiz: { select: { teacherId: true, quizStatus: true, title: true } },
+      },
       orderBy: { attemptNumber: "desc" },
     });
+
     if (!attempt) {
       return NextResponse.json(
-        { error: "Answer this arena question before using a battle power" },
+        { error: "You are not an active participant in this quiz" },
         { status: 403 },
       );
     }
 
+    const arena = await getArenaState(quizId);
+    if (arena && Array.isArray(arena.enabledPowers) && !arena.enabledPowers.includes(powerType)) {
+      return NextResponse.json({ error: "That battle power is disabled for this arena" }, { status: 403 });
+    }
+
+    // Prevent rapid double-clicking with a 4-second cooldown per power type
     const rateLimit = await consumeRateLimit(
-      `arena-power:${arena.sessionId}:${attempt.id}:${questionId}`,
+      `arena-power:${session.userId}:${quizId}:${powerType}`,
       1,
-      6 * 60 * 60_000,
+      4_000,
     );
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "You already used a battle power for this question" },
+        { error: `Please wait ${rateLimit.retryAfterSeconds}s before using ${powerType} again` },
         { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
       );
     }
+
+    const teacherId = attempt.quiz.teacherId;
+    const sessionId = arena?.sessionId || `arena-${quizId}`;
 
     const eventData = {
       attackerId: session.userId,
@@ -75,11 +74,15 @@ export async function POST(req: NextRequest) {
       targetName: powerType === "shield" ? (session.fullName || "A rival student") : "Rival Students",
       powerType,
       questionId,
-      sessionId: arena.sessionId,
+      sessionId,
       timestamp: new Date().toISOString(),
     };
+
     try {
-      await pusherServer.trigger(`private-quiz-${quizId}`, "battle-attack", eventData);
+      await Promise.allSettled([
+        pusherServer.trigger(`private-quiz-${quizId}`, "battle-attack", eventData),
+        pusherServer.trigger(`private-teacher-${teacherId}`, "battle-attack", eventData),
+      ]);
     } catch (error) {
       console.error("Battle action realtime broadcast failed:", error);
       return NextResponse.json({ error: "Battle action could not be delivered" }, { status: 503 });

@@ -4,6 +4,7 @@ import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import {
+  clearArenaState,
   createArenaState,
   getArenaState,
   isArenaAction,
@@ -123,12 +124,13 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
 
     const state = await getArenaState(quizId);
+    const activeArena = state?.status === "active" ? state : null;
     if (session.role !== "teacher" && session.role !== "admin") {
-      return NextResponse.json({ success: true, arena: state?.status === "active" ? state : null });
+      return NextResponse.json({ success: true, arena: activeArena });
     }
 
     const attempts = await prisma.studentQuiz.findMany({
-      where: { quizId, quizStatus: { notIn: ["rejected", "pending_approval"] } },
+      where: { quizId, quizStatus: { not: "rejected" } },
       select: {
         studentId: true,
         attemptNumber: true,
@@ -153,7 +155,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       }];
     });
 
-    return NextResponse.json({ success: true, arena: state, participants });
+    return NextResponse.json({ success: true, arena: activeArena, participants });
   } catch (error) {
     console.error("Get arena state error:", error);
     return NextResponse.json({ error: "Failed to load arena state" }, { status: 500 });
@@ -192,6 +194,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     let state = await getArenaState(quizId);
     let payouts: Awaited<ReturnType<typeof awardArenaBounty>> = [];
+
+    if (action === "reset") {
+      await clearArenaState(quizId);
+      try {
+        await pusherServer.trigger(`private-quiz-${quizId}`, "arena-end", {
+          quizId,
+          reset: true,
+        });
+      } catch (error) {
+        console.error("Arena reset push failed:", error);
+      }
+      return NextResponse.json({ success: true, message: "Arena state reset" });
+    }
+
     if (action === "start") {
       if (!["active", "in_progress"].includes(quiz.quizStatus)) {
         return NextResponse.json(
@@ -211,7 +227,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           });
           if (claimed.count !== 1) return false;
           await tx.studentQuiz.updateMany({
-            where: { quizId, quizStatus: "enrolled" },
+            where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
             data: { quizStatus: "in_progress", startTime: startedAt },
           });
           return true;
@@ -292,6 +308,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { error: "Arena state was saved, but the real-time broadcast failed. Please retry." },
         { status: 503 },
       );
+    }
+
+    if (action === "end") {
+      await clearArenaState(quizId);
     }
 
     return NextResponse.json({ success: true, action, arena: state, payouts: eventData.payouts });

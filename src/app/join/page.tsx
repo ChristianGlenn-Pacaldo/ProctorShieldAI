@@ -101,7 +101,10 @@ function JoinContent() {
       const res = await fetch("/api/quizzes/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessCode: code }),
+        body: JSON.stringify({
+          accessCode: code,
+          avatar: selectedMascot?.emoji || "🎓",
+        }),
       });
 
       const data = await res.json();

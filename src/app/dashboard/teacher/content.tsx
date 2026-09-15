@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, Users, AlertTriangle, Brain, Search, Crown } from "lucide-react";
+import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Radio, ShieldCheck, Activity, Zap } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
 import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
@@ -246,30 +246,38 @@ export default function TeacherDashboardContent({
     };
   }, [isSubscribed, teacherId]);
 
-  const statCards: StatCard[] = [
+  const statCards = [
     {
       label: "Total Quizzes",
       value: stats.totalQuizzes,
       icon: <FileText className="w-5 h-5" />,
-      color: "bg-blue-600/10 text-blue-600 dark:text-blue-400",
+      color: "bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+      sub: "AI & Manual Quizzes",
+      badge: "ACTIVE",
     },
     {
       label: "Students Monitored",
       value: stats.studentsMonitored,
       icon: <Users className="w-5 h-5" />,
-      color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400",
+      color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+      sub: "Live Proctored Sessions",
+      badge: "TELEMETRY",
     },
     {
       label: "Total Violations",
       value: stats.totalViolations,
       icon: <AlertTriangle className="w-5 h-5" />,
-      color: "bg-rose-600/10 text-rose-600 dark:text-rose-400",
+      color: "bg-rose-600/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+      sub: "Auto CCTV Evidence Logs",
+      badge: "AUDIT",
     },
     {
       label: "Flagged Students",
       value: stats.flaggedStudents,
       icon: <Brain className="w-5 h-5" />,
-      color: "bg-amber-600/10 text-amber-600 dark:text-amber-400",
+      color: "bg-amber-600/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
+      sub: "Gemini Forensic Alerts",
+      badge: "HIGH RISK",
     },
   ];
 
@@ -307,17 +315,58 @@ export default function TeacherDashboardContent({
         }}
       />
 
+      {/* Power Arena Quick Action Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-500/50">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-2xl shadow-md shadow-amber-500/30 shrink-0">
+            ⚔️
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm sm:text-base text-[var(--ink)] font-[family-name:var(--font-display)]">
+                Battle Power Arena Mode
+              </h3>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                PRO ARENA
+              </span>
+            </div>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              Host live competitive classroom quizzes with active student power-ups (Meteors, Blizzards, Shields).
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href={isSubscribed ? "/dashboard/teacher/playground" : "/dashboard/teacher/billing"}
+          className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/25 shrink-0 active:scale-95"
+          style={{ background: "linear-gradient(110deg, #d97706 0%, #f59e0b 50%, #ea580c 100%)" }}
+        >
+          <Zap className="w-3.5 h-3.5" />
+          <span>{isSubscribed ? "Launch Power Arena" : "Unlock Power Arena"}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5 shadow-xs">
+          <div
+            key={s.label}
+            className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
+          >
             <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}>
+              <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
                 {s.icon}
               </div>
+              <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-[var(--surface2)] text-[var(--muted)] border border-[var(--border)]">
+                {s.badge}
+              </span>
             </div>
-            <div className="text-2xl font-extrabold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{s.value}</div>
-            <div className="text-xs font-medium text-[var(--muted)] mt-0.5">{s.label}</div>
+            <div className="text-2xl sm:text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
+              {s.value}
+            </div>
+            <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{s.label}</div>
+            <div className="text-[10px] text-[var(--muted)] mt-0.5">{s.sub}</div>
           </div>
         ))}
       </div>
@@ -325,17 +374,25 @@ export default function TeacherDashboardContent({
       {/* Live Monitor + Violations Breakdown */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Live Monitor Widget */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🔴 Live Monitoring Feed</h3>
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isSubscribed ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
+        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-[var(--surface2)]/30">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">
+                Live Biometric Telemetry
+              </h3>
+            </div>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isSubscribed ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}>
               {isSubscribed ? (
-                <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               ) : (
                 <Crown className="w-3 h-3 text-amber-500" />
               )}
-              <span className={`text-[10px] font-bold ${isSubscribed ? "text-rose-600 dark:text-rose-400" : "text-amber-500"}`}>
-                {isSubscribed ? "LIVE" : "PRO"}
+              <span className={`text-[10px] font-black font-mono ${isSubscribed ? "text-emerald-500" : "text-amber-500"}`}>
+                {isSubscribed ? "RADAR ACTIVE" : "PRO ONLY"}
               </span>
             </div>
           </div>

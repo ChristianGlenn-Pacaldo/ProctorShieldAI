@@ -161,6 +161,14 @@ export default function QuizRoom() {
     hasGuardianShieldRef.current = hasGuardianShield;
   }, [hasGuardianShield]);
 
+  const [battlePowerInventory, setBattlePowerInventory] = useState<Record<string, boolean>>({
+    meteor: false,
+    earthquake: false,
+    blizzard: false,
+    shield: false,
+  });
+  const [isLaunchingPower, setIsLaunchingPower] = useState<string | null>(null);
+
   const [battleIntermission, setBattleIntermission] = useState<{
     show: boolean;
     nextIndex: number;
@@ -256,6 +264,55 @@ export default function QuizRoom() {
         return null;
       });
     }, 1400);
+  };
+
+  const handleUseArenaBattlePower = async (powerType: "meteor" | "earthquake" | "blizzard" | "shield") => {
+    if (battlePowerInventory[powerType] || isLaunchingPower !== null) return;
+    setIsLaunchingPower(powerType);
+    setPreWarning(null);
+
+    try {
+      const currentQId = currentQuestion?.id || questions[0]?.id || 1;
+      const res = await fetch("/api/live/battle-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quizId: Number(quizId),
+          powerType,
+          questionId: currentQId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setPreWarning(data.error || "Could not launch battle power.");
+        return;
+      }
+
+      setBattlePowerInventory((prev) => ({ ...prev, [powerType]: true }));
+
+      if (powerType === "shield") {
+        setHasGuardianShield(true);
+        hasGuardianShieldRef.current = true;
+        playShieldDeflectSound();
+        triggerCelebration("🛡️ GUARDIAN SHIELD EQUIPPED! Next incoming rival attack will be blocked!");
+      } else {
+        if (powerType === "meteor") playMeteorSound();
+        else if (powerType === "earthquake") playEarthquakeSound();
+        else if (powerType === "blizzard") playBlizzardSound();
+
+        const powerNames = {
+          meteor: "☄️ METEOR STRIKE",
+          earthquake: "🌋 EARTHQUAKE TREMOR",
+          blizzard: "❄️ BLIZZARD FROST",
+        };
+        triggerCelebration(`🚀 LAUNCHED ${powerNames[powerType]} AT RIVAL STUDENTS!`);
+      }
+    } catch {
+      setPreWarning("Network error launching battle power. Please try again.");
+    } finally {
+      setIsLaunchingPower(null);
+    }
   };
 
   // ── Web Audio Synthesizer (Zero External Dependencies) ───────
@@ -440,21 +497,6 @@ export default function QuizRoom() {
       }
     };
 
-    void fetch(`/api/arena/${quizId}`)
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((data) => {
-        if (data?.arena?.status !== "active") {
-          setArenaState(null);
-          return;
-        }
-        setArenaState(data.arena);
-        const currentArenaIndex = questions.findIndex(
-          (question) => question.id === data.arena.currentQuestionId,
-        );
-        if (currentArenaIndex >= 0) setCurrentQuestionIndex(currentArenaIndex);
-      })
-      .catch(() => setArenaState(null));
-
     import("pusher-js").then((Pusher) => {
       pusherClient = new Pusher.default(
         process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
@@ -468,7 +510,7 @@ export default function QuizRoom() {
       const quizBattleChannel = pusherClient.subscribe(`private-quiz-${quizId}`);
       quizBattleChannel.bind("battle-attack", (data: any) => {
         const isTarget = data?.targetId === "all" || data?.targetId === userId;
-        if (arenaActiveRef.current && isTarget && data.attackerId !== userId && data.powerType !== "shield") {
+        if (isTarget && data.attackerId !== userId && data.powerType !== "shield") {
           handleIncomingAttack(data.powerType, data.attackerName);
         }
       });
@@ -510,6 +552,27 @@ export default function QuizRoom() {
           data: { quizId },
         }),
       }).catch(() => {});
+
+      // Sync with a genuinely active arena (if started in the last 2 minutes).
+      // A stale arena from a previous session (started hours ago) is NOT
+      // activated — the teacher must click "Start Arena" again to fire a
+      // live arena-start Pusher event that the student picks up above.
+      void fetch(`/api/arena/${quizId}`)
+        .then(async (response) => response.ok ? response.json() : null)
+        .then((data) => {
+          if (data?.arena?.status !== "active") return;
+          const arenaStartedAt = Date.parse(data.arena.startedAt);
+          const arenaAgeMs = Number.isFinite(arenaStartedAt) ? Date.now() - arenaStartedAt : Infinity;
+          // Only sync if the arena was started within the last 2 minutes
+          // (i.e. it's from the current session, not a stale leftover)
+          if (arenaAgeMs > 120_000) return;
+          setArenaState(data.arena);
+          const currentArenaIndex = questions.findIndex(
+            (question) => question.id === data.arena.currentQuestionId,
+          );
+          if (currentArenaIndex >= 0) setCurrentQuestionIndex(currentArenaIndex);
+        })
+        .catch(() => {});
     });
 
     return () => {
@@ -1112,9 +1175,10 @@ export default function QuizRoom() {
         setIsCheckingAnswer(false);
         if (questionIndex >= questionsRef.current.length - 1) {
           void submitQuizRef.current();
-        } else if (arenaActiveRef.current) {
-          setBattleIntermission({ show: true, nextIndex: questionIndex + 1, questionId });
         } else {
+          // Always advance to the next question normally.
+          // In arena mode, battle powers are available via the
+          // dock at the bottom — no forced intermission screen.
           setCurrentQuestionIndex(questionIndex + 1);
         }
       }, 1_100);
@@ -2424,7 +2488,16 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
+    <div
+      className={`exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden ${
+        activeAttackEffect?.type === "earthquake" ? "animate-[earthquake-rumble_0.4s_infinite]" : ""
+      }`}
+      style={
+        activeAttackEffect?.type === "earthquake"
+          ? { animation: "earthquake-rumble 0.4s infinite ease-in-out" }
+          : undefined
+      }
+    >
       
       {/* Floating Gamification Celebration Banner */}
       {celebrationBanner && (
@@ -2503,99 +2576,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         <div className="fixed inset-0 z-[85] pointer-events-none bg-cyan-500/10 backdrop-blur-[2px] border-8 border-cyan-300/40 animate-pulse" />
       )}
 
-      {/* ── BATTLE POWER INTERMISSION MODAL (PROCTORSHIELD ATTACK & SHIELD) ── */}
-      {battleIntermission?.show && (
-        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
-          <div className="bg-[#11172a] border-2 border-indigo-500/50 rounded-3xl p-5 sm:p-8 max-w-xl w-full text-center shadow-2xl shadow-indigo-950/80 space-y-5 relative overflow-y-auto max-h-[calc(100dvh-2rem)] my-auto flex flex-col">
-            <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/20 blur-[60px] rounded-full pointer-events-none" />
-
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 text-amber-300 font-black text-xs uppercase tracking-wider mb-2">
-                <Swords className="w-3.5 h-3.5" /> Battle Power Phase
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white font-[family-name:var(--font-display)]">
-                Choose Your Move!
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 mt-1">
-                Attack rivals with a Meteor or Earthquake, or deploy a Guardian Shield for defense!
-              </p>
-            </div>
-
-            {/* Battle Powers Grid */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              {BATTLE_POWERS.filter((power) => (
-                arenaState?.enabledPowers.includes(power.id as ArenaPowerId)
-              )).map((power) => (
-                <button
-                  key={power.id}
-                  type="button"
-                  onClick={() => void handleLaunchBattlePower(power)}
-                  className="rounded-2xl border-2 p-4 text-left flex flex-col justify-between transition-all hover:scale-[1.03] active:scale-95 cursor-pointer group shadow-lg"
-                  style={{
-                    borderColor: power.border,
-                    backgroundColor: "rgba(20, 26, 48, 0.9)",
-                  }}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-1 mb-2">
-                      <span className="text-3xl sm:text-4xl group-hover:scale-110 transition-transform">
-                        {power.emoji}
-                      </span>
-                      <span
-                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          power.type === "defense"
-                            ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/50"
-                            : "bg-rose-500/30 text-rose-300 border border-rose-500/50"
-                        }`}
-                      >
-                        {power.badge}
-                      </span>
-                    </div>
-                    <div className="text-sm sm:text-base font-black text-white">
-                      {power.name}
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                      {power.description}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2 border-t border-white/10 text-[10px] font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1">
-                    <span>{power.id === "shield" ? "Equip Defense" : "Launch Attack"} ➔</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Skip Option */}
-            <button
-              type="button"
-              onClick={() => {
-                if (battleIntermission) {
-                  setWaitingForArenaWave(true);
-                  setBattleIntermission(null);
-                }
-              }}
-              className="text-xs text-slate-400 hover:text-white underline font-semibold cursor-pointer pt-1"
-            >
-              Skip Power & Wait for Question {battleIntermission.nextIndex + 1} →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {waitingForArenaWave && arenaState?.status === "active" && (
-        <div className="fixed inset-0 z-[95] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto my-auto rounded-3xl border border-indigo-500/40 bg-[#11172a] p-6 sm:p-7 text-center shadow-2xl">
-            <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-indigo-300 animate-pulse" />
-            </div>
-            <h2 className="text-xl font-black text-white">Answer Locked</h2>
-            <p className="mt-2 text-sm text-slate-300">
-              Waiting for your teacher to launch the next arena wave. Keep this quiz open.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Battle powers are available via the dock at the bottom of the quiz.
+          No forced intermission screen or waiting overlay — the student
+          answers questions normally and can use powers from the dock. */}
 
       {/* Security Warning Modal */}
       {teacherWarningModal.show && !warningModal.show && (
@@ -2900,15 +2883,108 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         {/* QUESTIONS STACK & POWER-UP DOCK */}
         <div className="w-full flex-1 flex flex-col gap-4 overflow-hidden">
           
-          {/* PROCTORSHIELD POWER-UP DOCK */}
-          <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md shrink-0">
+          {/* PROCTORSHIELD ARENA BATTLE POWERS DOCK */}
+          <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg shrink-0">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-violet-400" />
-              <span className="text-xs font-bold text-slate-300">ProctorShield Power-Ups:</span>
+              <Swords className="w-4 h-4 text-amber-400 animate-pulse" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-xs font-black text-white uppercase tracking-wider">
+                  Arena Battle Powers
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300">
+                  Live vs Rivals
+                </span>
+              </div>
             </div>
 
+            {/* Battle Powers: Attack & Defend against rivals */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* 50/50 Eraser */}
+              {/* Meteor Strike */}
+              <button
+                type="button"
+                onClick={() => void handleUseArenaBattlePower("meteor")}
+                disabled={battlePowerInventory.meteor || isLaunchingPower !== null}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                  battlePowerInventory.meteor
+                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-rose-600/30 to-amber-600/30 hover:from-rose-600/50 hover:to-amber-600/50 text-rose-200 border border-rose-500/50 hover:scale-105 active:scale-95 shadow-rose-500/20"
+                }`}
+                title="Rain flaming meteors on rivals' screens (-25 HP in Arena)"
+              >
+                <span className="text-sm">☄️</span>
+                <span>Meteor Strike</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-500/30 text-rose-300 font-mono font-bold">
+                  {battlePowerInventory.meteor ? "USED" : "1X"}
+                </span>
+              </button>
+
+              {/* Earthquake Tremor */}
+              <button
+                type="button"
+                onClick={() => void handleUseArenaBattlePower("earthquake")}
+                disabled={battlePowerInventory.earthquake || isLaunchingPower !== null}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                  battlePowerInventory.earthquake
+                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-amber-600/30 to-yellow-600/30 hover:from-amber-600/50 hover:to-yellow-600/50 text-amber-200 border border-amber-500/50 hover:scale-105 active:scale-95 shadow-amber-500/20"
+                }`}
+                title="Violently rumble and shake rivals' screens (-15 HP in Arena)"
+              >
+                <span className="text-sm">🌋</span>
+                <span>Earthquake</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-mono font-bold">
+                  {battlePowerInventory.earthquake ? "USED" : "1X"}
+                </span>
+              </button>
+
+              {/* Blizzard Frost */}
+              <button
+                type="button"
+                onClick={() => void handleUseArenaBattlePower("blizzard")}
+                disabled={battlePowerInventory.blizzard || isLaunchingPower !== null}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                  battlePowerInventory.blizzard
+                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-cyan-600/30 to-blue-600/30 hover:from-cyan-600/50 hover:to-blue-600/50 text-cyan-200 border border-cyan-500/50 hover:scale-105 active:scale-95 shadow-cyan-500/20"
+                }`}
+                title="Freeze rivals' screens in ice crystals for 4 seconds"
+              >
+                <span className="text-sm">❄️</span>
+                <span>Blizzard</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/30 text-cyan-300 font-mono font-bold">
+                  {battlePowerInventory.blizzard ? "USED" : "1X"}
+                </span>
+              </button>
+
+              {/* Guardian Shield */}
+              <button
+                type="button"
+                onClick={() => void handleUseArenaBattlePower("shield")}
+                disabled={battlePowerInventory.shield || hasGuardianShield || isLaunchingPower !== null}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                  hasGuardianShield
+                    ? "bg-emerald-500/25 text-emerald-300 border border-emerald-400/60 shadow-emerald-500/30 animate-pulse"
+                    : battlePowerInventory.shield
+                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-indigo-600/30 to-violet-600/30 hover:from-indigo-600/50 hover:to-violet-600/50 text-indigo-200 border border-indigo-500/50 hover:scale-105 active:scale-95 shadow-indigo-500/20"
+                }`}
+                title="Deploy a barrier that deflects the next incoming rival attack"
+              >
+                <span className="text-sm">🛡️</span>
+                <span>{hasGuardianShield ? "Shield Active" : "Guardian Shield"}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                  hasGuardianShield
+                    ? "bg-emerald-400/30 text-emerald-200"
+                    : "bg-indigo-500/30 text-indigo-300"
+                }`}>
+                  {hasGuardianShield ? "ACTIVE" : battlePowerInventory.shield ? "USED" : "1X"}
+                </span>
+              </button>
+
+              {/* Separator */}
+              <div className="h-5 w-px bg-slate-700/60 mx-1 hidden sm:block" />
+
+              {/* 50/50 Eraser (Exam booster) */}
               <button
                 type="button"
                 onClick={() => {
@@ -2917,44 +2993,47 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   }
                 }}
                 disabled={powerUps.fiftyFifty.used}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   powerUps.fiftyFifty.used
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-xs"
+                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
+                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
                 }`}
+                title="Remove 2 wrong choices"
               >
-                <Scissors className="w-3.5 h-3.5" />
-                <span>50/50 Eraser {powerUps.fiftyFifty.used ? "(Used)" : "(1x)"}</span>
+                <Scissors className="w-3 h-3 text-indigo-400" />
+                <span>50/50</span>
               </button>
 
-              {/* 2x Double Points */}
+              {/* 2x Score Booster */}
               <button
                 type="button"
                 onClick={handleUseDoublePoints}
                 disabled={powerUps.doublePoints.used}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   powerUps.doublePoints.used
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 shadow-xs"
+                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
+                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
                 }`}
+                title="2x Score multiplier + 150 XP"
               >
-                <Zap className="w-3.5 h-3.5" />
-                <span>2x Points {powerUps.doublePoints.used ? "(Used)" : "(1x)"}</span>
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>2x XP</span>
               </button>
 
-              {/* Time Freeze (+30s) */}
+              {/* Time Freeze */}
               <button
                 type="button"
                 onClick={handleUseTimeFreeze}
                 disabled={powerUps.timeFreeze.used}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   powerUps.timeFreeze.used
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 shadow-xs"
+                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
+                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
                 }`}
+                title="+30 Seconds time freeze"
               >
-                <Clock className="w-3.5 h-3.5" />
-                <span>+30s Freeze {powerUps.timeFreeze.used ? "(Used)" : "(1x)"}</span>
+                <Clock className="w-3 h-3 text-cyan-400" />
+                <span>+30s</span>
               </button>
             </div>
           </div>

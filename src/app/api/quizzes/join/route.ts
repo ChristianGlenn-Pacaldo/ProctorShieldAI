@@ -6,6 +6,7 @@ import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/li
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { getQuizCapacityDecision } from "@/lib/subscription-rules";
 import { getArenaState } from "@/lib/arena";
+import { AVATAR_CATALOG } from "@/lib/student-coins";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unauthorized. Only students can join quizzes${currentRole}.` }, { status: 401 });
     }
 
-    const { accessCode } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { accessCode, avatar } = body as { accessCode?: unknown; avatar?: unknown };
 
     if (typeof accessCode !== "string" || !accessCode.trim()) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
@@ -138,7 +140,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Resolve student avatar (passed from client, or from gameProfile, or default "🎓")
+    let studentAvatar = typeof avatar === "string" && avatar.trim() ? avatar.trim() : "";
+    if (!studentAvatar) {
+      try {
+        const studentProfile = await prisma.studentGameProfile.findUnique({
+          where: { studentId: session.userId },
+          select: { equippedAvatar: true },
+        });
+        const catalogItem = studentProfile?.equippedAvatar
+          ? AVATAR_CATALOG.find((a) => a.id === studentProfile.equippedAvatar)
+          : null;
+        studentAvatar = catalogItem?.emoji || "🎓";
+      } catch {
+        studentAvatar = "🎓";
+      }
+    }
+
     if (enrollmentResult.kind === "existing") {
+      // Trigger live arena join event so the teacher's lobby displays returning students immediately
+      try {
+        const { pusherServer } = await import("@/lib/pusher");
+        const arenaPayload = {
+          quizId: quiz.id,
+          studentId: session.userId,
+          studentName: session.fullName,
+          avatar: studentAvatar,
+          timestamp: new Date().toISOString(),
+        };
+        await Promise.allSettled([
+          pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
+          pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
+        ]);
+      } catch (e) {
+        console.error("Failed to trigger push event for existing student:", e);
+      }
+
       return NextResponse.json({
         success: true,
         message: `Welcome back to ${quiz.title}`,
@@ -206,17 +243,18 @@ export async function POST(req: NextRequest) {
         createdAt: teacherNotificationDate,
       });
 
-      const arena = await getArenaState(quiz.id);
-      if (arena?.status === "active" && arena.teacherId === quiz.teacherId) {
-        await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
-          sessionId: arena.sessionId,
-          quizId: quiz.id,
-          studentId: session.userId,
-          studentName: session.fullName,
-          avatar: "🎓",
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Broadcast arena student joined to both teacher and quiz channels so the lobby displays them live
+      const arenaPayload = {
+        quizId: quiz.id,
+        studentId: session.userId,
+        studentName: session.fullName,
+        avatar: studentAvatar,
+        timestamp: new Date().toISOString(),
+      };
+      await Promise.allSettled([
+        pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
+        pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
+      ]);
     } catch (e) {
       console.error("Failed to trigger push event:", e);
     }

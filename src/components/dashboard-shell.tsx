@@ -350,10 +350,10 @@ export default function DashboardShell({
                     {item.badge && (
                       <span
                         className={clsx(
-                          "px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase",
+                          "text-[10px] font-extrabold px-1.5 py-0.5 rounded-md shadow-xs",
                           item.badge === "PRO"
-                            ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-xs shadow-amber-500/40"
-                            : "bg-blue-600/15 text-blue-600 dark:text-blue-400 font-bold"
+                            ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md shadow-amber-500/40 animate-pulse"
+                            : "bg-blue-500/20 text-blue-300"
                         )}
                       >
                         {item.badge}

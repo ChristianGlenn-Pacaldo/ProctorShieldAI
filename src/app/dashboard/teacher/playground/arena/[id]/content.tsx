@@ -250,6 +250,26 @@ export default function ArenaHostContent({
     }
   };
 
+  const playJoinChime = () => {
+    if (!sfxEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch {
+      // Audio fallback
+    }
+  };
+
   const currentQuestionIdRef = useRef(quiz.questions[0]?.id ?? 0);
   useEffect(() => {
     currentQuestionIdRef.current = quiz.questions[currentQuestionIndex]?.id ?? 0;
@@ -346,13 +366,18 @@ export default function ArenaHostContent({
     setPhase("intermission");
   }, [currentQuestionIndex, quiz.questions]);
 
-  const addParticipant = useCallback((data: { studentId: string; studentName: string; avatar?: string }) => {
+  const addParticipant = useCallback((data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
+    const sId = data.studentId;
+    const sName = data.studentName || data.name || "Student Fighter";
+    const sAvatar = data.avatar || "🎓";
+    if (!sId) return;
+
     setBattlers((prev) => {
-      if (prev.some((b) => b.id === data.studentId)) return prev;
+      if (prev.some((b) => b.id === sId)) return prev;
       return [...prev, {
-        id: data.studentId,
-        name: data.studentName,
-        avatar: data.avatar || "🎓",
+        id: sId,
+        name: sName,
+        avatar: sAvatar,
         hp: 100,
         maxHp: 100,
         hasShield: false,
@@ -412,14 +437,13 @@ export default function ArenaHostContent({
             ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
             : 0;
           const remaining = Math.max(0, duration - elapsed);
-          setCurrentQuestionIndex(safeIndex);
-          setTimeLeft(remaining);
-          setChoiceVotes({});
-          setIsTimerRunning(remaining > 0);
-          setPhase(remaining > 0 ? "wave" : "intermission");
-        } else if (liveArena?.status === "ended") {
-          setPhase("podium");
-          setIsTimerRunning(false);
+          if (remaining > 0) {
+            setCurrentQuestionIndex(safeIndex);
+            setTimeLeft(remaining);
+            setChoiceVotes({});
+            setIsTimerRunning(true);
+            setPhase("wave");
+          }
         }
       })
       .catch(() => setArenaError("Could not load the current arena participants."));
@@ -434,15 +458,20 @@ export default function ArenaHostContent({
     const quizChannel = pusher.subscribe(`private-quiz-${quiz.id}`);
     const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
 
-    teacherChannel.bind("arena-student-joined", (data: { studentId: string; studentName: string; avatar?: string }) => {
+    const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
       addParticipant(data);
+      playJoinChime();
+      const displayName = data.studentName || data.name || "A fighter";
       setBattleEvents((prev) => [{
-        id: `ev-${Date.now()}`,
+        id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
         timestamp: "Just now",
-        text: `🎮 ${data.studentName} entered the Arena!`,
+        text: `🎮 ${displayName} entered the Arena!`,
         type: "info",
       }, ...prev.slice(0, 20)]);
-    });
+    };
+
+    teacherChannel.bind("arena-student-joined", handleStudentJoined);
+    quizChannel.bind("arena-student-joined", handleStudentJoined);
     teacherChannel.bind("arena-answer", (data: {
       studentId: string;
       studentName: string;
@@ -463,7 +492,7 @@ export default function ArenaHostContent({
         };
       }));
     });
-    quizChannel.bind("battle-attack", (data: {
+    const handleAttackEvent = (data: {
       attackerId?: string;
       attackerName: string;
       targetId?: string;
@@ -475,7 +504,10 @@ export default function ArenaHostContent({
       data.powerType,
       data.attackerId,
       data.targetId,
-    ));
+    );
+
+    quizChannel.bind("battle-attack", handleAttackEvent);
+    teacherChannel.bind("battle-attack", handleAttackEvent);
 
     return () => {
       quizChannel.unbind_all();
@@ -485,6 +517,25 @@ export default function ArenaHostContent({
       pusher.disconnect();
     };
   }, [addParticipant, handleCombatEvent, quiz.id, quiz.questions, teacherId, waveDuration]);
+
+  // Periodic background sync while waiting in lobby so joined students appear seamlessly
+  useEffect(() => {
+    if (phase !== "lobby") return;
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/arena/${quiz.id}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (Array.isArray(data?.participants)) {
+          data.participants.forEach(addParticipant);
+        }
+      } catch {
+        // Silently ignore background polling errors
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [phase, quiz.id, addParticipant]);
 
   useEffect(() => {
     if (phase !== "wave" || !isTimerRunning) return;
@@ -1140,8 +1191,12 @@ export default function ArenaHostContent({
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-800">
             <button
               onClick={() => {
+                void broadcastArenaAction("reset");
                 setPhase("lobby");
                 setCurrentQuestionIndex(0);
+                setTimeLeft(waveDuration);
+                setIsTimerRunning(false);
+                setChoiceVotes({});
                 setBattlers((prev) =>
                   prev.map((b) => ({ ...b, hp: 100, score: 0, streak: 0, isAlive: true, hasShield: false }))
                 );
