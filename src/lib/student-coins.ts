@@ -88,14 +88,14 @@ export const AVATAR_CATALOG: ShopAvatar[] = [
     perk: "Orbit Particle Aura",
   },
 
-  // Tier 1 (Common / Unlocked with basic quiz coins)
+  // Tier 1 (Free / All Avatars Unlocked)
   {
     id: "ninja",
     name: "Focus Ninja",
     emoji: "🥷",
     category: "mystic",
     rarity: "common",
-    price: 100,
+    price: 0,
     color: "from-slate-700 to-zinc-900",
     borderGlow: "rgba(113, 113, 122, 0.5)",
     description: "Silent, unwavering concentration through every exam.",
@@ -107,21 +107,21 @@ export const AVATAR_CATALOG: ShopAvatar[] = [
     emoji: "🐯",
     category: "cyber",
     rarity: "rare",
-    price: 180,
+    price: 0,
     color: "from-orange-500 to-red-600",
     borderGlow: "rgba(249, 115, 22, 0.5)",
     description: "Fierce exam predator that hunts down high marks.",
     perk: "Tiger Roar on Submit",
   },
 
-  // Tier 2 (Rare / Top Finishers)
+  // Tier 2 (Free / All Avatars Unlocked)
   {
     id: "wolf",
     name: "Shadow Wolf",
     emoji: "🐺",
     category: "mystic",
     rarity: "rare",
-    price: 250,
+    price: 0,
     color: "from-indigo-600 to-slate-900",
     borderGlow: "rgba(99, 102, 241, 0.5)",
     description: "Solitary master of exams with sharp instincts.",
@@ -133,7 +133,7 @@ export const AVATAR_CATALOG: ShopAvatar[] = [
     emoji: "🔥",
     category: "mystic",
     rarity: "epic",
-    price: 350,
+    price: 0,
     color: "from-amber-500 via-orange-600 to-red-600",
     borderGlow: "rgba(239, 68, 68, 0.6)",
     description: "Rises victorious even after tough questions.",
@@ -145,21 +145,21 @@ export const AVATAR_CATALOG: ShopAvatar[] = [
     emoji: "🐉",
     category: "mystic",
     rarity: "epic",
-    price: 450,
+    price: 0,
     color: "from-emerald-600 via-teal-600 to-cyan-700",
-    borderGlow: "rgba(16, 185, 129, 0.6)",
+    borderGlow: "rgba(168, 85, 247, 0.6)",
     description: "Ancient master of wisdom, unshakeable in test trials.",
     perk: "Jade Dragon Waves",
   },
 
-  // Tier 3 (Legendary / Top 1 Podium Champions)
+  // Tier 3 (Free / All Avatars Unlocked)
   {
     id: "champion",
     name: "Crown Champion",
     emoji: "👑",
     category: "champion",
     rarity: "legendary",
-    price: 500,
+    price: 0,
     color: "from-yellow-400 via-amber-500 to-yellow-600",
     borderGlow: "rgba(245, 158, 11, 0.8)",
     description: "The official crown for Top 1 Leaderboard conquerors.",
@@ -171,7 +171,7 @@ export const AVATAR_CATALOG: ShopAvatar[] = [
     emoji: "💎",
     category: "champion",
     rarity: "legendary",
-    price: 650,
+    price: 0,
     color: "from-cyan-400 via-blue-500 to-indigo-600",
     borderGlow: "rgba(6, 182, 212, 0.8)",
     description: "Pure brilliance that shines at the absolute pinnacle.",
@@ -186,7 +186,14 @@ export interface StudentAvatarData {
   topOneWins: number;
 }
 
-export const DEFAULT_STARTER_IDS = ["shield", "fox", "owl", "robot", "lightning", "rocket"];
+export const DEFAULT_STARTER_IDS = [
+  "shield",
+  "fox",
+  "owl",
+  "robot",
+  "lightning",
+  "rocket",
+];
 const AVATAR_IDS = new Set(AVATAR_CATALOG.map((avatar) => avatar.id));
 
 function boundedWholeNumber(value: unknown, fallback: number, maximum = 1_000_000_000) {

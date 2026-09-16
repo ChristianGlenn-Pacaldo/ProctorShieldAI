@@ -538,7 +538,11 @@ export default function ArenaHostContent({
         const data = await response.json();
         if (!isMounted) return;
 
-        if (data?.status === "ended" || data?.arena?.status === "ended" || data?.quizStatus === "ended") {
+        if (data?.status === "lobby") {
+          setPhase("lobby");
+          setIsTimerRunning(false);
+          setBattlers(Array.isArray(data?.participants) ? data.participants : []);
+        } else if (data?.status === "ended" || data?.arena?.status === "ended" || data?.quizStatus === "ended") {
           setPhase("podium");
           setIsTimerRunning(false);
         } else if (data?.status === "active" || data?.arena?.status === "active") {
@@ -1114,7 +1118,7 @@ export default function ArenaHostContent({
           <div className="flex items-end justify-center gap-3 sm:gap-6 pt-12 pb-6">
             {podiumLeaderboard.length === 0 && (
               <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-6 py-8 text-center text-sm text-slate-300">
-                No eligible student submission was available, so no coin bounty was awarded.
+                No eligible student submission was available for this session.
               </div>
             )}
             {/* 2nd Place */}
@@ -1129,8 +1133,8 @@ export default function ArenaHostContent({
                 </div>
                 <div className="w-full h-32 sm:h-40 rounded-t-2xl bg-gradient-to-b from-slate-700 to-slate-900 border-2 border-slate-600 flex flex-col items-center justify-center p-2 shadow-xl">
                   <span className="text-2xl font-black text-slate-300">2nd</span>
-                  <span className="text-[11px] font-bold text-amber-300 mt-1">
-                    +{Math.round(coinBounty * 0.6)} 🪙
+                  <span className="text-[11px] font-bold text-slate-400 mt-1">
+                    Runner-up
                   </span>
                 </div>
               </div>
@@ -1152,7 +1156,7 @@ export default function ArenaHostContent({
                 <div className="w-full h-44 sm:h-56 rounded-t-2xl bg-gradient-to-b from-amber-400 via-yellow-500 to-amber-600 border-2 border-amber-300 flex flex-col items-center justify-center p-2 shadow-2xl shadow-amber-500/30">
                   <span className="text-3xl font-black text-slate-950">1st</span>
                   <span className="text-xs font-black text-slate-950 mt-1 bg-white/60 px-2 py-0.5 rounded-full">
-                    +{coinBounty} 🪙
+                    Champion
                   </span>
                 </div>
               </div>
@@ -1171,7 +1175,7 @@ export default function ArenaHostContent({
                 <div className="w-full h-24 sm:h-32 rounded-t-2xl bg-gradient-to-b from-amber-800 to-amber-950 border-2 border-amber-700 flex flex-col items-center justify-center p-2 shadow-xl">
                   <span className="text-2xl font-black text-amber-200">3rd</span>
                   <span className="text-[11px] font-bold text-amber-300 mt-1">
-                    +{Math.round(coinBounty * 0.4)} 🪙
+                    Bronze
                   </span>
                 </div>
               </div>
@@ -1204,13 +1208,11 @@ export default function ArenaHostContent({
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-800">
             <button
               onClick={() => {
-                void broadcastArenaAction("reset");
+                void broadcastArenaAction("create_session");
                 setPhase("lobby");
                 setTimeLeft(selectedMatchDuration);
                 setIsTimerRunning(false);
-                setBattlers((prev) =>
-                  prev.map((b) => ({ ...b, score: 0, rank: 1, questionsAnswered: 0, isFinished: false, hasShield: false }))
-                );
+                setBattlers([]);
               }}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition-all cursor-pointer"
             >

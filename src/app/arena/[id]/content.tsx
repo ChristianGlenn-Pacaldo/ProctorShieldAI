@@ -23,6 +23,7 @@ import {
   Crosshair,
   Award,
   Check,
+  ArrowRight,
 } from "lucide-react";
 import {
   playMeteorSound,
@@ -34,6 +35,13 @@ import {
 import { ArenaBattleDock } from "@/components/arena/arena-battle-dock";
 import { ArenaPodium, type PodiumParticipant } from "@/components/arena/arena-podium";
 import type { ArenaParticipant, ArenaState } from "@/lib/arena";
+
+function playAttackSound(powerType: string) {
+  if (powerType === "meteor") playMeteorSound();
+  else if (powerType === "earthquake") playEarthquakeSound();
+  else if (powerType === "blizzard") playBlizzardSound();
+  else if (powerType === "shield") playShieldDeflectSound();
+}
 
 interface Choice {
   id: number;
@@ -114,6 +122,9 @@ export function ArenaContent({
   const [questionsCompleted, setQuestionsCompleted] = useState(
     savedAnswers.length >= questions.length && questions.length > 0
   );
+  const [isSpectating, setIsSpectating] = useState(false);
+  const [battleLogs, setBattleLogs] = useState<string[]>([]);
+  const [expEarned, setExpEarned] = useState(100);
 
   // ── Overall Server-Authoritative Match Timer ──────────────────
   const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
@@ -131,7 +142,6 @@ export function ArenaContent({
   const [totalParticipants, setTotalParticipants] = useState<number>(1);
   const [streak, setStreak] = useState(0);
   const [highestStreak, setHighestStreak] = useState(0);
-  const [coinsEarned, setCoinsEarned] = useState(0);
 
   // ── Rivals (Ranked by score descending, NO HP) ────────────────
   const [rivals, setRivals] = useState<ArenaParticipant[]>([]);
@@ -291,8 +301,10 @@ export function ArenaContent({
       });
       const submitData = await submitRes.json();
       if (submitData?.success) {
-        if (typeof submitData.coinsEarned === "number") {
-          setCoinsEarned(submitData.coinsEarned);
+        if (typeof submitData.expEarned === "number") {
+          setExpEarned(submitData.expEarned);
+        } else if (typeof submitData.result?.expEarned === "number") {
+          setExpEarned(submitData.result.expEarned);
         }
         if (typeof submitData.rank === "number") {
           setStudentRank(submitData.rank);
@@ -480,6 +492,24 @@ export function ArenaContent({
           updateRankingsFromParticipants(data.participants);
         }
       });
+
+      // ── Dedicated Session Reset / Fresh Session Event ─────────────
+      const handleSessionCreated = (data?: { sessionId?: string }) => {
+        setIncomingAttack(null);
+        setPhase("lobby");
+        if (data?.sessionId) {
+          setCurrentSessionId(data.sessionId);
+        }
+        setCurrentQuestionIndex(0);
+        setQuestionsCompleted(false);
+        setIsSpectating(false);
+        setScore(0);
+        setUsedPowers({});
+        setHasGuardianShield(false);
+        setBattleLogs([]);
+      };
+      arenaChannel.bind("arena-session-created", handleSessionCreated);
+      arenaChannel.bind("arena-reset", handleSessionCreated);
 
       // ── Match Ended by Teacher / Server ──────────────────────────
       arenaChannel.bind("arena-end", () => {
@@ -764,8 +794,7 @@ export function ArenaContent({
   };
 
   const executeBattlePower = async (powerType: BattlePowerType, targetStudentId?: string) => {
-    if (isLaunchingPower !== null || usedPowers[powerType]) return;
-    setIsLaunchingPower(powerType);
+    if (usedPowers[powerType]) return;
     setErrorMessage(null);
     setTargetPickerPower(null);
 
@@ -778,10 +807,20 @@ export function ArenaContent({
     const targetRival = rivals.find((r) => r.studentId === targetStudentId);
     const targetLabel = targetRival?.studentName || "Rival";
 
-    // Immediate optimistic launch feedback
-    if (powerType !== "shield") {
-      setCelebrationMessage(`🚀 Launching ${names[powerType]} at ${targetLabel.toUpperCase()}...`);
+    // Immediate optimistic launch feedback & sound
+    if (powerType === "shield") {
+      setHasGuardianShield(true);
+      if (soundEnabled) playShieldDeflectSound();
+      setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
+      setBattleLogs((prev) => ["🛡️ You armed Guardian Shield!", ...prev].slice(0, 15));
+    } else {
+      setCelebrationMessage(`🚀 Attack Launched! ${names[powerType]} targeting ${targetLabel.toUpperCase()}!`);
+      if (soundEnabled) playAttackSound(powerType);
+      setBattleLogs((prev) => [`🚀 Launched ${names[powerType]} at ${targetLabel}!`, ...prev].slice(0, 15));
     }
+
+    // Visually mark as used immediately with NO waiting delay
+    setUsedPowers((prev) => ({ ...prev, [powerType]: true }));
 
     try {
       const currentQ = questions[currentQuestionIndex];
@@ -799,27 +838,28 @@ export function ArenaContent({
 
       const data = await res.json();
       if (!res.ok) {
+        // Rollback optimistic power state on server error
+        setUsedPowers((prev) => {
+          const next = { ...prev };
+          delete next[powerType];
+          return next;
+        });
+        if (powerType === "shield") setHasGuardianShield(false);
         setErrorMessage(data.error || "Failed to cast battle power.");
         setCelebrationMessage(null);
         return;
       }
 
-      // Mark power as USED permanently for this match immediately upon server confirmation
-      setUsedPowers((prev) => ({ ...prev, [powerType]: true }));
-
-      if (powerType === "shield") {
-        setHasGuardianShield(true);
-        if (soundEnabled) playShieldDeflectSound();
-        setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
-      } else {
-        setCelebrationMessage(`🚀 LAUNCHED ${names[powerType]} AT ${targetLabel.toUpperCase()}! Strike incoming!`);
-      }
       setTimeout(() => setCelebrationMessage(null), 3000);
     } catch {
+      setUsedPowers((prev) => {
+        const next = { ...prev };
+        delete next[powerType];
+        return next;
+      });
+      if (powerType === "shield") setHasGuardianShield(false);
       setErrorMessage("Network error launching battle power.");
       setCelebrationMessage(null);
-    } finally {
-      setIsLaunchingPower(null);
     }
   };
 
@@ -874,7 +914,7 @@ export function ArenaContent({
           currentStudentId={studentId}
           studentScore={score}
           studentRank={studentRank}
-          studentCoins={coinsEarned}
+          expEarned={expEarned}
           highestStreak={highestStreak}
           onExit={() => router.push("/dashboard/student")}
         />
@@ -1330,24 +1370,181 @@ export function ArenaContent({
       {/* Main Question / Early Finish Area */}
       <main className="max-w-4xl w-full mx-auto my-auto flex flex-col justify-center">
         {questionsCompleted ? (
-          <div className="bg-gradient-to-br from-[#12182b] to-[#0d1222] border border-indigo-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl text-center space-y-4 animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-slate-950 mx-auto shadow-lg">
-              <Check className="w-8 h-8 stroke-[3]" />
-            </div>
+          isSpectating ? (
+            /* ── Spectator Lobby / Waiting View ── */
+            <div className="bg-gradient-to-br from-[#12182b] to-[#0d1222] border border-indigo-500/30 rounded-3xl p-5 sm:p-8 shadow-2xl space-y-5 animate-in fade-in">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      Active Match • Spectator View
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black text-white">Power Arena Live Spectator Lobby</h3>
+                  </div>
+                </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
-              All Questions Completed!
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-              Your questions are finished and your current score of <span className="text-amber-300 font-bold font-mono">{score} PTS</span> is locked in.
-              Use your remaining battle powers, track rivals, and wait for the match timer to conclude!
-            </p>
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-300 font-mono font-bold text-xs flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{formatTimer(matchTimeLeft)} left</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSpectating(false)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    View Summary Card
+                  </button>
+                </div>
+              </div>
 
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-bold">
-              <span>Overall Match Countdown: </span>
-              <span className="text-amber-300 font-black">{formatTimer(matchTimeLeft)}</span>
+              {/* Player Score & Match Status HUD */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 text-center">
+                  <div className="text-[10px] font-mono uppercase font-bold text-slate-400">Your Locked Score</div>
+                  <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono mt-0.5">{score} PTS</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 text-center">
+                  <div className="text-[10px] font-mono uppercase font-bold text-slate-400">Your Current Rank</div>
+                  <div className="text-xl sm:text-2xl font-black text-indigo-300 font-mono mt-0.5">#{studentRank} of {totalParticipants}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 text-center">
+                  <div className="text-[10px] font-mono uppercase font-bold text-slate-400">Match Status</div>
+                  <div className="text-xs sm:text-sm font-black text-emerald-400 uppercase mt-1">In Progress</div>
+                </div>
+              </div>
+
+              {/* Full Live Leaderboard */}
+              <div className="rounded-2xl bg-slate-900/90 border border-slate-800/90 p-4 space-y-2">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
+                    Full Live Leaderboard ({totalParticipants} Players)
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-400">Questions Locked (Completed)</span>
+                </div>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                  {[
+                    {
+                      studentId,
+                      studentName: studentName || "You",
+                      avatar: "🎓",
+                      score,
+                      rank: studentRank,
+                      hasShield: hasGuardianShield,
+                    },
+                    ...rivals.map((r) => ({
+                      studentId: r.studentId,
+                      studentName: r.studentName,
+                      avatar: r.avatar,
+                      score: r.score,
+                      rank: r.rank,
+                      hasShield: r.hasShield,
+                    })),
+                  ]
+                    .sort((a, b) => b.score - a.score || a.studentName.localeCompare(b.studentName))
+                    .map((p, idx) => {
+                      const isMe = p.studentId === studentId;
+                      return (
+                        <div
+                          key={p.studentId}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${
+                            isMe
+                              ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-200 font-bold"
+                              : "bg-slate-950/60 border-slate-800/80 text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-mono font-black text-slate-400 w-5">#{idx + 1}</span>
+                            <span className="text-base">{p.avatar || "🎓"}</span>
+                            <span className="font-medium text-white truncate max-w-[150px]">
+                              {p.studentName} {isMe && "(You)"}
+                            </span>
+                            {p.hasShield && <span title="Shield Armed">🛡️</span>}
+                          </div>
+                          <div className="font-mono font-black text-amber-300">{p.score} pts</div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Live Battle Activity Feed */}
+              {battleLogs.length > 0 && (
+                <div className="rounded-2xl bg-slate-900/60 border border-slate-800/60 p-3 space-y-1.5">
+                  <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 px-1">
+                    Live Combat Activity
+                  </div>
+                  <div className="space-y-1 max-h-24 overflow-y-auto text-xs">
+                    {battleLogs.slice(0, 4).map((log, idx) => (
+                      <div key={idx} className="text-slate-300 text-[11px] truncate flex items-center gap-1.5">
+                        <span className="text-indigo-400">•</span>
+                        <span>{log}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            /* ── Completion Summary Card ── */
+            <div className="bg-gradient-to-br from-[#12182b] to-[#0d1222] border border-indigo-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl text-center space-y-5 animate-in zoom-in-95">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-slate-950 mx-auto shadow-lg">
+                <Check className="w-8 h-8 stroke-[3]" />
+              </div>
+
+              <div className="space-y-1">
+                <h2 className="text-2xl sm:text-3xl font-black text-white">
+                  All Questions Completed!
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+                  Your questions are finished and your final score is locked in. Waiting for match to conclude — enter the spectator view to watch live standings, battle activity, and countdown!
+                </p>
+              </div>
+
+              {/* Stats Grid: Questions Completed, Your Score, Current Rank, Total Players */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg mx-auto">
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Questions Completed</div>
+                  <div className="text-lg font-black text-white font-mono mt-0.5">{questions.length} / {questions.length}</div>
+                </div>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Your Score</div>
+                  <div className="text-lg font-black text-amber-300 font-mono mt-0.5">{score} PTS</div>
+                </div>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Your Current Rank</div>
+                  <div className="text-lg font-black text-indigo-300 font-mono mt-0.5">#{studentRank}</div>
+                </div>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Total Players</div>
+                  <div className="text-lg font-black text-slate-300 font-mono mt-0.5">{totalParticipants}</div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  type="button"
+                  id="btn-back-to-arena-lobby"
+                  onClick={() => setIsSpectating(true)}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Back to Arena Lobby</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-bold">
+                <span>Match Time Remaining: </span>
+                <span className="text-amber-300 font-black">{formatTimer(matchTimeLeft)}</span>
+              </div>
+            </div>
+          )
         ) : currentQ ? (
           <div className="bg-gradient-to-br from-[#12182b] to-[#0d1222] border border-indigo-500/20 rounded-3xl p-5 sm:p-8 shadow-2xl">
             {/* Progress indicator */}

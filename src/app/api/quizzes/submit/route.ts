@@ -17,6 +17,7 @@ import {
   calculateQuizCoinReward,
 } from "@/lib/student-coins";
 import { ensureStudentGameProfile } from "@/lib/student-game-profile";
+import { awardStudentExp, EXP_REWARDS } from "@/lib/student-progression";
 
 class SubmissionConflictError extends Error {}
 
@@ -235,6 +236,7 @@ export async function POST(req: NextRequest) {
         console.error("Pusher arena submit broadcast error:", pusherErr);
       }
 
+      // Power Arena EXP is awarded authoritatively once at match conclusion upon finalization
       return NextResponse.json({
         success: true,
         studentQuiz: updatedStudentQuiz,
@@ -245,6 +247,7 @@ export async function POST(req: NextRequest) {
           deadlineExpired,
           aiVerdict: null,
           cheatingProbability: null,
+          expEarned: 0,
           coinsEarned: coinReward.coins,
           rank: studentRank,
           isTopOne: coinReward.isTopOne,
@@ -458,6 +461,16 @@ Return ONLY the valid JSON object.`;
 
     const { coinReward, studentRank, totalCoins } = completion;
 
+    let expEarned = 0;
+    if (!integrityInvalidated) {
+      try {
+        const expResult = await awardStudentExp(session.userId, EXP_REWARDS.PROCTORED_COMPLETION, "Exam Completion");
+        expEarned = expResult.expAwarded;
+      } catch (err) {
+        console.error("Failed to award student exp for proctored exam:", err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       studentQuiz: updatedStudentQuiz,
@@ -468,6 +481,7 @@ Return ONLY the valid JSON object.`;
         deadlineExpired,
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
+        expEarned,
         coinsEarned: coinReward.coins,
         rank: studentRank,
         isTopOne: coinReward.isTopOne,

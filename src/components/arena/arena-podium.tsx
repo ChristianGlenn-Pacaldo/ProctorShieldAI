@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Crown, Trophy, Medal, ArrowRight, Sparkles, Coins, Flame, Award } from "lucide-react";
+import { Crown, Trophy, Medal, ArrowRight, Sparkles, Flame, Award } from "lucide-react";
 
 export interface PodiumParticipant {
   studentId: string;
@@ -22,7 +22,8 @@ interface ArenaPodiumProps {
   currentStudentId: string;
   studentScore: number;
   studentRank: number;
-  studentCoins: number;
+  studentCoins?: number;
+  expEarned?: number;
   highestStreak: number;
   onExit?: () => void;
 }
@@ -36,6 +37,7 @@ export function ArenaPodium({
   studentScore,
   studentRank,
   studentCoins,
+  expEarned = 100,
   highestStreak,
   onExit,
 }: ArenaPodiumProps) {
@@ -187,10 +189,10 @@ export function ArenaPodium({
           </div>
           <div className="bg-[#182035]/60 border border-slate-800 rounded-2xl p-3">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
-              <Coins className="w-3.5 h-3.5 text-yellow-400" />
-              <span>Coins</span>
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <span>EXP Earned</span>
             </div>
-            <div className="text-lg sm:text-xl font-black text-yellow-400 font-mono">+{studentCoins}</div>
+            <div className="text-lg sm:text-xl font-black text-indigo-300 font-mono">+{expEarned}</div>
           </div>
         </div>
       </div>

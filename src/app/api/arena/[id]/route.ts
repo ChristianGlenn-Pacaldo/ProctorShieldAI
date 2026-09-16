@@ -16,6 +16,12 @@ import {
 } from "@/lib/arena";
 import { AVATAR_CATALOG } from "@/lib/student-coins";
 import { ensureStudentGameProfile } from "@/lib/student-game-profile";
+import {
+  awardStudentExp,
+  EXP_REWARDS,
+  isArenaExpAlreadyAwarded,
+  markArenaExpAwarded,
+} from "@/lib/student-progression";
 import type { ArenaState } from "@/lib/arena";
 
 interface RouteParams {
@@ -52,66 +58,31 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
   return quiz;
 }
 
-async function awardArenaBounty(state: ArenaState) {
-  const completed = await prisma.studentQuiz.findMany({
-    where: {
-      quizId: state.quizId,
-      quizStatus: "completed",
-      endTime: { not: null },
-      score: { not: null },
-      aiVerdict: { not: "cheated" },
-    },
-    select: { id: true, studentId: true, score: true, endTime: true },
-    orderBy: [{ score: "desc" }, { endTime: "asc" }],
-  });
-  const seen = new Set<string>();
-  const podium = completed.filter((attempt) => {
-    if (seen.has(attempt.studentId)) return false;
-    seen.add(attempt.studentId);
-    return true;
-  }).slice(0, 3);
-  const multipliers = [1, 0.6, 0.4];
-  const awards = podium.map((attempt, index) => ({
-    ...attempt,
-    rank: index + 1,
-    amount: Math.round(state.coinBounty * multipliers[index]),
-  }));
-  if (awards.length === 0) return [];
+async function awardArenaExp(state: ArenaState) {
+  if (!state.participants) return [];
+  const ranked = computeArenaRankings(state.participants);
+  const awards: Array<{ studentId: string; rank: number; amount: number }> = [];
 
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-bounty:${state.sessionId}`}))`;
-    const created = await tx.studentCoinLedger.createMany({
-      data: awards.map((award) => ({
-        studentId: award.studentId,
-        sourceType: "arena-bounty",
-        sourceId: state.sessionId,
-        amount: award.amount,
-        metadata: { quizId: state.quizId, rank: award.rank, studentQuizId: award.id },
-      })),
-      skipDuplicates: true,
-    });
-    if (created.count === 0) return awards;
-    if (created.count !== awards.length) throw new Error("Partial arena bounty ledger state detected");
+  for (const p of ranked) {
+    let exp = EXP_REWARDS.ARENA_PARTICIPATION;
+    if (p.rank === 1) exp += EXP_REWARDS.ARENA_RANK_1;
+    else if (p.rank === 2) exp += EXP_REWARDS.ARENA_RANK_2;
+    else if (p.rank === 3) exp += EXP_REWARDS.ARENA_RANK_3;
 
-    for (const award of awards) {
-      await ensureStudentGameProfile(tx, award.studentId);
-      await tx.studentGameProfile.update({
-        where: { studentId: award.studentId },
-        data: {
-          coins: { increment: award.amount },
-          topOneWins: award.rank === 1 ? { increment: 1 } : undefined,
-        },
+    // Idempotency: ensure each student receives Arena final EXP at most once per sessionId
+    const alreadyAwarded = await isArenaExpAlreadyAwarded(state.sessionId, p.studentId);
+    if (!alreadyAwarded) {
+      await awardStudentExp(p.studentId, exp, `Arena Match Completion (Rank #${p.rank})`).catch((err) => {
+        console.error(`Failed to award Arena EXP to ${p.studentId}:`, err);
       });
-      await tx.notification.create({
-        data: {
-          userId: award.studentId,
-          title: award.rank === 1 ? "🏆 Arena Champion!" : `Arena Podium — Rank ${award.rank}`,
-          message: `You earned +${award.amount} coins from the live arena podium.`,
-        },
+      await markArenaExpAwarded(state.sessionId, p.studentId, exp).catch((err) => {
+        console.error(`Failed to mark Arena EXP awarded to ${p.studentId}:`, err);
       });
     }
-    return awards;
-  });
+
+    awards.push({ studentId: p.studentId, rank: p.rank, amount: exp });
+  }
+  return awards;
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
@@ -221,7 +192,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       : {};
 
     let state = await getArenaState(quizId);
-    let payouts: Awaited<ReturnType<typeof awardArenaBounty>> = [];
+    let payouts: Awaited<ReturnType<typeof awardArenaExp>> = [];
 
     // ─────────────────────────────────────────────────────────────
     // ACTION: JOIN (Student explicitly joins current session lobby)
@@ -282,22 +253,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           timestamp: new Date().toISOString(),
         };
         try {
-          await Promise.allSettled([
-            pusherServer.trigger(`private-arena-${quizId}`, "arena-student-joined", joinPayload),
-            pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", joinPayload),
-          ]);
-        } catch (err) {
-          console.error("Failed to broadcast arena-student-joined:", err);
+          await pusherServer.trigger(`private-arena-${quizId}`, "arena-student-joined", {
+            studentId: session.userId,
+            studentName: session.fullName,
+            avatar: studentAvatar,
+            participantsCount: Object.keys(state.participants).length,
+          });
+          await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
+            studentId: session.userId,
+            studentName: session.fullName,
+            avatar: studentAvatar,
+            participantsCount: Object.keys(state.participants).length,
+          });
+        } catch (pusherErr) {
+          console.error("Pusher join broadcast error:", pusherErr);
         }
       }
 
       return NextResponse.json({
         success: true,
-        action: "join",
-        arena: state,
-        status: state.status,
+        message: "Joined arena session",
         sessionId: state.sessionId,
-        participants: rankedParticipants,
+        status: state.status,
+        participantsCount: Object.keys(state.participants).length,
+        arena: state,
       });
     }
 
@@ -311,32 +290,63 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Pro subscription required" }, { status: 403 });
     }
 
-    if (action === "reset") {
-      await clearArenaState(quizId);
+    if (action === "reset" || action === "create_session") {
+      const freshSessionId = crypto.randomUUID();
+      state = {
+        sessionId: freshSessionId,
+        quizId,
+        teacherId: session.userId,
+        status: "lobby",
+        mode: "score_arena",
+        matchDuration: 1800,
+        matchEndsAt: null,
+        coinBounty: 0,
+        enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
+        totalQuestions: quiz.questions.length,
+        startedAt: null,
+        endedAt: null,
+        participants: {},
+        usedPowers: {},
+        pendingAttacks: {},
+        currentWave: 0,
+        currentQuestionId: quiz.questions[0]?.id || 0,
+        waveStartedAt: null,
+        waveEndsAt: null,
+      };
+      await setArenaState(state);
+      await prisma.quiz.update({
+        where: { id: quizId },
+        data: { quizStatus: "active" },
+      }).catch(() => {});
       try {
-        await pusherServer.trigger(`private-arena-${quizId}`, "arena-end", {
+        await pusherServer.trigger(`private-arena-${quizId}`, "arena-session-created", {
           quizId,
-          status: "ended",
-          reset: true,
+          status: "lobby",
+          sessionId: freshSessionId,
+          timestamp: new Date().toISOString(),
+        });
+        await pusherServer.trigger(`private-arena-${quizId}`, "arena-reset", {
+          quizId,
+          status: "lobby",
+          sessionId: freshSessionId,
+          timestamp: new Date().toISOString(),
         });
       } catch (error) {
         console.error("Arena reset push failed:", error);
       }
-      return NextResponse.json({ success: true, message: "Arena state reset" });
+      return NextResponse.json({
+        success: true,
+        message: "Fresh arena session created",
+        sessionId: freshSessionId,
+        status: "lobby",
+        arena: state,
+        participants: [],
+      });
     }
 
     if (action === "start") {
-      if (quiz.quizStatus === "ended") {
-        return NextResponse.json(
-          { error: "This quiz has ended and cannot be started" },
-          { status: 409 },
-        );
-      }
       if (!["draft", "active", "in_progress"].includes(quiz.quizStatus)) {
-        return NextResponse.json(
-          { error: "Quiz cannot be started in its current status" },
-          { status: 409 },
-        );
+        return NextResponse.json({ error: "Quiz status cannot be started" }, { status: 409 });
       }
       if (state?.status === "active" && state.teacherId !== session.userId) {
         return NextResponse.json({ error: "This quiz already has an active arena host" }, { status: 409 });
@@ -349,34 +359,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           : 1800
       );
 
-      if (["draft", "active"].includes(quiz.quizStatus)) {
-        const startedAt = new Date();
-        const started = await prisma.$transaction(async (tx) => {
-          const claimed = await tx.quiz.updateMany({
-            where: { id: quizId, teacherId: session.userId, quizStatus: { in: ["draft", "active"] } },
-            data: { quizStatus: "in_progress" },
-          });
-          if (claimed.count !== 1) return false;
-          await tx.studentQuiz.updateMany({
-            where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
-            data: { quizStatus: "in_progress", startTime: startedAt },
-          });
-          return true;
+      const startedAt = new Date();
+      await prisma.$transaction(async (tx) => {
+        await tx.quiz.updateMany({
+          where: { id: quizId, quizStatus: { in: ["draft", "active"] } },
+          data: { quizStatus: "in_progress" },
         });
-        if (!started) {
-          return NextResponse.json({ error: "Quiz was already started or changed" }, { status: 409 });
-        }
-      } else if (quiz.quizStatus === "in_progress") {
-        await prisma.studentQuiz.updateMany({
+        await tx.studentQuiz.updateMany({
           where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
-          data: { quizStatus: "in_progress", startTime: new Date() },
+          data: { quizStatus: "in_progress", startTime: startedAt },
         });
-      }
+      });
 
       // Preserve existing joined participants, reset scores and used powers for clean match start
       const currentParticipants = state?.participants ? { ...state.participants } : {};
       const newSessionId = state?.status === "ended" ? crypto.randomUUID() : (state?.sessionId || crypto.randomUUID());
-      const startedAt = new Date().toISOString();
+      const startedAtStr = new Date().toISOString();
       const matchEndsAt = new Date(Date.now() + matchDuration * 1000).toISOString();
 
       state = {
@@ -387,17 +385,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mode: "score_arena",
         matchDuration,
         matchEndsAt,
-        coinBounty: 500,
+        coinBounty: 0,
         enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
         totalQuestions: quiz.questions.length,
-        startedAt,
+        startedAt: startedAtStr,
         endedAt: null,
         participants: currentParticipants,
         usedPowers: {},
         pendingAttacks: {},
         currentWave: 0,
         currentQuestionId: quiz.questions[0]?.id || 0,
-        waveStartedAt: startedAt,
+        waveStartedAt: startedAtStr,
         waveEndsAt: matchEndsAt,
       };
 
@@ -433,7 +431,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }).catch(() => {});
           }
         }
-        payouts = await awardArenaBounty(state);
+        payouts = await awardArenaExp(state);
         if (!isEndRetry) {
           state = {
             ...state,

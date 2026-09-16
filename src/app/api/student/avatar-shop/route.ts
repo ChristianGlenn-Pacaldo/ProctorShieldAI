@@ -82,95 +82,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Avatar not found in catalog" }, { status: 404 });
     }
 
-    if (action !== "buy" && action !== "equip") {
-      return NextResponse.json({ error: "Invalid action. Use 'buy', 'equip', or 'save-look'." }, { status: 400 });
+    const validActions = ["buy", "equip", "select", "use"];
+    if (!validActions.includes(action)) {
+      return NextResponse.json({ error: "Invalid action. Use 'equip', 'select', or 'save-look'." }, { status: 400 });
     }
 
-    if (action === "buy") {
-      const result = await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
-        const currentData = await ensureStudentGameProfile(tx, session.userId);
-        if (currentData.unlockedAvatars.includes(avatarId)) {
-          return { kind: "owned" as const };
-        }
-        if (currentData.coins < item.price) {
-          return { kind: "insufficient" as const, coins: currentData.coins };
-        }
+    // Avatar selection is completely free — no coin deduction or locked barriers
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
+      const currentData = await ensureStudentGameProfile(tx, session.userId);
+      const unlocked = Array.from(new Set([...currentData.unlockedAvatars, avatarId]));
 
-        const updated = await tx.studentGameProfile.update({
-          where: { studentId: session.userId },
-          data: {
-            coins: { decrement: item.price },
-            unlockedAvatars: { push: avatarId },
-            equippedAvatar: avatarId,
-          },
-        });
-        await tx.studentCoinLedger.create({
-          data: {
-            studentId: session.userId,
-            sourceType: "avatar-purchase",
-            sourceId: avatarId,
-            amount: -item.price,
-            metadata: { avatarId, avatarName: item.name },
-          },
-        });
-        return { kind: "purchased" as const, profile: updated };
+      const updated = await tx.studentGameProfile.update({
+        where: { studentId: session.userId },
+        data: {
+          equippedAvatar: avatarId,
+          unlockedAvatars: unlocked,
+        },
       });
+      return updated;
+    });
 
-      if (result.kind === "owned") {
-        return NextResponse.json(
-          { error: "You already own this avatar", alreadyOwned: true },
-          { status: 400 },
-        );
-      }
-      if (result.kind === "insufficient") {
-        return NextResponse.json(
-          {
-            error: `Not enough coins! You need ${item.price} coins, but have ${result.coins}.`,
-            needed: item.price - result.coins,
-          },
-          { status: 400 },
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: `Unlocked and equipped ${item.name}!`,
-        coins: result.profile.coins,
-        equippedAvatar: avatarId,
-        unlockedAvatars: result.profile.unlockedAvatars,
-      });
-    }
-
-    if (action === "equip") {
-      const result = await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
-        const currentData = await ensureStudentGameProfile(tx, session.userId);
-        if (!currentData.unlockedAvatars.includes(avatarId)) {
-          return { kind: "locked" as const };
-        }
-        const updated = await tx.studentGameProfile.update({
-          where: { studentId: session.userId },
-          data: { equippedAvatar: avatarId },
-        });
-        return { kind: "equipped" as const, profile: updated };
-      });
-
-      if (result.kind === "locked") {
-        return NextResponse.json(
-          { error: "You have not unlocked this avatar yet." },
-          { status: 403 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: `Equipped ${item.name} as your active avatar!`,
-        equippedAvatar: avatarId,
-        coins: result.profile.coins,
-        unlockedAvatars: result.profile.unlockedAvatars,
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      message: `Equipped ${item.name} as your active avatar!`,
+      equippedAvatar: avatarId,
+      unlockedAvatars: result.unlockedAvatars,
+    });
   } catch (error) {
     console.error("Avatar shop action error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

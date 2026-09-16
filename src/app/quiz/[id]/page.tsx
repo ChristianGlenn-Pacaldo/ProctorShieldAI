@@ -43,6 +43,7 @@ type QuizSubmittedResult = {
   violations: number;
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
+  expEarned?: number;
   coinsEarned?: number;
   rank?: number;
   isTopOne?: boolean;
@@ -796,6 +797,7 @@ export default function QuizRoom() {
           violations: serverViolationCount,
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
+          expEarned: typeof data.result?.expEarned === "number" ? data.result.expEarned : 100,
           coinsEarned: typeof data.result?.coinsEarned === "number" ? data.result.coinsEarned : 0,
           rank: data.result?.rank ?? 1,
           isTopOne: data.result?.isTopOne === true,
@@ -1945,21 +1947,21 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             </div>
           </div>
 
-          {/* Coins Earned Banner (Avatar Shop Rewards) */}
-          {!resultInvalidated && (quizSubmittedResult.coinsEarned ?? 0) > 0 && (
+          {/* EXP Earned Banner (Student Progression) */}
+          {!resultInvalidated && (quizSubmittedResult.expEarned ?? 100) > 0 && (
             <div className={`p-4 rounded-2xl border text-left flex items-center justify-between gap-3 ${
               quizSubmittedResult.isTopOne
                 ? "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 border-amber-400/50 shadow-lg shadow-amber-500/10"
                 : "bg-indigo-500/15 border-indigo-500/30"
             }`}>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-2xl shrink-0 animate-bounce">
-                  {quizSubmittedResult.isTopOne ? "🥇" : "🪙"}
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-2xl shrink-0">
+                  {quizSubmittedResult.isTopOne ? "🥇" : "⚡"}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase text-amber-400">
-                      {quizSubmittedResult.isTopOne ? "Top 1 Leaderboard Champion!" : "Quiz Reward Coins"}
+                    <span className="text-xs font-black uppercase text-indigo-400">
+                      {quizSubmittedResult.isTopOne ? "Top 1 Leaderboard Champion!" : "Student Progression"}
                     </span>
                     {quizSubmittedResult.isTopOne && (
                       <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full">
@@ -1968,20 +1970,20 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     )}
                   </div>
                   <div className="text-base font-black text-white mt-0.5">
-                    +{quizSubmittedResult.coinsEarned} Coins Earned!
+                    +{quizSubmittedResult.expEarned ?? 100} EXP Earned!
                   </div>
                   <div className="text-[11px] text-slate-300">
-                    Total balance: {quizSubmittedResult.totalCoins ?? 100} Coins • Use them in the Avatar Shop!
+                    Your EXP and Level are securely saved to your student profile.
                   </div>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => router.push("/dashboard/student/settings")}
-                className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+                onClick={() => router.push("/join/avatar-shop")}
+                className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
               >
-                Avatar Shop 🛍️
+                Avatar Look 🎨
               </button>
             </div>
           )}
@@ -1989,10 +1991,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
-              onClick={() => router.push("/dashboard/student/settings")}
-              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => router.push("/join/avatar-shop")}
+              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>🛍️ Spend Coins in Avatar Shop</span>
+              <span>🎨 Customize Avatar</span>
             </button>
             <button
               onClick={() => router.push("/dashboard/student")}

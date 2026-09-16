@@ -13,7 +13,6 @@ import {
   Lock,
   CheckCircle2,
   Users,
-  Coins,
   X,
   Search,
   Tv,
@@ -57,7 +56,6 @@ export default function PlaygroundContent({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [matchDuration, setMatchDuration] = useState<1800 | 3600>(1800);
-  const [coinBounty, setCoinBounty] = useState<number>(500);
   const [powers, setPowers] = useState({
     meteor: true,
     earthquake: true,
@@ -74,12 +72,31 @@ export default function PlaygroundContent({
 
   const selectedQuiz = quizzes.find((q) => q.id === selectedQuizId);
 
-  const handleLaunchArena = () => {
+  const handleLaunchArena = async () => {
     if (!selectedQuizId) return;
+    try {
+      // Explicitly create a fresh Arena session authoritatively via POST
+      await fetch(`/api/arena/${selectedQuizId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_session",
+          payload: {
+            mode: "score_arena",
+            matchDuration,
+            enabledPowers: Object.entries(powers)
+              .filter(([, v]) => v)
+              .map(([k]) => k),
+          },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to create fresh arena session:", err);
+    }
+
     const query = new URLSearchParams({
       mode: "score_arena",
       duration: matchDuration.toString(),
-      bounty: coinBounty.toString(),
       powers: Object.entries(powers)
         .filter(([, v]) => v)
         .map(([k]) => k)
@@ -157,13 +174,13 @@ export default function PlaygroundContent({
             </div>
           </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4 hover:border-amber-400/40 transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 border border-amber-400/30 flex items-center justify-center text-2xl">
-              🪙
+          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4 hover:border-indigo-400/40 transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400/30 flex items-center justify-center text-2xl">
+              ⚡
             </div>
-            <h3 className="text-lg font-bold text-white">Classroom Coin Bounties</h3>
+            <h3 className="text-lg font-bold text-white">Classroom EXP Progression</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Top Arena podium winners automatically earn custom coin bounties (up to 1,000 Coins) to unlock legendary avatars, animated frames, and titles in the Avatar Shop.
+              Top Arena podium winners and all participants earn authoritative EXP to level up their student rank and unlock free avatar customizations.
             </p>
             <div className="inline-flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
               <Lock className="w-3.5 h-3.5" /> Requires Pro Subscription
@@ -204,7 +221,7 @@ export default function PlaygroundContent({
             Playground & Live Game Studio
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Host live interactive game modes to engage students and reward them with avatar coins.
+            Host live interactive game modes to engage students and boost active participation with real-time progression.
           </p>
         </div>
 
@@ -252,8 +269,8 @@ export default function PlaygroundContent({
                 Projector & Smartboard Ready
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-                <Coins className="w-3.5 h-3.5 text-amber-400" />
-                Direct Avatar Shop Coins
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                EXP & Level Progression
               </div>
             </div>
           </div>
@@ -440,62 +457,34 @@ export default function PlaygroundContent({
                 </div>
               </div>
 
-              {/* Match Duration & Prize Bounty */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
-                    <span>3. Match Duration</span>
-                    <span className="text-amber-400 font-mono font-bold">
-                      {matchDuration === 3600 ? "1 Hour" : "30 Minutes"}
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMatchDuration(1800)}
-                      className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        matchDuration === 1800
-                          ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                          : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                      }`}
-                    >
-                      30 Minutes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMatchDuration(3600)}
-                      className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        matchDuration === 3600
-                          ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                          : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                      }`}
-                    >
-                      1 Hour
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
-                    <span>4. Champion Coin Bounty</span>
-                    <span className="text-amber-400 font-mono font-bold">+{coinBounty} 🪙</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[250, 500, 1000].map((bounty) => (
-                      <button
-                        key={bounty}
-                        type="button"
-                        onClick={() => setCoinBounty(bounty)}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          coinBounty === bounty
-                            ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                            : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                        }`}
-                      >
-                        {bounty}
-                      </button>
-                    ))}
-                  </div>
+              {/* Match Duration */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  2. Arena Match Duration
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMatchDuration(1800)}
+                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      matchDuration === 1800
+                        ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
+                        : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
+                    }`}
+                  >
+                    30 Minutes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchDuration(3600)}
+                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      matchDuration === 3600
+                        ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
+                        : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
+                    }`}
+                  >
+                    1 Hour
+                  </button>
                 </div>
               </div>
             </div>
@@ -507,9 +496,9 @@ export default function PlaygroundContent({
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
-                  { key: "meteor", label: "Meteor", icon: "☄️", sub: "-25 HP Attack" },
-                  { key: "earthquake", label: "Earthquake", icon: "🌋", sub: "Screen Shake" },
-                  { key: "blizzard", label: "Blizzard", icon: "❄️", sub: "Freeze Input" },
+                  { key: "meteor", label: "Meteor", icon: "☄️", sub: "-100 PTS Strike" },
+                  { key: "earthquake", label: "Earthquake", icon: "🌋", sub: "-60 PTS Tremor" },
+                  { key: "blizzard", label: "Blizzard", icon: "❄️", sub: "-40 PTS Frost" },
                   { key: "shield", label: "Shield", icon: "🛡️", sub: "Deflect Attack" },
                 ].map((p) => {
                   const active = powers[p.key as keyof typeof powers];

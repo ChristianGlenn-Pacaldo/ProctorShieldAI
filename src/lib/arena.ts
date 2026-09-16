@@ -4,7 +4,7 @@ import prisma from "./prisma.ts";
 
 export const ARENA_MODES = ["score_arena", "battle_royale", "wave_sprint"] as const;
 export const ARENA_POWER_IDS = ["meteor", "earthquake", "blizzard", "shield"] as const;
-export const ARENA_ACTIONS = ["start", "join", "wave", "airdrop", "end", "reset"] as const;
+export const ARENA_ACTIONS = ["start", "join", "wave", "airdrop", "end", "reset", "create_session"] as const;
 
 export type ArenaMode = (typeof ARENA_MODES)[number];
 export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
@@ -74,12 +74,12 @@ export interface ArenaState {
   status: ArenaStatus; // "lobby" | "active" | "ended"
   mode: ArenaMode;
   matchDuration: number; // overall match duration in seconds (1800 or 3600)
-  matchEndsAt?: string;
+  matchEndsAt?: string | null;
   coinBounty: number;
   enabledPowers: ArenaPowerId[];
   totalQuestions: number;
-  startedAt: string;
-  endedAt: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
   participants: Record<string, ArenaParticipant>;
   usedPowers: Record<string, Record<string, boolean>>; // studentId -> powerId -> boolean
   pendingAttacks?: Record<string, PendingAttack>;
@@ -87,8 +87,8 @@ export interface ArenaState {
   currentWave?: number;
   currentQuestionId?: number;
   waveDuration?: number;
-  waveStartedAt?: string;
-  waveEndsAt?: string;
+  waveStartedAt?: string | null;
+  waveEndsAt?: string | null;
   players?: Record<string, ArenaParticipant>;
 }
 

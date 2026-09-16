@@ -127,7 +127,7 @@ export function ArenaBattleDock({
                 <span className="text-xl sm:text-2xl">{power.emoji}</span>
                 <span
                   className={`text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    isUsed ? "bg-slate-800 text-slate-500" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    isUsed ? "bg-slate-800 text-slate-500" : isCurrentLoading ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                   }`}
                 >
                   {isUsed ? "USED" : "AVAILABLE"}
@@ -137,7 +137,7 @@ export function ArenaBattleDock({
               <div className="w-full">
                 <div className="text-xs font-black truncate">{power.name}</div>
                 <div className="text-[10px] text-slate-400 truncate">
-                  {isCurrentLoading ? "Deploying..." : isUsed ? "Expended (1x/Match)" : power.damageText}
+                  {isCurrentLoading ? "🚀 Strike Launched!" : isUsed ? "Expended (1x/Match)" : power.damageText}
                 </div>
               </div>
 
