@@ -256,7 +256,13 @@ function arenaSettingKey(quizId: number) {
 export async function setArenaState(state: ArenaState): Promise<void> {
   const jsonString = JSON.stringify(state);
 
-  // 1. Authoritative PostgreSQL write
+  // 1. Fast in-memory cache update (immediate visibility)
+  globalArena.__proctorShieldArenaState!.set(state.quizId, {
+    value: state,
+    expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
+  });
+
+  // 2. Authoritative PostgreSQL write
   try {
     await prisma.setting.upsert({
       where: { settingKey: arenaSettingKey(state.quizId) },
@@ -267,20 +273,12 @@ export async function setArenaState(state: ArenaState): Promise<void> {
     console.error("Authoritative Arena DB write failed:", error);
   }
 
-  // 2. Memory cache update
-  globalArena.__proctorShieldArenaState!.set(state.quizId, {
-    value: state,
-    expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
-  });
-
-  // 3. Redis cache write (optional speed-up)
+  // 3. Redis cache write (optional non-blocking speed cache)
   const redis = getRedis();
   if (redis) {
-    try {
-      await redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS);
-    } catch (error) {
+    void redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS).catch((error) => {
       console.warn("Arena Redis write failed (cache only):", error);
-    }
+    });
   }
 }
 

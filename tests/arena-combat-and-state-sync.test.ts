@@ -440,3 +440,63 @@ test("Test S: Proctored live monitoring is completely untouched", () => {
   assert.doesNotMatch(proctoredQuizPageSrc, /Meteor Strike|Earthquake|Blizzard|Guardian Shield/);
   assert.doesNotMatch(proctoredQuizPageSrc, /private-arena-/);
 });
+
+test("Test 9A: arena-incoming-attack is emitted immediately after validation/power claim", () => {
+  // Power claimed and pending attack created before Pusher broadcast
+  assert.match(battleActionRouteSrc, /arena\.usedPowers\[session\.userId\]\[powerType\]\s*=\s*true/);
+  assert.match(battleActionRouteSrc, /arena\.pendingAttacks\[attackId\]\s*=\s*pendingAttack/);
+  // Realtime warning dispatched with highest priority
+  assert.match(battleActionRouteSrc, /pusherServer\.trigger\(\s*\[`private-arena-\${quizId}`,\s*`private-teacher-\${attempt\.quiz\.teacherId}`\],\s*["']arena-incoming-attack["']/);
+});
+
+test("Test 9B: Incoming warning is not delayed by score deduction logic", () => {
+  // Score deduction happens in applyPendingAttackHit, scheduled via setTimeout after reaction window
+  assert.match(battleActionRouteSrc, /setTimeout\(async\s*\(\)\s*=>\s*\{[\s\S]*applyPendingAttackHit/);
+  // Auto-resolution timeout is strictly at least REACTION_WINDOW_MS
+  assert.match(battleActionRouteSrc, /REACTION_WINDOW_MS\s*\+\s*100/);
+});
+
+test("Test 9C: Target UI responds directly to Pusher event", () => {
+  // Target handler sets incoming attack immediately upon receiving event
+  assert.match(studentArenaContentSrc, /if\s*\(data\.targetStudentId\s*===\s*studentId\)\s*\{\s*setIncomingAttack\(data\);/);
+});
+
+test("Test 9D: No polling is required to display incoming warning", () => {
+  // Event listener on arenaChannel drives incoming attack warning
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-incoming-attack["'],\s*handleIncomingAttack\)/);
+  // No polling setInterval calls fetch in student content
+  assert.doesNotMatch(studentArenaContentSrc, /setInterval\(\s*\(\)\s*=>\s*\{[^}]*fetch\(/);
+});
+
+test("Test 9E: Reaction countdown uses server expiresAt", () => {
+  // Event handler and reaction interval compute remaining time from server expiresAt
+  assert.match(studentArenaContentSrc, /typeof\s+data\.expiresAt\s*===\s*["']number["']\s*\?\s*data\.expiresAt/);
+  assert.match(studentArenaContentSrc, /typeof\s+incomingAttack\.expiresAt\s*===\s*["']number["']\s*\?\s*incomingAttack\.expiresAt/);
+  assert.match(studentArenaContentSrc, /Math\.max\(0,\s*expiry\s*-\s*Date\.now\(\)\)/);
+});
+
+test("Test 9F: Shield still works within reaction window", () => {
+  // Server checks if deflection occurred within reaction window
+  assert.match(battleActionRouteSrc, /if\s*\(now\s*<=\s*attackToDefend\.expiresAt\)\s*\{/);
+  assert.match(battleActionRouteSrc, /attackToDefend\.status\s*=\s*["']deflected["']/);
+  assert.match(battleActionRouteSrc, /arena-attack-blocked/);
+  assert.match(battleActionRouteSrc, /arena-attack-deflected/);
+});
+
+test("Test 9G: Score deduction still happens only after reaction window if unblocked", () => {
+  // applyPendingAttackHit only deducts score when attack status is still pending
+  assert.match(battleActionRouteSrc, /if\s*\(!attack\s*\|\|\s*attack\.status\s*!==\s*["']pending["']\)\s*return\s+null;/);
+  assert.match(battleActionRouteSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
+});
+
+test("Test 9H: One-use power logic still works", () => {
+  // Offensive and defensive powers are strictly once per match
+  assert.match(battleActionRouteSrc, /if\s*\(arena\.usedPowers\[session\.userId\]\[powerType\]\)\s*\{[\s\S]*POWER_ALREADY_USED/);
+});
+
+test("Test 9I: Live Monitoring unaffected", () => {
+  assert.match(proctoredQuizPageSrc, /faceapi\.nets\.tinyFaceDetector\.loadFromUri/);
+  assert.match(proctoredQuizPageSrc, /runDevicePreflight/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /arena-incoming-attack/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /battle-action/);
+});

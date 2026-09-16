@@ -76,6 +76,8 @@ interface IncomingAttackAlert {
   powerType: string;
   scorePenalty: number;
   damage?: number;
+  createdAt?: number;
+  expiresAt?: number;
   warningExpiry: string;
   reactionWindowMs: number;
 }
@@ -500,7 +502,10 @@ export function ArenaContent({
       const handleIncomingAttackEvent = (data: IncomingAttackAlert) => {
         if (data.targetStudentId === studentId) {
           setIncomingAttack(data);
-          setReactionTimeLeftMs(data.reactionWindowMs || 2500);
+          const expiry = typeof data.expiresAt === "number"
+            ? data.expiresAt
+            : (data.warningExpiry ? Date.parse(data.warningExpiry) : Date.now() + 2500);
+          setReactionTimeLeftMs(Math.max(0, expiry - Date.now()));
         } else if (data.attackerId === studentId) {
           setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
           setTimeout(() => setCelebrationMessage(null), 2500);
@@ -640,7 +645,12 @@ export function ArenaContent({
   // ── Reaction Countdown Interval for Incoming Attack ───────────
   useEffect(() => {
     if (!incomingAttack) return;
-    const expiry = Date.parse(incomingAttack.warningExpiry);
+    const expiry = typeof incomingAttack.expiresAt === "number"
+      ? incomingAttack.expiresAt
+      : (incomingAttack.warningExpiry ? Date.parse(incomingAttack.warningExpiry) : Date.now() + 2500);
+
+    setReactionTimeLeftMs(Math.max(0, expiry - Date.now()));
+
     const interval = setInterval(() => {
       const remaining = Math.max(0, expiry - Date.now());
       setReactionTimeLeftMs(remaining);
@@ -759,6 +769,20 @@ export function ArenaContent({
     setErrorMessage(null);
     setTargetPickerPower(null);
 
+    const names: Record<string, string> = {
+      meteor: "☄️ METEOR STRIKE (-100 PTS)",
+      earthquake: "🌋 EARTHQUAKE TREMOR (-60 PTS)",
+      blizzard: "❄️ BLIZZARD FROST (-40 PTS)",
+      shield: "🛡️ GUARDIAN SHIELD",
+    };
+    const targetRival = rivals.find((r) => r.studentId === targetStudentId);
+    const targetLabel = targetRival?.studentName || "Rival";
+
+    // Immediate optimistic launch feedback
+    if (powerType !== "shield") {
+      setCelebrationMessage(`🚀 Launching ${names[powerType]} at ${targetLabel.toUpperCase()}...`);
+    }
+
     try {
       const currentQ = questions[currentQuestionIndex];
       const res = await fetch("/api/arena/battle-action", {
@@ -776,10 +800,11 @@ export function ArenaContent({
       const data = await res.json();
       if (!res.ok) {
         setErrorMessage(data.error || "Failed to cast battle power.");
+        setCelebrationMessage(null);
         return;
       }
 
-      // Mark power as USED permanently for this match
+      // Mark power as USED permanently for this match immediately upon server confirmation
       setUsedPowers((prev) => ({ ...prev, [powerType]: true }));
 
       if (powerType === "shield") {
@@ -787,18 +812,12 @@ export function ArenaContent({
         if (soundEnabled) playShieldDeflectSound();
         setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
       } else {
-        const names: Record<string, string> = {
-          meteor: "☄️ METEOR STRIKE (-100 PTS)",
-          earthquake: "🌋 EARTHQUAKE TREMOR (-60 PTS)",
-          blizzard: "❄️ BLIZZARD FROST (-40 PTS)",
-        };
-        const targetRival = rivals.find((r) => r.studentId === targetStudentId);
-        const targetLabel = targetRival?.studentName || "Rival";
         setCelebrationMessage(`🚀 LAUNCHED ${names[powerType]} AT ${targetLabel.toUpperCase()}! Strike incoming!`);
       }
       setTimeout(() => setCelebrationMessage(null), 3000);
     } catch {
       setErrorMessage("Network error launching battle power.");
+      setCelebrationMessage(null);
     } finally {
       setIsLaunchingPower(null);
     }

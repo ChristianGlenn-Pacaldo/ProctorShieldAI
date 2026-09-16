@@ -39,7 +39,6 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
 
   // Recompute rankings dynamically across all participants
   const updatedRankings = computeArenaRankings(arena.participants);
-  await setArenaState(arena);
 
   const hitEventData = {
     attackId: attack.attackId,
@@ -56,24 +55,32 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     timestamp: new Date().toISOString(),
   };
 
+  // Broadcast hit events and persist state concurrently
+  const broadcastPromise = Promise.allSettled([
+    pusherServer.trigger(
+      [`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`],
+      "arena-attack-hit",
+      hitEventData,
+    ),
+    pusherServer.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
+    pusherServer.trigger(`private-arena-${quizId}`, "arena-score-updated", {
+      quizId,
+      studentId: attack.targetStudentId,
+      score: target ? target.score : 0,
+      rank: target ? target.rank : 1,
+      totalCount: updatedRankings.length,
+      penalty,
+    }),
+    pusherServer.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
+      quizId,
+      participants: updatedRankings,
+    }),
+  ]);
+
+  const persistPromise = setArenaState(arena);
+
   try {
-    await Promise.allSettled([
-      pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-hit", hitEventData),
-      pusherServer.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
-      pusherServer.trigger(`private-arena-${quizId}`, "arena-score-updated", {
-        quizId,
-        studentId: attack.targetStudentId,
-        score: target ? target.score : 0,
-        rank: target ? target.rank : 1,
-        totalCount: updatedRankings.length,
-        penalty,
-      }),
-      pusherServer.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
-        quizId,
-        participants: updatedRankings,
-      }),
-      pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-hit", hitEventData),
-    ]);
+    await Promise.all([broadcastPromise, persistPromise]);
   } catch (err) {
     console.error("Failed to broadcast attack-hit event:", err);
   }
@@ -113,19 +120,22 @@ export async function POST(req: NextRequest) {
     }
     const powerType = rawPower as ArenaPowerId;
 
-    // Verify student is enrolled in this quiz and attemptMode is arena
-    const attempt = await prisma.studentQuiz.findFirst({
-      where: {
-        studentId: session.userId,
-        quizId,
-        quizStatus: { not: "rejected" },
-      },
-      select: {
-        attemptMode: true,
-        quiz: { select: { teacherId: true, quizStatus: true, title: true, quizMode: true } },
-      },
-      orderBy: { attemptNumber: "desc" },
-    });
+    // Parallelize student enrollment validation and arena state retrieval
+    const [attempt, arena] = await Promise.all([
+      prisma.studentQuiz.findFirst({
+        where: {
+          studentId: session.userId,
+          quizId,
+          quizStatus: { not: "rejected" },
+        },
+        select: {
+          attemptMode: true,
+          quiz: { select: { teacherId: true, quizStatus: true, title: true, quizMode: true } },
+        },
+        orderBy: { attemptNumber: "desc" },
+      }),
+      getArenaState(quizId),
+    ]);
 
     if (!attempt) {
       return NextResponse.json(
@@ -145,7 +155,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const arena = await getArenaState(quizId);
     if (!arena || arena.status === "lobby") {
       return NextResponse.json(
         { error: "Arena has not started yet. Wait for teacher to start.", code: "ARENA_NOT_STARTED" },
@@ -210,19 +219,16 @@ export async function POST(req: NextRequest) {
     // CASE 1: GUARDIAN SHIELD (SELF-TARGETED & DEFLECTION)
     // ─────────────────────────────────────────────────────────────
     if (powerType === "shield") {
-      // Check if there is an active incoming attack targeting this student
       let attackToDefend: PendingAttack | null = null;
       if (defendAttackId && arena.pendingAttacks[defendAttackId]) {
         attackToDefend = arena.pendingAttacks[defendAttackId];
       } else {
-        // Find any pending attack targeted to this user within valid reaction window
         const now = Date.now();
         attackToDefend = Object.values(arena.pendingAttacks).find(
           (a) => a.targetStudentId === session.userId && a.status === "pending" && a.expiresAt >= now,
         ) || null;
       }
 
-      // Mark shield permanently as USED for this student in this match
       arena.usedPowers[session.userId].shield = true;
 
       if (attackToDefend && attackToDefend.targetStudentId === session.userId && attackToDefend.status === "pending") {
@@ -233,7 +239,6 @@ export async function POST(req: NextRequest) {
           if (arena.participants[session.userId]) {
             arena.participants[session.userId].hasShield = false;
           }
-          await setArenaState(arena);
 
           const deflectEventData = {
             attackId: attackToDefend.attackId,
@@ -246,18 +251,24 @@ export async function POST(req: NextRequest) {
             timestamp: new Date().toISOString(),
           };
 
-          try {
-            await Promise.allSettled([
-              pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-deflected", deflectEventData),
-              pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-blocked", deflectEventData),
-              pusherServer.trigger(`private-arena-${quizId}`, "attack-deflected", deflectEventData),
-              pusherServer.trigger(`private-arena-${quizId}`, "attack-blocked", deflectEventData),
-              pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-deflected", deflectEventData),
-              pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-blocked", deflectEventData),
-            ]);
-          } catch (err) {
-            console.error("Deflect broadcast failed:", err);
-          }
+          // Dispatch deflect broadcast and persist in parallel
+          const deflectBroadcast = Promise.allSettled([
+            pusherServer.trigger(
+              [`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`],
+              "arena-attack-deflected",
+              deflectEventData,
+            ),
+            pusherServer.trigger(
+              [`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`],
+              "arena-attack-blocked",
+              deflectEventData,
+            ),
+            pusherServer.trigger(`private-arena-${quizId}`, "attack-deflected", deflectEventData),
+            pusherServer.trigger(`private-arena-${quizId}`, "attack-blocked", deflectEventData),
+          ]);
+          const persistDeflect = setArenaState(arena);
+
+          await Promise.all([deflectBroadcast, persistDeflect]);
 
           return NextResponse.json({
             success: true,
@@ -268,11 +279,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // If not deflecting an immediate attack, pre-arm the shield for the next incoming attack
+      // Pre-arm the shield for the next incoming attack
       if (arena.participants[session.userId]) {
         arena.participants[session.userId].hasShield = true;
       }
-      await setArenaState(arena);
 
       const shieldArmData = {
         studentId: session.userId,
@@ -281,14 +291,16 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
       };
 
-      try {
-        await Promise.allSettled([
-          pusherServer.trigger(`private-arena-${quizId}`, "arena-shield-equipped", shieldArmData),
-          pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-shield-equipped", shieldArmData),
-        ]);
-      } catch (err) {
-        console.error("Shield equip broadcast failed:", err);
-      }
+      const shieldBroadcast = Promise.allSettled([
+        pusherServer.trigger(
+          [`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`],
+          "arena-shield-equipped",
+          shieldArmData,
+        ),
+      ]);
+      const persistShield = setArenaState(arena);
+
+      await Promise.all([shieldBroadcast, persistShield]);
 
       return NextResponse.json({
         success: true,
@@ -319,7 +331,7 @@ export async function POST(req: NextRequest) {
     const targetParticipant = arena.participants[targetStudentId];
     if (!targetParticipant) {
       return NextResponse.json(
-        { error: "Target rival is not a currently joined participant in this Arena session.", code: "INVALID_TARGET" },
+        { error: "Target student is not a currently joined participant in this Arena session.", code: "INVALID_TARGET" },
         { status: 400 },
       );
     }
@@ -335,23 +347,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Rate limit cooldown per power type (3 seconds)
-    const rateLimit = await consumeRateLimit(
-      `arena-power:${session.userId}:${quizId}:${powerType}`,
-      1,
-      3_000,
-    );
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: `Please wait ${rateLimit.retryAfterSeconds}s before using ${powerType} again` },
-        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
-      );
-    }
-
     // Mark offensive power as USED permanently for this student in this match
     arena.usedPowers[session.userId][powerType] = true;
 
-    // Create pending attack with 2.5 second warning / reaction window
+    // Create pending attack with authoritative server timestamps
     const attackId = `atk_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     const scorePenalty = getPowerPenalty(powerType);
     const createdAt = Date.now();
@@ -373,9 +372,8 @@ export async function POST(req: NextRequest) {
     };
 
     arena.pendingAttacks[attackId] = pendingAttack;
-    await setArenaState(arena);
 
-    // Broadcast Phase 1: Incoming Attack Warning
+    // Incoming attack warning payload with authoritative server timestamps
     const incomingEventData = {
       attackId,
       attackerId: session.userId,
@@ -386,23 +384,29 @@ export async function POST(req: NextRequest) {
       scorePenalty,
       damage: scorePenalty,
       questionId,
+      createdAt,
+      expiresAt,
       warningExpiry,
       reactionWindowMs: REACTION_WINDOW_MS,
       timestamp: new Date().toISOString(),
     };
 
-    try {
-      await Promise.allSettled([
-        pusherServer.trigger(`private-arena-${quizId}`, "arena-incoming-attack", incomingEventData),
-        pusherServer.trigger(`private-arena-${quizId}`, "incoming-attack", incomingEventData),
-        pusherServer.trigger(`private-teacher-${attempt.quiz.teacherId}`, "arena-incoming-attack", incomingEventData),
-      ]);
-    } catch (error) {
-      console.error("Incoming attack broadcast failed:", error);
-      return NextResponse.json({ error: "Battle action could not be delivered" }, { status: 503 });
-    }
+    // ─────────────────────────────────────────────────────────────
+    // DISPATCH REALTIME WARNING IMMEDIATELY (ASAP)
+    // ─────────────────────────────────────────────────────────────
+    const broadcastPromise = Promise.allSettled([
+      pusherServer.trigger(
+        [`private-arena-${quizId}`, `private-teacher-${attempt.quiz.teacherId}`],
+        "arena-incoming-attack",
+        incomingEventData,
+      ),
+      pusherServer.trigger(`private-arena-${quizId}`, "incoming-attack", incomingEventData),
+    ]);
 
-    // Schedule authoritative server-side auto-resolution after reaction window closes
+    // Persist authoritative Arena state in parallel
+    const persistPromise = setArenaState(arena);
+
+    // Schedule authoritative server-side resolution after reaction window closes
     setTimeout(async () => {
       try {
         await applyPendingAttackHit(quizId, attackId);
@@ -410,6 +414,9 @@ export async function POST(req: NextRequest) {
         console.error("Scheduled attack resolution error:", err);
       }
     }, REACTION_WINDOW_MS + 100);
+
+    // Concurrently wait for broadcast and state persistence
+    await Promise.all([broadcastPromise, persistPromise]);
 
     return NextResponse.json({
       success: true,
