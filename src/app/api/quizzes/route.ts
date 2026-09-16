@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import crypto from "node:crypto";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { getQuizCreationDecision } from "@/lib/subscription-rules";
+import { parseQuizMode, InvalidQuizModeError } from "@/lib/quiz-mode";
 
 type RawChoice = { choiceText?: unknown; isCorrect?: unknown };
 type RawQuestion = { questionText?: unknown; questionType?: unknown; points?: unknown; choices?: unknown };
@@ -140,8 +141,22 @@ export async function POST(req: NextRequest) {
       allowRetake,
       isGamified,
       isAiGenerated,
+      quizMode: rawQuizMode,
     } = await req.json();
     const isAiQuiz = isAiGenerated === true;
+
+    let parsedQuizMode: "proctored" | "arena";
+    try {
+      parsedQuizMode = parseQuizMode(rawQuizMode);
+    } catch (err) {
+      if (err instanceof InvalidQuizModeError) {
+        return NextResponse.json(
+          { error: "Invalid quiz mode.", code: "INVALID_QUIZ_MODE" },
+          { status: 400 },
+        );
+      }
+      throw err;
+    }
 
     if (
       typeof subjectName !== "string"
@@ -258,6 +273,7 @@ export async function POST(req: NextRequest) {
           passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
           quizStatus: "draft",
           quizType: isGamified !== false ? "gamified" : "standard",
+          quizMode: parsedQuizMode,
           shuffleQuestions: Boolean(shuffleQuestions),
           allowRetake: allowRetake === true,
           questions: validQuestions.length > 0 ? { create: validQuestions } : undefined,

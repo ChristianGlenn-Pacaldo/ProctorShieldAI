@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
           studentId: session.userId,
           quizId: quiz.id,
           quizStatus: isLateJoin ? "pending_approval" : "enrolled",
+          attemptMode: quiz.quizMode === "arena" ? "arena" : "proctored",
         },
       });
 
@@ -159,21 +160,23 @@ export async function POST(req: NextRequest) {
 
     if (enrollmentResult.kind === "existing") {
       // Trigger live arena join event so the teacher's lobby displays returning students immediately
-      try {
-        const { pusherServer } = await import("@/lib/pusher");
-        const arenaPayload = {
-          quizId: quiz.id,
-          studentId: session.userId,
-          studentName: session.fullName,
-          avatar: studentAvatar,
-          timestamp: new Date().toISOString(),
-        };
-        await Promise.allSettled([
-          pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
-          pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
-        ]);
-      } catch (e) {
-        console.error("Failed to trigger push event for existing student:", e);
+      if (quiz.quizMode === "arena") {
+        try {
+          const { pusherServer } = await import("@/lib/pusher");
+          const arenaPayload = {
+            quizId: quiz.id,
+            studentId: session.userId,
+            studentName: session.fullName,
+            avatar: studentAvatar,
+            timestamp: new Date().toISOString(),
+          };
+          await Promise.allSettled([
+            pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
+            pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
+          ]);
+        } catch (e) {
+          console.error("Failed to trigger push event for existing student:", e);
+        }
       }
 
       return NextResponse.json({
@@ -183,6 +186,7 @@ export async function POST(req: NextRequest) {
           id: quiz.id,
           title: quiz.title,
           subject: quiz.subject.subjectName,
+          quizMode: quiz.quizMode || "proctored",
         },
       }, { status: 200 });
     }
@@ -243,18 +247,20 @@ export async function POST(req: NextRequest) {
         createdAt: teacherNotificationDate,
       });
 
-      // Broadcast arena student joined to both teacher and quiz channels so the lobby displays them live
-      const arenaPayload = {
-        quizId: quiz.id,
-        studentId: session.userId,
-        studentName: session.fullName,
-        avatar: studentAvatar,
-        timestamp: new Date().toISOString(),
-      };
-      await Promise.allSettled([
-        pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
-        pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
-      ]);
+      if (quiz.quizMode === "arena") {
+        // Broadcast arena student joined to both teacher and quiz channels so the lobby displays them live
+        const arenaPayload = {
+          quizId: quiz.id,
+          studentId: session.userId,
+          studentName: session.fullName,
+          avatar: studentAvatar,
+          timestamp: new Date().toISOString(),
+        };
+        await Promise.allSettled([
+          pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
+          pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
+        ]);
+      }
     } catch (e) {
       console.error("Failed to trigger push event:", e);
     }
@@ -275,6 +281,7 @@ export async function POST(req: NextRequest) {
         id: quiz.id,
         title: quiz.title,
         subject: quiz.subject.subjectName,
+        quizMode: quiz.quizMode || "proctored",
       },
       capacity,
     }, { status: 201 });

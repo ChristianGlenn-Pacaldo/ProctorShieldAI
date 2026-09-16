@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         quizStatus: { not: "rejected" },
       },
       include: {
-        quiz: { select: { teacherId: true, quizStatus: true, title: true } },
+        quiz: { select: { teacherId: true, quizStatus: true, title: true, quizMode: true } },
       },
       orderBy: { attemptNumber: "desc" },
     });
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
     if (!attempt) {
       return NextResponse.json(
         { error: "You are not an active participant in this quiz" },
+        { status: 403 },
+      );
+    }
+
+    if (attempt.quiz.quizMode !== "arena" || attempt.attemptMode !== "arena") {
+      return NextResponse.json(
+        { error: "Battle powers are disabled in proctored examinations.", code: "INVALID_QUIZ_MODE" },
         { status: 403 },
       );
     }

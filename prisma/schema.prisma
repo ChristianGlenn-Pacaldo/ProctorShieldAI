@@ -91,6 +91,7 @@ model Quiz {
   isGamified       Boolean  @default(true) @map("is_gamified")
   sourceFilePath   String?  @map("source_file_path")
   quizType         String?  @map("quiz_type")
+  quizMode         String   @default("proctored") @map("quiz_mode")
   duration         Int?
   totalQuestions   Int?     @map("total_questions")
   passingScore     Int?     @map("passing_score")
@@ -104,6 +105,7 @@ model Quiz {
   questions      Question[]
   studentQuizzes StudentQuiz[]
 
+  @@index([quizMode])
   @@map("quizzes")
 }
 
@@ -148,6 +150,7 @@ model StudentQuiz {
   aiVerdict           String?  @map("ai_verdict")
   cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)
   quizStatus          String?  @map("quiz_status")
+  attemptMode         String   @default("proctored") @map("attempt_mode")
   deviceType          String?  @map("device_type")
   monitoringLevel     String?  @map("monitoring_level")
   deviceCapabilities  Json?    @map("device_capabilities")
@@ -162,6 +165,7 @@ model StudentQuiz {
 
   @@unique([studentId, quizId, attemptNumber])
   @@index([quizId, quizStatus])
+  @@index([attemptMode])
   @@map("student_quizzes")
 }
 

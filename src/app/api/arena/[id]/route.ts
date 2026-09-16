@@ -31,6 +31,7 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
       id: true,
       teacherId: true,
       quizStatus: true,
+      quizMode: true,
       questions: { select: { id: true }, orderBy: { id: "asc" } },
       _count: { select: { questions: true } },
     },
@@ -122,6 +123,15 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
     if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+    if (quiz.quizMode !== "arena") {
+      return NextResponse.json(
+        {
+          error: "This quiz is configured as a Proctored Exam. Only quizzes with quizMode 'arena' can be accessed in Power Arena.",
+          code: "INVALID_QUIZ_MODE",
+        },
+        { status: 409 },
+      );
+    }
 
     const state = await getArenaState(quizId);
     const activeArena = state?.status === "active" ? state : null;
@@ -178,6 +188,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
     if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+    if (quiz.quizMode !== "arena") {
+      return NextResponse.json(
+        {
+          error: "This quiz is configured as a Proctored Exam. Only quizzes with quizMode 'arena' can be launched in Power Arena.",
+          code: "INVALID_QUIZ_MODE",
+        },
+        { status: 409 },
+      );
+    }
     if (quiz._count.questions === 0) {
       return NextResponse.json({ error: "Add at least one question before launching an arena" }, { status: 409 });
     }

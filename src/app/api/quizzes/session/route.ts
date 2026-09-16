@@ -20,6 +20,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid quiz" }, { status: 400 });
     }
 
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { id: true, quizMode: true },
+    });
+    if (!quiz) {
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    }
+    if (quiz.quizMode === "arena") {
+      return NextResponse.json(
+        {
+          error: "Device preflight check is not required for Power Arena matches.",
+          code: "PREFLIGHT_NOT_APPLICABLE",
+        },
+        { status: 400 },
+      );
+    }
+
     const capabilities = normalizeDeviceCapabilities(
       body.capabilities,
       req.headers.get("user-agent") || "",

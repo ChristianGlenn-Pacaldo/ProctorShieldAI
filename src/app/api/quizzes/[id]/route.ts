@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
 import { deleteEvidence } from "@/lib/evidence-storage";
+import { parseQuizMode, InvalidQuizModeError, canChangeQuizMode, type QuizMode } from "@/lib/quiz-mode";
 
 // Seeded random number generator (Mulberry32 variant)
 function seededRandom(seed: string) {
@@ -131,6 +132,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       userId: session.userId,
       studentQuizStatus: session.role === "student" ? studentQuiz?.quizStatus : undefined,
       studentQuizId: session.role === "student" ? studentQuiz?.id : undefined,
+      attemptMode: session.role === "student" ? studentQuiz?.attemptMode || "proctored" : undefined,
       canEnterQuiz: session.role === "student" ? canEnterQuiz : undefined,
       remainingSeconds,
       deviceType: session.role === "student" ? studentQuiz?.deviceType : undefined,
@@ -146,6 +148,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         id: quiz.id,
         title: quiz.title,
         description: quiz.description,
+        quizMode: quiz.quizMode || "proctored",
         duration: quiz.duration,
         totalQuestions: quiz.totalQuestions || quiz.questions.length,
         passingScore: quiz.passingScore,
@@ -237,6 +240,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const shuffleQuestions = typeof body.shuffleQuestions === "boolean" ? body.shuffleQuestions : undefined;
     const isGamified = typeof body.isGamified === "boolean" ? body.isGamified : undefined;
 
+    let parsedQuizMode: "proctored" | "arena" | undefined;
+    if (body.quizMode !== undefined) {
+      try {
+        parsedQuizMode = parseQuizMode(body.quizMode);
+      } catch (err) {
+        if (err instanceof InvalidQuizModeError) {
+          return NextResponse.json(
+            { error: "Invalid quiz mode.", code: "INVALID_QUIZ_MODE" },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
+
+      const existingMode = (existingQuiz.quizMode as QuizMode) || "proctored";
+      if (parsedQuizMode !== existingMode) {
+        const attemptsCount = await prisma.studentQuiz.count({
+          where: { quizId },
+        });
+        const transition = canChangeQuizMode({
+          currentMode: existingMode,
+          targetMode: parsedQuizMode,
+          attemptsCount,
+          quizStatus: existingQuiz.quizStatus,
+        });
+        if (!transition.allowed) {
+          return NextResponse.json(
+            { error: transition.error, code: transition.code },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
     // Transactional update for quiz and optional questions
     const updatedQuiz = await prisma.$transaction(async (tx) => {
       // If questions array is passed and quiz is in draft or has no student submissions
@@ -286,6 +323,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           shuffleQuestions: shuffleQuestions ?? existingQuiz.shuffleQuestions,
           allowRetake: body.allowRetake ?? existingQuiz.allowRetake,
           isGamified: isGamified ?? existingQuiz.isGamified,
+          quizMode: parsedQuizMode ?? existingQuiz.quizMode,
           totalQuestions: totalQCount ?? existingQuiz.totalQuestions,
         },
         include: {
