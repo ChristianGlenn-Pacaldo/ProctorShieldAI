@@ -116,3 +116,49 @@ test("Test I: Arena tests from Phase 2 still pass and standalone Arena route is 
   assert.equal(fs.existsSync(arenaContentPath), true);
 });
 
+test("Phase 3.1 Test A: Live Monitoring exam has no 50/50 booster", () => {
+  assert.equal(quizPageSrc.includes("50/50"), false);
+  assert.equal(quizPageSrc.includes("handleUseFiftyFifty"), false);
+  assert.equal(quizPageSrc.includes("eliminatedChoices"), false);
+});
+
+test("Phase 3.1 Test B: Live Monitoring exam has no 2x score multiplier", () => {
+  assert.equal(/\b2x\b/i.test(quizPageSrc), false);
+  assert.equal(quizPageSrc.includes("handleUseDoublePoints"), false);
+  assert.equal(quizPageSrc.includes("doublePoints"), false);
+  assert.equal(quizPageSrc.includes("Score multiplier"), false);
+});
+
+test("Phase 3.1 Test C: Live Monitoring exam has no Time Freeze booster", () => {
+  assert.equal(quizPageSrc.includes("handleUseTimeFreeze"), false);
+  assert.equal(quizPageSrc.includes("timeFreeze"), false);
+  assert.equal(quizPageSrc.includes("+30s"), false);
+  assert.equal(quizPageSrc.includes("+30 SECONDS"), false);
+});
+
+test("Phase 3.1 Test D: Academic score cannot be multiplied by a student game mechanic", () => {
+  assert.equal(quizPageSrc.includes("Math.min(streak"), false);
+  assert.equal(quizPageSrc.includes("streakMultiplier"), false);
+  assert.equal(quizPageSrc.includes("booster"), false);
+  assert.equal(quizPageSrc.includes("power-up"), false);
+  assert.equal(quizPageSrc.includes("multiplier"), false);
+});
+
+test("Phase 3.1 Test E: Proctored exam timer cannot be frozen or extended by a student", () => {
+  assert.equal(quizPageSrc.includes("isTimeFrozen"), false);
+  assert.equal(/setTimeLeft\s*\(\s*\(prev\)\s*=>\s*prev\s*\+\s*\d+/i.test(quizPageSrc), false);
+});
+
+test("Phase 3.1 Test F: Power Arena game mechanics are preserved in /arena/[id]", () => {
+  const arenaContentSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/app/arena/[id]/content.tsx"),
+    "utf-8"
+  );
+  assert.match(arenaContentSrc, /streakMultiplier/);
+  assert.match(arenaContentSrc, /battlePowerInventory/);
+  assert.match(arenaContentSrc, /handleIncomingAttack/);
+  assert.match(arenaContentSrc, /ArenaPodium/);
+  assert.match(arenaContentSrc, /activeAttackEffect/);
+});
+
+

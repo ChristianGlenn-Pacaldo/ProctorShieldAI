@@ -21,9 +21,6 @@ import {
   Camera, 
   AlertTriangle, 
   CheckCircle, 
-  Flame, 
-  Zap, 
-  Scissors, 
   Clock, 
   Volume2, 
   VolumeX, 
@@ -37,13 +34,12 @@ import {
   WifiOff,
   Save,
   ShieldAlert,
+  Award,
 } from "lucide-react";
 
 type QuizSubmittedResult = {
   score: number | null;
   total: number;
-  xp: number;
-  streak: number;
   violations: number;
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
@@ -126,23 +122,9 @@ export default function QuizRoom() {
   const [studentQuizId, setStudentQuizId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string>("");
 
-  // ── PROCTORSHIELD GAMIFICATION STATE ──────────────────
-  const [streak, setStreak] = useState(1);
-  const [xp, setXp] = useState(100);
+  // ── PROCTORSHIELD EXAM STATE ──────────────────────────
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [celebrationBanner, setCelebrationBanner] = useState<string | null>(null);
-  const [isTimeFrozen, setIsTimeFrozen] = useState(false);
   const [quizSubmittedResult, setQuizSubmittedResult] = useState<QuizSubmittedResult | null>(null);
-
-  // Power-Up inventory (Usable 1x per quiz)
-  const [powerUps, setPowerUps] = useState({
-    fiftyFifty: { used: false, activeQuestionId: null as number | null },
-    doublePoints: { used: false, active: false },
-    timeFreeze: { used: false, active: false },
-  });
-
-  // Stores choice IDs that are eliminated by 50/50 per question
-  const [eliminatedChoices, setEliminatedChoices] = useState<Record<number, number[]>>({});
 
 
 
@@ -196,61 +178,7 @@ export default function QuizRoom() {
     }
   }, [playTone, quizId, setPreWarning, setTeacherWarningModal]);
 
-  const triggerCelebration = useCallback((msg: string) => {
-    setCelebrationBanner(msg);
-    setTimeout(() => setCelebrationBanner(null), 3200);
-  }, []);
 
-  // ── POWER-UP ACTIONS ─────────────────────────────────────────
-  // 1. 50/50 Eraser (Removes 2 incorrect choices for current question)
-  const handleUseFiftyFifty = (currentQuestionId: number) => {
-    if (powerUps.fiftyFifty.used) return;
-    const q = questions.find((item) => item.id === currentQuestionId);
-    if (!q || !q.choices || q.choices.length < 3) return;
-
-    // Pick 2 random choices to eliminate
-    const choiceIds = q.choices.map((c: any) => c.id);
-    const toEliminate = choiceIds.slice(0, 2);
-
-    setEliminatedChoices((prev) => ({
-      ...prev,
-      [currentQuestionId]: toEliminate,
-    }));
-
-    setPowerUps((prev) => ({
-      ...prev,
-      fiftyFifty: { used: true, activeQuestionId: currentQuestionId },
-    }));
-
-    playTone([400, 600, 800], "triangle", 0.12);
-    triggerCelebration("✨ 50/50 ERASER USED! 2 Wrong Choices Removed");
-  };
-
-  // 2. Double Points Booster (Doubles points earned)
-  const handleUseDoublePoints = () => {
-    if (powerUps.doublePoints.used) return;
-    setPowerUps((prev) => ({
-      ...prev,
-      doublePoints: { used: true, active: true },
-    }));
-    playTone([523, 659, 783, 1046], "sine", 0.1);
-    setXp((prev) => prev + 150);
-    triggerCelebration("⚡ 2X SCORE BOOSTER ACTIVATED! (+150 XP Bonus)");
-  };
-
-  // 3. Time Freeze (+30 seconds)
-  const handleUseTimeFreeze = () => {
-    if (powerUps.timeFreeze.used) return;
-    setPowerUps((prev) => ({
-      ...prev,
-      timeFreeze: { used: true, active: true },
-    }));
-    setTimeLeft((prev) => prev + 30);
-    setIsTimeFrozen(true);
-    setTimeout(() => setIsTimeFrozen(false), 5000);
-    playTone([300, 450, 600, 900], "sine", 0.15);
-    triggerCelebration("⏱ +30 SECONDS TIME FREEZE GRANTED!");
-  };
 
   // ── WebRTC P2P Live Video Streamer (Student -> Teacher) ──
   useEffect(() => {
@@ -740,8 +668,6 @@ export default function QuizRoom() {
 
   // Stable refs for exam state
   const answersStateRef = useRef<Record<number, number>>({});
-  const xpRef = useRef(xp);
-  const streakRef = useRef(streak);
   const questionsRef = useRef(questions);
   const studentQuizIdRef = useRef(studentQuizId);
   const violationCountStateRef = useRef(violationCount);
@@ -749,12 +675,10 @@ export default function QuizRoom() {
 
   useEffect(() => {
     answersStateRef.current = answersState;
-    xpRef.current = xp;
-    streakRef.current = streak;
     questionsRef.current = questions;
     studentQuizIdRef.current = studentQuizId;
     violationCountStateRef.current = violationCount;
-  }, [answersState, xp, streak, questions, studentQuizId, violationCount]);
+  }, [answersState, questions, studentQuizId, violationCount]);
 
   const autosaveAnswers = useCallback(async () => {
     const currentStudentQuizId = studentQuizIdRef.current;
@@ -824,8 +748,6 @@ export default function QuizRoom() {
         await pendingEvidenceUploadRef.current;
       }
       const currentAnswers = answersStateRef.current;
-      const currentXp = xpRef.current;
-      const currentStreak = streakRef.current;
       const currentQuestions = questionsRef.current;
       const currentStudentQuizId = studentQuizIdRef.current;
       const currentViolations = violationCountStateRef.current;
@@ -842,8 +764,6 @@ export default function QuizRoom() {
           quizId: parseInt(quizId),
           answers: payloadAnswers,
           studentQuizId: currentStudentQuizId,
-          xpEarned: currentXp,
-          streakMax: currentStreak,
         })
       });
 
@@ -873,8 +793,6 @@ export default function QuizRoom() {
         setQuizSubmittedResult({
           score: data.result?.score == null ? null : Number(data.result.score),
           total: 100,
-          xp: currentXp,
-          streak: currentStreak,
           violations: serverViolationCount,
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
@@ -925,7 +843,6 @@ export default function QuizRoom() {
     if (
       isCheckingAnswer
       || answerFeedback[questionId]
-      || eliminatedChoices[questionId]?.includes(choiceId)
     ) return;
 
     setIsCheckingAnswer(true);
@@ -955,11 +872,8 @@ export default function QuizRoom() {
 
       if (isCorrect) {
         playTone([523, 659, 784], "sine", 0.08);
-        setXp((current) => current + (powerUps.doublePoints.active ? 100 : 50) * Math.min(streak, 3));
-        setStreak((current) => Math.min(current + 1, 5));
       } else {
         playTone([220, 165], "sawtooth", 0.12);
-        setStreak(1);
       }
 
       if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
@@ -975,7 +889,7 @@ export default function QuizRoom() {
       setPreWarning("Network error. Your answer was not recorded; please tap it again.");
       setIsCheckingAnswer(false);
     }
-  }, [answerFeedback, eliminatedChoices, isCheckingAnswer, playTone, powerUps.doublePoints.active, quizId, setPreWarning, streak]);
+  }, [answerFeedback, isCheckingAnswer, playTone, quizId, setPreWarning]);
 
 const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -1959,7 +1873,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             <span className={`absolute -bottom-2 -right-2 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase shadow-md ${
               resultInvalidated ? "bg-rose-500 text-white" : "bg-emerald-500 text-slate-950"
             }`}>
-              {resultInvalidated ? "INVALIDATED" : "RANK #1"}
+              {resultInvalidated ? "INVALIDATED" : "SUBMITTED"}
             </span>
           </div>
 
@@ -1970,23 +1884,23 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             <p className="text-sm text-slate-400 mt-1 font-medium">
               {resultInvalidated
                 ? "Three-strike integrity limit reached — academic score not recorded"
-                : "ProctorShield Gamified Integrity Score Recorded"}
+                : "Academic Integrity and Exam Record Saved"}
             </p>
           </div>
 
-          {/* Gamified Stats Grid */}
+          {/* Academic Exam Stats Grid */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">XP Earned</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Exam Score</div>
               <div className="text-xl font-black text-amber-400 mt-1 flex items-center justify-center gap-1">
-                <Sparkles className="w-4 h-4 text-amber-400" /> {quizSubmittedResult.xp}
+                <Award className="w-4 h-4 text-amber-400" /> {quizSubmittedResult.score !== null ? `${quizSubmittedResult.score}%` : "Recorded"}
               </div>
             </div>
 
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Max Streak</div>
-              <div className="text-xl font-black text-orange-400 mt-1 flex items-center justify-center gap-1">
-                <Flame className="w-4 h-4 text-orange-500" /> {quizSubmittedResult.streak}x
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Questions Completed</div>
+              <div className="text-xl font-black text-indigo-400 mt-1 flex items-center justify-center gap-1">
+                <CheckCircle className="w-4 h-4 text-indigo-400" /> {questions.length}
               </div>
             </div>
 
@@ -2049,7 +1963,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     </span>
                     {quizSubmittedResult.isTopOne && (
                       <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full">
-                        PODIUM STAR
+                        HONOR ROLL
                       </span>
                     )}
                   </div>
@@ -2173,9 +2087,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               <h1 className="text-2xl font-bold text-white mb-2">{quiz?.title || "Proctoring Initialization"}</h1>
               <p className="text-indigo-400 font-semibold mb-2">{quiz?.subject?.subjectName}</p>
               
-              {/* Gamification Badge */}
+              {/* Examination Mode Badge */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-bold mb-4">
-                <Flame className="w-3.5 h-3.5 text-orange-400" /> ProctorShield Gamified Exam Engine Enabled
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> ProctorShield Monitored Examination
               </div>
 
               <p className="text-gray-400 mb-6 text-sm leading-relaxed">
@@ -2278,14 +2192,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
   return (
     <div className="exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
-      {/* Floating Gamification Celebration Banner */}
-      {celebrationBanner && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-2xl shadow-orange-500/40 border border-amber-300/40 animate-bounce flex items-center gap-2">
-          <Sparkles className="w-4 h-4 animate-spin" />
-          <span>{celebrationBanner}</span>
-        </div>
-      )}
-
       {/* Security Warning Modal */}
       {teacherWarningModal.show && !warningModal.show && (
         <div className="app-modal-backdrop bg-black/80 backdrop-blur-md">
@@ -2352,7 +2258,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         </div>
       )}
 
-      {/* TOP HEADER WITH PROCTORSHIELD GAMIFICATION HUD */}
+      {/* TOP HEADER WITH EXAM STATUS HUD */}
       <header className="py-2.5 px-3 sm:px-4 lg:px-8 bg-[#131627] border-b border-[#242a42] flex flex-wrap items-center justify-between shrink-0 shadow-md gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <h1 className="text-base lg:text-xl font-black text-white tracking-tight font-[family-name:var(--font-display)] truncate max-w-[180px] sm:max-w-none">
@@ -2369,7 +2275,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           </button>
         </div>
 
-        {/* Gamified HUD Badges */}
+        {/* Proctored HUD Indicators */}
         <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-1.5 sm:gap-2 lg:gap-4">
           <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${
             isOnline
@@ -2392,25 +2298,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             {monitoringLabel(monitoringLevel)}
           </div>
 
-
-          {/* Streak Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
-            <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
-            <span>Streak {streak}x</span>
-          </div>
-
-          {/* XP Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-extrabold text-xs shadow-xs">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>{xp} XP</span>
-          </div>
-
           {/* Exam Timer */}
-          <div className={`px-3 sm:px-4 py-1.5 rounded-xl text-sm sm:text-base font-bold font-mono shadow-md border ${
-            isTimeFrozen 
-              ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse" 
-              : "bg-[#1c2138] border-[#2e375e] text-amber-400"
-          }`}>
+          <div className="px-3 sm:px-4 py-1.5 rounded-xl text-sm sm:text-base font-bold font-mono shadow-md border bg-[#1c2138] border-[#2e375e] text-amber-400">
             {formatTime(timeLeft)}
           </div>
 
@@ -2425,7 +2314,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         </div>
       </header>
 
-      {/* Real-time XP Progress Bar */}
+      {/* Exam Question Progress Bar */}
       <div className="w-full h-1.5 bg-[#181c30] overflow-hidden">
         <div 
           className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-400 transition-all duration-300"
@@ -2529,37 +2418,52 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           {/* Status Indicators */}
           <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-4 space-y-3 shadow-md">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">AI Engine</span>
-              <span className={`font-bold ${aiStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>{aiStatus}</span>
+            <div className="w-full text-left text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">
+              PROCTOR DIAGNOSTICS
             </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-[#242a42]">
+            <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">Face Detection</span>
               <span className={`font-bold ${faceStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>{faceStatus}</span>
             </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-[#242a42]">
-              <span className="text-slate-400 font-medium">Device Scan</span>
-              <span className={`font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>{deviceStatus}</span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">Head Pose</span>
+              <span className={`font-bold ${gazeStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                {gazeStatus.includes("✓") ? "Forward ✓" : "Diverted ✗"}
+              </span>
             </div>
-            <div className="pt-2 border-t border-[#242a42] space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-medium">Audio Level</span>
-                <span className={`font-bold text-[11px] ${audioStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>
-                  {audioStatus.includes("Active") ? `${audioLevel}%` : audioStatus}
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-[#1e2338] rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-400 transition-all duration-150" style={{ width: `${audioLevel}%` }} />
-              </div>
+            <div className="flex items-center justify-between text-xs gap-2">
+              <span className="text-slate-400 font-medium">Object Check</span>
+              <span className={`max-w-[10rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : deviceStatus.includes("Loading") ? "text-amber-400" : "text-red-400"}`}>
+                {deviceStatus}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs gap-2">
+              <span className="text-slate-400 font-medium">Ambient Audio</span>
+              <span className={`max-w-[10rem] truncate text-right font-bold ${audioStatus.includes("Active") ? "text-emerald-400" : "text-amber-400"}`}>
+                {audioStatus}{audioStatus.includes("Active") ? ` · ${audioLevel}%` : ""}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">Lockdown</span>
+              <span className="font-bold text-emerald-400">{isMobile ? "App-Switch Guard" : "Strict Fullscreen"}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">Assurance</span>
+              <span className="font-bold text-violet-300">{monitoringLabel(monitoringLevel)}</span>
             </div>
           </div>
 
-          {/* Violations Card */}
+          {/* Strike Counter Card */}
           <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-4 shadow-md">
-            <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">
-              VIOLATIONS ({violationCount}/3)
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Security Strikes</span>
+              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                violationCount > 0 ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"
+              }`}>
+                {violationCount}/3 Violations
+              </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 mt-3">
               {[1, 2, 3].map((num) => (
                 <div
                   key={num}
@@ -2577,75 +2481,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
         </div>
 
-        {/* QUESTIONS STACK & POWER-UP DOCK */}
+        {/* QUESTIONS STACK */}
         <div className="w-full flex-1 flex flex-col gap-4 overflow-hidden">
-          
-          {/* PROCTORSHIELD EXAM POWER-UPS */}
-          <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg shrink-0">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                <span className="text-xs font-black text-white uppercase tracking-wider">
-                  Exam Power-Ups
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-
-              {/* 50/50 Eraser (Exam booster) */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (questions.length > 0) {
-                    handleUseFiftyFifty(currentQuestion?.id ?? questions[0].id);
-                  }
-                }}
-                disabled={powerUps.fiftyFifty.used}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  powerUps.fiftyFifty.used
-                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
-                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
-                }`}
-                title="Remove 2 wrong choices"
-              >
-                <Scissors className="w-3 h-3 text-indigo-400" />
-                <span>50/50</span>
-              </button>
-
-              {/* 2x Score Booster */}
-              <button
-                type="button"
-                onClick={handleUseDoublePoints}
-                disabled={powerUps.doublePoints.used}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  powerUps.doublePoints.used
-                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
-                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
-                }`}
-                title="2x Score multiplier + 150 XP"
-              >
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span>2x XP</span>
-              </button>
-
-              {/* Time Freeze */}
-              <button
-                type="button"
-                onClick={handleUseTimeFreeze}
-                disabled={powerUps.timeFreeze.used}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  powerUps.timeFreeze.used
-                    ? "bg-[#1c2136] text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed"
-                    : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60"
-                }`}
-                title="+30 Seconds time freeze"
-              >
-                <Clock className="w-3 h-3 text-cyan-400" />
-                <span>+30s</span>
-              </button>
-            </div>
-          </div>
 
           {/* QUESTIONS LIST */}
           <div className="flex-1 bg-[#141726] border border-[#242a42] rounded-2xl p-4 lg:p-6 overflow-y-auto shadow-lg space-y-6">
@@ -2706,7 +2543,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     const optionLetter = String.fromCharCode(65 + choiceIndex);
                     const feedback = answerFeedback[currentQuestion.id];
                     const isSelected = feedback?.choiceId === choice.id || answersState[currentQuestion.id] === choice.id;
-                    const eliminated = eliminatedChoices[currentQuestion.id]?.includes(choice.id);
                     const isLocked = Boolean(feedback) || isCheckingAnswer;
                     const selectedCorrect = isSelected && feedback?.isCorrect === true;
                     const selectedWrong = isSelected && feedback?.isCorrect === false;
@@ -2716,11 +2552,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                         type="button"
                         key={choice.id}
                         onClick={() => void handleSelectChoice(currentQuestion.id, choice.id, currentQuestionIndex)}
-                        disabled={eliminated || isLocked}
+                        disabled={isLocked}
                         className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl border text-left transition-all disabled:cursor-not-allowed ${
-                          eliminated
-                            ? "opacity-30 line-through bg-slate-900/50 border-dashed border-slate-700"
-                            : selectedCorrect
+                          selectedCorrect
                             ? "bg-emerald-500/20 border-emerald-400 shadow-md shadow-emerald-500/20"
                             : selectedWrong
                             ? "bg-rose-500/20 border-rose-400 shadow-md shadow-rose-500/20"
