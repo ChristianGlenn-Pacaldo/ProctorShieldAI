@@ -77,8 +77,9 @@ interface BattleEvent {
 
 interface ArenaHostContentProps {
   quiz: QuizData;
-  mode: "battle_royale" | "wave_sprint";
-  waveDuration: number;
+  mode?: string;
+  matchDuration?: number;
+  waveDuration?: number;
   coinBounty: number;
   enabledPowers: string[];
   teacherId: string;
@@ -98,7 +99,8 @@ const BOT_NAMES = [
 
 export default function ArenaHostContent({
   quiz,
-  mode,
+  mode = "score_arena",
+  matchDuration = 1800,
   waveDuration,
   coinBounty,
   enabledPowers,
@@ -107,12 +109,11 @@ export default function ArenaHostContent({
   // Arena Phase: 'lobby' | 'wave' | 'podium'
   const [phase, setPhase] = useState<"lobby" | "wave" | "podium">("lobby");
 
-  // Overall Match Duration Config (Teacher can choose 5m, 10m, 15m in lobby)
-  const [selectedMatchDuration, setSelectedMatchDuration] = useState<number>(
-    quiz.duration ? quiz.duration * 60 : 600
-  );
+  // Overall Match Duration Config (Teacher can choose 30m or 1h in lobby)
+  const initialDuration = matchDuration === 3600 ? 3600 : 1800;
+  const [selectedMatchDuration, setSelectedMatchDuration] = useState<number>(initialDuration);
   const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(selectedMatchDuration);
+  const [timeLeft, setTimeLeft] = useState<number>(initialDuration);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
   const [sfxEnabled, setSfxEnabled] = useState<boolean>(true);
@@ -123,33 +124,8 @@ export default function ArenaHostContent({
   const [isActionPending, setIsActionPending] = useState(false);
   const actionPendingRef = useRef(false);
 
-  // Battlers State (Authoritative Score-Based Participants)
-  const [battlers, setBattlers] = useState<Battler[]>([
-    {
-      id: "bot-1",
-      name: "Nova",
-      avatar: "⚡",
-      score: 0,
-      rank: 1,
-      questionsAnswered: 0,
-      totalQuestions: quiz.questions.length,
-      isFinished: false,
-      hasShield: true,
-      isAi: true,
-    },
-    {
-      id: "bot-2",
-      name: "Blaze",
-      avatar: "🔥",
-      score: 0,
-      rank: 2,
-      questionsAnswered: 0,
-      totalQuestions: quiz.questions.length,
-      isFinished: false,
-      hasShield: false,
-      isAi: true,
-    },
-  ]);
+  // Battlers State: Starts EMPTY (0 ghost participants). Populated only when students join current session.
+  const [battlers, setBattlers] = useState<Battler[]>([]);
 
   // Live Combat Events Activity Feed
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([
@@ -552,6 +528,43 @@ export default function ArenaHostContent({
     };
   }, [addParticipant, quiz.id, quiz.questions.length, syncRankedBattlers, teacherId]);
 
+  // Initial load on mount (fetch current session state & participants)
+  useEffect(() => {
+    let isMounted = true;
+    async function loadArenaInitial() {
+      try {
+        const response = await fetch(`/api/arena/${quiz.id}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!isMounted) return;
+
+        if (data?.status === "ended" || data?.arena?.status === "ended" || data?.quizStatus === "ended") {
+          setPhase("podium");
+          setIsTimerRunning(false);
+        } else if (data?.status === "active" || data?.arena?.status === "active") {
+          setPhase("wave");
+          setIsTimerRunning(true);
+          const endsAt = data.arena?.matchEndsAt;
+          if (endsAt) {
+            setMatchEndsAt(endsAt);
+            const rem = Math.max(0, Math.ceil((Date.parse(endsAt) - Date.now()) / 1000));
+            setTimeLeft(rem);
+          }
+        }
+
+        if (Array.isArray(data?.participants)) {
+          syncRankedBattlers(data.participants);
+        }
+      } catch (err) {
+        console.error("Failed to load initial arena state:", err);
+      }
+    }
+    void loadArenaInitial();
+    return () => {
+      isMounted = false;
+    };
+  }, [quiz.id, syncRankedBattlers]);
+
   // Periodic reconciliation with server
   useEffect(() => {
     if (phase === "podium") return;
@@ -833,19 +846,18 @@ export default function ArenaHostContent({
           <div className="max-w-md mx-auto w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center space-y-2">
             <span className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center justify-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
-              Configure Overall Match Duration
+              MATCH DURATION
             </span>
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               {[
-                { label: "5 Minutes", sec: 300 },
-                { label: "10 Minutes", sec: 600 },
-                { label: "15 Minutes", sec: 900 },
+                { label: "30 Minutes", sec: 1800 },
+                { label: "1 Hour", sec: 3600 },
               ].map((dur) => (
                 <button
                   key={dur.sec}
                   type="button"
                   onClick={() => setSelectedMatchDuration(dur.sec)}
-                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
                     selectedMatchDuration === dur.sec
                       ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black"
                       : "bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white"
@@ -856,7 +868,7 @@ export default function ArenaHostContent({
               ))}
             </div>
             <p className="text-[10px] text-slate-500 pt-1">
-              Questions progress automatically for each student. Match concludes when timer expires or you end it manually.
+              One overall match duration. Questions progress continuously at each student&apos;s pace.
             </p>
           </div>
 

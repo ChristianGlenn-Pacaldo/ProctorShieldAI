@@ -1,13 +1,27 @@
 import crypto from "node:crypto";
 import { getRedis } from "./redis.ts";
+import prisma from "./prisma.ts";
 
-export const ARENA_MODES = ["battle_royale", "wave_sprint"] as const;
+export const ARENA_MODES = ["score_arena", "battle_royale", "wave_sprint"] as const;
 export const ARENA_POWER_IDS = ["meteor", "earthquake", "blizzard", "shield"] as const;
-export const ARENA_ACTIONS = ["start", "wave", "airdrop", "end", "reset"] as const;
+export const ARENA_ACTIONS = ["start", "join", "wave", "airdrop", "end", "reset"] as const;
 
 export type ArenaMode = (typeof ARENA_MODES)[number];
 export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
 export type ArenaAction = (typeof ARENA_ACTIONS)[number];
+export type ArenaStatus = "lobby" | "active" | "ended";
+
+export const VALID_MATCH_DURATIONS = [1800, 3600] as const;
+export const DEFAULT_MATCH_DURATION = 1800; // 30 Minutes default
+
+export function normalizeMatchDuration(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (parsed === 1800 || parsed === 3600) return parsed;
+  // If legacy minutes provided: 30 min -> 1800s, 60 min -> 3600s
+  if (parsed === 30) return 1800;
+  if (parsed === 60) return 3600;
+  return DEFAULT_MATCH_DURATION;
+}
 
 export const POWER_SCORE_PENALTIES: Record<ArenaPowerId, number> = {
   meteor: 100,
@@ -57,9 +71,9 @@ export interface ArenaState {
   sessionId: string;
   quizId: number;
   teacherId: string;
-  status: "active" | "ended";
+  status: ArenaStatus; // "lobby" | "active" | "ended"
   mode: ArenaMode;
-  matchDuration: number; // overall match duration in seconds (e.g. 300, 600, 900)
+  matchDuration: number; // overall match duration in seconds (1800 or 3600)
   matchEndsAt?: string;
   coinBounty: number;
   enabledPowers: ArenaPowerId[];
@@ -79,13 +93,19 @@ export interface ArenaState {
 }
 
 const ARENA_TTL_SECONDS = 6 * 60 * 60;
-const localArenaState = new Map<number, { value: ArenaState; expiresAt: number }>();
+const globalArena = globalThis as typeof globalThis & {
+  __proctorShieldArenaState?: Map<number, { value: ArenaState; expiresAt: number }>;
+};
+if (!globalArena.__proctorShieldArenaState) {
+  globalArena.__proctorShieldArenaState = new Map();
+}
+
 const validModes = new Set<string>(ARENA_MODES);
 const validPowers = new Set<string>(ARENA_POWER_IDS);
 const validActions = new Set<string>(ARENA_ACTIONS);
 
 export function isArenaAction(value: unknown): value is ArenaAction {
-  return typeof value === "string" && (validActions.has(value) || value === "wave");
+  return typeof value === "string" && (validActions.has(value) || value === "wave" || value === "join");
 }
 
 export function isArenaPowerId(value: unknown): value is ArenaPowerId {
@@ -105,7 +125,7 @@ export function normalizeArenaConfig(input: unknown): Pick<
   const mode =
     typeof record.mode === "string" && validModes.has(record.mode)
       ? (record.mode as ArenaMode)
-      : "battle_royale";
+      : "score_arena";
   const requestedPowers = Array.isArray(record.enabledPowers) ? record.enabledPowers : [];
   const enabledPowers = Array.from(new Set(requestedPowers.filter(isArenaPowerId)));
 
@@ -150,24 +170,25 @@ export function computeArenaRankings(
 export function createArenaState(params: {
   quizId: number;
   teacherId: string;
+  status?: ArenaStatus;
   totalQuestions?: number;
   currentQuestionId?: number;
   config?: Partial<ReturnType<typeof normalizeArenaConfig>> | Record<string, unknown>;
+  sessionId?: string;
 }): ArenaState {
   const config = normalizeArenaConfig(params.config);
-  const startedAt = new Date().toISOString();
+  const status: ArenaStatus = params.status || "lobby";
   const rawRecord = params.config && typeof params.config === "object" ? (params.config as Record<string, unknown>) : {};
-  const rawMatchDuration = rawRecord.matchDuration || rawRecord.duration;
-  const matchDuration = typeof rawMatchDuration === "number" && rawMatchDuration > 0
-    ? rawMatchDuration
-    : (config.waveDuration ? config.waveDuration * 10 : 600);
-  const matchEndsAt = new Date(Date.now() + matchDuration * 1000).toISOString();
+  const rawDuration = rawRecord.matchDuration ?? rawRecord.duration;
+  const matchDuration = normalizeMatchDuration(rawDuration);
+  const startedAt = status === "active" ? new Date().toISOString() : "";
+  const matchEndsAt = status === "active" ? new Date(Date.now() + matchDuration * 1000).toISOString() : undefined;
 
   const state: ArenaState = {
-    sessionId: crypto.randomUUID(),
+    sessionId: params.sessionId || crypto.randomUUID(),
     quizId: params.quizId,
     teacherId: params.teacherId,
-    status: "active",
+    status,
     ...config,
     matchDuration,
     matchEndsAt,
@@ -224,24 +245,59 @@ function arenaKey(quizId: number) {
   return `proctorshield:arena:${quizId}`;
 }
 
-export async function setArenaState(state: ArenaState) {
-  const redis = getRedis();
-  // Preserve ended arena state for reconciliation queries instead of deleting immediately.
-  if (redis) {
-    try {
-      await redis.set(arenaKey(state.quizId), JSON.stringify(state), "EX", ARENA_TTL_SECONDS);
-    } catch (error) {
-      console.warn("Arena Redis write failed; using the single-process fallback:", error);
-    }
+function arenaSettingKey(quizId: number) {
+  return `arena:state:${quizId}`;
+}
+
+/**
+ * Persists Arena state authoritatively into PostgreSQL (Setting table).
+ * Uses globalThis and Redis as speed caches only.
+ */
+export async function setArenaState(state: ArenaState): Promise<void> {
+  const jsonString = JSON.stringify(state);
+
+  // 1. Authoritative PostgreSQL write
+  try {
+    await prisma.setting.upsert({
+      where: { settingKey: arenaSettingKey(state.quizId) },
+      update: { settingValue: jsonString },
+      create: { settingKey: arenaSettingKey(state.quizId), settingValue: jsonString },
+    });
+  } catch (error) {
+    console.error("Authoritative Arena DB write failed:", error);
   }
-  localArenaState.set(state.quizId, {
+
+  // 2. Memory cache update
+  globalArena.__proctorShieldArenaState!.set(state.quizId, {
     value: state,
     expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
   });
+
+  // 3. Redis cache write (optional speed-up)
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS);
+    } catch (error) {
+      console.warn("Arena Redis write failed (cache only):", error);
+    }
+  }
 }
 
-export async function clearArenaState(quizId: number) {
-  localArenaState.delete(quizId);
+/**
+ * Clears Arena state from PostgreSQL, memory cache, and Redis.
+ */
+export async function clearArenaState(quizId: number): Promise<void> {
+  try {
+    await prisma.setting.deleteMany({
+      where: { settingKey: arenaSettingKey(quizId) },
+    });
+  } catch (error) {
+    console.error("Authoritative Arena DB delete failed:", error);
+  }
+
+  globalArena.__proctorShieldArenaState?.delete(quizId);
+
   const redis = getRedis();
   if (redis) {
     try {
@@ -252,27 +308,52 @@ export async function clearArenaState(quizId: number) {
   }
 }
 
+/**
+ * Retrieves Arena state. PostgreSQL is the authoritative source of truth.
+ * If cache and DB disagree, persisted authoritative Arena state wins.
+ */
 export async function getArenaState(quizId: number): Promise<ArenaState | null> {
+  // 1. Check authoritative PostgreSQL source of truth
+  try {
+    const record = await prisma.setting.findUnique({
+      where: { settingKey: arenaSettingKey(quizId) },
+    });
+    if (record?.settingValue) {
+      try {
+        const dbState = JSON.parse(record.settingValue) as ArenaState;
+        // Keep in-memory cache synchronized with authoritative DB
+        globalArena.__proctorShieldArenaState!.set(quizId, {
+          value: dbState,
+          expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
+        });
+        const redis = getRedis();
+        if (redis) {
+          void redis.set(arenaKey(quizId), JSON.stringify(dbState), "EX", ARENA_TTL_SECONDS).catch(() => {});
+        }
+        return dbState;
+      } catch (err) {
+        console.error("Failed to parse authoritative arena state from DB:", err);
+      }
+    }
+  } catch (error) {
+    console.error("Authoritative Arena DB read failed, falling back to cache:", error);
+  }
+
+  // 2. Cache fallbacks if DB read failed
+  const local = globalArena.__proctorShieldArenaState?.get(quizId);
+  if (local && local.expiresAt > Date.now()) {
+    return local.value;
+  }
+
   const redis = getRedis();
   if (redis) {
     try {
-      const value = await redis.get(arenaKey(quizId));
-      if (value) {
-        try {
-          return JSON.parse(value) as ArenaState;
-        } catch {
-          await redis.del(arenaKey(quizId));
-        }
+      const val = await redis.get(arenaKey(quizId));
+      if (val) {
+        return JSON.parse(val) as ArenaState;
       }
-    } catch (error) {
-      console.warn("Arena Redis read failed; using the single-process fallback:", error);
-    }
+    } catch {}
   }
 
-  const local = localArenaState.get(quizId);
-  if (!local || local.expiresAt <= Date.now()) {
-    localArenaState.delete(quizId);
-    return null;
-  }
-  return local.value;
+  return null;
 }

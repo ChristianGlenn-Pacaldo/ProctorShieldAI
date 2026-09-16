@@ -10,6 +10,8 @@ import {
   getPowerPenalty,
   getPowerDamage,
   POWER_SCORE_PENALTIES,
+  normalizeMatchDuration,
+  VALID_MATCH_DURATIONS,
   type ArenaParticipant,
   type ArenaState,
 } from "../src/lib/arena.ts";
@@ -20,6 +22,14 @@ const studentArenaContentSrc = fs.readFileSync(
 );
 const teacherArenaContentSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/dashboard/teacher/playground/arena/[id]/content.tsx"),
+  "utf-8"
+);
+const teacherPlaygroundSrc = fs.readFileSync(
+  path.resolve(process.cwd(), "src/app/dashboard/teacher/playground/content.tsx"),
+  "utf-8"
+);
+const libArenaSrc = fs.readFileSync(
+  path.resolve(process.cwd(), "src/lib/arena.ts"),
   "utf-8"
 );
 const apiArenaRouteSrc = fs.readFileSync(
@@ -79,11 +89,12 @@ test("Requirement 5: Overall timer is server-authoritative", () => {
   const state: ArenaState = createArenaState({
     quizId: 10,
     teacherId: "teacher-1",
+    status: "active",
     totalQuestions: 20,
-    config: { matchDuration: 600 },
+    config: { matchDuration: 1800 },
   });
   assert.ok(state.matchEndsAt);
-  assert.equal(state.matchDuration, 600);
+  assert.equal(state.matchDuration, 1800);
 
   // Student client synchronizes timer with server matchEndsAt
   assert.match(studentArenaContentSrc, /data\.arena\.matchEndsAt/);
@@ -293,4 +304,139 @@ test("Requirement 38: Power score penalties are configured and deterministic", (
   assert.equal(getPowerPenalty("earthquake"), 60);
   assert.equal(getPowerPenalty("blizzard"), 40);
   assert.equal(getPowerPenalty("shield"), 0);
+});
+
+test("Test A: Student opening /arena/[id] before teacher start sees waiting lobby", () => {
+  // Default phase state in student component is strictly "lobby"
+  assert.match(
+    studentArenaContentSrc,
+    /const\s*\[phase,\s*setPhase\]\s*=\s*useState<["']lobby["']\s*\|\s*["']in_wave["']\s*\|\s*["']podium["']>\(\s*["']lobby["']\s*\)/
+  );
+  // Lobby UI renders waiting indicator
+  assert.match(studentArenaContentSrc, /Waiting for teacher to start Power Arena/);
+});
+
+test("Test B: Questions and choice selections are locked / not interactable until match is active", () => {
+  // Lobby phase returns early before active question card is rendered
+  assert.match(studentArenaContentSrc, /if\s*\(phase\s*===\s*["']lobby["']\)\s*\{/);
+  const lobbyBlock = studentArenaContentSrc.split('if (phase === "lobby")')[1]?.split("Render: Active Gameplay Screen")[0] ?? "";
+  assert.equal(lobbyBlock.includes("handleSelectChoice"), false);
+  assert.equal(lobbyBlock.includes("handleConfirmChoice"), false);
+});
+
+test("Test C: Battle powers cannot be triggered before match start (ARENA_NOT_STARTED 409)", () => {
+  assert.match(battleActionRouteSrc, /if\s*\(!arena\s*\|\|\s*arena\.status\s*===\s*["']lobby["']\)\s*\{/);
+  assert.match(battleActionRouteSrc, /code:\s*["']ARENA_NOT_STARTED["']/);
+  assert.match(battleActionRouteSrc, /status:\s*409/);
+});
+
+test("Test D: Teacher Arena Host shows 0 participants until students explicitly join", () => {
+  // Host battlers state starts as an empty array, no hardcoded bot entries
+  assert.match(teacherArenaContentSrc, /const\s*\[battlers,\s*setBattlers\]\s*=\s*useState<Battler\[\]>\(\[\]\)/);
+});
+
+test("Test E: Enrolled student who has NOT navigated to /arena/[id] does NOT appear in teacher participant list", () => {
+  // GET /api/arena/[id] does NOT loop enrolled students into state.participants
+  assert.doesNotMatch(apiArenaRouteSrc, /for\s*\(\s*const\s+enrollment\s+of\s+enrolledStudents\s*\)\s*\{[\s\S]*ensureArenaPlayer/);
+});
+
+test("Test F: Student who enters /arena/[id] calls join action and appears on host", () => {
+  // Student content calls join on mount
+  assert.match(studentArenaContentSrc, /action:\s*["']join["']/);
+  // Server handles join action, registers participant, and emits arena-student-joined
+  assert.match(apiArenaRouteSrc, /action\s*===\s*["']join["']/);
+  assert.match(apiArenaRouteSrc, /arena-student-joined/);
+});
+
+test("Test G: Student refresh does NOT create duplicate participant", () => {
+  // Participants are keyed by studentId/userId in state.participants
+  assert.match(apiArenaRouteSrc, /state\.participants\[session\.userId\]/);
+});
+
+test("Test H: Teacher clicking 'Start Arena' transitions state to active, sets authoritative matchEndsAt, generates sessionId, and emits arena-start", () => {
+  assert.match(apiArenaRouteSrc, /action\s*===\s*["']start["']/);
+  assert.match(apiArenaRouteSrc, /status:\s*["']active["']/);
+  assert.match(apiArenaRouteSrc, /crypto\.randomUUID\(\)/);
+  assert.match(apiArenaRouteSrc, /new Date\(Date\.now\(\)\s*\+\s*matchDuration\s*\*\s*1000\)\.toISOString\(\)/);
+  assert.match(apiArenaRouteSrc, /const\s+event\s*=\s*`arena-\$\{action\}`/);
+  assert.match(apiArenaRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*event/);
+});
+
+test("Test I: Student receives arena-start and transitions to active game view", () => {
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-start["'],\s*\(data/);
+  assert.match(studentArenaContentSrc, /setPhase\(["']in_wave["']\)/);
+  assert.match(studentArenaContentSrc, /setCurrentSessionId\(data\.sessionId\s*\|\|\s*data\?\.arena\?\.sessionId/);
+});
+
+test("Test J: Server-persisted Arena state matches active session (PostgreSQL Setting row as authoritative source)", () => {
+  assert.match(libArenaSrc, /prisma\.setting\.upsert/);
+  assert.match(libArenaSrc, /arena:state:\${quizId}/);
+  assert.match(libArenaSrc, /arenaSettingKey\(state\.quizId\)/);
+});
+
+test("Test K: Battle action succeeds during active match with valid target", () => {
+  assert.match(battleActionRouteSrc, /if\s*\(powerType\s*===\s*["']shield["']\)/);
+  assert.match(battleActionRouteSrc, /applyPendingAttackHit/);
+  assert.match(battleActionRouteSrc, /targetStudentId/);
+});
+
+test("Test L: Battle action fails before teacher starts (ARENA_NOT_STARTED, 409)", () => {
+  assert.match(battleActionRouteSrc, /if\s*\(!arena\s*\|\|\s*arena\.status\s*===\s*["']lobby["']\)\s*\{[\s\S]*code:\s*["']ARENA_NOT_STARTED["'][\s\S]*status:\s*409/);
+});
+
+test("Test M: Battle action fails after match ended (ARENA_ENDED, 409)", () => {
+  assert.match(battleActionRouteSrc, /arena\.status\s*===\s*["']ended["'][\s\S]*code:\s*["']ARENA_ENDED["'][\s\S]*status:\s*409/);
+});
+
+test("Test N: Battle action fails if student is not a joined participant (NOT_ARENA_PARTICIPANT, 403)", () => {
+  assert.match(battleActionRouteSrc, /!arena\.participants\s*\|\|\s*!arena\.participants\[session\.userId\]/);
+  assert.match(battleActionRouteSrc, /code:\s*["']NOT_ARENA_PARTICIPANT["']/);
+  assert.match(battleActionRouteSrc, /status:\s*403/);
+});
+
+test("Test O: Offensive battle power fails if target is not a joined participant (INVALID_TARGET, 400)", () => {
+  assert.match(battleActionRouteSrc, /const\s+targetParticipant\s*=\s*arena\.participants\[targetStudentId\]/);
+  assert.match(battleActionRouteSrc, /if\s*\(!targetParticipant\)\s*\{[\s\S]*code:\s*["']INVALID_TARGET["']/);
+});
+
+test("Test P: Extra game mode selector is removed from teacher setup (single mode score_arena)", () => {
+  assert.doesNotMatch(teacherPlaygroundSrc, /value:\s*["']battle_royale["']/);
+  assert.doesNotMatch(teacherPlaygroundSrc, /value:\s*["']wave_sprint["']/);
+  assert.match(teacherPlaygroundSrc, /Power Arena Rules/);
+  assert.match(teacherPlaygroundSrc, /Score-Based Power Arena/);
+});
+
+test("Test Q: Strictly no HP / health bars / elimination / damage wording exists", () => {
+  assert.doesNotMatch(teacherPlaygroundSrc, /100 HP/);
+  assert.doesNotMatch(teacherPlaygroundSrc, /Last standing wins/i);
+  assert.match(studentArenaContentSrc, /-100 PTS/);
+  assert.match(studentArenaContentSrc, /-60 PTS/);
+  assert.match(studentArenaContentSrc, /-40 PTS/);
+  assert.doesNotMatch(studentArenaContentSrc, /100 HP/);
+});
+
+test("Test R: Match duration only accepts 1800 and 3600; 30 min -> 1800s, 1 hr -> 3600s; invalid values normalized", () => {
+  assert.deepEqual(VALID_MATCH_DURATIONS, [1800, 3600]);
+  assert.equal(normalizeMatchDuration(1800), 1800);
+  assert.equal(normalizeMatchDuration(3600), 3600);
+  assert.equal(normalizeMatchDuration(30), 1800);
+  assert.equal(normalizeMatchDuration(60), 3600);
+  assert.equal(normalizeMatchDuration(600), 1800); // legacy 10 min normalizes to 1800
+  assert.equal(normalizeMatchDuration(undefined), 1800); // default
+  assert.equal(normalizeMatchDuration("invalid"), 1800);
+
+  // Teacher UI offers only 30 Minutes and 1 Hour
+  assert.match(teacherArenaContentSrc, /30 Minutes/);
+  assert.match(teacherArenaContentSrc, /1 Hour/);
+  assert.match(teacherPlaygroundSrc, /30 Minutes/);
+  assert.match(teacherPlaygroundSrc, /1 Hour/);
+});
+
+test("Test S: Proctored live monitoring is completely untouched", () => {
+  assert.match(proctoredQuizPageSrc, /faceapi\.nets\.tinyFaceDetector\.loadFromUri/);
+  assert.match(proctoredQuizPageSrc, /runDevicePreflight/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /ArenaBattleDock/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /battle-action/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /Meteor Strike|Earthquake|Blizzard|Guardian Shield/);
+  assert.doesNotMatch(proctoredQuizPageSrc, /private-arena-/);
 });

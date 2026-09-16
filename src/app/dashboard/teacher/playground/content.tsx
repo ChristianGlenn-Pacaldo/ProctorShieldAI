@@ -56,8 +56,7 @@ export default function PlaygroundContent({
     quizzes.length > 0 ? quizzes[0].id : null
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [gameMode, setGameMode] = useState<"battle_royale" | "wave_sprint">("battle_royale");
-  const [waveDuration, setWaveDuration] = useState<number>(30);
+  const [matchDuration, setMatchDuration] = useState<1800 | 3600>(1800);
   const [coinBounty, setCoinBounty] = useState<number>(500);
   const [powers, setPowers] = useState({
     meteor: true,
@@ -78,8 +77,8 @@ export default function PlaygroundContent({
   const handleLaunchArena = () => {
     if (!selectedQuizId) return;
     const query = new URLSearchParams({
-      mode: gameMode,
-      duration: waveDuration.toString(),
+      mode: "score_arena",
+      duration: matchDuration.toString(),
       bounty: coinBounty.toString(),
       powers: Object.entries(powers)
         .filter(([, v]) => v)
@@ -138,7 +137,7 @@ export default function PlaygroundContent({
             </div>
             <h3 className="text-lg font-bold text-white">Live ProctorShield Arena Battle</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Students answer questions to charge their power gauge, then target classmates with ☄️ Meteors (-25 HP), 🌋 Earthquakes (screen rumbles), and ❄️ Frost stuns, or defend with 🛡️ Guardian Shields.
+              Students answer questions continuously to charge powers, then target classmates with ☄️ Meteors (-100 PTS), 🌋 Earthquakes (-60 PTS), and ❄️ Blizzards (-40 PTS), or defend with 🛡️ Guardian Shields.
             </p>
             <div className="inline-flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
               <Lock className="w-3.5 h-3.5" /> Requires Pro Subscription
@@ -151,7 +150,7 @@ export default function PlaygroundContent({
             </div>
             <h3 className="text-lg font-bold text-white">Projector Command Center</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Designed for live projection in classroom whiteboards or screen shares. Broadcast real-time student HP, combat telemetry, question waves, and dynamic podiums.
+              Designed for live projection in classroom whiteboards or screen shares. Broadcast real-time student scores, combat telemetry, live rankings, and dynamic podiums.
             </p>
             <div className="inline-flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
               <Lock className="w-3.5 h-3.5" /> Requires Pro Subscription
@@ -240,7 +239,7 @@ export default function PlaygroundContent({
             </h2>
 
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-              The ultimate classroom Battle Royale. Students answer your quiz questions in synchronized waves, earning power-ups like <span className="text-amber-300 font-bold">☄️ Meteors</span>, <span className="text-orange-300 font-bold">🌋 Earthquakes</span>, <span className="text-cyan-300 font-bold">❄️ Blizzards</span>, and <span className="text-blue-300 font-bold">🛡️ Guardian Shields</span> to duel their classmates and claim the championship prize pool.
+              The ultimate classroom Power Arena. Students answer quiz questions continuously, earning power-ups like <span className="text-amber-300 font-bold">☄️ Meteors (-100 PTS)</span>, <span className="text-orange-300 font-bold">🌋 Earthquakes (-60 PTS)</span>, <span className="text-cyan-300 font-bold">❄️ Blizzards (-40 PTS)</span>, and <span className="text-blue-300 font-bold">🛡️ Guardian Shields</span> to duel their classmates and claim the championship prize pool.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -426,70 +425,53 @@ export default function PlaygroundContent({
 
             {/* Game Rules Config */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Game Mode */}
+              {/* Game Rules Informational Card */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  2. Arena Game Mode
+                  2. Power Arena Rules
                 </label>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setGameMode("battle_royale")}
-                    className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                      gameMode === "battle_royale"
-                        ? "bg-amber-400/15 border-amber-400/50 text-white"
-                        : "bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/50"
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-white">
-                      <span>⚔️ Battle Royale</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Players start with 100 HP. Powers deal damage, last standing wins.
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setGameMode("wave_sprint")}
-                    className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                      gameMode === "wave_sprint"
-                        ? "bg-amber-400/15 border-amber-400/50 text-white"
-                        : "bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/50"
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-white">
-                      <span>⚡ Wave Points Sprint</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      No elimination. Powers freeze/shake rivals, highest points win.
-                    </div>
-                  </button>
+                <div className="p-3.5 rounded-xl border border-amber-400/40 bg-amber-400/10 text-white space-y-1">
+                  <div className="font-black text-xs flex items-center gap-1.5 text-amber-300">
+                    <span>⚡ Score-Based Power Arena</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Answer questions, earn points, and strategically reduce rival scores using battle powers.
+                  </p>
                 </div>
               </div>
 
-              {/* Wave Duration & Prize Bounty */}
+              {/* Match Duration & Prize Bounty */}
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
-                    <span>3. Time Per Question</span>
-                    <span className="text-amber-400 font-mono font-bold">{waveDuration}s</span>
+                    <span>3. Match Duration</span>
+                    <span className="text-amber-400 font-mono font-bold">
+                      {matchDuration === 3600 ? "1 Hour" : "30 Minutes"}
+                    </span>
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[20, 30, 45].map((sec) => (
-                      <button
-                        key={sec}
-                        type="button"
-                        onClick={() => setWaveDuration(sec)}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          waveDuration === sec
-                            ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                            : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                        }`}
-                      >
-                        {sec}s
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMatchDuration(1800)}
+                      className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        matchDuration === 1800
+                          ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
+                      }`}
+                    >
+                      30 Minutes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMatchDuration(3600)}
+                      className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        matchDuration === 3600
+                          ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
+                      }`}
+                    >
+                      1 Hour
+                    </button>
                   </div>
                 </div>
 

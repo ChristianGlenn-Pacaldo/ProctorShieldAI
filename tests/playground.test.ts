@@ -32,7 +32,7 @@ test("arena settings accept only supported modes, durations, bounties, and power
     coinBounty: -50,
     enabledPowers: ["unknown"],
   }), {
-    mode: "battle_royale",
+    mode: "score_arena",
     waveDuration: 30,
     coinBounty: 500,
     enabledPowers: [...ARENA_POWER_IDS],
@@ -56,8 +56,7 @@ test("new arena states cannot inherit client-owned identity fields", () => {
   assert.equal(state.quizId, 8);
   assert.equal(state.teacherId, "teacher-real");
   assert.equal(state.currentQuestionId, 81);
-  assert.equal(state.status, "active");
-  assert.equal(state.waveStartedAt, state.startedAt);
+  assert.equal(state.status, "lobby");
   assert.ok(state.sessionId.length > 20);
 });
 

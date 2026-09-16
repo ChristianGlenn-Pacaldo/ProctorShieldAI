@@ -95,10 +95,9 @@ export function ArenaContent({
 }: ArenaContentProps) {
   const router = useRouter();
 
-  // ── Match Phase ──────────────────────────────────────────────
-  const [phase, setPhase] = useState<"lobby" | "in_wave" | "podium">(
-    initialQuizStatus === "in_progress" ? "in_wave" : initialQuizStatus === "ended" ? "podium" : "lobby"
-  );
+  // ── Match Phase: Strictly lobby until teacher starts ──────────
+  const [phase, setPhase] = useState<"lobby" | "in_wave" | "podium">("lobby");
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // ── Automatic Question Progression ────────────────────────────
   const initialUnansweredIndex = questions.findIndex(
@@ -116,7 +115,7 @@ export function ArenaContent({
 
   // ── Overall Server-Authoritative Match Timer ──────────────────
   const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
-  const [matchTimeLeft, setMatchTimeLeft] = useState<number>(600); // 10 minutes default
+  const [matchTimeLeft, setMatchTimeLeft] = useState<number>(1800); // 30 minutes default
 
   // ── Score, Ranking & Participants ─────────────────────────────
   const [score, setScore] = useState(() => {
@@ -310,6 +309,55 @@ export function ArenaContent({
     } catch {}
   }, [quizId, lockedAnswers, updateRankingsFromParticipants]);
 
+  // ── Explicit Arena Join on Mount ──────────────────────────────
+  useEffect(() => {
+    let isMounted = true;
+    async function joinArena() {
+      try {
+        const res = await fetch(`/api/arena/${quizId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "join" }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+
+        const sessId = data?.sessionId || data?.arena?.sessionId;
+        if (sessId) {
+          setCurrentSessionId(sessId);
+        }
+
+        const currentStatus = data?.status || data?.arena?.status;
+        if (currentStatus === "active") {
+          setPhase("in_wave");
+          if (data.arena?.matchEndsAt) {
+            setMatchEndsAt(data.arena.matchEndsAt);
+            const endsAt = Date.parse(data.arena.matchEndsAt);
+            if (Number.isFinite(endsAt)) {
+              setMatchTimeLeft(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+            }
+          }
+        } else if (currentStatus === "ended" || data?.quizStatus === "ended") {
+          setPhase("podium");
+        } else {
+          setPhase("lobby");
+        }
+
+        if (Array.isArray(data?.participants)) {
+          updateRankingsFromParticipants(data.participants);
+        }
+      } catch (err) {
+        console.error("Failed to join arena lobby:", err);
+      }
+    }
+
+    void joinArena();
+    return () => {
+      isMounted = false;
+    };
+  }, [quizId, updateRankingsFromParticipants]);
+
   // ── Fetch Initial / Reconciled Arena State ─────────────────────
   const refreshArenaState = useCallback(async () => {
     try {
@@ -317,22 +365,28 @@ export function ArenaContent({
       if (!res.ok) return;
       const data = await res.json();
 
+      const sessId = data?.sessionId || data?.arena?.sessionId;
+      if (sessId) {
+        setCurrentSessionId(sessId);
+      }
+
       // Authoritative finished state from server
-      if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
+      const currentStatus = data?.status || data?.arena?.status;
+      if (currentStatus === "ended" || data?.quizStatus === "ended") {
         setIncomingAttack(null);
         setPhase("podium");
         void finalizeMatch();
         return;
       }
 
-      if (data?.arena?.status === "active") {
+      if (currentStatus === "active") {
         setPhase("in_wave");
-        if (Array.isArray(data.arena.enabledPowers)) {
+        if (Array.isArray(data.arena?.enabledPowers)) {
           setEnabledPowers(data.arena.enabledPowers);
         }
 
         // Authoritative matchEndsAt countdown
-        if (data.arena.matchEndsAt) {
+        if (data.arena?.matchEndsAt) {
           setMatchEndsAt(data.arena.matchEndsAt);
           const endsAt = Date.parse(data.arena.matchEndsAt);
           if (Number.isFinite(endsAt)) {
@@ -344,6 +398,8 @@ export function ArenaContent({
             }
           }
         }
+      } else if (currentStatus === "lobby") {
+        setPhase("lobby");
       }
 
       // Restore usedPowers from server
@@ -386,14 +442,27 @@ export function ArenaContent({
 
       const arenaChannel = pusher.subscribe(`private-arena-${quizId}`);
 
+      // ── Student Joined Event in Realtime ─────────────────────────
+      arenaChannel.bind("arena-student-joined", (data?: {
+        participants?: ArenaParticipant[];
+      }) => {
+        if (Array.isArray(data?.participants)) {
+          updateRankingsFromParticipants(data.participants);
+        }
+      });
+
       // ── Match Started by Teacher ─────────────────────────────────
       arenaChannel.bind("arena-start", (data?: {
         arena?: ArenaState;
+        sessionId?: string;
         matchEndsAt?: string;
         matchDuration?: number;
         participants?: ArenaParticipant[];
       }) => {
         setPhase("in_wave");
+        if (data?.sessionId || data?.arena?.sessionId) {
+          setCurrentSessionId(data.sessionId || data?.arena?.sessionId || null);
+        }
         setCurrentQuestionIndex(0);
         if (data?.matchEndsAt || data?.arena?.matchEndsAt) {
           const ends = (data.matchEndsAt || data?.arena?.matchEndsAt)!;
@@ -408,6 +477,13 @@ export function ArenaContent({
         if (Array.isArray(data?.participants)) {
           updateRankingsFromParticipants(data.participants);
         }
+      });
+
+      // ── Match Ended by Teacher / Server ──────────────────────────
+      arenaChannel.bind("arena-end", () => {
+        setIncomingAttack(null);
+        setPhase("podium");
+        void finalizeMatch();
       });
 
       // ── Host Airdrop ─────────────────────────────────────────────
@@ -690,6 +766,7 @@ export function ArenaContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId,
+          sessionId: currentSessionId,
           powerType,
           questionId: currentQ?.id || 1,
           targetStudentId,
@@ -736,6 +813,7 @@ export function ArenaContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId,
+          sessionId: currentSessionId,
           powerType: "shield",
           defendAttackId: incomingAttack.attackId,
         }),
@@ -824,15 +902,40 @@ export function ArenaContent({
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold uppercase tracking-wider mb-3">
             <Radio className="w-3.5 h-3.5 animate-pulse text-rose-400" />
-            <span>Station Ready • Awaiting Host</span>
+            <span>Waiting for teacher to start Power Arena...</span>
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-            Waiting for Match Start
+            Power Arena Lobby
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-sm mb-6">
-            Your teacher is assembling the lobby. When the match starts, questions progress automatically at your own pace!
+          <p className="text-xs sm:text-sm text-slate-400 max-w-sm mb-4">
+            {quizTitle} • {totalParticipants} {totalParticipants === 1 ? "player" : "players"} joined
           </p>
+
+          {/* Display currently joined fighters in lobby */}
+          {allParticipants.length > 0 && (
+            <div className="w-full mb-4 p-3 rounded-xl bg-[#12182b]/70 border border-slate-800">
+              <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Joined Fighters ({allParticipants.length})</span>
+                <span className="text-emerald-400 font-mono text-[10px]">● Connected</span>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center max-h-24 overflow-y-auto">
+                {allParticipants.map((p) => (
+                  <span
+                    key={p.studentId}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                      p.studentId === studentId
+                        ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-200"
+                        : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                    }`}
+                  >
+                    <span>{p.avatar || "🎓"}</span>
+                    <span>{p.studentName}{p.studentId === studentId ? " (You)" : ""}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="w-full bg-[#12182b]/80 border border-slate-800 rounded-2xl p-4 text-left">
             <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
@@ -864,7 +967,7 @@ export function ArenaContent({
                 <span className="text-lg">🛡️</span>
                 <div>
                   <div className="font-black text-indigo-300">Guardian Shield</div>
-                  <div className="text-[10px] text-slate-400">Deflect Next Attack</div>
+                  <div className="text-[10px] text-slate-400">Blocks one incoming attack</div>
                 </div>
               </div>
             </div>

@@ -146,10 +146,33 @@ export async function POST(req: NextRequest) {
     }
 
     const arena = await getArenaState(quizId);
-    if (!arena || arena.status !== "active") {
+    if (!arena || arena.status === "lobby") {
       return NextResponse.json(
-        { error: "No active arena session exists for this quiz" },
+        { error: "Arena has not started yet. Wait for teacher to start.", code: "ARENA_NOT_STARTED" },
         { status: 409 },
+      );
+    }
+
+    if (arena.status === "ended" || (arena.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt))) {
+      return NextResponse.json(
+        { error: "Arena match has already ended.", code: "ARENA_ENDED" },
+        { status: 409 },
+      );
+    }
+
+    // Validate current session identifier if provided
+    if (record?.sessionId && typeof record.sessionId === "string" && arena.sessionId !== record.sessionId) {
+      return NextResponse.json(
+        { error: "Stale Arena session. Please refresh to join the current match.", code: "STALE_ARENA_SESSION" },
+        { status: 409 },
+      );
+    }
+
+    // Attacker must have joined the current Arena session
+    if (!arena.participants || !arena.participants[session.userId]) {
+      return NextResponse.json(
+        { error: "You are not an active participant in this Arena session.", code: "NOT_ARENA_PARTICIPANT" },
+        { status: 403 },
       );
     }
 
@@ -160,7 +183,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!arena.participants) arena.participants = {};
     if (!arena.usedPowers) arena.usedPowers = {};
     if (!arena.usedPowers[session.userId]) arena.usedPowers[session.userId] = {};
     if (!arena.pendingAttacks) arena.pendingAttacks = {};
@@ -218,20 +240,23 @@ export async function POST(req: NextRequest) {
             attackerId: attackToDefend.attackerId,
             attackerName: attackToDefend.attackerName,
             targetStudentId: session.userId,
-            targetName: session.fullName || "Target Student",
+            targetName: session.fullName,
             powerType: attackToDefend.powerType,
-            message: `🛡️ ${session.fullName || "Target"} deflected ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()} with Guardian Shield! (0 PTS lost)`,
+            status: "deflected",
             timestamp: new Date().toISOString(),
           };
 
           try {
             await Promise.allSettled([
+              pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-deflected", deflectEventData),
               pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-blocked", deflectEventData),
+              pusherServer.trigger(`private-arena-${quizId}`, "attack-deflected", deflectEventData),
               pusherServer.trigger(`private-arena-${quizId}`, "attack-blocked", deflectEventData),
+              pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-deflected", deflectEventData),
               pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-blocked", deflectEventData),
             ]);
-          } catch (error) {
-            console.error("Deflection Pusher broadcast failed:", error);
+          } catch (err) {
+            console.error("Deflect broadcast failed:", err);
           }
 
           return NextResponse.json({
@@ -278,41 +303,36 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     if (!targetStudentId) {
       return NextResponse.json(
-        { error: "Target student is required for offensive battle powers" },
+        { error: "Target student is required for offensive battle powers", code: "INVALID_TARGET" },
         { status: 400 },
       );
     }
 
     if (targetStudentId === session.userId) {
       return NextResponse.json(
-        { error: "You cannot target yourself with an offensive power" },
+        { error: "You cannot target yourself with an offensive power", code: "SELF_TARGET" },
         { status: 400 },
       );
     }
 
-    // Verify target belongs to the same Arena
-    let targetParticipant = arena.participants[targetStudentId];
+    // Target must be a currently joined participant in this Arena session
+    const targetParticipant = arena.participants[targetStudentId];
     if (!targetParticipant) {
-      const targetEnrollment = await prisma.studentQuiz.findFirst({
-        where: { quizId, studentId: targetStudentId, quizStatus: { not: "rejected" } },
-        select: {
-          studentId: true,
-          attemptMode: true,
-          student: { select: { fullName: true } },
-        },
-      });
+      return NextResponse.json(
+        { error: "Target rival is not a currently joined participant in this Arena session.", code: "INVALID_TARGET" },
+        { status: 400 },
+      );
+    }
 
-      if (!targetEnrollment || targetEnrollment.attemptMode !== "arena") {
-        return NextResponse.json(
-          { error: "Target student does not belong to this arena" },
-          { status: 400 },
-        );
-      }
-
-      targetParticipant = ensureArenaParticipant(arena, {
-        studentId: targetEnrollment.studentId,
-        studentName: targetEnrollment.student.fullName,
-      });
+    const targetEnrollment = await prisma.studentQuiz.findFirst({
+      where: { quizId, studentId: targetStudentId, quizStatus: { not: "rejected" } },
+      select: { attemptMode: true },
+    });
+    if (!targetEnrollment || targetEnrollment.attemptMode !== "arena") {
+      return NextResponse.json(
+        { error: "Target student does not belong to this arena", code: "INVALID_TARGET" },
+        { status: 400 },
+      );
     }
 
     // Rate limit cooldown per power type (3 seconds)
