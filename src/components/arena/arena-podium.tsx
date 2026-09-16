@@ -199,7 +199,7 @@ export function ArenaPodium({
       {allParticipants.length > 0 && (
         <div className="w-full max-w-xl bg-[#0d1222]/80 border border-slate-800 rounded-2xl p-4 mb-8">
           <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider mb-3 px-2">
-            Full Match Leaderboard
+            Full Match Leaderboard ({allParticipants.length} Players)
           </h4>
           <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
             {allParticipants.map((p) => {

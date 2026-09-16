@@ -78,7 +78,7 @@ export default async function ArenaHostPage({ params, searchParams }: PageProps)
     <ArenaHostContent
       quiz={sanitizedQuiz}
       mode={config.mode}
-      waveDuration={config.waveDuration}
+      waveDuration={config.waveDuration ?? 30}
       coinBounty={config.coinBounty}
       enabledPowers={config.enabledPowers}
       teacherId={session.userId}

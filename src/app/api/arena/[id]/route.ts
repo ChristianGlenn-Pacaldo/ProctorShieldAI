@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import {
   clearArenaState,
+  computeArenaRankings,
   createArenaState,
   ensureArenaPlayer,
   getArenaState,
@@ -137,11 +138,31 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     let state = await getArenaState(quizId);
 
+    // Authoritative check: If overall timer expired while active, transition to ended
+    if (state?.status === "active" && state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)) {
+      state = {
+        ...state,
+        status: "ended",
+        endedAt: state.endedAt || new Date().toISOString(),
+        pendingAttacks: {},
+      };
+      await setArenaState(state);
+      await prisma.quiz.update({
+        where: { id: quizId },
+        data: { quizStatus: "ended" },
+      }).catch(() => {});
+      await prisma.studentQuiz.updateMany({
+        where: { quizId, quizStatus: "in_progress" },
+        data: { quizStatus: "completed", endTime: new Date() },
+      }).catch(() => {});
+    }
+
     const attempts = await prisma.studentQuiz.findMany({
       where: { quizId, quizStatus: { not: "rejected" } },
       select: {
         studentId: true,
         attemptNumber: true,
+        score: true,
         student: {
           select: {
             fullName: true,
@@ -152,7 +173,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       orderBy: { attemptNumber: "desc" },
     });
     const seen = new Set<string>();
-    const participants = attempts.flatMap((attempt) => {
+    const enrolledStudents = attempts.flatMap((attempt) => {
       if (seen.has(attempt.studentId)) return [];
       seen.add(attempt.studentId);
       const avatarId = attempt.student.gameProfile?.equippedAvatar || "shield";
@@ -160,6 +181,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         studentId: attempt.studentId,
         studentName: attempt.student.fullName,
         avatar: AVATAR_CATALOG.find((avatar) => avatar.id === avatarId)?.emoji || "🎓",
+        score: attempt.score || 0,
       }];
     });
 
@@ -170,17 +192,27 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     }
 
     if (state) {
-      if (!state.players) state.players = {};
-      for (const p of participants) {
+      if (!state.participants) state.participants = {};
+      if (!state.usedPowers) state.usedPowers = {};
+      for (const p of enrolledStudents) {
         ensureArenaPlayer(state, p);
       }
       await setArenaState(state);
     }
 
+    const rankedParticipants = state ? computeArenaRankings(state.participants) : enrolledStudents.map((s, i) => ({
+      ...s,
+      rank: i + 1,
+      questionsAnswered: 0,
+      totalQuestions: quiz._count.questions,
+      isFinished: false,
+    }));
+
     return NextResponse.json({
       success: true,
       arena: state,
-      participants,
+      participants: rankedParticipants,
+      usedPowers: (state?.usedPowers && state.usedPowers[session.userId]) || {},
       quizStatus: quiz.quizStatus,
     });
   } catch (error) {
@@ -289,16 +321,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         state = createArenaState({
           quizId,
           teacherId: session.userId,
+          totalQuestions: quiz.questions.length,
           currentQuestionId: quiz.questions[0].id,
           config: normalizeArenaConfig(payload),
         });
       }
 
-      // Initialize all enrolled students in state.players
+      state.participants = state.participants || {};
+      state.usedPowers = state.usedPowers || {};
+
+      // Initialize all enrolled students in state.participants
       const enrolled = await prisma.studentQuiz.findMany({
         where: { quizId, quizStatus: { not: "rejected" } },
         select: {
           studentId: true,
+          score: true,
           student: { select: { fullName: true, gameProfile: { select: { equippedAvatar: true } } } },
         },
       });
@@ -310,6 +347,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           avatar: AVATAR_CATALOG.find((a) => a.id === avatarId)?.emoji || "🎓",
         });
       }
+      computeArenaRankings(state.participants);
     } else {
       if (!state || state.teacherId !== session.userId) {
         return NextResponse.json({ error: "No active arena session exists for this quiz" }, { status: 409 });
@@ -319,22 +357,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: "No active arena session exists for this quiz" }, { status: 409 });
       }
       if (action === "wave") {
+        // Backwards compatibility for legacy wave calls if any
         const waveIndex = Number(payload.waveIndex);
-        if (!Number.isInteger(waveIndex) || waveIndex < 0 || waveIndex >= quiz.questions.length) {
-          return NextResponse.json({ error: "Invalid arena wave" }, { status: 400 });
+        if (Number.isInteger(waveIndex) && waveIndex >= 0 && waveIndex < quiz.questions.length) {
+          state.currentWave = waveIndex;
+          state.currentQuestionId = quiz.questions[waveIndex].id;
         }
-        const waveStartedAt = new Date().toISOString();
-        const duration = state.waveDuration || 30;
-        const waveEndsAt = new Date(Date.now() + duration * 1000).toISOString();
-        state = {
-          ...state,
-          currentWave: waveIndex,
-          currentQuestionId: quiz.questions[waveIndex].id,
-          waveStartedAt,
-          waveEndsAt,
-          pendingAttacks: {},
-        };
       } else if (action === "end") {
+        // Sync final participant scores to studentQuiz attempts before awarding bounty
+        if (state.participants) {
+          for (const p of Object.values(state.participants)) {
+            await prisma.studentQuiz.updateMany({
+              where: { quizId, studentId: p.studentId },
+              data: { score: p.score },
+            }).catch(() => {});
+          }
+        }
         payouts = await awardArenaBounty(state);
         if (!isEndRetry) {
           state = {
@@ -353,16 +391,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           }).catch((err) => console.error("Failed to mark student quizzes completed:", err));
         }
       } else if (action === "airdrop") {
-        if (state.players) {
-          for (const p of Object.values(state.players)) {
+        // Airdrop in score-based arena: gives all participants +50 bonus score and a Guardian Shield!
+        if (state.participants) {
+          for (const p of Object.values(state.participants)) {
             p.hasShield = true;
-            p.currentHp = Math.min(p.maxHp, p.currentHp + 15);
+            p.score += 50;
           }
+          computeArenaRankings(state.participants);
         }
       }
     }
 
     await setArenaState(state);
+    const rankedParticipants = computeArenaRankings(state.participants || {});
     const event = `arena-${action}`;
     const eventData = {
       quizId,
@@ -370,10 +411,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       sessionId: state.sessionId,
       status: state.status,
       mode: state.mode,
-      waveDuration: state.waveDuration,
+      matchDuration: state.matchDuration,
+      matchEndsAt: state.matchEndsAt,
+      waveDuration: state.matchDuration,
       coinBounty: state.coinBounty,
       enabledPowers: state.enabledPowers,
-      waveIndex: state.currentWave,
+      totalQuestions: state.totalQuestions,
+      participants: rankedParticipants,
       sender: session.fullName,
       teacherId: session.userId,
       timestamp: new Date().toISOString(),
@@ -394,7 +438,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ success: true, action, arena: state, payouts: eventData.payouts });
+    return NextResponse.json({ success: true, action, arena: state, payouts: eventData.payouts, participants: rankedParticipants });
   } catch (error) {
     console.error("Arena action error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

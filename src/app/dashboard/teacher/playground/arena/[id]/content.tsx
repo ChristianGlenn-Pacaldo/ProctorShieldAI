@@ -14,19 +14,21 @@ import {
   Play,
   Users,
   Gift,
-  SkipForward,
   Flame,
   Shield,
   ArrowLeft,
   RotateCcw,
   Bot,
   Trash2,
-  Heart,
   Link2,
   AlertCircle,
+  Clock,
+  StopCircle,
+  Zap,
+  Award,
 } from "lucide-react";
 import PusherClient from "pusher-js";
-import type { PlayerHealth } from "@/lib/arena";
+import { computeArenaRankings, type ArenaParticipant } from "@/lib/arena";
 
 interface Choice {
   id: number;
@@ -57,14 +59,13 @@ interface Battler {
   id: string;
   name: string;
   avatar: string;
-  hp: number;
-  maxHp: number;
-  hasShield: boolean;
   score: number;
-  streak: number;
+  rank: number;
+  questionsAnswered: number;
+  totalQuestions: number;
+  isFinished: boolean;
+  hasShield: boolean;
   isAi: boolean;
-  isAlive: boolean;
-  lastAction?: string;
 }
 
 interface BattleEvent {
@@ -72,14 +73,6 @@ interface BattleEvent {
   timestamp: string;
   text: string;
   type: "attack" | "shield" | "airdrop" | "elimination" | "info";
-}
-
-interface LiveArenaState {
-  status: "active" | "ended";
-  currentWave: number;
-  currentQuestionId: number;
-  waveDuration: number;
-  waveStartedAt?: string;
 }
 
 interface ArenaHostContentProps {
@@ -111,11 +104,17 @@ export default function ArenaHostContent({
   enabledPowers,
   teacherId,
 }: ArenaHostContentProps) {
-  // Arena Phase: 'lobby' | 'wave' | 'intermission' | 'podium'
-  const [phase, setPhase] = useState<"lobby" | "wave" | "intermission" | "podium">("lobby");
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [timeLeft, setTimeLeft] = useState<number>(waveDuration);
+  // Arena Phase: 'lobby' | 'wave' | 'podium'
+  const [phase, setPhase] = useState<"lobby" | "wave" | "podium">("lobby");
+
+  // Overall Match Duration Config (Teacher can choose 5m, 10m, 15m in lobby)
+  const [selectedMatchDuration, setSelectedMatchDuration] = useState<number>(
+    quiz.duration ? quiz.duration * 60 : 600
+  );
+  const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(selectedMatchDuration);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+
   const [sfxEnabled, setSfxEnabled] = useState<boolean>(true);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -124,47 +123,35 @@ export default function ArenaHostContent({
   const [isActionPending, setIsActionPending] = useState(false);
   const actionPendingRef = useRef(false);
 
-  // Battlers State
+  // Battlers State (Authoritative Score-Based Participants)
   const [battlers, setBattlers] = useState<Battler[]>([
     {
       id: "bot-1",
       name: "Nova",
       avatar: "⚡",
-      hp: 100,
-      maxHp: 100,
-      hasShield: true,
       score: 0,
-      streak: 0,
+      rank: 1,
+      questionsAnswered: 0,
+      totalQuestions: quiz.questions.length,
+      isFinished: false,
+      hasShield: true,
       isAi: true,
-      isAlive: true,
     },
     {
       id: "bot-2",
       name: "Blaze",
       avatar: "🔥",
-      hp: 100,
-      maxHp: 100,
-      hasShield: false,
       score: 0,
-      streak: 0,
-      isAi: true,
-      isAlive: true,
-    },
-    {
-      id: "bot-3",
-      name: "Viper",
-      avatar: "🐉",
-      hp: 100,
-      maxHp: 100,
+      rank: 2,
+      questionsAnswered: 0,
+      totalQuestions: quiz.questions.length,
+      isFinished: false,
       hasShield: false,
-      score: 0,
-      streak: 0,
       isAi: true,
-      isAlive: true,
     },
   ]);
 
-  // Live Combat Events
+  // Live Combat Events Activity Feed
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([
     {
       id: "ev-0",
@@ -173,9 +160,6 @@ export default function ArenaHostContent({
       type: "info",
     },
   ]);
-
-  // Player Choice Distribution (Live count per choice)
-  const [choiceVotes, setChoiceVotes] = useState<Record<number, number>>({});
 
   // Audio Context Ref
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -207,16 +191,14 @@ export default function ArenaHostContent({
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 1.2);
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
   };
 
   const playFanfareSound = () => {
     if (!sfxEnabled) return;
     try {
       const ctx = getAudioContext();
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.5];
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -229,9 +211,7 @@ export default function ArenaHostContent({
         osc.start(ctx.currentTime + idx * 0.12);
         osc.stop(ctx.currentTime + idx * 0.12 + 0.4);
       });
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
   };
 
   const playAirdropSound = () => {
@@ -249,9 +229,7 @@ export default function ArenaHostContent({
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.4);
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
   };
 
   const playJoinChime = () => {
@@ -269,106 +247,35 @@ export default function ArenaHostContent({
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.3);
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
   };
 
-  const currentQuestionIdRef = useRef(quiz.questions[0]?.id ?? 0);
-  useEffect(() => {
-    currentQuestionIdRef.current = quiz.questions[currentQuestionIndex]?.id ?? 0;
-  }, [currentQuestionIndex, quiz.questions]);
+  // Synchronize participants list & ranks
+  const syncRankedBattlers = useCallback((participants: ArenaParticipant[]) => {
+    if (!Array.isArray(participants)) return;
+    setBattlers((prev) => {
+      const botList = prev.filter((b) => b.isAi);
+      const studentList: Battler[] = participants.map((p, idx) => ({
+        id: p.studentId,
+        name: p.studentName,
+        avatar: p.avatar || "🎓",
+        score: p.score || 0,
+        rank: p.rank || idx + 1,
+        questionsAnswered: p.questionsAnswered || 0,
+        totalQuestions: p.totalQuestions || quiz.questions.length,
+        isFinished: Boolean(p.isFinished),
+        hasShield: Boolean(p.hasShield),
+        isAi: false,
+      }));
 
-  const handleCombatEvent = useCallback((
-    attackerName: string,
-    targetName: string,
-    power: string,
-    attackerId?: string,
-    targetId?: string,
-  ) => {
-    setBattlers((prev) =>
-      prev.map((b) => {
-        const isTarget = power === "shield"
-          ? (targetId ? b.id === targetId : b.name === attackerName)
-          : targetId === "all"
-            ? (attackerId ? b.id !== attackerId : b.name !== attackerName)
-            : (targetId ? b.id === targetId : b.name === targetName);
-        if (isTarget && b.isAlive) {
-          if (power === "shield") {
-            return { ...b, hasShield: true };
-          }
-          if (b.hasShield) {
-            return { ...b, hasShield: false }; // Shield breaks, deflects hit
-          }
-          // Take damage from attack
-          const damage = power === "meteor" ? 25 : power === "earthquake" ? 15 : 10;
-          const nextHp = Math.max(0, b.hp - damage);
-          return {
-            ...b,
-            hp: nextHp,
-            isAlive: nextHp > 0,
-          };
-        }
-        return b;
-      })
-    );
-
-    let eventText = "";
-    let eventType: BattleEvent["type"] = "attack";
-
-    if (power === "shield") {
-      eventText = `🛡️ ${attackerName} raised a Guardian Shield!`;
-      eventType = "shield";
-    } else if (power === "meteor") {
-      eventText = `☄️ ${attackerName} struck ${targetName} with a Meteor (-25 HP)!`;
-    } else if (power === "earthquake") {
-      eventText = `🌋 ${attackerName} triggered an Earthquake on ${targetName} (-15 HP)!`;
-    } else if (power === "blizzard") {
-      eventText = `❄️ ${attackerName} froze ${targetName} with Blizzard Frost!`;
-    } else {
-      eventText = `⚡ ${attackerName} attacked ${targetName}!`;
-    }
-
-    setBattleEvents((prev) => [
-      {
-        id: `ev-${Date.now()}-${Math.random()}`,
-        timestamp: "Just now",
-        text: eventText,
-        type: eventType,
-      },
-      ...prev.slice(0, 20),
-    ]);
-  }, []);
-
-  const handleTimeUp = useCallback(() => {
-    setIsTimerRunning(false);
-
-    // Real students are scored from validated server answer events. Only bots
-    // need a simulated result when the wave closes.
-    const currentQ = quiz.questions[currentQuestionIndex];
-    const correctChoice = currentQ?.choices.find((c) => c.isCorrect);
-
-    if (correctChoice) {
-      setBattlers((prev) =>
-        prev.map((b) => {
-          if (!b.isAi) return b;
-          const isCorrect = Math.random() < 0.75;
-          if (isCorrect) {
-            const nextStreak = b.streak + 1;
-            const pointsAwarded = 100 * nextStreak;
-            return {
-              ...b,
-              score: b.score + pointsAwarded,
-              streak: nextStreak,
-            };
-          }
-          return { ...b, streak: 0 };
-        })
-      );
-    }
-
-    setPhase("intermission");
-  }, [currentQuestionIndex, quiz.questions]);
+      const combined = [...studentList, ...botList];
+      combined.sort((a, b) => b.score - a.score);
+      combined.forEach((b, i) => {
+        b.rank = i + 1;
+      });
+      return combined;
+    });
+  }, [quiz.questions.length]);
 
   const addParticipant = useCallback((data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
     const sId = data.studentId;
@@ -378,20 +285,28 @@ export default function ArenaHostContent({
 
     setBattlers((prev) => {
       if (prev.some((b) => b.id === sId)) return prev;
-      return [...prev, {
-        id: sId,
-        name: sName,
-        avatar: sAvatar,
-        hp: 100,
-        maxHp: 100,
-        hasShield: false,
-        score: 0,
-        streak: 0,
-        isAi: false,
-        isAlive: true,
-      }];
+      const updated = [
+        ...prev,
+        {
+          id: sId,
+          name: sName,
+          avatar: sAvatar,
+          score: 0,
+          rank: prev.length + 1,
+          questionsAnswered: 0,
+          totalQuestions: quiz.questions.length,
+          isFinished: false,
+          hasShield: false,
+          isAi: false,
+        },
+      ];
+      updated.sort((a, b) => b.score - a.score);
+      updated.forEach((b, i) => {
+        b.rank = i + 1;
+      });
+      return updated;
     });
-  }, []);
+  }, [quiz.questions.length]);
 
   const broadcastArenaAction = async (action: string, payload?: Record<string, unknown>) => {
     if (actionPendingRef.current) return false;
@@ -419,85 +334,8 @@ export default function ArenaHostContent({
     }
   };
 
-  // Load enrolled students and subscribe only to authenticated channels.
+  // Realtime Pusher Subscriptions
   useEffect(() => {
-    const syncArenaData = (data: {
-      participants?: Array<{ studentId: string; studentName: string; avatar?: string }>;
-      arena?: (LiveArenaState & { players?: Record<string, PlayerHealth> }) | null;
-      quizStatus?: string;
-    } | null) => {
-      if (!data) return;
-      if (Array.isArray(data.participants)) data.participants.forEach(addParticipant);
-      if (data.arena?.players) {
-        setBattlers((prev) => {
-          const updated = [...prev];
-          for (const [sId, p] of Object.entries(data.arena!.players!)) {
-            const idx = updated.findIndex((b) => b.id === sId);
-            if (idx >= 0) {
-              updated[idx] = {
-                ...updated[idx],
-                hp: p.currentHp,
-                maxHp: p.maxHp,
-                isAlive: p.isAlive,
-                hasShield: p.hasShield,
-                name: p.studentName || updated[idx].name,
-                avatar: p.avatar || updated[idx].avatar,
-              };
-            } else {
-              updated.push({
-                id: sId,
-                name: p.studentName || "Student Fighter",
-                avatar: p.avatar || "🎓",
-                hp: p.currentHp,
-                maxHp: p.maxHp,
-                hasShield: p.hasShield,
-                score: 0,
-                streak: 0,
-                isAi: false,
-                isAlive: p.isAlive,
-              });
-            }
-          }
-          return updated;
-        });
-      }
-
-      if (data.arena?.status === "ended" || data.quizStatus === "ended") {
-        setPhase("podium");
-        return;
-      }
-
-      const liveArena = data.arena;
-      if (liveArena?.status === "active") {
-        const questionIndex = quiz.questions.findIndex(
-          (question) => question.id === liveArena.currentQuestionId,
-        );
-        const safeIndex = questionIndex >= 0
-          ? questionIndex
-          : Math.min(Math.max(liveArena.currentWave, 0), Math.max(quiz.questions.length - 1, 0));
-        const startedAt = Date.parse(liveArena.waveStartedAt || "");
-        const duration = Number.isFinite(liveArena.waveDuration)
-          ? liveArena.waveDuration
-          : waveDuration;
-        const elapsed = Number.isFinite(startedAt)
-          ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
-          : 0;
-        const remaining = Math.max(0, duration - elapsed);
-        if (remaining > 0) {
-          setCurrentQuestionIndex(safeIndex);
-          setTimeLeft(remaining);
-          setChoiceVotes({});
-          setIsTimerRunning(true);
-          setPhase("wave");
-        }
-      }
-    };
-
-    void fetch(`/api/arena/${quiz.id}`)
-      .then(async (response) => (response.ok ? response.json() : null))
-      .then(syncArenaData)
-      .catch(() => setArenaError("Could not load the current arena participants."));
-
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
       {
@@ -512,120 +350,131 @@ export default function ArenaHostContent({
       addParticipant(data);
       playJoinChime();
       const displayName = data.studentName || data.name || "A fighter";
-      setBattleEvents((prev) => [{
-        id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        timestamp: "Just now",
-        text: `🎮 ${displayName} entered the Arena!`,
-        type: "info",
-      }, ...prev.slice(0, 20)]);
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `🎮 ${displayName} entered the Arena!`,
+          type: "info",
+        },
+        ...prev.slice(0, 25),
+      ]);
     };
 
     arenaChannel.bind("arena-student-joined", handleStudentJoined);
     teacherChannel.bind("arena-student-joined", handleStudentJoined);
 
+    // Live Student Answer Progress Event
     const handleAnswerEvent = (data: {
       studentId: string;
       studentName: string;
       questionId: number;
       choiceId: number;
       isCorrect: boolean;
-    }) => {
-      if (data.questionId !== currentQuestionIdRef.current) return;
-      addParticipant(data);
-      setChoiceVotes((prev) => ({ ...prev, [data.choiceId]: (prev[data.choiceId] || 0) + 1 }));
-      setBattlers((prev) => prev.map((b) => {
-        if (b.id !== data.studentId) return b;
-        const nextStreak = data.isCorrect ? b.streak + 1 : 0;
-        return {
-          ...b,
-          streak: nextStreak,
-          score: data.isCorrect ? b.score + 100 * nextStreak : b.score,
-        };
-      }));
-    };
-
-    arenaChannel.bind("arena-answer", handleAnswerEvent);
-    teacherChannel.bind("arena-answer", handleAnswerEvent);
-
-    // ── Incoming Attack Warning ──────────────────────────────
-    const handleIncomingAttack = (data: {
-      attackId: string;
-      attackerName: string;
-      targetName: string;
-      powerType: string;
-      damage: number;
-    }) => {
-      setBattleEvents((prev) => [
-        {
-          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          timestamp: "Just now",
-          text: `⚠️ ${data.attackerName} launched ${data.powerType.toUpperCase()} at ${data.targetName}! (Defend window active)`,
-          type: "attack",
-        },
-        ...prev.slice(0, 20),
-      ]);
-    };
-
-    arenaChannel.bind("arena-incoming-attack", handleIncomingAttack);
-    teacherChannel.bind("arena-incoming-attack", handleIncomingAttack);
-
-    // ── Attack Hit with authoritative Damage ──────────────────
-    const handleAttackHit = (data: {
-      attackId: string;
-      attackerName: string;
-      targetStudentId: string;
-      targetName: string;
-      powerType: string;
-      damage: number;
-      targetCurrentHp: number;
-      targetMaxHp: number;
-      isAlive: boolean;
-      playerHealth?: Record<string, PlayerHealth>;
+      score: number;
+      rank: number;
+      questionsAnswered: number;
+      isFinished: boolean;
     }) => {
       setBattlers((prev) => {
-        if (data.playerHealth) {
-          return prev.map((b) => {
-            const updated = data.playerHealth?.[b.id];
-            if (updated) {
-              return {
-                ...b,
-                hp: updated.currentHp,
-                maxHp: updated.maxHp,
-                isAlive: updated.isAlive,
-                hasShield: updated.hasShield,
-              };
-            }
-            return b;
-          });
-        }
-        return prev.map((b) => {
-          if (b.id === data.targetStudentId) {
-            return {
-              ...b,
-              hp: data.targetCurrentHp,
-              isAlive: data.isAlive,
-              hasShield: false,
-            };
-          }
-          return b;
+        const updated = prev.map((b) => {
+          if (b.id !== data.studentId) return b;
+          return {
+            ...b,
+            score: typeof data.score === "number" ? data.score : b.score,
+            questionsAnswered: data.questionsAnswered ?? b.questionsAnswered + 1,
+            isFinished: Boolean(data.isFinished),
+          };
         });
+        updated.sort((a, b) => b.score - a.score);
+        updated.forEach((b, i) => {
+          b.rank = i + 1;
+        });
+        return updated;
       });
 
       setBattleEvents((prev) => [
         {
           id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           timestamp: "Just now",
-          text: `💥 ${data.attackerName}'s ${data.powerType.toUpperCase()} struck ${data.targetName} for -${data.damage} HP!`,
+          text: `${data.isCorrect ? "✅" : "❌"} ${data.studentName} answered ${data.isCorrect ? "correctly (+pts)" : "incorrectly"}. (Q: ${data.questionsAnswered || 1}/${quiz.questions.length})`,
+          type: "info",
+        },
+        ...prev.slice(0, 25),
+      ]);
+    };
+
+    arenaChannel.bind("arena-answer", handleAnswerEvent);
+    teacherChannel.bind("arena-answer", handleAnswerEvent);
+
+    // Incoming Attack Warning
+    const handleIncomingAttack = (data: {
+      attackId: string;
+      attackerName: string;
+      targetName: string;
+      powerType: string;
+      scorePenalty?: number;
+      damage?: number;
+    }) => {
+      const penalty = data.scorePenalty || data.damage || 40;
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `⚠️ ${data.attackerName} launched ${data.powerType.toUpperCase()} at ${data.targetName}! (-${penalty} PTS at risk)`,
           type: "attack",
         },
-        ...prev.slice(0, 20),
+        ...prev.slice(0, 25),
       ]);
+    };
+
+    arenaChannel.bind("arena-incoming-attack", handleIncomingAttack);
+    teacherChannel.bind("arena-incoming-attack", handleIncomingAttack);
+
+    // Attack Hit Event
+    const handleAttackHit = (data: {
+      attackId: string;
+      attackerName: string;
+      targetStudentId: string;
+      targetName: string;
+      powerType: string;
+      scorePenalty?: number;
+      damage?: number;
+      targetCurrentScore: number;
+      targetRank: number;
+      participants?: ArenaParticipant[];
+    }) => {
+      const penalty = data.scorePenalty || data.damage || 40;
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `💥 ${data.attackerName}'s ${data.powerType.toUpperCase()} hit ${data.targetName} for -${penalty} PTS!`,
+          type: "attack",
+        },
+        ...prev.slice(0, 25),
+      ]);
+
+      if (Array.isArray(data.participants)) {
+        syncRankedBattlers(data.participants);
+      } else {
+        setBattlers((prev) => {
+          const updated = prev.map((b) =>
+            b.id === data.targetStudentId ? { ...b, score: data.targetCurrentScore } : b
+          );
+          updated.sort((a, b) => b.score - a.score);
+          updated.forEach((b, i) => {
+            b.rank = i + 1;
+          });
+          return updated;
+        });
+      }
     };
 
     arenaChannel.bind("arena-attack-hit", handleAttackHit);
     teacherChannel.bind("arena-attack-hit", handleAttackHit);
 
-    // ── Attack Blocked by Guardian Shield ────────────────────
+    // Attack Blocked Event
     const handleAttackBlocked = (data: {
       attackId: string;
       attackerName: string;
@@ -640,122 +489,57 @@ export default function ArenaHostContent({
         {
           id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           timestamp: "Just now",
-          text: `🛡️ ${data.targetName} deflected ${data.attackerName}'s ${data.powerType.toUpperCase()} with Guardian Shield! (0 DMG)`,
+          text: `🛡️ ${data.targetName} deflected ${data.attackerName}'s ${data.powerType.toUpperCase()} with Guardian Shield! (0 PTS lost)`,
           type: "shield",
         },
-        ...prev.slice(0, 20),
+        ...prev.slice(0, 25),
       ]);
     };
 
     arenaChannel.bind("arena-attack-blocked", handleAttackBlocked);
     teacherChannel.bind("arena-attack-blocked", handleAttackBlocked);
 
-    // ── Shield Equipped ───────────────────────────────────────
-    const handleShieldEquipped = (data: { studentId: string; studentName?: string }) => {
-      setBattlers((prev) =>
-        prev.map((b) => (b.id === data.studentId ? { ...b, hasShield: true } : b))
-      );
-      setBattleEvents((prev) => [
-        {
-          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          timestamp: "Just now",
-          text: `🛡️ ${data.studentName || "A fighter"} armed a Guardian Shield!`,
-          type: "shield",
-        },
-        ...prev.slice(0, 20),
-      ]);
-    };
-
-    arenaChannel.bind("arena-shield-equipped", handleShieldEquipped);
-    teacherChannel.bind("arena-shield-equipped", handleShieldEquipped);
-
-    // ── Health Updated ───────────────────────────────────────
-    const handleHealthUpdated = (data: {
-      studentId: string;
-      currentHp: number;
-      maxHp: number;
-      isAlive: boolean;
-      playerHealth?: Record<string, PlayerHealth>;
-    }) => {
-      setBattlers((prev) => {
-        if (data.playerHealth) {
-          return prev.map((b) => {
-            const updated = data.playerHealth?.[b.id];
-            if (updated) {
-              return {
-                ...b,
-                hp: updated.currentHp,
-                maxHp: updated.maxHp,
-                isAlive: updated.isAlive,
-                hasShield: updated.hasShield,
-              };
-            }
-            return b;
-          });
-        }
-        return prev.map((b) =>
-          b.id === data.studentId
-            ? { ...b, hp: data.currentHp, maxHp: data.maxHp, isAlive: data.isAlive }
-            : b
-        );
-      });
-    };
-
-    arenaChannel.bind("arena-health-updated", handleHealthUpdated);
-
-    // ── Player Eliminated ────────────────────────────────────
-    const handlePlayerEliminated = (data: {
-      studentId: string;
-      studentName: string;
-      eliminatedBy: string;
-    }) => {
-      setBattlers((prev) =>
-        prev.map((b) => (b.id === data.studentId ? { ...b, isAlive: false, hp: 0 } : b))
-      );
-      setBattleEvents((prev) => [
-        {
-          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          timestamp: "Just now",
-          text: `☠️ ${data.studentName} was ELIMINATED by ${data.eliminatedBy}!`,
-          type: "elimination",
-        },
-        ...prev.slice(0, 20),
-      ]);
-    };
-
-    arenaChannel.bind("arena-player-eliminated", handlePlayerEliminated);
-
-    arenaChannel.bind("arena-start", (data?: { arena?: { waveDuration?: number }; waveDuration?: number }) => {
-      setPhase("wave");
-      setCurrentQuestionIndex(0);
-      setTimeLeft(data?.arena?.waveDuration || data?.waveDuration || waveDuration);
-      setIsTimerRunning(true);
-      setChoiceVotes({});
-    });
-
-    arenaChannel.bind("arena-wave", (data: { waveIndex?: number }) => {
-      if (typeof data.waveIndex === "number") {
-        setCurrentQuestionIndex(data.waveIndex);
-        setTimeLeft(waveDuration);
-        setIsTimerRunning(true);
-        setChoiceVotes({});
-        setPhase("wave");
+    // Leaderboard Updated Event
+    arenaChannel.bind("arena-leaderboard-updated", (data: { participants?: ArenaParticipant[] }) => {
+      if (Array.isArray(data?.participants)) {
+        syncRankedBattlers(data.participants);
       }
     });
 
-    arenaChannel.bind("arena-airdrop", () => {
-      playAirdropSound();
-      setBattlers((prev) =>
-        prev.map((b) => ({
-          ...b,
-          hasShield: true,
-          hp: Math.min(b.maxHp, b.hp + 15),
-        }))
-      );
+    // Score Updated Event
+    arenaChannel.bind("arena-score-updated", (data: { studentId: string; score: number; rank: number }) => {
+      setBattlers((prev) => {
+        const updated = prev.map((b) =>
+          b.id === data.studentId ? { ...b, score: data.score } : b
+        );
+        updated.sort((a, b) => b.score - a.score);
+        updated.forEach((b, i) => {
+          b.rank = i + 1;
+        });
+        return updated;
+      });
     });
 
+    // Arena Start
+    arenaChannel.bind("arena-start", (data?: { matchDuration?: number; matchEndsAt?: string; participants?: ArenaParticipant[] }) => {
+      setPhase("wave");
+      setIsTimerRunning(true);
+      if (data?.matchEndsAt) {
+        setMatchEndsAt(data.matchEndsAt);
+        const rem = Math.max(0, Math.ceil((Date.parse(data.matchEndsAt) - Date.now()) / 1000));
+        setTimeLeft(rem);
+      } else if (data?.matchDuration) {
+        setTimeLeft(data.matchDuration);
+      }
+      if (Array.isArray(data?.participants)) {
+        syncRankedBattlers(data.participants);
+      }
+    });
+
+    // Arena End
     arenaChannel.bind("arena-end", () => {
       playFanfareSound();
+      setIsTimerRunning(false);
       setPhase("podium");
     });
 
@@ -766,134 +550,92 @@ export default function ArenaHostContent({
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
-  }, [addParticipant, quiz.id, quiz.questions, teacherId, waveDuration]);
+  }, [addParticipant, quiz.id, quiz.questions.length, syncRankedBattlers, teacherId]);
 
-  // Periodic background sync while match is not ended so participants and health remain strictly authoritative
+  // Periodic reconciliation with server
   useEffect(() => {
     if (phase === "podium") return;
+
     const interval = setInterval(async () => {
       try {
         const response = await fetch(`/api/arena/${quiz.id}`);
         if (!response.ok) return;
         const data = await response.json();
-        if (Array.isArray(data?.participants)) {
-          data.participants.forEach(addParticipant);
-        }
-        if (data?.arena?.players) {
-          setBattlers((prev) => {
-            const updated = [...prev];
-            for (const [sId, p] of Object.entries(data.arena.players as Record<string, PlayerHealth>)) {
-              const idx = updated.findIndex((b) => b.id === sId);
-              if (idx >= 0) {
-                updated[idx] = {
-                  ...updated[idx],
-                  hp: p.currentHp,
-                  maxHp: p.maxHp,
-                  isAlive: p.isAlive,
-                  hasShield: p.hasShield,
-                  name: p.studentName || updated[idx].name,
-                  avatar: p.avatar || updated[idx].avatar,
-                };
-              } else {
-                updated.push({
-                  id: sId,
-                  name: p.studentName || "Student Fighter",
-                  avatar: p.avatar || "🎓",
-                  hp: p.currentHp,
-                  maxHp: p.maxHp,
-                  hasShield: p.hasShield,
-                  score: 0,
-                  streak: 0,
-                  isAi: false,
-                  isAlive: p.isAlive,
-                });
-              }
-            }
-            return updated;
-          });
-        }
+
         if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
           setPhase("podium");
+          setIsTimerRunning(false);
+          return;
         }
-      } catch {
-        // Silently ignore background polling errors
-      }
+
+        if (data?.arena?.status === "active") {
+          setPhase("wave");
+          setIsTimerRunning(true);
+          if (data.arena.matchEndsAt) {
+            setMatchEndsAt(data.arena.matchEndsAt);
+            const remaining = Math.max(0, Math.ceil((Date.parse(data.arena.matchEndsAt) - Date.now()) / 1000));
+            setTimeLeft(remaining);
+            if (remaining <= 0) {
+              setPhase("podium");
+              setIsTimerRunning(false);
+            }
+          }
+        }
+
+        if (Array.isArray(data?.participants)) {
+          syncRankedBattlers(data.participants);
+        }
+      } catch {}
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [phase, quiz.id, addParticipant]);
+  }, [phase, quiz.id, syncRankedBattlers]);
 
+  // Overall Match Timer Countdown
   useEffect(() => {
     if (phase !== "wave" || !isTimerRunning) return;
+
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleTimeUp();
-          return 0;
+      if (matchEndsAt) {
+        const remaining = Math.max(0, Math.ceil((Date.parse(matchEndsAt) - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        if (remaining <= 0) {
+          void handleEndArena();
         }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [handleTimeUp, phase, isTimerRunning]);
-
-  // Bots are optional practice opponents; their votes never overwrite real votes.
-  useEffect(() => {
-    if (phase !== "wave" || !isTimerRunning) return;
-    const currentQ = quiz.questions[currentQuestionIndex];
-    if (!currentQ || currentQ.choices.length === 0) return;
-    const bots = battlers.filter((b) => b.isAi && b.isAlive);
-    const timeout = setTimeout(() => {
-      setChoiceVotes((prev) => {
-        const next = { ...prev };
-        bots.forEach(() => {
-          const choice = currentQ.choices[Math.floor(Math.random() * currentQ.choices.length)];
-          next[choice.id] = (next[choice.id] || 0) + 1;
+      } else {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            void handleEndArena();
+            return 0;
+          }
+          return prev - 1;
         });
-        return next;
-      });
-      if (bots.length >= 2 && enabledPowers.length > 0) {
-        const attacker = bots[Math.floor(Math.random() * bots.length)];
-        const target = bots.find((b) => b.id !== attacker.id) || bots[0];
-        const power = enabledPowers[Math.floor(Math.random() * enabledPowers.length)];
-        handleCombatEvent(attacker.name, target.name, power);
       }
-    }, Math.min(5_000, Math.max(3_000, waveDuration * 150)));
-    return () => clearTimeout(timeout);
-  }, [battlers, currentQuestionIndex, enabledPowers, handleCombatEvent, isTimerRunning, phase, quiz.questions, waveDuration]);
+    }, 1000);
 
+    return () => clearInterval(interval);
+  }, [phase, isTimerRunning, matchEndsAt]);
+
+  // Start Arena Match
   const handleStartMatch = async () => {
+    const waveDuration = selectedMatchDuration;
     const started = await broadcastArenaAction("start", {
       mode,
       waveDuration,
+      matchDuration: selectedMatchDuration,
       coinBounty,
       enabledPowers,
     });
     if (!started) return;
     playGongSound();
-    setCurrentQuestionIndex(0);
-    setTimeLeft(waveDuration);
+    setTimeLeft(selectedMatchDuration);
     setIsTimerRunning(true);
-    setChoiceVotes({});
     setPhase("wave");
   };
 
-  const handleNextWave = async () => {
-    if (currentQuestionIndex + 1 < quiz.questions.length) {
-      const advanced = await broadcastArenaAction("wave", { waveIndex: currentQuestionIndex + 1 });
-      if (!advanced) return;
-      playGongSound();
-      setCurrentQuestionIndex((prev) => prev + 1);
-      setTimeLeft(waveDuration);
-      setIsTimerRunning(true);
-      setChoiceVotes({});
-      setPhase("wave");
-    } else {
-      await handleEndArena();
-    }
-  };
-
+  // End Arena Match Manually
   const handleEndArena = async () => {
+    setIsTimerRunning(false);
     if (!(await broadcastArenaAction("end"))) return;
     playFanfareSound();
     setPhase("podium");
@@ -906,17 +648,17 @@ export default function ArenaHostContent({
       prev.map((b) => ({
         ...b,
         hasShield: true,
-        hp: Math.min(b.maxHp, b.hp + 15),
+        score: b.score + 50,
       }))
     );
     setBattleEvents((prev) => [
       {
         id: `ev-${Date.now()}`,
         timestamp: "Just now",
-        text: `🎁 HOST AIRDROP DELIVERED! All battlers granted Shields and +15 HP!`,
+        text: `🎁 HOST AIRDROP DELIVERED! All battlers granted Shields and +50 PTS!`,
         type: "airdrop",
       },
-      ...prev.slice(0, 20),
+      ...prev.slice(0, 25),
     ]);
   };
 
@@ -924,21 +666,28 @@ export default function ArenaHostContent({
     const available = BOT_NAMES.filter((b) => !battlers.some((x) => x.name === b.name));
     if (available.length === 0) return;
     const bot = available[0];
-    setBattlers((prev) => [
-      ...prev,
-      {
-        id: `bot-${Date.now()}`,
-        name: bot.name,
-        avatar: bot.avatar,
-        hp: 100,
-        maxHp: 100,
-        hasShield: false,
-        score: 0,
-        streak: 0,
-        isAi: true,
-        isAlive: true,
-      },
-    ]);
+    setBattlers((prev) => {
+      const updated = [
+        ...prev,
+        {
+          id: `bot-${Date.now()}`,
+          name: bot.name,
+          avatar: bot.avatar,
+          score: 0,
+          rank: prev.length + 1,
+          questionsAnswered: 0,
+          totalQuestions: quiz.questions.length,
+          isFinished: false,
+          hasShield: false,
+          isAi: true,
+        },
+      ];
+      updated.sort((a, b) => b.score - a.score);
+      updated.forEach((b, i) => {
+        b.rank = i + 1;
+      });
+      return updated;
+    });
   };
 
   const handleClearBots = () => {
@@ -968,9 +717,15 @@ export default function ArenaHostContent({
     }
   };
 
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Full leaderboard sorted #1 through #N
   const sortedLeaderboard = [...battlers].sort((a, b) => b.score - a.score);
-  const podiumLeaderboard = sortedLeaderboard.filter((battler) => !battler.isAi);
-  const currentQ = quiz.questions[currentQuestionIndex];
+  const podiumLeaderboard = sortedLeaderboard.filter((b) => !b.isAi);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans select-none overflow-x-hidden">
@@ -994,17 +749,17 @@ export default function ArenaHostContent({
               <div className="text-sm font-black tracking-tight text-white flex items-center gap-2">
                 <span>{quiz.title}</span>
                 <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-extrabold uppercase">
-                  PROCTORSHIELD ARENA
+                  POWER ARENA HOST
                 </span>
               </div>
               <div className="text-[11px] text-slate-400">
-                {quiz.subjectName} • {battlers.length} Battlers
+                {quiz.subjectName} • {battlers.length} Battlers • Score-Based Gameplay
               </div>
             </div>
           </div>
         </div>
 
-        {/* Join PIN Pill for Classroom Display */}
+        {/* Join PIN Pill for Classroom Projector */}
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700">
             <span className="text-[11px] font-bold text-slate-400">JOIN CODE:</span>
@@ -1048,30 +803,61 @@ export default function ArenaHostContent({
       </header>
 
       {arenaError && (
-        <div role="alert" className="mx-4 mt-3 rounded-xl border border-rose-500/50 bg-rose-950/80 px-4 py-3 text-sm font-semibold text-rose-100">
-          {arenaError}
+        <div role="alert" className="mx-4 mt-3 rounded-xl border border-rose-500/50 bg-rose-950/80 px-4 py-3 text-sm font-semibold text-rose-100 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{arenaError}</span>
         </div>
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          PHASE 1: LOBBY (WAITING FOR PLAYERS)
+          PHASE 1: LOBBY (TEACHER CONFIG & START ARENA)
       ───────────────────────────────────────────────────────────── */}
       {phase === "lobby" && (
         <main className="flex-1 p-6 sm:p-12 flex flex-col justify-between max-w-6xl mx-auto w-full space-y-8">
-          {/* Instructions Showcase */}
           <div className="text-center space-y-3">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-bold tracking-wider uppercase">
               <Users className="w-4 h-4" />
-              LOBBY OPEN • READY TO FIGHT
+              ARENA LOBBY OPEN • READY TO START
             </div>
             <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight font-[family-name:var(--font-display)]">
-              Join the ProctorShield Arena
+              Join the Power Arena
             </h1>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-base sm:text-xl text-slate-300 pt-2">
               <span>1. Go to <strong className="text-white font-mono underline decoration-amber-400">/join</strong></span>
               <span className="text-slate-600 hidden sm:inline">•</span>
               <span>2. Enter PIN: <strong className="text-amber-400 font-mono text-2xl font-black">{quiz.accessCode}</strong></span>
             </div>
+          </div>
+
+          {/* Overall Match Duration Selector */}
+          <div className="max-w-md mx-auto w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center space-y-2">
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center justify-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              Configure Overall Match Duration
+            </span>
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[
+                { label: "5 Minutes", sec: 300 },
+                { label: "10 Minutes", sec: 600 },
+                { label: "15 Minutes", sec: 900 },
+              ].map((dur) => (
+                <button
+                  key={dur.sec}
+                  type="button"
+                  onClick={() => setSelectedMatchDuration(dur.sec)}
+                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                    selectedMatchDuration === dur.sec
+                      ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black"
+                      : "bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  {dur.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 pt-1">
+              Questions progress automatically for each student. Match concludes when timer expires or you end it manually.
+            </p>
           </div>
 
           {/* Battler Cards Grid */}
@@ -1121,15 +907,6 @@ export default function ArenaHostContent({
 
           {/* Lobby Actions */}
           <div className="flex flex-col items-center justify-center gap-4 pt-6 border-t border-slate-800">
-            {arenaError && (
-              <div
-                role="alert"
-                className="w-full max-w-xl mx-auto rounded-xl border border-rose-500/50 bg-rose-950/90 px-4 py-3 text-sm font-semibold text-rose-200 flex items-center justify-center gap-2 shadow-lg animate-in fade-in"
-              >
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>{arenaError}</span>
-              </div>
-            )}
             <button
               onClick={handleStartMatch}
               disabled={battlers.length === 0 || isActionPending}
@@ -1143,7 +920,7 @@ export default function ArenaHostContent({
               ) : (
                 <>
                   <Swords className="w-6 h-6 text-slate-950" />
-                  Start Arena Match ({quiz.questions.length} Waves)
+                  Start Arena Match ({formatTimer(selectedMatchDuration)})
                 </>
               )}
             </button>
@@ -1152,166 +929,147 @@ export default function ArenaHostContent({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          PHASE 2: QUESTION WAVE (ACTIVE BATTLE)
+          PHASE 2: ACTIVE ARENA (LIVE FULL LEADERBOARD + TELEMETRY)
       ───────────────────────────────────────────────────────────── */}
-      {phase === "wave" && currentQ && (
+      {phase === "wave" && (
         <main className="flex-1 p-4 sm:p-8 flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto w-full">
-          {/* Left: Big Projector Question & Choices */}
-          <div className="flex-1 flex flex-col justify-between space-y-6">
-            {/* Wave Header & Timer */}
+          {/* Left: Full Live Leaderboard (#1 through #N) */}
+          <div className="flex-1 flex flex-col justify-between space-y-4">
+            {/* Overall Match Timer & Header Bar */}
             <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
               <div className="space-y-1">
-                <span className="px-2.5 py-1 rounded-md bg-amber-400/20 text-amber-300 text-xs font-black uppercase">
-                  WAVE {currentQuestionIndex + 1} OF {quiz.questions.length}
+                <span className="px-2.5 py-1 rounded-md bg-amber-400/20 text-amber-300 text-xs font-black uppercase tracking-wider">
+                  POWER ARENA IN PROGRESS
                 </span>
                 <div className="text-xs text-slate-400">
-                  Worth {currentQ.points * 100} Points
+                  Total Questions: {quiz.questions.length} • Automatic Student Progression
                 </div>
               </div>
 
-              {/* Live Countdown Ring */}
+              {/* Live Overall Countdown Timer */}
               <div className="flex items-center gap-3">
-                <div
-                  className={`text-3xl sm:text-4xl font-mono font-black ${
-                    timeLeft <= 5 ? "text-rose-400 animate-ping" : "text-amber-400"
-                  }`}
-                >
-                  {timeLeft}s
-                </div>
-              </div>
-            </div>
-
-            {/* Question Text */}
-            <div className="p-6 sm:p-10 rounded-3xl bg-slate-900 border-2 border-slate-800 shadow-xl min-h-48 flex items-center justify-center text-center">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight font-[family-name:var(--font-display)]">
-                {currentQ.questionText}
-              </h2>
-            </div>
-
-            {/* Choices Grid with Live Vote Counters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {currentQ.choices.map((choice, idx) => {
-                const colors = [
-                  "border-rose-500/40 bg-rose-950/20 text-rose-200",
-                  "border-blue-500/40 bg-blue-950/20 text-blue-200",
-                  "border-amber-500/40 bg-amber-950/20 text-amber-200",
-                  "border-emerald-500/40 bg-emerald-950/20 text-emerald-200",
-                ];
-                const badgeLetters = ["A", "B", "C", "D"];
-                const votes = choiceVotes[choice.id] || 0;
-
-                return (
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">Match Time</span>
                   <div
-                    key={choice.id}
-                    className={`p-4 sm:p-5 rounded-2xl border-2 flex items-center justify-between ${
-                      colors[idx % colors.length]
+                    className={`text-3xl sm:text-4xl font-mono font-black ${
+                      timeLeft <= 30 ? "text-rose-400 animate-ping" : "text-amber-400"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-white text-sm">
-                        {badgeLetters[idx]}
-                      </span>
-                      <span className="font-bold text-sm sm:text-base text-white">
-                        {choice.choiceText}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 text-xs font-bold text-slate-300">
-                      <Users className="w-3 h-3 text-slate-400" />
-                      {votes}
-                    </div>
+                    {formatTimer(timeLeft)}
                   </div>
-                );
-              })}
+                </div>
+              </div>
             </div>
 
-            {/* Host Wave Controls */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-              <button
-                onClick={handleDropAirdrop}
-                disabled={isActionPending}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
-              >
-                <Gift className="w-4 h-4" />
-                Drop Airdrop 🎁
-              </button>
-
-              <button
-                onClick={handleTimeUp}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs transition-all cursor-pointer"
-              >
-                <SkipForward className="w-4 h-4" />
-                Reveal Answer ⏭️
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Live Battle Telemetry & Telemetry Feed */}
-          <div className="w-full lg:w-80 flex flex-col gap-4">
-            {/* Battlers HP & Shield Status */}
-            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
-              <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                <span>ARENA FIGHTERS</span>
-                <span className="text-amber-400">{battlers.filter((b) => b.isAlive).length} Alive</span>
+            {/* Complete Dynamic Leaderboard Table */}
+            <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl flex-1 flex flex-col">
+              <div className="p-3.5 bg-slate-800/60 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-400 px-6">
+                <span>RANK & PARTICIPANT</span>
+                <span>PROGRESS & STATUS</span>
+                <span>SCORE</span>
               </div>
 
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {battlers.map((b) => (
+              <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[480px]">
+                {sortedLeaderboard.map((b, idx) => (
                   <div
                     key={b.id}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                      b.isAlive
-                        ? "bg-slate-950 border-slate-800"
-                        : "bg-rose-950/20 border-rose-900/40 opacity-50"
+                    className={`p-3.5 px-6 flex items-center justify-between transition-all ${
+                      idx === 0
+                        ? "bg-amber-400/10"
+                        : idx === 1
+                        ? "bg-slate-800/30"
+                        : idx === 2
+                        ? "bg-amber-700/10"
+                        : ""
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-lg">{b.avatar}</span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          idx === 0
+                            ? "bg-amber-400 text-slate-950 shadow-md"
+                            : idx === 1
+                            ? "bg-slate-300 text-slate-950"
+                            : idx === 2
+                            ? "bg-amber-700 text-white"
+                            : "text-slate-500 font-mono bg-slate-800"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span className="text-xl shrink-0">{b.avatar}</span>
                       <div className="min-w-0">
-                        <div className="font-bold text-white truncate text-[11px]">
+                        <div className="font-bold text-white text-sm sm:text-base truncate">
                           {b.name}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                          <span>{b.score} pts</span>
-                          {b.streak > 1 && (
-                            <span className="text-amber-400 font-bold">🔥x{b.streak}</span>
-                          )}
-                        </div>
+                        {b.hasShield && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                            🛡️ SHIELD
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    {/* HP Bar */}
-                    <div className="w-20 space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-mono">
-                        <span className="text-rose-400 flex items-center gap-0.5">
-                          <Heart className="w-2.5 h-2.5 fill-rose-500" /> {b.hp}
-                        </span>
-                        {b.hasShield && <Shield className="w-3 h-3 text-blue-400 fill-blue-400/20" />}
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            b.hp > 50 ? "bg-emerald-400" : b.hp > 25 ? "bg-amber-400" : "bg-rose-500"
-                          }`}
-                          style={{ width: `${(b.hp / b.maxHp) * 100}%` }}
-                        />
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-slate-400 hidden sm:inline">
+                        {b.questionsAnswered} / {quiz.questions.length} Qs
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          b.isFinished
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            : "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                        }`}
+                      >
+                        {b.isFinished ? "Completed" : "Playing"}
+                      </span>
+                    </div>
+
+                    <div className="text-right font-mono font-black text-amber-300 text-base sm:text-lg">
+                      {b.score} <span className="text-xs text-slate-400 font-normal">pts</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Real-Time Combat Event Feed */}
+            {/* Teacher Host Action Controls: Airdrop and End Arena */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={handleDropAirdrop}
+                disabled={isActionPending}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                <Gift className="w-4 h-4" />
+                Drop Airdrop (+50 PTS & Shield) 🎁
+              </button>
+
+              <button
+                onClick={handleEndArena}
+                disabled={isActionPending}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-lg transition-all cursor-pointer"
+              >
+                <StopCircle className="w-4 h-4" />
+                End Arena Now 🏁
+              </button>
+            </div>
+          </div>
+
+          {/* Right: Live Combat Activity Feed */}
+          <div className="w-full lg:w-84 flex flex-col gap-4">
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5 flex-1 flex flex-col">
-              <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                Live Combat Feed
+              <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  Live Combat Feed
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400 font-bold">● LIVE</span>
               </div>
-              <div className="flex-1 max-h-56 overflow-y-auto space-y-2 text-xs text-slate-300 pr-1">
+              <div className="flex-1 max-h-[500px] overflow-y-auto space-y-2 text-xs text-slate-300 pr-1">
                 {battleEvents.map((ev) => (
                   <div
                     key={ev.id}
-                    className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-[11px] leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150"
+                    className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150"
                   >
                     {ev.text}
                   </div>
@@ -1323,105 +1081,7 @@ export default function ArenaHostContent({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          PHASE 3: INTERMISSION & WAVE LEADERBOARD
-      ───────────────────────────────────────────────────────────── */}
-      {phase === "intermission" && currentQ && (
-        <main className="flex-1 p-6 sm:p-12 flex flex-col justify-between max-w-4xl mx-auto w-full space-y-6">
-          <div className="text-center space-y-2">
-            <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-black uppercase">
-              WAVE {currentQuestionIndex + 1} COMPLETE
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight font-[family-name:var(--font-display)]">
-              Wave Leaderboard
-            </h2>
-            <div className="text-sm text-slate-400">
-              Correct Answer:{" "}
-              <span className="text-emerald-400 font-bold">
-                {currentQ.choices.find((c) => c.isCorrect)?.choiceText}
-              </span>
-            </div>
-          </div>
-
-          {/* Leaderboard Table */}
-          <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-800/60 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-400 px-6">
-              <span>RANK & BATTLER</span>
-              <span>SCORE & STREAK</span>
-            </div>
-            <div className="divide-y divide-slate-800/80">
-              {sortedLeaderboard.map((b, idx) => (
-                <div
-                  key={b.id}
-                  className={`p-4 px-6 flex items-center justify-between transition-all ${
-                    idx === 0
-                      ? "bg-amber-400/10"
-                      : idx === 1
-                      ? "bg-slate-800/30"
-                      : idx === 2
-                      ? "bg-amber-700/10"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
-                        idx === 0
-                          ? "bg-amber-400 text-slate-950 shadow-md"
-                          : idx === 1
-                          ? "bg-slate-300 text-slate-950"
-                          : idx === 2
-                          ? "bg-amber-700 text-white"
-                          : "text-slate-500 font-mono"
-                      }`}
-                    >
-                      {idx + 1}
-                    </span>
-                    <span className="text-xl">{b.avatar}</span>
-                    <span className="font-bold text-white text-sm sm:text-base">
-                      {b.name}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {b.streak > 1 && (
-                      <span className="text-xs font-bold text-amber-400">
-                        🔥 x{b.streak}
-                      </span>
-                    )}
-                    <span className="font-mono font-black text-white text-base sm:text-lg">
-                      {b.score} <span className="text-xs text-slate-400 font-normal">pts</span>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Next Wave Button */}
-          <div className="flex justify-center pt-4">
-            <button
-              onClick={handleNextWave}
-              disabled={isActionPending}
-              className="inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 text-slate-950 font-black text-base shadow-xl shadow-amber-400/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-            >
-              {currentQuestionIndex + 1 < quiz.questions.length ? (
-                <>
-                  <Play className="w-5 h-5 fill-slate-950" />
-                  Next Wave ({currentQuestionIndex + 2} / {quiz.questions.length})
-                </>
-              ) : (
-                <>
-                  <Crown className="w-5 h-5 text-slate-950" />
-                  Grand Championship Podium 🏁
-                </>
-              )}
-            </button>
-          </div>
-        </main>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-          PHASE 4: GRAND CHAMPIONSHIP PODIUM
+          PHASE 3: GRAND CHAMPIONSHIP PODIUM
       ───────────────────────────────────────────────────────────── */}
       {phase === "podium" && (
         <main className="flex-1 p-6 sm:p-12 flex flex-col justify-between max-w-4xl mx-auto w-full space-y-8 animate-in zoom-in-95 duration-300">
@@ -1434,7 +1094,7 @@ export default function ArenaHostContent({
               Championship Podium
             </h1>
             <p className="text-sm sm:text-base text-slate-400">
-              Prizes awarded to top battlers to spend in the Avatar Shop.
+              Prizes awarded to top battlers based on authoritative scores.
             </p>
           </div>
 
@@ -1506,18 +1166,38 @@ export default function ArenaHostContent({
             )}
           </div>
 
+          {/* Full Leaderboard for All Participants Below Podium */}
+          {sortedLeaderboard.length > 0 && (
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-2 max-h-72 overflow-y-auto">
+              <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider mb-2 px-1">
+                Full Final Leaderboard ({sortedLeaderboard.length} Participants)
+              </h4>
+              {sortedLeaderboard.map((b, idx) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-black text-slate-400 w-5">#{idx + 1}</span>
+                    <span className="text-base">{b.avatar}</span>
+                    <span className="font-bold text-white">{b.name}</span>
+                  </div>
+                  <div className="font-mono font-black text-amber-300">{b.score} pts</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-800">
             <button
               onClick={() => {
                 void broadcastArenaAction("reset");
                 setPhase("lobby");
-                setCurrentQuestionIndex(0);
-                setTimeLeft(waveDuration);
+                setTimeLeft(selectedMatchDuration);
                 setIsTimerRunning(false);
-                setChoiceVotes({});
                 setBattlers((prev) =>
-                  prev.map((b) => ({ ...b, hp: 100, score: 0, streak: 0, isAlive: true, hasShield: false }))
+                  prev.map((b) => ({ ...b, score: 0, rank: 1, questionsAnswered: 0, isFinished: false, hasShield: false }))
                 );
               }}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition-all cursor-pointer"

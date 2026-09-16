@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getSession } from "@/lib/auth";
 import {
+  computeArenaRankings,
+  ensureArenaParticipant,
   getArenaState,
-  getPowerDamage,
+  getPowerPenalty,
   isArenaPowerId,
   setArenaState,
+  type ArenaParticipant,
   type ArenaPowerId,
   type PendingAttack,
 } from "@/lib/arena";
@@ -15,7 +18,7 @@ import { consumeRateLimit } from "@/lib/security";
 
 const REACTION_WINDOW_MS = 2500;
 
-// Resolve an expired pending attack into a confirmed hit with damage
+// Resolve an expired pending attack into a confirmed hit with score deduction
 async function applyPendingAttackHit(quizId: number, attackId: string) {
   const arena = await getArenaState(quizId);
   if (!arena || arena.status !== "active" || !arena.pendingAttacks) return null;
@@ -25,14 +28,17 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
 
   // Mark attack as hit
   attack.status = "hit";
-  if (!arena.players) arena.players = {};
+  if (!arena.participants) arena.participants = {};
 
-  const target = arena.players[attack.targetStudentId];
+  const target = arena.participants[attack.targetStudentId];
+  const penalty = attack.scorePenalty || attack.damage || 40;
   if (target) {
-    target.currentHp = Math.max(0, target.currentHp - attack.damage);
-    target.isAlive = target.currentHp > 0;
+    // Score must never drop below zero
+    target.score = Math.max(0, target.score - penalty);
   }
 
+  // Recompute rankings dynamically across all participants
+  const updatedRankings = computeArenaRankings(arena.participants);
   await setArenaState(arena);
 
   const hitEventData = {
@@ -42,11 +48,11 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     targetStudentId: attack.targetStudentId,
     targetName: attack.targetName,
     powerType: attack.powerType,
-    damage: attack.damage,
-    targetCurrentHp: target ? target.currentHp : 0,
-    targetMaxHp: target ? target.maxHp : 100,
-    isAlive: target ? target.isAlive : true,
-    playerHealth: arena.players,
+    scorePenalty: penalty,
+    damage: penalty, // backwards compatibility
+    targetCurrentScore: target ? target.score : 0,
+    targetRank: target ? target.rank : 1,
+    participants: updatedRankings,
     timestamp: new Date().toISOString(),
   };
 
@@ -54,25 +60,20 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     await Promise.allSettled([
       pusherServer.trigger(`private-arena-${quizId}`, "arena-attack-hit", hitEventData),
       pusherServer.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
-      pusherServer.trigger(`private-arena-${quizId}`, "arena-health-updated", {
+      pusherServer.trigger(`private-arena-${quizId}`, "arena-score-updated", {
         quizId,
         studentId: attack.targetStudentId,
-        currentHp: target ? target.currentHp : 0,
-        maxHp: target ? target.maxHp : 100,
-        isAlive: target ? target.isAlive : true,
-        playerHealth: arena.players,
+        score: target ? target.score : 0,
+        rank: target ? target.rank : 1,
+        totalCount: updatedRankings.length,
+        penalty,
+      }),
+      pusherServer.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
+        quizId,
+        participants: updatedRankings,
       }),
       pusherServer.trigger(`private-teacher-${arena.teacherId}`, "arena-attack-hit", hitEventData),
     ]);
-
-    if (target && !target.isAlive) {
-      await pusherServer.trigger(`private-arena-${quizId}`, "arena-player-eliminated", {
-        quizId,
-        studentId: attack.targetStudentId,
-        studentName: attack.targetName,
-        eliminatedBy: attack.attackerName,
-      });
-    }
   } catch (err) {
     console.error("Failed to broadcast attack-hit event:", err);
   }
@@ -80,7 +81,7 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
   return hitEventData;
 }
 
-// POST /api/arena/battle-action — authoritative realtime targeted combat
+// POST /api/arena/battle-action — authoritative realtime targeted score-based combat
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession("student");
@@ -159,8 +160,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!arena.players) arena.players = {};
+    if (!arena.participants) arena.participants = {};
+    if (!arena.usedPowers) arena.usedPowers = {};
+    if (!arena.usedPowers[session.userId]) arena.usedPowers[session.userId] = {};
     if (!arena.pendingAttacks) arena.pendingAttacks = {};
+
+    // ─────────────────────────────────────────────────────────────
+    // RULE 13 & 14: EVERY POWER IS ONCE PER STUDENT PER MATCH
+    // ─────────────────────────────────────────────────────────────
+    if (arena.usedPowers[session.userId][powerType]) {
+      const powerNames: Record<ArenaPowerId, string> = {
+        meteor: "Meteor Strike",
+        earthquake: "Earthquake",
+        blizzard: "Blizzard",
+        shield: "Guardian Shield",
+      };
+      return NextResponse.json(
+        {
+          error: `${powerNames[powerType]} has already been used in this match.`,
+          code: "POWER_ALREADY_USED",
+        },
+        { status: 409 },
+      );
+    }
 
     // ─────────────────────────────────────────────────────────────
     // CASE 1: GUARDIAN SHIELD (SELF-TARGETED & DEFLECTION)
@@ -178,13 +200,16 @@ export async function POST(req: NextRequest) {
         ) || null;
       }
 
+      // Mark shield permanently as USED for this student in this match
+      arena.usedPowers[session.userId].shield = true;
+
       if (attackToDefend && attackToDefend.targetStudentId === session.userId && attackToDefend.status === "pending") {
         const now = Date.now();
         if (now <= attackToDefend.expiresAt) {
-          // Valid deflection within reaction window!
+          // Valid deflection within reaction window! Zero score deduction.
           attackToDefend.status = "deflected";
-          if (arena.players[session.userId]) {
-            arena.players[session.userId].hasShield = false;
+          if (arena.participants[session.userId]) {
+            arena.participants[session.userId].hasShield = false;
           }
           await setArenaState(arena);
 
@@ -195,7 +220,7 @@ export async function POST(req: NextRequest) {
             targetStudentId: session.userId,
             targetName: session.fullName || "Target Student",
             powerType: attackToDefend.powerType,
-            message: `🛡️ ${session.fullName || "Target"} deflected ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()} with Guardian Shield!`,
+            message: `🛡️ ${session.fullName || "Target"} deflected ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()} with Guardian Shield! (0 PTS lost)`,
             timestamp: new Date().toISOString(),
           };
 
@@ -219,8 +244,8 @@ export async function POST(req: NextRequest) {
       }
 
       // If not deflecting an immediate attack, pre-arm the shield for the next incoming attack
-      if (arena.players[session.userId]) {
-        arena.players[session.userId].hasShield = true;
+      if (arena.participants[session.userId]) {
+        arena.participants[session.userId].hasShield = true;
       }
       await setArenaState(arena);
 
@@ -266,41 +291,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify target belongs to the same Arena
-    let targetPlayer = arena.players[targetStudentId];
-    if (!targetPlayer) {
+    let targetParticipant = arena.participants[targetStudentId];
+    if (!targetParticipant) {
       const targetEnrollment = await prisma.studentQuiz.findFirst({
         where: { quizId, studentId: targetStudentId, quizStatus: { not: "rejected" } },
         select: {
           studentId: true,
+          attemptMode: true,
           student: { select: { fullName: true } },
         },
       });
 
-      if (!targetEnrollment) {
+      if (!targetEnrollment || targetEnrollment.attemptMode !== "arena") {
         return NextResponse.json(
           { error: "Target student does not belong to this arena" },
           { status: 400 },
         );
       }
 
-      targetPlayer = {
+      targetParticipant = ensureArenaParticipant(arena, {
         studentId: targetEnrollment.studentId,
         studentName: targetEnrollment.student.fullName,
-        avatar: "🎓",
-        currentHp: 100,
-        maxHp: 100,
-        isAlive: true,
-        hasShield: false,
-      };
-      arena.players[targetStudentId] = targetPlayer;
-    }
-
-    // Verify target is active and not eliminated
-    if (!targetPlayer.isAlive || targetPlayer.currentHp <= 0) {
-      return NextResponse.json(
-        { error: "Target student has already been eliminated" },
-        { status: 400 },
-      );
+      });
     }
 
     // Rate limit cooldown per power type (3 seconds)
@@ -316,9 +328,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Mark offensive power as USED permanently for this student in this match
+    arena.usedPowers[session.userId][powerType] = true;
+
     // Create pending attack with 2.5 second warning / reaction window
     const attackId = `atk_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
-    const damage = getPowerDamage(powerType);
+    const scorePenalty = getPowerPenalty(powerType);
     const createdAt = Date.now();
     const expiresAt = createdAt + REACTION_WINDOW_MS;
     const warningExpiry = new Date(expiresAt).toISOString();
@@ -328,9 +343,10 @@ export async function POST(req: NextRequest) {
       attackerId: session.userId,
       attackerName: session.fullName || "A rival student",
       targetStudentId,
-      targetName: targetPlayer.studentName || "Rival Student",
+      targetName: targetParticipant.studentName || "Rival Student",
       powerType,
-      damage,
+      scorePenalty,
+      damage: scorePenalty,
       createdAt,
       expiresAt,
       status: "pending",
@@ -345,9 +361,10 @@ export async function POST(req: NextRequest) {
       attackerId: session.userId,
       attackerName: session.fullName || "A rival student",
       targetStudentId,
-      targetName: targetPlayer.studentName,
+      targetName: targetParticipant.studentName,
       powerType,
-      damage,
+      scorePenalty,
+      damage: scorePenalty,
       questionId,
       warningExpiry,
       reactionWindowMs: REACTION_WINDOW_MS,
@@ -358,11 +375,6 @@ export async function POST(req: NextRequest) {
       await Promise.allSettled([
         pusherServer.trigger(`private-arena-${quizId}`, "arena-incoming-attack", incomingEventData),
         pusherServer.trigger(`private-arena-${quizId}`, "incoming-attack", incomingEventData),
-        // Compatibility broadcast for legacy host listeners
-        pusherServer.trigger(`private-arena-${quizId}`, "battle-attack", {
-          ...incomingEventData,
-          targetId: targetStudentId,
-        }),
         pusherServer.trigger(`private-teacher-${attempt.quiz.teacherId}`, "arena-incoming-attack", incomingEventData),
       ]);
     } catch (error) {
@@ -377,7 +389,7 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         console.error("Scheduled attack resolution error:", err);
       }
-    }, REACTION_WINDOW_MS + 150);
+    }, REACTION_WINDOW_MS + 100);
 
     return NextResponse.json({
       success: true,

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getArenaState } from "@/lib/arena";
+import {
+  computeArenaRankings,
+  ensureArenaPlayer,
+  getArenaState,
+  setArenaState,
+} from "@/lib/arena";
 import { pusherServer } from "@/lib/pusher";
 
 export async function POST(req: NextRequest) {
@@ -89,26 +94,78 @@ export async function POST(req: NextRequest) {
       return { choiceId, isCorrect: selectedChoice.isCorrect, alreadyAnswered: false };
     }, { timeout: 15_000 });
 
+    let updatedScore = 0;
+    let updatedRank = 1;
+    let totalCount = 1;
+
     if (!result.alreadyAnswered) {
       try {
         const arena = await getArenaState(quizId);
         if (arena?.status === "active" && arena.teacherId === attempt.quiz.teacherId) {
-          await pusherServer.trigger(`private-teacher-${attempt.quiz.teacherId}`, "arena-answer", {
-            sessionId: arena.sessionId,
+          const participant = ensureArenaPlayer(arena, {
             studentId: session.userId,
             studentName: session.fullName,
-            questionId,
-            choiceId: result.choiceId,
-            isCorrect: result.isCorrect,
-            timestamp: new Date().toISOString(),
           });
+
+          const points = result.isCorrect ? (selectedChoice.question.points || 100) : 0;
+          participant.score += points;
+          participant.questionsAnswered += 1;
+          if (arena.totalQuestions > 0 && participant.questionsAnswered >= arena.totalQuestions) {
+            participant.isFinished = true;
+            participant.finishedAt = new Date().toISOString();
+          }
+
+          const ranked = computeArenaRankings(arena.participants);
+          await setArenaState(arena);
+
+          updatedScore = participant.score;
+          updatedRank = participant.rank;
+          totalCount = ranked.length;
+
+          await Promise.allSettled([
+            pusherServer.trigger(`private-arena-${quizId}`, "arena-score-updated", {
+              quizId,
+              studentId: session.userId,
+              score: participant.score,
+              rank: participant.rank,
+              totalCount: ranked.length,
+              questionsAnswered: participant.questionsAnswered,
+              totalQuestions: arena.totalQuestions,
+              isFinished: participant.isFinished,
+              timestamp: new Date().toISOString(),
+            }),
+            pusherServer.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
+              quizId,
+              participants: ranked,
+              updatedStudentId: session.userId,
+            }),
+            pusherServer.trigger(`private-teacher-${attempt.quiz.teacherId}`, "arena-answer", {
+              sessionId: arena.sessionId,
+              studentId: session.userId,
+              studentName: session.fullName,
+              questionId,
+              choiceId: result.choiceId,
+              isCorrect: result.isCorrect,
+              score: participant.score,
+              rank: participant.rank,
+              questionsAnswered: participant.questionsAnswered,
+              isFinished: participant.isFinished,
+              timestamp: new Date().toISOString(),
+            }),
+          ]);
         }
       } catch (error) {
         console.warn("Arena answer broadcast warning:", error);
       }
     }
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({
+      success: true,
+      ...result,
+      score: updatedScore,
+      rank: updatedRank,
+      totalCount,
+    });
   } catch (error) {
     console.error("Record quiz answer error:", error);
     return NextResponse.json({ error: "Failed to record answer" }, { status: 500 });

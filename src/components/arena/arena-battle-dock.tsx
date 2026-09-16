@@ -29,7 +29,7 @@ const POWERS: PowerConfig[] = [
     id: "meteor",
     name: "Meteor Strike",
     emoji: "☄️",
-    damageText: "-25 HP",
+    damageText: "-100 PTS",
     colorGradient: "from-rose-600/30 to-amber-600/30 hover:from-rose-600/50 hover:to-amber-600/50",
     activeBorder: "border-rose-500/50 hover:border-rose-400 shadow-rose-500/20",
     badgeBg: "bg-rose-500/30 text-rose-300",
@@ -39,7 +39,7 @@ const POWERS: PowerConfig[] = [
     id: "earthquake",
     name: "Earthquake",
     emoji: "🌋",
-    damageText: "Rumble",
+    damageText: "-60 PTS",
     colorGradient: "from-amber-600/30 to-yellow-600/30 hover:from-amber-600/50 hover:to-yellow-600/50",
     activeBorder: "border-amber-500/50 hover:border-amber-400 shadow-amber-500/20",
     badgeBg: "bg-amber-500/30 text-amber-300",
@@ -49,7 +49,7 @@ const POWERS: PowerConfig[] = [
     id: "blizzard",
     name: "Blizzard Frost",
     emoji: "❄️",
-    damageText: "Freeze 4s",
+    damageText: "-40 PTS",
     colorGradient: "from-cyan-600/30 to-blue-600/30 hover:from-cyan-600/50 hover:to-blue-600/50",
     activeBorder: "border-cyan-500/50 hover:border-cyan-400 shadow-cyan-500/20",
     badgeBg: "bg-cyan-500/30 text-cyan-300",
@@ -59,7 +59,7 @@ const POWERS: PowerConfig[] = [
     id: "shield",
     name: "Guardian Shield",
     emoji: "🛡️",
-    damageText: "Deflect",
+    damageText: "DEFLECT",
     colorGradient: "from-indigo-600/30 to-purple-600/30 hover:from-indigo-600/50 hover:to-purple-600/50",
     activeBorder: "border-indigo-500/50 hover:border-indigo-400 shadow-indigo-500/20",
     badgeBg: "bg-indigo-500/30 text-indigo-300",
@@ -127,17 +127,17 @@ export function ArenaBattleDock({
                 <span className="text-xl sm:text-2xl">{power.emoji}</span>
                 <span
                   className={`text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    isUsed ? "bg-slate-800 text-slate-500" : power.badgeBg
+                    isUsed ? "bg-slate-800 text-slate-500" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                   }`}
                 >
-                  {isUsed ? "USED" : power.damageText}
+                  {isUsed ? "USED" : "AVAILABLE"}
                 </span>
               </div>
 
               <div className="w-full">
                 <div className="text-xs font-black truncate">{power.name}</div>
                 <div className="text-[10px] text-slate-400 truncate">
-                  {isCurrentLoading ? "Deploying..." : isUsed ? "Expended" : "Ready to cast"}
+                  {isCurrentLoading ? "Deploying..." : isUsed ? "Expended (1x/Match)" : power.damageText}
                 </div>
               </div>
 

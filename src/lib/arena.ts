@@ -9,14 +9,33 @@ export type ArenaMode = (typeof ARENA_MODES)[number];
 export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
 export type ArenaAction = (typeof ARENA_ACTIONS)[number];
 
-export interface PlayerHealth {
+export const POWER_SCORE_PENALTIES: Record<ArenaPowerId, number> = {
+  meteor: 100,
+  earthquake: 60,
+  blizzard: 40,
+  shield: 0,
+};
+
+export function getPowerPenalty(power: ArenaPowerId): number {
+  return POWER_SCORE_PENALTIES[power] ?? 40;
+}
+
+// Backwards compatibility alias for existing code
+export function getPowerDamage(power: ArenaPowerId): number {
+  return getPowerPenalty(power);
+}
+
+export interface ArenaParticipant {
   studentId: string;
   studentName: string;
   avatar: string;
-  currentHp: number;
-  maxHp: number;
-  isAlive: boolean;
-  hasShield: boolean;
+  score: number;
+  rank: number;
+  questionsAnswered: number;
+  totalQuestions: number;
+  isFinished: boolean;
+  finishedAt?: string;
+  hasShield?: boolean;
   isAi?: boolean;
 }
 
@@ -27,7 +46,8 @@ export interface PendingAttack {
   targetStudentId: string;
   targetName: string;
   powerType: ArenaPowerId;
-  damage: number;
+  scorePenalty: number;
+  damage?: number; // backwards compatibility alias
   createdAt: number;
   expiresAt: number;
   status: "pending" | "deflected" | "hit" | "cancelled";
@@ -39,17 +59,23 @@ export interface ArenaState {
   teacherId: string;
   status: "active" | "ended";
   mode: ArenaMode;
-  waveDuration: number;
+  matchDuration: number; // overall match duration in seconds (e.g. 300, 600, 900)
+  matchEndsAt?: string;
   coinBounty: number;
   enabledPowers: ArenaPowerId[];
-  currentWave: number;
-  currentQuestionId: number;
-  waveStartedAt: string;
-  waveEndsAt?: string;
+  totalQuestions: number;
   startedAt: string;
   endedAt: string | null;
-  players?: Record<string, PlayerHealth>;
+  participants: Record<string, ArenaParticipant>;
+  usedPowers: Record<string, Record<string, boolean>>; // studentId -> powerId -> boolean
   pendingAttacks?: Record<string, PendingAttack>;
+  // Deprecated wave fields preserved for compatibility during transition
+  currentWave?: number;
+  currentQuestionId?: number;
+  waveDuration?: number;
+  waveStartedAt?: string;
+  waveEndsAt?: string;
+  players?: Record<string, ArenaParticipant>;
 }
 
 const ARENA_TTL_SECONDS = 6 * 60 * 60;
@@ -59,26 +85,11 @@ const validPowers = new Set<string>(ARENA_POWER_IDS);
 const validActions = new Set<string>(ARENA_ACTIONS);
 
 export function isArenaAction(value: unknown): value is ArenaAction {
-  return typeof value === "string" && validActions.has(value);
+  return typeof value === "string" && (validActions.has(value) || value === "wave");
 }
 
 export function isArenaPowerId(value: unknown): value is ArenaPowerId {
   return typeof value === "string" && validPowers.has(value);
-}
-
-export function getPowerDamage(power: ArenaPowerId): number {
-  switch (power) {
-    case "meteor":
-      return 25;
-    case "earthquake":
-      return 15;
-    case "blizzard":
-      return 10;
-    case "shield":
-      return 0;
-    default:
-      return 10;
-  }
 }
 
 function allowedNumber(value: unknown, allowed: readonly number[], fallback: number) {
@@ -90,10 +101,11 @@ export function normalizeArenaConfig(input: unknown): Pick<
   ArenaState,
   "mode" | "waveDuration" | "coinBounty" | "enabledPowers"
 > {
-  const record = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const mode = typeof record.mode === "string" && validModes.has(record.mode)
-    ? record.mode as ArenaMode
-    : "battle_royale";
+  const record = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const mode =
+    typeof record.mode === "string" && validModes.has(record.mode)
+      ? (record.mode as ArenaMode)
+      : "battle_royale";
   const requestedPowers = Array.isArray(record.enabledPowers) ? record.enabledPowers : [];
   const enabledPowers = Array.from(new Set(requestedPowers.filter(isArenaPowerId)));
 
@@ -105,57 +117,108 @@ export function normalizeArenaConfig(input: unknown): Pick<
   };
 }
 
+/**
+ * Deterministic rankings calculator:
+ * Primary: score descending
+ * Secondary: questions answered descending
+ * Tertiary: finishedAt ascending (earlier finish)
+ * Fallback: studentName ascending
+ */
+export function computeArenaRankings(
+  participants: Record<string, ArenaParticipant>,
+): ArenaParticipant[] {
+  const list = Object.values(participants);
+  list.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.questionsAnswered !== a.questionsAnswered) return b.questionsAnswered - a.questionsAnswered;
+    if (a.finishedAt && b.finishedAt) {
+      const diff = Date.parse(a.finishedAt) - Date.parse(b.finishedAt);
+      if (diff !== 0) return diff;
+    } else if (a.finishedAt && !b.finishedAt) {
+      return -1;
+    } else if (!a.finishedAt && b.finishedAt) {
+      return 1;
+    }
+    return a.studentName.localeCompare(b.studentName);
+  });
+  list.forEach((p, idx) => {
+    p.rank = idx + 1;
+  });
+  return list;
+}
+
 export function createArenaState(params: {
   quizId: number;
   teacherId: string;
-  currentQuestionId: number;
+  totalQuestions?: number;
+  currentQuestionId?: number;
   config?: Partial<ReturnType<typeof normalizeArenaConfig>> | Record<string, unknown>;
 }): ArenaState {
   const config = normalizeArenaConfig(params.config);
   const startedAt = new Date().toISOString();
-  const waveDuration = config.waveDuration;
-  const waveEndsAt = new Date(Date.now() + waveDuration * 1000).toISOString();
-  return {
+  const rawRecord = params.config && typeof params.config === "object" ? (params.config as Record<string, unknown>) : {};
+  const rawMatchDuration = rawRecord.matchDuration || rawRecord.duration;
+  const matchDuration = typeof rawMatchDuration === "number" && rawMatchDuration > 0
+    ? rawMatchDuration
+    : (config.waveDuration ? config.waveDuration * 10 : 600);
+  const matchEndsAt = new Date(Date.now() + matchDuration * 1000).toISOString();
+
+  const state: ArenaState = {
     sessionId: crypto.randomUUID(),
     quizId: params.quizId,
     teacherId: params.teacherId,
     status: "active",
     ...config,
-    currentWave: 0,
-    currentQuestionId: params.currentQuestionId,
-    waveStartedAt: startedAt,
-    waveEndsAt,
+    matchDuration,
+    matchEndsAt,
+    totalQuestions: params.totalQuestions || 0,
     startedAt,
     endedAt: null,
-    players: {},
+    participants: {},
+    usedPowers: {},
     pendingAttacks: {},
+    // Compatibility fields
+    currentWave: 0,
+    currentQuestionId: params.currentQuestionId || 0,
+    waveStartedAt: startedAt,
+    waveEndsAt: matchEndsAt,
   };
+  state.players = state.participants;
+  return state;
 }
 
-export function ensureArenaPlayer(
+export function ensureArenaParticipant(
   state: ArenaState,
   player: { studentId: string; studentName: string; avatar?: string; isAi?: boolean },
-): PlayerHealth {
-  if (!state.players) state.players = {};
-  const existing = state.players[player.studentId];
+): ArenaParticipant {
+  if (!state.participants) state.participants = {};
+  if (!state.players) state.players = state.participants;
+  const existing = state.participants[player.studentId];
   if (existing) {
     if (player.studentName && !existing.studentName) existing.studentName = player.studentName;
     if (player.avatar && !existing.avatar) existing.avatar = player.avatar;
     return existing;
   }
-  const created: PlayerHealth = {
+  const created: ArenaParticipant = {
     studentId: player.studentId,
     studentName: player.studentName || "Fighter",
     avatar: player.avatar || "🎓",
-    currentHp: 100,
-    maxHp: 100,
-    isAlive: true,
+    score: 0,
+    rank: Object.keys(state.participants).length + 1,
+    questionsAnswered: 0,
+    totalQuestions: state.totalQuestions || 0,
+    isFinished: false,
     hasShield: false,
     isAi: player.isAi,
   };
-  state.players[player.studentId] = created;
+  state.participants[player.studentId] = created;
+  computeArenaRankings(state.participants);
   return created;
 }
+
+// Backwards compatibility alias
+export const ensureArenaPlayer = ensureArenaParticipant;
+export type PlayerHealth = ArenaParticipant;
 
 function arenaKey(quizId: number) {
   return `proctorshield:arena:${quizId}`;
