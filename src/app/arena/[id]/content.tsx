@@ -327,14 +327,13 @@ export function ArenaContent({
       // Arena-exclusive channel
       const arenaChannel = pusher.subscribe(`private-arena-${quizId}`);
 
-      arenaChannel.bind("arena-start", (data: { arena?: ArenaState }) => {
+      arenaChannel.bind("arena-start", (data?: { arena?: ArenaState; waveDuration?: number }) => {
         setPhase("in_wave");
-        if (data.arena) {
-          setWaveDuration(data.arena.waveDuration || 30);
-          setWaveTimeLeft(data.arena.waveDuration || 30);
-          if (Array.isArray(data.arena.enabledPowers)) {
-            setEnabledPowers(data.arena.enabledPowers);
-          }
+        const duration = data?.arena?.waveDuration || data?.waveDuration || 30;
+        setWaveDuration(duration);
+        setWaveTimeLeft(duration);
+        if (Array.isArray(data?.arena?.enabledPowers)) {
+          setEnabledPowers(data.arena.enabledPowers);
         }
         setCurrentQuestionIndex(0);
       });

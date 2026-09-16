@@ -228,20 +228,26 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (action === "start") {
-      if (!["active", "in_progress"].includes(quiz.quizStatus)) {
+      if (quiz.quizStatus === "ended") {
         return NextResponse.json(
-          { error: "Make the quiz active before launching the arena" },
+          { error: "This quiz has ended and cannot be started" },
+          { status: 409 },
+        );
+      }
+      if (!["draft", "active", "in_progress"].includes(quiz.quizStatus)) {
+        return NextResponse.json(
+          { error: "Quiz cannot be started in its current status" },
           { status: 409 },
         );
       }
       if (state?.status === "active" && state.teacherId !== session.userId) {
         return NextResponse.json({ error: "This quiz already has an active arena host" }, { status: 409 });
       }
-      if (quiz.quizStatus === "active") {
+      if (["draft", "active"].includes(quiz.quizStatus)) {
         const startedAt = new Date();
         const started = await prisma.$transaction(async (tx) => {
           const claimed = await tx.quiz.updateMany({
-            where: { id: quizId, teacherId: session.userId, quizStatus: "active" },
+            where: { id: quizId, teacherId: session.userId, quizStatus: { in: ["draft", "active"] } },
             data: { quizStatus: "in_progress" },
           });
           if (claimed.count !== 1) return false;
@@ -254,6 +260,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         if (!started) {
           return NextResponse.json({ error: "Quiz was already started or changed" }, { status: 409 });
         }
+      } else if (quiz.quizStatus === "in_progress") {
+        await prisma.studentQuiz.updateMany({
+          where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
+          data: { quizStatus: "in_progress", startTime: new Date() },
+        });
       }
       // Retrying a start after a saved-state/broadcast failure must reuse the
       // same session instead of resetting every connected student's arena.

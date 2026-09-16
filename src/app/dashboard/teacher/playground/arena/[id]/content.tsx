@@ -22,6 +22,8 @@ import {
   Bot,
   Trash2,
   Heart,
+  Link2,
+  AlertCircle,
 } from "lucide-react";
 import PusherClient from "pusher-js";
 
@@ -114,6 +116,7 @@ export default function ArenaHostContent({
   const [timeLeft, setTimeLeft] = useState<number>(waveDuration);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const [sfxEnabled, setSfxEnabled] = useState<boolean>(true);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [arenaError, setArenaError] = useState("");
@@ -514,9 +517,12 @@ export default function ArenaHostContent({
     arenaChannel.bind("battle-attack", handleAttackEvent);
     teacherChannel.bind("battle-attack", handleAttackEvent);
 
-    arenaChannel.bind("arena-start", () => {
+    arenaChannel.bind("arena-start", (data?: { arena?: { waveDuration?: number }; waveDuration?: number }) => {
       setPhase("wave");
+      setCurrentQuestionIndex(0);
+      setTimeLeft(data?.arena?.waveDuration || data?.waveDuration || waveDuration);
       setIsTimerRunning(true);
+      setChoiceVotes({});
     });
 
     arenaChannel.bind("arena-wave", (data: { waveIndex?: number }) => {
@@ -695,6 +701,12 @@ export default function ArenaHostContent({
     setBattlers((prev) => prev.filter((b) => !b.isAi));
   };
 
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(quiz.accessCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2500);
+  };
+
   const handleCopyLink = () => {
     const url = `${window.location.origin}/join?code=${quiz.accessCode}`;
     navigator.clipboard.writeText(url);
@@ -756,11 +768,20 @@ export default function ArenaHostContent({
               {quiz.accessCode}
             </span>
             <button
+              onClick={handleCopyCode}
+              className="p-1 rounded-md hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
+              title="Copy Code"
+              aria-label="Copy Code"
+            >
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+            <button
               onClick={handleCopyLink}
               className="p-1 rounded-md hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
-              title="Copy Student Join URL"
+              title="Copy Link"
+              aria-label="Copy Link"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Link2 className="w-3.5 h-3.5" />}
             </button>
           </div>
 
@@ -855,14 +876,32 @@ export default function ArenaHostContent({
           </div>
 
           {/* Lobby Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-800">
+          <div className="flex flex-col items-center justify-center gap-4 pt-6 border-t border-slate-800">
+            {arenaError && (
+              <div
+                role="alert"
+                className="w-full max-w-xl mx-auto rounded-xl border border-rose-500/50 bg-rose-950/90 px-4 py-3 text-sm font-semibold text-rose-200 flex items-center justify-center gap-2 shadow-lg animate-in fade-in"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{arenaError}</span>
+              </div>
+            )}
             <button
               onClick={handleStartMatch}
               disabled={battlers.length === 0 || isActionPending}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-10 py-5 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 text-slate-950 font-black text-lg shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 transition-all cursor-pointer"
             >
-              <Swords className="w-6 h-6 text-slate-950" />
-              Start Arena Match ({quiz.questions.length} Waves)
+              {isActionPending ? (
+                <>
+                  <span className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  Starting Arena...
+                </>
+              ) : (
+                <>
+                  <Swords className="w-6 h-6 text-slate-950" />
+                  Start Arena Match ({quiz.questions.length} Waves)
+                </>
+              )}
             </button>
           </div>
         </main>
