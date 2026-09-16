@@ -257,15 +257,17 @@ export function calculateQuizCoinReward(params: {
   score: number;
   violationsCount: number;
   isInvalidated: boolean;
+  attemptMode?: string;
 }): {
   coins: number;
   rankTitle: string;
   isTopOne: boolean;
   breakdown: string[];
 } {
-  const { rank, score, violationsCount, isInvalidated } = params;
+  const { rank, score, violationsCount, isInvalidated, attemptMode } = params;
+  const isArena = attemptMode === "arena";
 
-  if (isInvalidated) {
+  if (!isArena && isInvalidated) {
     return {
       coins: 0,
       rankTitle: "Invalidated Result",
@@ -297,7 +299,7 @@ export function calculateQuizCoinReward(params: {
     breakdown.push("+60 Coins for Top 10 Finish");
   } else {
     totalCoins += 40;
-    breakdown.push("+40 Coins for Quiz Completion");
+    breakdown.push(isArena ? "+40 Coins for Arena Match Completion" : "+40 Coins for Quiz Completion");
   }
 
   // Performance bonus for high score
@@ -306,8 +308,11 @@ export function calculateQuizCoinReward(params: {
     breakdown.push("+30 Coins for 90%+ Mastery");
   }
 
-  // Clean integrity bonus
-  if (violationsCount === 0) {
+  // Clean integrity bonus for proctored or arena match completion bonus
+  if (isArena) {
+    totalCoins += 25;
+    breakdown.push("+25 Coins for Arena Combat Finish");
+  } else if (violationsCount === 0) {
     totalCoins += 25;
     breakdown.push("+25 Coins for Zero-Violation Clean Proctor Shield");
   }

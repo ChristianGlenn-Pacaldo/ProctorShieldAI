@@ -89,8 +89,176 @@ export async function POST(req: NextRequest) {
       mergeLockedAnswers(submittedAnswers, lockedAnswers),
     );
     const score = grading.score;
+    const effectiveMode = studentQuiz.attemptMode === "arena" ? "arena" : "proctored";
+    const isArena = effectiveMode === "arena";
+    const completedAt = new Date();
 
-    // 3. AI Verdict Logic (Gemini with Robust Fallback)
+    // ─────────────────────────────────────────────────────────────
+    // ARENA SUBMISSION PATH (Zero Gemini / Integrity Analysis)
+    // ─────────────────────────────────────────────────────────────
+    if (isArena) {
+      const recordedScore = score;
+      let completion;
+      try {
+        completion = await prisma.$transaction(async (tx) => {
+          const claimed = await tx.studentQuiz.updateMany({
+            where: {
+              id: studentQuiz.id,
+              endTime: null,
+              quizStatus: { notIn: ["completed", "submitting", "pending_approval", "rejected"] },
+              quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+            },
+            data: { quizStatus: "submitting" },
+          });
+          if (claimed.count !== 1) throw new SubmissionConflictError();
+
+          await tx.answer.deleteMany({ where: { studentQuizId: studentQuiz.id } });
+          if (grading.records.length > 0) {
+            await tx.answer.createMany({
+              data: grading.records.map((record) => ({ ...record, studentQuizId: studentQuiz.id })),
+            });
+          }
+
+          const completed = await tx.studentQuiz.update({
+            where: { id: studentQuiz.id },
+            data: {
+              endTime: completedAt,
+              quizStatus: "completed",
+              score: recordedScore,
+              remarks: deadlineExpired ? "Arena match submitted automatically after the time limit expired." : null,
+              aiVerdict: null,
+              cheatingProbability: null,
+            },
+          });
+
+          await tx.notification.createMany({
+            data: [
+              {
+                userId: studentQuiz.quiz.teacherId,
+                title: "Power Arena Match Completed",
+                message: `${session.fullName} completed Power Arena "${studentQuiz.quiz.title}" with a score of ${score}%.`,
+              },
+              {
+                userId: session.userId,
+                title: "Arena Match Completed",
+                message: `You completed Power Arena "${studentQuiz.quiz.title}". Score: ${score}%.`,
+              },
+            ],
+          });
+
+          const allSubmissions = await tx.studentQuiz.findMany({
+            where: {
+              quizId: Number(quizId),
+              quizStatus: "completed",
+            },
+            select: { id: true, score: true },
+            orderBy: [{ score: "desc" }, { endTime: "asc" }],
+          });
+          const foundIndex = allSubmissions.findIndex((submission) => submission.id === studentQuiz.id);
+          const studentRank = foundIndex >= 0 ? foundIndex + 1 : allSubmissions.length + 1;
+          const coinReward = calculateQuizCoinReward({
+            rank: studentRank,
+            score: recordedScore,
+            violationsCount: 0,
+            isInvalidated: false,
+            attemptMode: "arena",
+          });
+
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
+          const currentProfile = await ensureStudentGameProfile(tx, session.userId);
+          let totalCoins = currentProfile.coins;
+          if (coinReward.coins > 0) {
+            await tx.studentCoinLedger.create({
+              data: {
+                studentId: session.userId,
+                sourceType: "arena-completion",
+                sourceId: studentQuiz.id,
+                amount: coinReward.coins,
+                metadata: {
+                  quizId: studentQuiz.quiz.id,
+                  rank: studentRank,
+                  score: recordedScore,
+                  attemptMode: "arena",
+                },
+              },
+            });
+            const rewardedProfile = await tx.studentGameProfile.update({
+              where: { studentId: session.userId },
+              data: {
+                coins: { increment: coinReward.coins },
+                topOneWins: coinReward.isTopOne ? { increment: 1 } : undefined,
+              },
+            });
+            totalCoins = rewardedProfile.coins;
+            await tx.notification.create({
+              data: {
+                userId: session.userId,
+                title: coinReward.isTopOne ? "🥇 Top 1 Arena Champion!" : "🪙 Arena Coins Earned!",
+                message: `You earned +${coinReward.coins} coins for finishing ${coinReward.rankTitle}! Visit the Avatar Shop to unlock new avatars.`,
+              },
+            });
+          }
+
+          return { completed, coinReward, studentRank, totalCoins };
+        });
+      } catch (error) {
+        if (error instanceof SubmissionConflictError) {
+          return NextResponse.json({ error: "This arena session is already being submitted or completed" }, { status: 409 });
+        }
+        throw error;
+      }
+
+      const updatedStudentQuiz = completion.completed;
+      const { coinReward, studentRank, totalCoins } = completion;
+
+      try {
+        const channelName = `private-teacher-${studentQuiz.quiz.teacherId}`;
+        await pusherServer.trigger(channelName, "student-submitted", {
+          studentId: session.userId,
+          studentName: session.fullName,
+          quizId: studentQuiz.quiz.id,
+          quizTitle: studentQuiz.quiz.title,
+          attemptMode: "arena",
+          score: recordedScore,
+          timestamp: new Date().toISOString(),
+        });
+
+        await pusherServer.trigger("private-admin-dashboard", "activity", {
+          type: "arena-submit",
+          userId: session.userId,
+          fullName: session.fullName,
+          role: "student",
+          activity: `Power Arena completed: ${studentQuiz.quiz.title} by ${session.fullName}`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (pusherErr) {
+        console.error("Pusher arena submit broadcast error:", pusherErr);
+      }
+
+      return NextResponse.json({
+        success: true,
+        studentQuiz: updatedStudentQuiz,
+        result: {
+          score: recordedScore,
+          violationCount: 0,
+          integrityInvalidated: false,
+          deadlineExpired,
+          aiVerdict: null,
+          cheatingProbability: null,
+          coinsEarned: coinReward.coins,
+          rank: studentRank,
+          isTopOne: coinReward.isTopOne,
+          rankTitle: coinReward.rankTitle,
+          totalCoins,
+          rewardBreakdown: coinReward.breakdown,
+          attemptMode: "arena",
+        },
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. PROCTORED EXAM AI VERDICT & INTEGRITY POLICY ENFORCEMENT
+    // ─────────────────────────────────────────────────────────────
     const violations = studentQuiz.violations;
     const violationSummary = violations.map(v => 
       `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
@@ -130,8 +298,6 @@ Return ONLY the valid JSON object.`;
     verdictData = enforceIntegrityPolicy(verdictData, violations.length);
     const integrityInvalidated = isIntegrityInvalidated(violations.length);
     const recordedScore = integrityInvalidated ? null : score;
-
-    const completedAt = new Date();
 
     // Claim and complete the attempt atomically. A concurrent request cannot
     // pass the conditional update after the first transaction commits.
@@ -212,6 +378,7 @@ Return ONLY the valid JSON object.`;
           score: recordedScore ?? 0,
           violationsCount: violations.length,
           isInvalidated: integrityInvalidated,
+          attemptMode: "proctored",
         });
 
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
@@ -268,6 +435,7 @@ Return ONLY the valid JSON object.`;
         studentName: session.fullName,
         quizId: studentQuiz.quiz.id,
         quizTitle: studentQuiz.quiz.title,
+        attemptMode: "proctored",
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
         score: recordedScore,
@@ -306,6 +474,7 @@ Return ONLY the valid JSON object.`;
         rankTitle: coinReward.rankTitle,
         totalCoins,
         rewardBreakdown: coinReward.breakdown,
+        attemptMode: "proctored",
       },
     });
 

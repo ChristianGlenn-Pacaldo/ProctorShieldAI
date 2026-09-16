@@ -22,9 +22,32 @@ export async function GET() {
       },
     });
 
-    const normalizedResults = results.map((result) => result.aiVerdict === "cheated"
-      ? { ...result, score: null, integrityInvalidated: true }
-      : { ...result, integrityInvalidated: false });
+    const normalizedResults = results.map((result) => {
+      // Historical classification: StudentQuiz.attemptMode is authoritative
+      const effectiveMode = result.attemptMode === "arena" ? "arena" : "proctored";
+      const isArena = effectiveMode === "arena";
+
+      if (isArena) {
+        return {
+          ...result,
+          effectiveMode: "arena" as const,
+          modeLabel: "Power Arena",
+          aiVerdict: null,
+          cheatingProbability: null,
+          aiAnalysis: null,
+          integrityInvalidated: false,
+        };
+      }
+
+      const isInvalidated = result.aiVerdict === "cheated";
+      return {
+        ...result,
+        effectiveMode: "proctored" as const,
+        modeLabel: "Live Monitored Exam",
+        score: isInvalidated ? null : result.score,
+        integrityInvalidated: isInvalidated,
+      };
+    });
 
     return NextResponse.json({ success: true, results: normalizedResults });
   } catch (error) {

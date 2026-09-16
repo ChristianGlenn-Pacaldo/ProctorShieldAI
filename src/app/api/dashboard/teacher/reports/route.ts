@@ -20,11 +20,13 @@ export async function GET(req: NextRequest) {
 
     const teacherId = session.userId;
 
-    // Fetch all student quiz sessions for this teacher
+    // Fetch all student proctored quiz sessions for this teacher
+    // Academic integrity reports strictly include ONLY attempts where attemptMode === "proctored"
     const studentQuizzes = await prisma.studentQuiz.findMany({
       where: {
         quizStatus: "completed",
         endTime: { not: null },
+        attemptMode: "proctored",
         quiz: {
           teacherId: teacherId,
         },
