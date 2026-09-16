@@ -96,8 +96,7 @@ export async function POST(req: NextRequest) {
       await Promise.allSettled([
         // Primary Arena-exclusive realtime channel
         pusherServer.trigger(`private-arena-${quizId}`, "battle-attack", eventData),
-        // Backward compatibility channels for teacher host & legacy quiz runner
-        pusherServer.trigger(`private-quiz-${quizId}`, "battle-attack", eventData),
+        // Teacher host realtime channel
         pusherServer.trigger(`private-teacher-${teacherId}`, "battle-attack", eventData),
       ]);
     } catch (error) {

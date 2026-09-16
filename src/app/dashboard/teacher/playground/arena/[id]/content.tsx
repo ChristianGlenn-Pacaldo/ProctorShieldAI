@@ -455,7 +455,7 @@ export default function ArenaHostContent({
         authEndpoint: "/api/pusher/auth",
       },
     );
-    const quizChannel = pusher.subscribe(`private-quiz-${quiz.id}`);
+    const arenaChannel = pusher.subscribe(`private-arena-${quiz.id}`);
     const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
 
     const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
@@ -470,9 +470,10 @@ export default function ArenaHostContent({
       }, ...prev.slice(0, 20)]);
     };
 
+    arenaChannel.bind("arena-student-joined", handleStudentJoined);
     teacherChannel.bind("arena-student-joined", handleStudentJoined);
-    quizChannel.bind("arena-student-joined", handleStudentJoined);
-    teacherChannel.bind("arena-answer", (data: {
+
+    const handleAnswerEvent = (data: {
       studentId: string;
       studentName: string;
       questionId: number;
@@ -491,7 +492,11 @@ export default function ArenaHostContent({
           score: data.isCorrect ? b.score + 100 * nextStreak : b.score,
         };
       }));
-    });
+    };
+
+    arenaChannel.bind("arena-answer", handleAnswerEvent);
+    teacherChannel.bind("arena-answer", handleAnswerEvent);
+
     const handleAttackEvent = (data: {
       attackerId?: string;
       attackerName: string;
@@ -506,13 +511,44 @@ export default function ArenaHostContent({
       data.targetId,
     );
 
-    quizChannel.bind("battle-attack", handleAttackEvent);
+    arenaChannel.bind("battle-attack", handleAttackEvent);
     teacherChannel.bind("battle-attack", handleAttackEvent);
 
+    arenaChannel.bind("arena-start", () => {
+      setPhase("wave");
+      setIsTimerRunning(true);
+    });
+
+    arenaChannel.bind("arena-wave", (data: { waveIndex?: number }) => {
+      if (typeof data.waveIndex === "number") {
+        setCurrentQuestionIndex(data.waveIndex);
+        setTimeLeft(waveDuration);
+        setIsTimerRunning(true);
+        setChoiceVotes({});
+        setPhase("wave");
+      }
+    });
+
+    arenaChannel.bind("arena-airdrop", () => {
+      playAirdropSound();
+      setBattlers((prev) =>
+        prev.map((b) => ({
+          ...b,
+          hasShield: true,
+          hp: Math.min(b.maxHp, b.hp + 15),
+        }))
+      );
+    });
+
+    arenaChannel.bind("arena-end", () => {
+      playFanfareSound();
+      setPhase("podium");
+    });
+
     return () => {
-      quizChannel.unbind_all();
+      arenaChannel.unbind_all();
       teacherChannel.unbind_all();
-      pusher.unsubscribe(`private-quiz-${quiz.id}`);
+      pusher.unsubscribe(`private-arena-${quiz.id}`);
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };

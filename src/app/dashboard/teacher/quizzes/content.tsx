@@ -16,6 +16,8 @@ import {
   Swords,
   Layers,
   Settings,
+  Radio,
+  Gamepad2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -623,7 +625,7 @@ export default function TeacherQuizzesPage({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Quiz Title", "Subject", "Join Code", "Questions", "Students", "Status", "Actions"].map((h) => (
+                  {["Quiz Title", "Mode", "Subject", "Join Code", "Questions", "Students", "Status", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide"
@@ -639,6 +641,17 @@ export default function TeacherQuizzesPage({
                     <td className="px-5 py-3">
                       <div className="text-sm font-semibold text-[var(--ink)]">{e.title}</div>
                       <div className="text-xs text-[var(--muted)] mt-0.5">{e.duration} mins</div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                          e.quizMode === "arena"
+                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25"
+                            : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
+                        }`}
+                      >
+                        {e.quizMode === "arena" ? "Power Arena" : "Live Exam"}
+                      </span>
                     </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">
                       {e.subject?.subjectName || e.subjectName || "N/A"}
@@ -673,6 +686,27 @@ export default function TeacherQuizzesPage({
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
+                        {/* Arena Host vs Live Monitor Flow */}
+                        {e.quizMode === "arena" ? (
+                          <button
+                            onClick={() => router.push(`/dashboard/teacher/playground/arena/${e.id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all cursor-pointer"
+                            title="Host Power Arena Game Station"
+                          >
+                            <Gamepad2 className="w-3 h-3" />
+                            <span>Arena Host</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push(`/dashboard/teacher/monitor?quizId=${e.id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Open Live Examination Monitor"
+                          >
+                            <Radio className="w-3 h-3" />
+                            <span>Monitor</span>
+                          </button>
+                        )}
+
                         {/* Edit in ProctorShield Studio (Dual Overview & 2x2 Question Studio) */}
                         <button
                           onClick={() => handleEditQuizInStudio(e)}
@@ -811,6 +845,53 @@ export default function TeacherQuizzesPage({
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-1">Enrolled students</div>
                 </div>
+              </div>
+
+              {/* Host Arena or Monitor Flow */}
+              <div className="flex items-center justify-between p-3.5 bg-[var(--surface2)] rounded-xl border border-[var(--border)]">
+                <div>
+                  <div className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                    {manageQuiz.quizMode === "arena" ? (
+                      <>
+                        <Gamepad2 className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Power Arena Host</span>
+                      </>
+                    ) : (
+                      <>
+                        <Radio className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Live Proctoring Monitor</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                    {manageQuiz.quizMode === "arena"
+                      ? "Launch the interactive Arena game board and battle controls"
+                      : "Monitor examinee webcams, audio anomalies, and AI violations"}
+                  </div>
+                </div>
+                {manageQuiz.quizMode === "arena" ? (
+                  <button
+                    onClick={() => {
+                      const qId = manageQuiz.id;
+                      setManageQuiz(null);
+                      router.push(`/dashboard/teacher/playground/arena/${qId}`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Gamepad2 className="w-3.5 h-3.5" /> Arena Host
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const qId = manageQuiz.id;
+                      setManageQuiz(null);
+                      router.push(`/dashboard/teacher/monitor?quizId=${qId}`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Radio className="w-3.5 h-3.5" /> Open Monitor
+                  </button>
+                )}
               </div>
 
               {/* Edit full quiz in ProctorShield Studio CTA */}

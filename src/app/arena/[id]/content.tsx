@@ -339,10 +339,6 @@ export function ArenaContent({
         setCurrentQuestionIndex(0);
       });
 
-      arenaChannel.bind("quiz-started", () => {
-        setPhase("in_wave");
-      });
-
       arenaChannel.bind("arena-wave", (data: { arena?: ArenaState; waveIndex?: number }) => {
         setPhase("in_wave");
         const idx = typeof data.waveIndex === "number" ? data.waveIndex : data.arena?.currentWave ?? 0;

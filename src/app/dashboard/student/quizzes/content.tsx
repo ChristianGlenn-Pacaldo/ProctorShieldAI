@@ -43,8 +43,9 @@ export default function QuizzesContent({ userId }: { userId: string }) {
     
     channel.bind("retake-decision", (data: any) => {
       if (data.action === "accept") {
-        // Teacher accepted! Instantly redirect into the quiz.
-        router.push(`/quiz/${data.quizId}`);
+        // Teacher accepted! Instantly redirect into the quiz or arena according to mode.
+        const target = data.quizMode === "arena" ? `/arena/${data.quizId}` : `/quiz/${data.quizId}`;
+        router.push(target);
       } else {
         // Teacher rejected. Refresh the page to show updated status.
         window.location.reload();
@@ -94,7 +95,7 @@ export default function QuizzesContent({ userId }: { userId: string }) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Quiz Title", "Subject", "Duration", "Status", "AI Verdict", "Action"].map((h) => (
+                  {["Quiz Title", "Mode", "Subject", "Duration", "Status", "AI Verdict", "Action"].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -104,9 +105,20 @@ export default function QuizzesContent({ userId }: { userId: string }) {
                   const e = enrollment?.quiz;
                   if (!e) return null;
                   const isCompleted = ["completed", "ended", "rejected", "pending_retake"].includes(enrollment.quizStatus);
+                  const isArena = e.quizMode === "arena";
+                  const targetUrl = isArena ? `/arena/${e.id}` : `/quiz/${e.id}`;
                   return (
                     <tr key={enrollment.id} className="hover:bg-[var(--surface2)] transition-colors">
                       <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title || "Untitled Quiz"}</td>
+                      <td className="px-5 py-3">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                          isArena
+                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                            : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20"
+                        }`}>
+                          {isArena ? "Power Arena" : "Live Monitored Exam"}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.subject?.subjectName || "N/A"}</td>
                       <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.duration} min</td>
                       <td className="px-5 py-3">
@@ -121,8 +133,10 @@ export default function QuizzesContent({ userId }: { userId: string }) {
                       </td>
                       <td className="px-5 py-3">
                         {!isCompleted ? (
-                          <Link href={`/quiz/${e.id}`}>
-                            <button className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">Take Quiz</button>
+                          <Link href={targetUrl}>
+                            <button className="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20">
+                              {isArena ? "Enter Arena" : "Take Quiz"}
+                            </button>
                           </Link>
                         ) : (
                           <button 
@@ -134,7 +148,7 @@ export default function QuizzesContent({ userId }: { userId: string }) {
                         )}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>

@@ -45,7 +45,12 @@ export async function POST(req: NextRequest) {
           studentId: session.userId,
           endTime: null,
           quizStatus: { in: ["enrolled", "in_progress", "pending_approval"] },
-          ...(channelType === "arena" ? { attemptMode: "arena" } : {}),
+          ...(channelType === "arena"
+            ? {
+                attemptMode: "arena",
+                quiz: { quizMode: "arena" },
+              }
+            : {}),
         },
         select: { id: true },
       }));

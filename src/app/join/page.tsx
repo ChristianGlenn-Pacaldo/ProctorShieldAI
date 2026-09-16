@@ -35,7 +35,7 @@ function JoinContent() {
   const [message, setMessage] = useState("");
   const [soundActive, setSoundActive] = useState(true);
   const [selectedMascot, setSelectedMascot] = useState(MASCOTS[0]);
-  const [activeQuizzes, setActiveQuizzes] = useState<Array<{ id: number; title: string; accessCode?: string }>>([]);
+  const [activeQuizzes, setActiveQuizzes] = useState<Array<{ id: number; title: string; accessCode?: string; quizMode?: string }>>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +61,7 @@ function JoinContent() {
                 id: q.quiz.id,
                 title: q.quiz.title,
                 accessCode: q.quiz.accessCode,
+                quizMode: q.quiz.quizMode,
               }))
               .slice(0, 3);
             setActiveQuizzes(live);
@@ -111,8 +112,12 @@ function JoinContent() {
 
       if (res.ok && data.quiz?.id) {
         playSuccessFanfare();
+        const targetRoute =
+          data.quiz.quizMode === "arena"
+            ? `/arena/${data.quiz.id}`
+            : `/quiz/${data.quiz.id}`;
         setTimeout(() => {
-          router.push(`/quiz/${data.quiz.id}`);
+          router.push(targetRoute);
         }, 250);
       } else if (res.status === 401) {
         localStorage.setItem("pendingJoinCode", code);
@@ -467,7 +472,8 @@ function JoinContent() {
                         setJoinCode(quiz.accessCode);
                         handleJoinQuiz(quiz.accessCode);
                       } else {
-                        router.push(`/quiz/${quiz.id}`);
+                        const target = quiz.quizMode === "arena" ? `/arena/${quiz.id}` : `/quiz/${quiz.id}`;
+                        router.push(target);
                       }
                     }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"

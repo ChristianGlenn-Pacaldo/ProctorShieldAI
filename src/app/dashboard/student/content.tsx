@@ -38,11 +38,13 @@ interface StudentQuiz {
   cheatingProbability: number | null;
   aiVerdict: string | null;
   createdAt: string;
+  attemptMode?: string | null;
   quiz?: {
     id: number;
     title: string;
     duration: number | null;
     accessCode: string | null;
+    quizMode?: string | null;
     subject?: {
       subjectName: string;
     } | null;
@@ -127,8 +129,9 @@ export default function StudentDashboardContent() {
       const data = await res.json();
       if (res.ok && data.quiz?.id) {
         playSuccessFanfare();
+        const target = data.quiz.quizMode === "arena" ? `/arena/${data.quiz.id}` : `/quiz/${data.quiz.id}`;
         startTransition(() => {
-          router.push(`/quiz/${data.quiz.id}`);
+          router.push(target);
         });
       } else {
         playErrorBuzz();
@@ -403,9 +406,18 @@ export default function StudentDashboardContent() {
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                        {se.quiz.subject?.subjectName || "General Exam"}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                          se.quiz.quizMode === "arena"
+                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25"
+                            : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
+                        }`}>
+                          {se.quiz.quizMode === "arena" ? "Power Arena" : "Live Monitored Exam"}
+                        </span>
+                        <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                          {se.quiz.subject?.subjectName || "General Exam"}
+                        </span>
+                      </div>
                       <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                         Room Open
@@ -435,11 +447,11 @@ export default function StudentDashboardContent() {
                     )}
 
                     <Link
-                      href={`/quiz/${se.quiz.id}`}
+                      href={se.quiz.quizMode === "arena" ? `/arena/${se.quiz.id}` : `/quiz/${se.quiz.id}`}
                       onClick={() => playSuccessFanfare()}
                       className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-[0_3px_0_#312e81] active:translate-y-0.5 active:shadow-none transition-all"
                     >
-                      <span>Take Quiz</span>
+                      <span>{se.quiz.quizMode === "arena" ? "Enter Arena" : "Take Quiz"}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>

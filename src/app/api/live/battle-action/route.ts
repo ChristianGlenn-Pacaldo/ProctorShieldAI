@@ -91,7 +91,6 @@ export async function POST(req: NextRequest) {
     try {
       await Promise.allSettled([
         pusherServer.trigger(`private-arena-${quizId}`, "battle-attack", eventData),
-        pusherServer.trigger(`private-quiz-${quizId}`, "battle-attack", eventData),
         pusherServer.trigger(`private-teacher-${teacherId}`, "battle-attack", eventData),
       ]);
     } catch (error) {

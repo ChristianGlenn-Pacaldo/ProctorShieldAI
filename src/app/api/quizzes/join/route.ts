@@ -171,8 +171,8 @@ export async function POST(req: NextRequest) {
             timestamp: new Date().toISOString(),
           };
           await Promise.allSettled([
+            pusherServer.trigger(`private-arena-${quiz.id}`, "arena-student-joined", arenaPayload),
             pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
-            pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
           ]);
         } catch (e) {
           console.error("Failed to trigger push event for existing student:", e);
@@ -193,23 +193,25 @@ export async function POST(req: NextRequest) {
 
     const { studentQuiz, isLateJoin, capacity } = enrollmentResult;
 
-    // Create notification for Teacher
+    // Create notification for Teacher (Proctored quizzes only)
     let teacherNotificationId = null;
     let teacherNotificationDate = new Date().toISOString();
-    try {
-      const notification = await prisma.notification.create({
-        data: {
-          userId: quiz.teacherId,
-          title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
-          message: isLateJoin
-            ? `${session.fullName} requested late entry for "${quiz.title}".`
-            : `${session.fullName} joined your quiz: "${quiz.title}".`,
-        },
-      });
-      teacherNotificationId = notification.id.toString();
-      teacherNotificationDate = notification.createdAt.toISOString();
-    } catch (e) {
-      console.error("Failed to create teacher notification:", e);
+    if (quiz.quizMode !== "arena") {
+      try {
+        const notification = await prisma.notification.create({
+          data: {
+            userId: quiz.teacherId,
+            title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
+            message: isLateJoin
+              ? `${session.fullName} requested late entry for "${quiz.title}".`
+              : `${session.fullName} joined your quiz: "${quiz.title}".`,
+          },
+        });
+        teacherNotificationId = notification.id.toString();
+        teacherNotificationDate = notification.createdAt.toISOString();
+      } catch (e) {
+        console.error("Failed to create teacher notification:", e);
+      }
     }
 
     // Create notification for Student
@@ -217,7 +219,7 @@ export async function POST(req: NextRequest) {
       await prisma.notification.create({
         data: {
           userId: session.userId,
-          title: "Quiz Joined",
+          title: quiz.quizMode === "arena" ? "Power Arena Joined" : "Quiz Joined",
           message: `You have successfully joined "${quiz.title}" (${quiz.subject.subjectName}).`,
         },
       });
@@ -229,26 +231,28 @@ export async function POST(req: NextRequest) {
     try {
       const { pusherServer } = await import("@/lib/pusher");
       
-      if (isLateJoin) {
-        await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "late-join-request", {
-          studentQuizId: studentQuiz.id,
-          studentName: session.fullName,
-          quizTitle: quiz.title,
-          quizId: quiz.id,
+      if (quiz.quizMode !== "arena") {
+        if (isLateJoin) {
+          await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "late-join-request", {
+            studentQuizId: studentQuiz.id,
+            studentName: session.fullName,
+            quizTitle: quiz.title,
+            quizId: quiz.id,
+          });
+        }
+
+        await pusherServer.trigger(`private-user-${quiz.teacherId}`, "notification", {
+          id: teacherNotificationId,
+          title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
+          message: isLateJoin
+              ? `${session.fullName} requested late entry for "${quiz.title}".`
+              : `${session.fullName} joined "${quiz.title}".`,
+          createdAt: teacherNotificationDate,
         });
       }
 
-      await pusherServer.trigger(`private-user-${quiz.teacherId}`, "notification", {
-        id: teacherNotificationId,
-        title: isLateJoin ? "Late Join Request" : "Student Joined Quiz",
-        message: isLateJoin
-            ? `${session.fullName} requested late entry for "${quiz.title}".`
-            : `${session.fullName} joined "${quiz.title}".`,
-        createdAt: teacherNotificationDate,
-      });
-
       if (quiz.quizMode === "arena") {
-        // Broadcast arena student joined to both teacher and quiz channels so the lobby displays them live
+        // Broadcast arena student joined only on private-arena channel and teacher channel
         const arenaPayload = {
           quizId: quiz.id,
           studentId: session.userId,
@@ -257,8 +261,8 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
         };
         await Promise.allSettled([
+          pusherServer.trigger(`private-arena-${quiz.id}`, "arena-student-joined", arenaPayload),
           pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
-          pusherServer.trigger(`private-quiz-${quiz.id}`, "arena-student-joined", arenaPayload),
         ]);
       }
     } catch (e) {
