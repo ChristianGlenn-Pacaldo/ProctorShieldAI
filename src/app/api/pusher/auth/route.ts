@@ -23,14 +23,19 @@ export async function POST(req: NextRequest) {
   }
   if (channelName === "private-admin-dashboard" && session.role === "admin") allowed = true;
 
-  const quizMatch = /^private-quiz-(\d+)$/.exec(channelName);
-  if (quizMatch) {
-    const quizId = Number(quizMatch[1]);
+  const channelMatch = /^private-(quiz|arena)-(\d+)$/.exec(channelName);
+  if (channelMatch) {
+    const channelType = channelMatch[1];
+    const quizId = Number(channelMatch[2]);
     if (session.role === "admin") {
       allowed = true;
     } else if (session.role === "teacher") {
       allowed = Boolean(await prisma.quiz.findFirst({
-        where: { id: quizId, teacherId: session.userId },
+        where: {
+          id: quizId,
+          teacherId: session.userId,
+          ...(channelType === "arena" ? { quizMode: "arena" } : {}),
+        },
         select: { id: true },
       }));
     } else if (session.role === "student") {
@@ -40,6 +45,7 @@ export async function POST(req: NextRequest) {
           studentId: session.userId,
           endTime: null,
           quizStatus: { in: ["enrolled", "in_progress", "pending_approval"] },
+          ...(channelType === "arena" ? { attemptMode: "arena" } : {}),
         },
         select: { id: true },
       }));

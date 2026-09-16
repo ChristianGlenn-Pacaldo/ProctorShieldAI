@@ -217,10 +217,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (action === "reset") {
       await clearArenaState(quizId);
       try {
-        await pusherServer.trigger(`private-quiz-${quizId}`, "arena-end", {
-          quizId,
-          reset: true,
-        });
+        await Promise.allSettled([
+          pusherServer.trigger(`private-quiz-${quizId}`, "arena-end", {
+            quizId,
+            reset: true,
+          }),
+          pusherServer.trigger(`private-arena-${quizId}`, "arena-end", {
+            quizId,
+            reset: true,
+          }),
+        ]);
       } catch (error) {
         console.error("Arena reset push failed:", error);
       }
@@ -315,11 +321,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     };
 
     try {
-      await pusherServer.trigger(`private-quiz-${quizId}`, event, eventData);
+      await Promise.allSettled([
+        pusherServer.trigger(`private-quiz-${quizId}`, event, eventData),
+        pusherServer.trigger(`private-arena-${quizId}`, event, eventData),
+      ]);
       if (action === "start" && quiz.quizStatus === "active") {
-        await pusherServer.trigger(`private-quiz-${quizId}`, "quiz-started", {
-          message: "Quiz and arena have started!",
-        });
+        await Promise.allSettled([
+          pusherServer.trigger(`private-quiz-${quizId}`, "quiz-started", {
+            message: "Quiz and arena have started!",
+          }),
+          pusherServer.trigger(`private-arena-${quizId}`, "quiz-started", {
+            message: "Quiz and arena have started!",
+          }),
+        ]);
       }
     } catch (error) {
       console.error("Arena realtime broadcast failed:", error);

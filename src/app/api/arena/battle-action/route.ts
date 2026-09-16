@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimit } from "@/lib/security";
 
-// POST /api/live/battle-action — broadcast arena power usage against rivals
+// POST /api/arena/battle-action — broadcast arena power usage against rivals in Power Arena
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession("student");
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body: unknown = await req.json().catch(() => null);
-    const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     const quizId = Number(record?.quizId);
     const questionId = Number(record?.questionId) || 0;
     const powerType = record?.powerType;
@@ -46,16 +46,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Strict Arena mode guards
     if (attempt.quiz.quizMode !== "arena" || attempt.attemptMode !== "arena") {
       return NextResponse.json(
-        { error: "Battle powers are disabled in proctored examinations.", code: "INVALID_QUIZ_MODE" },
+        {
+          error: "Battle powers are disabled in proctored examinations.",
+          code: "INVALID_QUIZ_MODE",
+        },
         { status: 403 },
       );
     }
 
     const arena = await getArenaState(quizId);
     if (arena && Array.isArray(arena.enabledPowers) && !arena.enabledPowers.includes(powerType)) {
-      return NextResponse.json({ error: "That battle power is disabled for this arena" }, { status: 403 });
+      return NextResponse.json(
+        { error: "That battle power is disabled for this arena" },
+        { status: 403 },
+      );
     }
 
     // Prevent rapid double-clicking with a 4-second cooldown per power type
@@ -87,7 +94,9 @@ export async function POST(req: NextRequest) {
 
     try {
       await Promise.allSettled([
+        // Primary Arena-exclusive realtime channel
         pusherServer.trigger(`private-arena-${quizId}`, "battle-attack", eventData),
+        // Backward compatibility channels for teacher host & legacy quiz runner
         pusherServer.trigger(`private-quiz-${quizId}`, "battle-attack", eventData),
         pusherServer.trigger(`private-teacher-${teacherId}`, "battle-attack", eventData),
       ]);
@@ -98,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, ...eventData });
   } catch (error) {
-    console.error("Battle action API error:", error);
+    console.error("Arena battle action API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
