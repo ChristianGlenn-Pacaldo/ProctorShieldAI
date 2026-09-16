@@ -308,11 +308,8 @@ export function calculateQuizCoinReward(params: {
     breakdown.push("+30 Coins for 90%+ Mastery");
   }
 
-  // Clean integrity bonus for proctored or arena match completion bonus
-  if (isArena) {
-    totalCoins += 25;
-    breakdown.push("+25 Coins for Arena Combat Finish");
-  } else if (violationsCount === 0) {
+  // Clean integrity bonus applies only to proctored exams with zero violations
+  if (!isArena && violationsCount === 0) {
     totalCoins += 25;
     breakdown.push("+25 Coins for Zero-Violation Clean Proctor Shield");
   }

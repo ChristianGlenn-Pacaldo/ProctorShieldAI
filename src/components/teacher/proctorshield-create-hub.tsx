@@ -14,7 +14,7 @@ import {
 export interface ProctorShieldCreateHubProps {
   teacherName?: string;
   isSubscribed?: boolean;
-  onOpenCreateQuiz: () => void;
+  onOpenCreateQuiz: (mode?: "proctored" | "arena") => void;
   onOpenAiGenerator?: () => void;
   onOpenArena?: () => void;
   onRequirePro?: (reason: "ai" | "arena") => void;
@@ -45,7 +45,7 @@ export default function ProctorShieldCreateHub({
       if (onRequirePro) onRequirePro("arena");
       return;
     }
-    if (onOpenArena) onOpenArena();
+    onOpenCreateQuiz("arena");
   };
 
   const handleAiClick = () => {
@@ -70,7 +70,7 @@ export default function ProctorShieldCreateHub({
             type="button"
             onClick={() => {
               setActiveTab("create");
-              onOpenCreateQuiz();
+              onOpenCreateQuiz("proctored");
             }}
             className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === "create"
@@ -107,12 +107,12 @@ export default function ProctorShieldCreateHub({
         </div>
       </div>
 
-      {/* Activity Creation Cards Grid (3 Cards: Assessment, Proctor Arena [PRO], AI Generator [PRO]) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto">
-        {/* 1. Assessment (Quiz) - Primary */}
+      {/* Activity Creation Cards Grid (3 Cards: Live Monitored Exam, Power Arena [PRO], AI Generator [PRO]) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto">
+        {/* 1. Live Monitored Exam - Academic Integrity */}
         <button
           type="button"
-          onClick={onOpenCreateQuiz}
+          onClick={() => onOpenCreateQuiz("proctored")}
           className="group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 border-emerald-500/30 hover:border-emerald-500 shadow-xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer"
         >
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
@@ -120,15 +120,18 @@ export default function ProctorShieldCreateHub({
           </div>
           <div>
             <div className="text-base font-bold text-[var(--ink)] group-hover:text-emerald-500 transition-colors">
-              Assessment
+              Live Monitored Exam
             </div>
-            <div className="text-xs text-[var(--muted)] mt-1 leading-snug">
-              Quick &amp; interactive questions
+            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+              Academic Examination
+            </div>
+            <div className="text-xs text-[var(--muted)] mt-1.5 leading-snug">
+              AI-assisted monitoring, webcam &amp; mic verification, violation detection, and live teacher proctoring.
             </div>
           </div>
         </button>
 
-        {/* 2. Proctor Arena (Multiplayer) - PRO MODE ONLY */}
+        {/* 2. Power Arena (Multiplayer) - PRO MODE */}
         <button
           type="button"
           onClick={handleArenaClick}
@@ -148,14 +151,17 @@ export default function ProctorShieldCreateHub({
           </div>
           <div>
             <div className="text-base font-bold text-[var(--ink)] group-hover:text-amber-500 transition-colors flex items-center justify-center gap-1.5">
-              <span>Proctor Arena</span>
+              <span>Power Arena</span>
               <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-400 font-extrabold uppercase tracking-wide">
                 <Crown className="w-3 h-3 text-amber-400" />
                 PRO
               </span>
             </div>
-            <div className="text-xs text-[var(--muted)] mt-1 leading-snug">
-              {isSubscribed ? "Live battle royale with powers & shields" : "Pro Exclusive • Live battle royale"}
+            <div className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+              Competitive Multiplayer Game
+            </div>
+            <div className="text-xs text-[var(--muted)] mt-1.5 leading-snug">
+              Live multiplayer Arena with battle powers, leaderboard &amp; podium. NO webcam or proctoring.
             </div>
           </div>
         </button>

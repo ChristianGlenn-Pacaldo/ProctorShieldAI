@@ -77,11 +77,11 @@ test("Test F: Arena rewards are never penalized or invalidated by violations", (
     attemptMode: "arena",
   });
 
-  assert.equal(arenaReward.coins > 0, true);
+  assert.equal(arenaReward.coins, 280); // 250 (rank 1) + 30 (mastery >= 90)
   assert.equal(arenaReward.isTopOne, true);
   assert.equal(arenaReward.rankTitle, "🥇 Top 1 Leaderboard Champion");
   assert.equal(arenaReward.breakdown.some((b) => b.includes("integrity policy violation")), false);
-  assert.equal(arenaReward.breakdown.some((b) => b.includes("Arena Combat Finish")), true);
+  assert.equal(arenaReward.breakdown.some((b) => b.includes("Zero-Violation Clean Proctor Shield")), false);
 
   // Proctored with invalidation receives 0 coins
   const proctoredReward = calculateQuizCoinReward({

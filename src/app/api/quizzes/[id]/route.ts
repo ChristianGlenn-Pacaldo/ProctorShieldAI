@@ -60,6 +60,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    let attemptsCount = 0;
+    if (session.role === "teacher") {
+      attemptsCount = await prisma.studentQuiz.count({
+        where: { quizId: quiz.id },
+      });
+    }
+
     let questions = quiz.questions;
     let studentQuiz: Awaited<ReturnType<typeof prisma.studentQuiz.findFirst>> = null;
 
@@ -156,6 +163,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         quizStatus: quiz.quizStatus,
         teacherId: quiz.teacherId,
         subject: quiz.subject,
+        hasAttempts: attemptsCount > 0,
+        attemptsCount,
       },
       questions: safeQuestions.map(q => ({
         id: q.id,

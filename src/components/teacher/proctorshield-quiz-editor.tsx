@@ -60,6 +60,10 @@ export interface QuizFormData {
   shuffleQuestions: boolean;
   allowRetake: boolean;
   isGamified: boolean;
+  quizMode: "proctored" | "arena";
+  quizStatus?: string;
+  hasAttempts?: boolean;
+  participantCount?: number;
   questions: QuestionItem[];
 }
 
@@ -149,16 +153,21 @@ export default function ProctorShieldQuizEditor({
   onOpenAiGenerator,
 }: ProctorShieldQuizEditorProps) {
   // Main Quiz State
+  const initialMode = initialQuiz?.quizMode || (initialQuiz?.isGamified ? "arena" : "proctored");
   const [quizForm, setQuizForm] = useState<QuizFormData>({
     id: initialQuiz?.id,
-    title: initialQuiz?.title || "Untitled Assessment",
+    title: initialQuiz?.title || (initialMode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
     subjectName: initialQuiz?.subjectName || "Computer Science",
     description: initialQuiz?.description || "",
-    duration: initialQuiz?.duration || 30,
+    duration: initialQuiz?.duration || (initialMode === "arena" ? 15 : 30),
     passingScore: initialQuiz?.passingScore || 70,
     shuffleQuestions: initialQuiz?.shuffleQuestions ?? true,
     allowRetake: initialQuiz?.allowRetake ?? false,
-    isGamified: initialQuiz?.isGamified ?? true,
+    isGamified: initialQuiz?.isGamified ?? (initialMode === "arena"),
+    quizMode: initialMode,
+    quizStatus: initialQuiz?.quizStatus || "draft",
+    hasAttempts: Boolean(initialQuiz?.hasAttempts || (initialQuiz?.participantCount ?? 0) > 0),
+    participantCount: initialQuiz?.participantCount || 0,
     questions:
       initialQuiz?.questions && initialQuiz.questions.length > 0
         ? initialQuiz.questions
@@ -186,16 +195,21 @@ export default function ProctorShieldQuizEditor({
   // Synchronize state when initialQuiz prop updates (e.g. from AI generator or quiz detail load)
   useEffect(() => {
     if (initialQuiz) {
+      const mode = initialQuiz.quizMode || (initialQuiz.isGamified ? "arena" : "proctored");
       setQuizForm({
         id: initialQuiz.id,
-        title: initialQuiz.title || "Untitled Assessment",
+        title: initialQuiz.title || (mode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
         subjectName: initialQuiz.subjectName || "Computer Science",
         description: initialQuiz.description || "",
-        duration: initialQuiz.duration || 30,
+        duration: initialQuiz.duration || (mode === "arena" ? 15 : 30),
         passingScore: initialQuiz.passingScore || 70,
         shuffleQuestions: initialQuiz.shuffleQuestions ?? true,
         allowRetake: initialQuiz.allowRetake ?? false,
-        isGamified: initialQuiz.isGamified ?? true,
+        isGamified: initialQuiz.isGamified ?? (mode === "arena"),
+        quizMode: mode,
+        quizStatus: initialQuiz.quizStatus || "draft",
+        hasAttempts: Boolean(initialQuiz.hasAttempts || (initialQuiz.participantCount ?? 0) > 0),
+        participantCount: initialQuiz.participantCount || 0,
         questions:
           initialQuiz.questions && initialQuiz.questions.length > 0
             ? initialQuiz.questions
@@ -216,6 +230,31 @@ export default function ProctorShieldQuizEditor({
       });
     }
   }, [initialQuiz]);
+
+  const isModeLocked = Boolean(
+    quizForm.id &&
+    (quizForm.hasAttempts ||
+      (quizForm.participantCount ?? 0) > 0 ||
+      (quizForm.quizStatus && quizForm.quizStatus !== "draft"))
+  );
+
+  const handleToggleMode = (targetMode: "proctored" | "arena") => {
+    if (quizForm.quizMode === targetMode) return;
+    if (isModeLocked) {
+      setSaveError("Quiz mode cannot be changed after students have joined or attempted this quiz.");
+      return;
+    }
+    if (targetMode === "arena" && !isSubscribed) {
+      alert("Power Arena mode requires an active ProctorShield Pro subscription.\n\nPlease upgrade to Pro to unlock multiplayer Arena games.");
+      return;
+    }
+    setQuizForm((prev) => ({
+      ...prev,
+      quizMode: targetMode,
+      isGamified: targetMode === "arena",
+      title: prev.title === "Untitled Assessment" && targetMode === "arena" ? "Untitled Power Arena Match" : prev.title,
+    }));
+  };
 
   // Studio Mode: 'quiz_overview' (ProctorShield /edit) vs 'question_studio' (ProctorShield /question/.../edit)
   const [studioMode, setStudioMode] = useState<"quiz_overview" | "question_studio">("quiz_overview");
@@ -402,8 +441,9 @@ export default function ProctorShieldQuizEditor({
         duration: quizForm.duration,
         passingScore: quizForm.passingScore,
         shuffleQuestions: quizForm.shuffleQuestions,
-        allowRetake: quizForm.allowRetake,
-        isGamified: quizForm.isGamified,
+        allowRetake: quizForm.quizMode === "arena" ? false : quizForm.allowRetake,
+        isGamified: quizForm.quizMode === "arena" ? true : quizForm.isGamified,
+        quizMode: quizForm.quizMode,
         totalQuestions: quizForm.questions.length,
         questions: quizForm.questions.map((q) => {
           let choices = q.choices
@@ -439,6 +479,9 @@ export default function ProctorShieldQuizEditor({
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "QUIZ_MODE_CHANGE_NOT_ALLOWED" || res.status === 409) {
+          throw new Error("Quiz mode cannot be changed after students have joined or attempted this quiz.");
+        }
         throw new Error(data.error || data.message || "Failed to save quiz");
       }
 
@@ -504,10 +547,47 @@ export default function ProctorShieldQuizEditor({
               {quizForm.subjectName}
             </span>
 
-            {quizForm.isGamified && (
-              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[11px] font-extrabold shrink-0">
-                <Swords className="w-3 h-3 text-amber-400" />
-                PROCTORSHIELD ARENA READY
+            {/* Mode Switcher Segmented Control */}
+            <div className="inline-flex items-center p-0.5 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleToggleMode("proctored")}
+                disabled={isModeLocked && quizForm.quizMode !== "proctored"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  quizForm.quizMode === "proctored"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                } ${isModeLocked && quizForm.quizMode !== "proctored" ? "opacity-40 cursor-not-allowed" : ""}`}
+                title={isModeLocked ? "Quiz mode cannot be changed after students have joined or attempted this quiz." : "Switch to Live Monitored Exam"}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Live Exam</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleMode("arena")}
+                disabled={isModeLocked && quizForm.quizMode !== "arena"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  quizForm.quizMode === "arena"
+                    ? "bg-amber-500 text-slate-950 shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                } ${isModeLocked && quizForm.quizMode !== "arena" ? "opacity-40 cursor-not-allowed" : ""}`}
+                title={isModeLocked ? "Quiz mode cannot be changed after students have joined or attempted this quiz." : "Switch to Power Arena"}
+              >
+                <Swords className="w-3.5 h-3.5" />
+                <span>Power Arena</span>
+                {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
+              </button>
+            </div>
+
+            {isModeLocked && (
+              <span
+                className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-400 text-[10px] font-semibold shrink-0"
+                title="Quiz mode cannot be changed after students have joined or attempted this quiz."
+              >
+                <Lock className="w-3 h-3" />
+                Mode Locked
               </span>
             )}
           </div>
@@ -638,16 +718,28 @@ export default function ProctorShieldQuizEditor({
                   </div>
                 </div>
 
-                {/* ProctorShield AI Security Level */}
-                <div className="p-3.5 rounded-2xl bg-blue-950/20 border border-blue-500/30 flex items-center gap-3">
-                  <ShieldCheck className="w-6 h-6 text-blue-400 shrink-0" />
-                  <div className="text-xs">
-                    <div className="font-bold text-white">ProctorShield AI Active</div>
-                    <div className="text-slate-400 text-[11px]">
-                      WebRTC cam monitor & tab lock active
+                {/* Mode-Specific Telemetry Card */}
+                {quizForm.quizMode === "arena" ? (
+                  <div className="p-3.5 rounded-2xl bg-amber-950/25 border border-amber-500/30 flex items-center gap-3">
+                    <Swords className="w-6 h-6 text-amber-400 shrink-0" />
+                    <div className="text-xs">
+                      <div className="font-bold text-amber-300">Power Arena Mode Active</div>
+                      <div className="text-slate-400 text-[11px]">
+                        Multiplayer battle arena • Zero proctoring • No webcam or mic
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-blue-950/20 border border-blue-500/30 flex items-center gap-3">
+                    <ShieldCheck className="w-6 h-6 text-blue-400 shrink-0" />
+                    <div className="text-xs">
+                      <div className="font-bold text-white">Live Exam Proctoring Active</div>
+                      <div className="text-slate-400 text-[11px]">
+                        AI monitoring, webcam/mic verification &amp; live teacher oversight
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Question Assistant Banner */}
                 {onOpenAiGenerator && (
@@ -1225,6 +1317,46 @@ export default function ProctorShieldQuizEditor({
             </div>
 
             <div className="space-y-4 text-xs flex-1 min-h-0 overflow-y-auto pr-1">
+              {/* Quiz Mode Selector */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-300">Quiz Mode</label>
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMode("proctored")}
+                    disabled={isModeLocked && quizForm.quizMode !== "proctored"}
+                    className={`flex items-center justify-center gap-2 p-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      quizForm.quizMode === "proctored"
+                        ? "bg-indigo-600 text-white shadow-md"
+                        : "text-slate-400 hover:text-white"
+                    } ${isModeLocked && quizForm.quizMode !== "proctored" ? "opacity-40 cursor-not-allowed" : ""}`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Live Monitored Exam</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMode("arena")}
+                    disabled={isModeLocked && quizForm.quizMode !== "arena"}
+                    className={`flex items-center justify-center gap-2 p-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      quizForm.quizMode === "arena"
+                        ? "bg-amber-500 text-slate-950 shadow-md"
+                        : "text-slate-400 hover:text-white"
+                    } ${isModeLocked && quizForm.quizMode !== "arena" ? "opacity-40 cursor-not-allowed" : ""}`}
+                  >
+                    <Swords className="w-4 h-4" />
+                    <span>Power Arena</span>
+                    {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
+                  </button>
+                </div>
+                {isModeLocked && (
+                  <p className="text-[11px] text-amber-400/90 flex items-center gap-1.5 mt-1">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Quiz mode cannot be changed after students have joined or attempted this quiz.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-300 mb-1">Subject Name</label>
                 <input
@@ -1235,98 +1367,156 @@ export default function ProctorShieldQuizEditor({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Duration (Minutes)</label>
-                  <input
-                    type="number"
-                    min={5}
-                    max={480}
-                    value={quizForm.duration}
-                    onChange={(e) =>
-                      setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 30 })
-                    }
-                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Passing Score (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={quizForm.passingScore}
-                    onChange={(e) =>
-                      setQuizForm({ ...quizForm, passingScore: parseInt(e.target.value, 10) || 70 })
-                    }
-                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Toggles */}
-              <div className="space-y-2 pt-2">
-                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={quizForm.shuffleQuestions}
-                    onChange={(e) =>
-                      setQuizForm({ ...quizForm, shuffleQuestions: e.target.checked })
-                    }
-                    className="w-4 h-4 rounded text-indigo-600"
-                  />
-                  <div>
-                    <div className="font-bold text-white">Shuffle Questions</div>
-                    <div className="text-[11px] text-slate-400">
-                      Randomize question order for each student
+              {/* Mode-Specific Settings: Live Monitored Exam */}
+              {quizForm.quizMode === "proctored" && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-300 mb-1">Exam Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={480}
+                        value={quizForm.duration}
+                        onChange={(e) =>
+                          setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 30 })
+                        }
+                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-300 mb-1">Passing Score (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={quizForm.passingScore}
+                        onChange={(e) =>
+                          setQuizForm({ ...quizForm, passingScore: parseInt(e.target.value, 10) || 70 })
+                        }
+                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
+                      />
                     </div>
                   </div>
-                </label>
 
-                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={quizForm.isGamified}
-                    onChange={(e) => {
-                      if (!isSubscribed && e.target.checked) {
-                        alert("ProctorShield Arena Battle Powers require an active Pro subscription.");
-                        return;
+                  <div className="space-y-2 pt-1">
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={quizForm.shuffleQuestions}
+                        onChange={(e) =>
+                          setQuizForm({ ...quizForm, shuffleQuestions: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded text-indigo-600"
+                      />
+                      <div>
+                        <div className="font-bold text-white">Shuffle Questions</div>
+                        <div className="text-[11px] text-slate-400">
+                          Randomize question order for each student
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={quizForm.allowRetake}
+                        onChange={(e) => setQuizForm({ ...quizForm, allowRetake: e.target.checked })}
+                        className="w-4 h-4 rounded text-indigo-600"
+                      />
+                      <div>
+                        <div className="font-bold text-white">Allow Retakes</div>
+                        <div className="text-[11px] text-slate-400">
+                          Permit students to request re-attempts
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 text-indigo-300 text-[11px] leading-relaxed">
+                    <div className="font-bold text-white flex items-center gap-1.5 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      Academic Integrity Configuration
+                    </div>
+                    Camera, microphone, tab lock, and AI proctoring are automatically active for this exam. No game boosters or score multipliers are permitted.
+                  </div>
+                </>
+              )}
+
+              {/* Mode-Specific Settings: Power Arena */}
+              {quizForm.quizMode === "arena" && (
+                <>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Match Duration (Minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={quizForm.duration}
+                      onChange={(e) =>
+                        setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 15 })
                       }
-                      setQuizForm({ ...quizForm, isGamified: e.target.checked });
-                    }}
-                    className="w-4 h-4 rounded text-amber-500"
-                  />
-                  <div>
-                    <div className="font-bold text-white flex items-center gap-1.5">
-                      <Swords className="w-3.5 h-3.5 text-amber-400" />
-                      ProctorShield Arena Battle Powers
-                      {!isSubscribed && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-400 font-extrabold uppercase">
-                          PRO
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      Enable meteors, earthquakes, blizzards & shields
-                    </div>
+                      className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-amber-500"
+                    />
                   </div>
-                </label>
 
-                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={quizForm.allowRetake}
-                    onChange={(e) => setQuizForm({ ...quizForm, allowRetake: e.target.checked })}
-                    className="w-4 h-4 rounded text-indigo-600"
-                  />
-                  <div>
-                    <div className="font-bold text-white">Allow Retakes</div>
-                    <div className="text-[11px] text-slate-400">
-                      Permit students to request re-attempts
-                    </div>
+                  <div className="space-y-2 pt-1">
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={quizForm.shuffleQuestions}
+                        onChange={(e) =>
+                          setQuizForm({ ...quizForm, shuffleQuestions: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded text-amber-500"
+                      />
+                      <div>
+                        <div className="font-bold text-white">Shuffle Questions</div>
+                        <div className="text-[11px] text-slate-400">
+                          Randomize question order for all arena combatants
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={quizForm.isGamified}
+                        onChange={(e) => {
+                          if (!isSubscribed && e.target.checked) {
+                            alert("Power Arena Battle Powers require an active Pro subscription.");
+                            return;
+                          }
+                          setQuizForm({ ...quizForm, isGamified: e.target.checked });
+                        }}
+                        className="w-4 h-4 rounded text-amber-500"
+                      />
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <Swords className="w-3.5 h-3.5 text-amber-400" />
+                          Arena Battle Powers
+                          {!isSubscribed && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-400 font-extrabold uppercase">
+                              PRO
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          Enable Meteors, Earthquakes, Blizzards &amp; Guardian Shields during combat
+                        </div>
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
+
+                  <div className="p-3.5 rounded-2xl bg-amber-950/25 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
+                    <div className="font-bold text-amber-200 flex items-center gap-1.5 mb-1">
+                      <Swords className="w-4 h-4 text-amber-400" />
+                      Multiplayer Arena Configuration
+                    </div>
+                    Competitive game mechanics, live leaderboards, and podium rewards are enabled. Camera, microphone, and AI cheating checks are completely disabled.
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="pt-3 border-t border-slate-800 flex justify-end shrink-0">

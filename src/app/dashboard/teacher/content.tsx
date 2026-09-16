@@ -293,8 +293,8 @@ export default function TeacherDashboardContent({
       <ProctorShieldCreateHub
         teacherName={teacherName}
         isSubscribed={isSubscribed}
-        onOpenCreateQuiz={() => {
-          window.location.href = "/dashboard/teacher/quizzes?create=true";
+        onOpenCreateQuiz={(mode = "proctored") => {
+          window.location.href = `/dashboard/teacher/quizzes?create=true&mode=${mode}`;
         }}
         onOpenAiGenerator={() => {
           if (!isSubscribed) {

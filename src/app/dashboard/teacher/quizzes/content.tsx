@@ -179,11 +179,13 @@ export default function TeacherQuizzesPage({
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get("mode") === "arena" ? "arena" : "proctored";
       if (params.get("create") === "true" || params.get("new") === "true") {
-        openNewQuizStudio();
+        openNewQuizStudio(modeParam);
         const url = new URL(window.location.href);
         url.searchParams.delete("create");
         url.searchParams.delete("new");
+        url.searchParams.delete("mode");
         window.history.replaceState({}, "", url.pathname);
       } else if (params.get("ai") === "true") {
         if (!isSubscribed) {
@@ -199,13 +201,30 @@ export default function TeacherQuizzesPage({
     }
   }, [isSubscribed, manualQuizCount, manualQuizLimit]);
 
-  const openNewQuizStudio = () => {
+  const openNewQuizStudio = (mode: "proctored" | "arena" = "proctored") => {
+    if (mode === "arena" && !isSubscribed) {
+      setUpgradeReason("quiz_limit");
+      setShowBillingModal(true);
+      return;
+    }
     if (!isSubscribed && manualQuizCount >= manualQuizLimit) {
       setUpgradeReason("quiz_limit");
       setShowBillingModal(true);
       return;
     }
-    setEditingQuizData(null);
+    setEditingQuizData({
+      title: mode === "arena" ? "Untitled Power Arena Match" : "Untitled Monitored Assessment",
+      quizMode: mode,
+      isGamified: mode === "arena",
+      duration: mode === "arena" ? 15 : 30,
+      passingScore: 70,
+      shuffleQuestions: true,
+      allowRetake: false,
+      hasAttempts: false,
+      participantCount: 0,
+      quizStatus: "draft",
+      questions: [],
+    });
     setIsEditorOpen(true);
   };
 
@@ -225,7 +244,11 @@ export default function TeacherQuizzesPage({
           passingScore: data.quiz.passingScore || 70,
           shuffleQuestions: data.quiz.shuffleQuestions ?? true,
           allowRetake: data.quiz.allowRetake ?? true,
-          isGamified: data.quiz.isGamified ?? true,
+          isGamified: data.quiz.isGamified ?? (data.quiz.quizMode === "arena"),
+          quizMode: data.quiz.quizMode || "proctored",
+          quizStatus: data.quiz.quizStatus || "draft",
+          hasAttempts: Boolean(data.quiz.hasAttempts || (data.quiz.attemptsCount && data.quiz.attemptsCount > 0) || (quiz.participantCount && quiz.participantCount > 0)),
+          participantCount: quiz.participantCount ?? 0,
           questions: (data.questions || []).map((q: any) => ({
             id: q.id,
             questionText: q.questionText,
@@ -603,7 +626,7 @@ export default function TeacherQuizzesPage({
             )}
 
             <button
-              onClick={openNewQuizStudio}
+              onClick={() => openNewQuizStudio("proctored")}
               className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" /> {isSubscribed ? "New Quiz" : "Manual Quiz"}
@@ -650,7 +673,7 @@ export default function TeacherQuizzesPage({
                             : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
                         }`}
                       >
-                        {e.quizMode === "arena" ? "Power Arena" : "Live Exam"}
+                        {e.quizMode === "arena" ? "Power Arena" : "Live Monitored Exam"}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">
@@ -693,8 +716,8 @@ export default function TeacherQuizzesPage({
                             className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all cursor-pointer"
                             title="Host Power Arena Game Station"
                           >
-                            <Gamepad2 className="w-3 h-3" />
-                            <span>Arena Host</span>
+                            <Gamepad2 className="w-3.5 h-3.5" />
+                            <span>Host Arena</span>
                           </button>
                         ) : (
                           <button
@@ -702,8 +725,8 @@ export default function TeacherQuizzesPage({
                             className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer"
                             title="Open Live Examination Monitor"
                           >
-                            <Radio className="w-3 h-3" />
-                            <span>Monitor</span>
+                            <Radio className="w-3.5 h-3.5" />
+                            <span>Monitor Exam</span>
                           </button>
                         )}
 
