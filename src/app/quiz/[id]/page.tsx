@@ -36,18 +36,8 @@ import {
   Wifi,
   WifiOff,
   Save,
-  Swords,
   ShieldAlert,
 } from "lucide-react";
-import {
-  BATTLE_POWERS,
-  playMeteorSound,
-  playEarthquakeSound,
-  playShieldDeflectSound,
-  playBlizzardSound,
-  BattlePower,
-} from "@/lib/student-battle";
-import type { ArenaPowerId, ArenaState } from "@/lib/arena";
 
 type QuizSubmittedResult = {
   score: number | null;
@@ -154,166 +144,7 @@ export default function QuizRoom() {
   // Stores choice IDs that are eliminated by 50/50 per question
   const [eliminatedChoices, setEliminatedChoices] = useState<Record<number, number[]>>({});
 
-  // ── IN-QUIZ BATTLE ARENA STATE (PROCTORSHIELD-STYLE ATTACK & SHIELD) ──
-  const [hasGuardianShield, setHasGuardianShield] = useState(false);
-  const hasGuardianShieldRef = useRef(false);
-  useEffect(() => {
-    hasGuardianShieldRef.current = hasGuardianShield;
-  }, [hasGuardianShield]);
 
-  const [battlePowerInventory, setBattlePowerInventory] = useState<Record<string, boolean>>({
-    meteor: false,
-    earthquake: false,
-    blizzard: false,
-    shield: false,
-  });
-  const [isLaunchingPower, setIsLaunchingPower] = useState<string | null>(null);
-
-  const [battleIntermission, setBattleIntermission] = useState<{
-    show: boolean;
-    nextIndex: number;
-    questionId: number;
-  } | null>(null);
-  const [arenaState, setArenaState] = useState<ArenaState | null>(null);
-  const [waitingForArenaWave, setWaitingForArenaWave] = useState(false);
-  const arenaActiveRef = useRef(false);
-  useEffect(() => {
-    arenaActiveRef.current = arenaState?.status === "active";
-  }, [arenaState]);
-  const [activeAttackEffect, setActiveAttackEffect] = useState<{
-    type: "meteor" | "earthquake" | "blizzard" | "deflected";
-    attackerName: string;
-    message: string;
-  } | null>(null);
-  const handleIncomingAttack = useCallback((powerType: string, attackerName: string) => {
-    if (hasGuardianShieldRef.current) {
-      hasGuardianShieldRef.current = false;
-      setHasGuardianShield(false);
-      playShieldDeflectSound();
-      setActiveAttackEffect({
-        type: "deflected",
-        attackerName,
-        message: `🛡️ GUARDIAN SHIELD DEFLECTED ${attackerName}'s ${powerType.toUpperCase()}! Your desk was completely protected!`,
-      });
-      setTimeout(() => setActiveAttackEffect(null), 4500);
-      return;
-    }
-
-    if (powerType === "meteor") {
-      playMeteorSound();
-      setActiveAttackEffect({
-        type: "meteor",
-        attackerName,
-        message: `☄️ METEOR STRIKE HIT! ${attackerName} dropped a flaming meteor storm on your desk!`,
-      });
-    } else if (powerType === "earthquake") {
-      playEarthquakeSound();
-      setActiveAttackEffect({
-        type: "earthquake",
-        attackerName,
-        message: `🌋 SEISMIC EARTHQUAKE! ${attackerName} violently rumbled your exam screen!`,
-      });
-    } else if (powerType === "blizzard") {
-      playBlizzardSound();
-      setActiveAttackEffect({
-        type: "blizzard",
-        attackerName,
-        message: `❄️ BLIZZARD FREEZE! ${attackerName} frosted your view in ice crystals!`,
-      });
-    }
-    setTimeout(() => setActiveAttackEffect(null), 4500);
-  }, []);
-
-  const handleLaunchBattlePower = async (power: BattlePower) => {
-    if (!battleIntermission || !arenaActiveRef.current) return;
-    setPreWarning(null);
-    try {
-      const response = await fetch("/api/live/battle-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quizId: Number(quizId),
-          powerType: power.id,
-          questionId: battleIntermission.questionId,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setPreWarning(data.error || "The battle action could not be delivered.");
-        return;
-      }
-
-      if (power.id === "shield") {
-        setHasGuardianShield(true);
-        playShieldDeflectSound();
-        triggerCelebration("🛡️ GUARDIAN SHIELD EQUIPPED! Next incoming attack will be blocked!");
-      } else {
-        if (power.id === "meteor") playMeteorSound();
-        else if (power.id === "earthquake") playEarthquakeSound();
-        else if (power.id === "blizzard") playBlizzardSound();
-        triggerCelebration(`🚀 LAUNCHED ${power.name.toUpperCase()} AT RIVAL STUDENTS!`);
-      }
-    } catch {
-      setPreWarning("Network error. The battle action was not delivered; please try again.");
-      return;
-    }
-
-    setTimeout(() => {
-      setBattleIntermission((curr) => {
-        if (curr) setWaitingForArenaWave(true);
-        return null;
-      });
-    }, 1400);
-  };
-
-  const handleUseArenaBattlePower = async (powerType: "meteor" | "earthquake" | "blizzard" | "shield") => {
-    if (battlePowerInventory[powerType] || isLaunchingPower !== null) return;
-    setIsLaunchingPower(powerType);
-    setPreWarning(null);
-
-    try {
-      const currentQId = currentQuestion?.id || questions[0]?.id || 1;
-      const res = await fetch("/api/live/battle-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quizId: Number(quizId),
-          powerType,
-          questionId: currentQId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setPreWarning(data.error || "Could not launch battle power.");
-        return;
-      }
-
-      setBattlePowerInventory((prev) => ({ ...prev, [powerType]: true }));
-
-      if (powerType === "shield") {
-        setHasGuardianShield(true);
-        hasGuardianShieldRef.current = true;
-        playShieldDeflectSound();
-        triggerCelebration("🛡️ GUARDIAN SHIELD EQUIPPED! Next incoming rival attack will be blocked!");
-      } else {
-        if (powerType === "meteor") playMeteorSound();
-        else if (powerType === "earthquake") playEarthquakeSound();
-        else if (powerType === "blizzard") playBlizzardSound();
-
-        const powerNames = {
-          meteor: "☄️ METEOR STRIKE",
-          earthquake: "🌋 EARTHQUAKE TREMOR",
-          blizzard: "❄️ BLIZZARD FROST",
-        };
-        triggerCelebration(`🚀 LAUNCHED ${powerNames[powerType]} AT RIVAL STUDENTS!`);
-      }
-    } catch {
-      setPreWarning("Network error launching battle power. Please try again.");
-    } finally {
-      setIsLaunchingPower(null);
-    }
-  };
 
   // ── Web Audio Synthesizer (Zero External Dependencies) ───────
   const playTone = useCallback((freqs: number[], type: OscillatorType = "sine", duration: number = 0.15) => {
@@ -506,41 +337,6 @@ export default function QuizRoom() {
       const channel = pusherClient.subscribe(studentChannelName);
       channel.bind("webrtc-signal", handleWebRTCSignal);
 
-      // Subscribe to quiz-wide live battle power attacks
-      const quizBattleChannel = pusherClient.subscribe(`private-quiz-${quizId}`);
-      quizBattleChannel.bind("battle-attack", (data: any) => {
-        const isTarget = data?.targetId === "all" || data?.targetId === userId;
-        if (isTarget && data.attackerId !== userId && data.powerType !== "shield") {
-          handleIncomingAttack(data.powerType, data.attackerName);
-        }
-      });
-      quizBattleChannel.bind("arena-airdrop", (data: { arena?: ArenaState }) => {
-        if (!arenaActiveRef.current || data.arena?.status !== "active") return;
-        setHasGuardianShield(true);
-        playShieldDeflectSound();
-        triggerCelebration("🎁 HOST AIRDROP: Guardian Shield equipped for the next attack!");
-      });
-      quizBattleChannel.bind("arena-start", (data: { arena?: ArenaState }) => {
-        if (data.arena?.status === "active") setArenaState(data.arena);
-      });
-      quizBattleChannel.bind("arena-wave", (data: { arena?: ArenaState }) => {
-        if (data.arena?.status === "active") {
-          setArenaState(data.arena);
-          const nextIndex = questions.findIndex((question) => question.id === data.arena?.currentQuestionId);
-          if (nextIndex >= 0) {
-            setCurrentQuestionIndex(nextIndex);
-            setWaitingForArenaWave(false);
-            setBattleIntermission(null);
-          }
-        }
-      });
-      quizBattleChannel.bind("arena-end", () => {
-        arenaActiveRef.current = false;
-        setArenaState(null);
-        setWaitingForArenaWave(false);
-        setBattleIntermission(null);
-      });
-
       // Instantly announce student readiness to teacher
       fetch("/api/live/webrtc", {
         method: "POST",
@@ -552,27 +348,6 @@ export default function QuizRoom() {
           data: { quizId },
         }),
       }).catch(() => {});
-
-      // Sync with a genuinely active arena (if started in the last 2 minutes).
-      // A stale arena from a previous session (started hours ago) is NOT
-      // activated — the teacher must click "Start Arena" again to fire a
-      // live arena-start Pusher event that the student picks up above.
-      void fetch(`/api/arena/${quizId}`)
-        .then(async (response) => response.ok ? response.json() : null)
-        .then((data) => {
-          if (data?.arena?.status !== "active") return;
-          const arenaStartedAt = Date.parse(data.arena.startedAt);
-          const arenaAgeMs = Number.isFinite(arenaStartedAt) ? Date.now() - arenaStartedAt : Infinity;
-          // Only sync if the arena was started within the last 2 minutes
-          // (i.e. it's from the current session, not a stale leftover)
-          if (arenaAgeMs > 120_000) return;
-          setArenaState(data.arena);
-          const currentArenaIndex = questions.findIndex(
-            (question) => question.id === data.arena.currentQuestionId,
-          );
-          if (currentArenaIndex >= 0) setCurrentQuestionIndex(currentArenaIndex);
-        })
-        .catch(() => {});
     });
 
     return () => {
@@ -580,11 +355,10 @@ export default function QuizRoom() {
       pcMapRef.current.clear();
       if (pusherClient) {
         pusherClient.unsubscribe(studentChannelName);
-        pusherClient.unsubscribe(`private-quiz-${quizId}`);
         pusherClient.disconnect();
       }
     };
-  }, [hasStarted, userId, quiz?.teacherId, quizId, handleIncomingAttack, questions, triggerCelebration]);
+  }, [hasStarted, userId, quiz?.teacherId, quizId]);
 
   // Detect mobile device on mount
   useEffect(() => {
@@ -656,6 +430,10 @@ export default function QuizRoom() {
 
   const runDevicePreflight = useCallback(async () => {
     if (isCheckingDevice) return false;
+    if (quiz?.quizMode === "arena") {
+      router.replace(`/arena/${quizId}`);
+      return false;
+    }
     setIsCheckingDevice(true);
     setDeviceCheckError("");
     let testStream: MediaStream | null = null;
@@ -721,6 +499,11 @@ export default function QuizRoom() {
         const res = await fetch(`/api/quizzes/${quizId}`);
         const data = await res.json();
         if (res.ok && data.success) {
+          // ARENA ROUTE GUARD: If quiz is an arena quiz, redirect immediately
+          if (data.quiz?.quizMode === "arena") {
+            router.replace(`/arena/${quizId}`);
+            return;
+          }
           setQuiz(data.quiz);
           setQuestions(data.questions || []);
           setStudentQuizStatus(data.studentQuizStatus || "");
@@ -752,6 +535,10 @@ export default function QuizRoom() {
           .then((res) => res.json())
           .then((data) => {
             if (data.success && data.quiz) {
+              if (data.quiz.quizMode === "arena") {
+                router.replace(`/arena/${quizId}`);
+                return;
+              }
               setQuiz(data.quiz);
               setQuestions(data.questions || []);
               setStudentQuizStatus(data.studentQuizStatus || "");
@@ -888,6 +675,11 @@ export default function QuizRoom() {
       const data = await response.json();
       if (!response.ok || !data.success) {
         setLobbyError(data.error || "Unable to verify the quiz start status.");
+        return;
+      }
+
+      if (data.quiz?.quizMode === "arena") {
+        router.replace(`/arena/${quizId}`);
         return;
       }
 
@@ -1176,9 +968,6 @@ export default function QuizRoom() {
         if (questionIndex >= questionsRef.current.length - 1) {
           void submitQuizRef.current();
         } else {
-          // Always advance to the next question normally.
-          // In arena mode, battle powers are available via the
-          // dock at the bottom — no forced intermission screen.
           setCurrentQuestionIndex(questionIndex + 1);
         }
       }, 1_100);
@@ -2488,17 +2277,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div
-      className={`exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden ${
-        activeAttackEffect?.type === "earthquake" ? "animate-[earthquake-rumble_0.4s_infinite]" : ""
-      }`}
-      style={
-        activeAttackEffect?.type === "earthquake"
-          ? { animation: "earthquake-rumble 0.4s infinite ease-in-out" }
-          : undefined
-      }
-    >
-      
+    <div className="exam-shell min-h-screen bg-[#0b0d17] text-white flex flex-col font-sans select-none overflow-x-hidden">
       {/* Floating Gamification Celebration Banner */}
       {celebrationBanner && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-2xl shadow-orange-500/40 border border-amber-300/40 animate-bounce flex items-center gap-2">
@@ -2506,79 +2285,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           <span>{celebrationBanner}</span>
         </div>
       )}
-
-      {/* Global CSS for Earthquake Screen Rumble & Meteors */}
-      <style jsx global>{`
-        @keyframes earthquake-rumble {
-          0% { transform: translate(0px, 0px) rotate(0deg); }
-          20% { transform: translate(-6px, 5px) rotate(-0.5deg); }
-          40% { transform: translate(6px, -4px) rotate(0.5deg); }
-          60% { transform: translate(-5px, 3px) rotate(-0.5deg); }
-          80% { transform: translate(5px, -3px) rotate(0.5deg); }
-          100% { transform: translate(0px, 0px) rotate(0deg); }
-        }
-        @keyframes meteor-fall {
-          0% { transform: translateY(-80px) translateX(-40px); opacity: 0; }
-          30% { opacity: 1; }
-          100% { transform: translateY(700px) translateX(350px); opacity: 0; }
-        }
-      `}</style>
-
-      {/* Incoming Battle Attack / Shield Deflection Banner */}
-      {activeAttackEffect && (
-        <div
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] px-6 py-3.5 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-bounce max-w-lg w-[90%] text-center justify-center pointer-events-none"
-          style={{
-            backgroundColor:
-              activeAttackEffect.type === "deflected"
-                ? "rgba(16, 185, 129, 0.95)"
-                : activeAttackEffect.type === "earthquake"
-                ? "rgba(217, 119, 6, 0.95)"
-                : activeAttackEffect.type === "meteor"
-                ? "rgba(225, 29, 72, 0.95)"
-                : "rgba(6, 182, 212, 0.95)",
-            borderColor: "#ffffff",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.8)",
-          }}
-        >
-          <span className="text-2xl">
-            {activeAttackEffect.type === "deflected"
-              ? "🛡️"
-              : activeAttackEffect.type === "earthquake"
-              ? "🌋"
-              : activeAttackEffect.type === "meteor"
-              ? "☄️"
-              : "❄️"}
-          </span>
-          <span className="text-xs sm:text-sm font-black text-white">
-            {activeAttackEffect.message}
-          </span>
-        </div>
-      )}
-
-      {/* Falling Meteors Animation Overlay on Screen */}
-      {activeAttackEffect?.type === "meteor" && (
-        <div className="fixed inset-0 z-[85] pointer-events-none overflow-hidden">
-          <div className="absolute top-10 left-1/4 w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-rose-600 blur-xs animate-ping" />
-          <div
-            className="absolute top-0 left-1/3 w-8 h-8 rounded-full bg-rose-500 shadow-[0_0_50px_#ef4444]"
-            style={{ animation: "meteor-fall 1.5s infinite linear" }}
-          />
-          <div
-            className="absolute top-0 left-2/3 w-10 h-10 rounded-full bg-amber-500 shadow-[0_0_60px_#f59e0b]"
-            style={{ animation: "meteor-fall 1.8s infinite linear 0.4s" }}
-          />
-        </div>
-      )}
-
-      {/* Blizzard Frost Screen Overlay */}
-      {activeAttackEffect?.type === "blizzard" && (
-        <div className="fixed inset-0 z-[85] pointer-events-none bg-cyan-500/10 backdrop-blur-[2px] border-8 border-cyan-300/40 animate-pulse" />
-      )}
-
-      {/* Battle powers are available via the dock at the bottom of the quiz.
-          No forced intermission screen or waiting overlay — the student
-          answers questions normally and can use powers from the dock. */}
 
       {/* Security Warning Modal */}
       {teacherWarningModal.show && !warningModal.show && (
@@ -2685,13 +2391,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             {isMobile ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
             {monitoringLabel(monitoringLevel)}
           </div>
-          {/* Guardian Shield Defense Status */}
-          {hasGuardianShield && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/20 border-2 border-indigo-400 text-indigo-300 font-extrabold text-xs shadow-lg shadow-indigo-500/30 animate-pulse">
-              <ShieldCheck className="w-4 h-4 text-indigo-400" />
-              <span>🛡️ Shield Active (Protected)</span>
-            </div>
-          )}
+
 
           {/* Streak Badge */}
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-extrabold text-xs shadow-xs">
@@ -2737,10 +2437,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* MAIN EXAM LAYOUT */}
-      <div
-        className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 pb-28 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)] transition-all"
-        style={activeAttackEffect?.type === "earthquake" ? { animation: "earthquake-rumble 0.25s infinite" } : undefined}
-      >
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 pb-28 lg:p-6 gap-4 lg:gap-6 max-h-none lg:max-h-[calc(100vh-80px)] transition-all">
         
         {/* MOBILE PROCTORING BAR */}
         <div className="block lg:hidden bg-[#141724] border border-[#212638] rounded-2xl p-3 space-y-3 shrink-0 shadow-md">
@@ -2883,106 +2580,18 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         {/* QUESTIONS STACK & POWER-UP DOCK */}
         <div className="w-full flex-1 flex flex-col gap-4 overflow-hidden">
           
-          {/* PROCTORSHIELD ARENA BATTLE POWERS DOCK */}
+          {/* PROCTORSHIELD EXAM POWER-UPS */}
           <div className="bg-[#141726] border border-[#242a42] rounded-2xl p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg shrink-0">
             <div className="flex items-center gap-2">
-              <Swords className="w-4 h-4 text-amber-400 animate-pulse" />
+              <Zap className="w-4 h-4 text-amber-400" />
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                 <span className="text-xs font-black text-white uppercase tracking-wider">
-                  Arena Battle Powers
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300">
-                  Live vs Rivals
+                  Exam Power-Ups
                 </span>
               </div>
             </div>
 
-            {/* Battle Powers: Attack & Defend against rivals */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Meteor Strike */}
-              <button
-                type="button"
-                onClick={() => void handleUseArenaBattlePower("meteor")}
-                disabled={battlePowerInventory.meteor || isLaunchingPower !== null}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  battlePowerInventory.meteor
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-gradient-to-r from-rose-600/30 to-amber-600/30 hover:from-rose-600/50 hover:to-amber-600/50 text-rose-200 border border-rose-500/50 hover:scale-105 active:scale-95 shadow-rose-500/20"
-                }`}
-                title="Rain flaming meteors on rivals' screens (-25 HP in Arena)"
-              >
-                <span className="text-sm">☄️</span>
-                <span>Meteor Strike</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-500/30 text-rose-300 font-mono font-bold">
-                  {battlePowerInventory.meteor ? "USED" : "1X"}
-                </span>
-              </button>
-
-              {/* Earthquake Tremor */}
-              <button
-                type="button"
-                onClick={() => void handleUseArenaBattlePower("earthquake")}
-                disabled={battlePowerInventory.earthquake || isLaunchingPower !== null}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  battlePowerInventory.earthquake
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-gradient-to-r from-amber-600/30 to-yellow-600/30 hover:from-amber-600/50 hover:to-yellow-600/50 text-amber-200 border border-amber-500/50 hover:scale-105 active:scale-95 shadow-amber-500/20"
-                }`}
-                title="Violently rumble and shake rivals' screens (-15 HP in Arena)"
-              >
-                <span className="text-sm">🌋</span>
-                <span>Earthquake</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-mono font-bold">
-                  {battlePowerInventory.earthquake ? "USED" : "1X"}
-                </span>
-              </button>
-
-              {/* Blizzard Frost */}
-              <button
-                type="button"
-                onClick={() => void handleUseArenaBattlePower("blizzard")}
-                disabled={battlePowerInventory.blizzard || isLaunchingPower !== null}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  battlePowerInventory.blizzard
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-gradient-to-r from-cyan-600/30 to-blue-600/30 hover:from-cyan-600/50 hover:to-blue-600/50 text-cyan-200 border border-cyan-500/50 hover:scale-105 active:scale-95 shadow-cyan-500/20"
-                }`}
-                title="Freeze rivals' screens in ice crystals for 4 seconds"
-              >
-                <span className="text-sm">❄️</span>
-                <span>Blizzard</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/30 text-cyan-300 font-mono font-bold">
-                  {battlePowerInventory.blizzard ? "USED" : "1X"}
-                </span>
-              </button>
-
-              {/* Guardian Shield */}
-              <button
-                type="button"
-                onClick={() => void handleUseArenaBattlePower("shield")}
-                disabled={battlePowerInventory.shield || hasGuardianShield || isLaunchingPower !== null}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  hasGuardianShield
-                    ? "bg-emerald-500/25 text-emerald-300 border border-emerald-400/60 shadow-emerald-500/30 animate-pulse"
-                    : battlePowerInventory.shield
-                    ? "bg-[#1c2136] text-slate-500 border border-slate-700/40 opacity-50 cursor-not-allowed"
-                    : "bg-gradient-to-r from-indigo-600/30 to-violet-600/30 hover:from-indigo-600/50 hover:to-violet-600/50 text-indigo-200 border border-indigo-500/50 hover:scale-105 active:scale-95 shadow-indigo-500/20"
-                }`}
-                title="Deploy a barrier that deflects the next incoming rival attack"
-              >
-                <span className="text-sm">🛡️</span>
-                <span>{hasGuardianShield ? "Shield Active" : "Guardian Shield"}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                  hasGuardianShield
-                    ? "bg-emerald-400/30 text-emerald-200"
-                    : "bg-indigo-500/30 text-indigo-300"
-                }`}>
-                  {hasGuardianShield ? "ACTIVE" : battlePowerInventory.shield ? "USED" : "1X"}
-                </span>
-              </button>
-
-              {/* Separator */}
-              <div className="h-5 w-px bg-slate-700/60 mx-1 hidden sm:block" />
 
               {/* 50/50 Eraser (Exam booster) */}
               <button

@@ -5,7 +5,10 @@ import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimit } from "@/lib/security";
 
-// POST /api/live/battle-action — broadcast arena power usage against rivals
+/**
+ * @deprecated Use `POST /api/arena/battle-action` instead.
+ * Retained as a legacy compatibility wrapper during Phase 3.
+ */
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession("student");
