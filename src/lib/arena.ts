@@ -9,6 +9,30 @@ export type ArenaMode = (typeof ARENA_MODES)[number];
 export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
 export type ArenaAction = (typeof ARENA_ACTIONS)[number];
 
+export interface PlayerHealth {
+  studentId: string;
+  studentName: string;
+  avatar: string;
+  currentHp: number;
+  maxHp: number;
+  isAlive: boolean;
+  hasShield: boolean;
+  isAi?: boolean;
+}
+
+export interface PendingAttack {
+  attackId: string;
+  attackerId: string;
+  attackerName: string;
+  targetStudentId: string;
+  targetName: string;
+  powerType: ArenaPowerId;
+  damage: number;
+  createdAt: number;
+  expiresAt: number;
+  status: "pending" | "deflected" | "hit" | "cancelled";
+}
+
 export interface ArenaState {
   sessionId: string;
   quizId: number;
@@ -21,8 +45,11 @@ export interface ArenaState {
   currentWave: number;
   currentQuestionId: number;
   waveStartedAt: string;
+  waveEndsAt?: string;
   startedAt: string;
   endedAt: string | null;
+  players?: Record<string, PlayerHealth>;
+  pendingAttacks?: Record<string, PendingAttack>;
 }
 
 const ARENA_TTL_SECONDS = 6 * 60 * 60;
@@ -37,6 +64,21 @@ export function isArenaAction(value: unknown): value is ArenaAction {
 
 export function isArenaPowerId(value: unknown): value is ArenaPowerId {
   return typeof value === "string" && validPowers.has(value);
+}
+
+export function getPowerDamage(power: ArenaPowerId): number {
+  switch (power) {
+    case "meteor":
+      return 25;
+    case "earthquake":
+      return 15;
+    case "blizzard":
+      return 10;
+    case "shield":
+      return 0;
+    default:
+      return 10;
+  }
 }
 
 function allowedNumber(value: unknown, allowed: readonly number[], fallback: number) {
@@ -67,21 +109,52 @@ export function createArenaState(params: {
   quizId: number;
   teacherId: string;
   currentQuestionId: number;
-  config: ReturnType<typeof normalizeArenaConfig>;
+  config?: Partial<ReturnType<typeof normalizeArenaConfig>> | Record<string, unknown>;
 }): ArenaState {
+  const config = normalizeArenaConfig(params.config);
   const startedAt = new Date().toISOString();
+  const waveDuration = config.waveDuration;
+  const waveEndsAt = new Date(Date.now() + waveDuration * 1000).toISOString();
   return {
     sessionId: crypto.randomUUID(),
     quizId: params.quizId,
     teacherId: params.teacherId,
     status: "active",
-    ...params.config,
+    ...config,
     currentWave: 0,
     currentQuestionId: params.currentQuestionId,
     waveStartedAt: startedAt,
+    waveEndsAt,
     startedAt,
     endedAt: null,
+    players: {},
+    pendingAttacks: {},
   };
+}
+
+export function ensureArenaPlayer(
+  state: ArenaState,
+  player: { studentId: string; studentName: string; avatar?: string; isAi?: boolean },
+): PlayerHealth {
+  if (!state.players) state.players = {};
+  const existing = state.players[player.studentId];
+  if (existing) {
+    if (player.studentName && !existing.studentName) existing.studentName = player.studentName;
+    if (player.avatar && !existing.avatar) existing.avatar = player.avatar;
+    return existing;
+  }
+  const created: PlayerHealth = {
+    studentId: player.studentId,
+    studentName: player.studentName || "Fighter",
+    avatar: player.avatar || "🎓",
+    currentHp: 100,
+    maxHp: 100,
+    isAlive: true,
+    hasShield: false,
+    isAi: player.isAi,
+  };
+  state.players[player.studentId] = created;
+  return created;
 }
 
 function arenaKey(quizId: number) {
@@ -90,18 +163,7 @@ function arenaKey(quizId: number) {
 
 export async function setArenaState(state: ArenaState) {
   const redis = getRedis();
-  if (state.status === "ended") {
-    // Clean up ended arenas immediately from local cache and Redis to prevent stale data
-    localArenaState.delete(state.quizId);
-    if (redis) {
-      try {
-        await redis.del(arenaKey(state.quizId));
-      } catch (error) {
-        console.warn("Arena Redis delete failed:", error);
-      }
-    }
-    return;
-  }
+  // Preserve ended arena state for reconciliation queries instead of deleting immediately.
   if (redis) {
     try {
       await redis.set(arenaKey(state.quizId), JSON.stringify(state), "EX", ARENA_TTL_SECONDS);

@@ -6,10 +6,12 @@ import { pusherServer } from "@/lib/pusher";
 import {
   clearArenaState,
   createArenaState,
+  ensureArenaPlayer,
   getArenaState,
   isArenaAction,
   normalizeArenaConfig,
   setArenaState,
+  type PlayerHealth,
 } from "@/lib/arena";
 import { AVATAR_CATALOG } from "@/lib/student-coins";
 import { ensureStudentGameProfile } from "@/lib/student-game-profile";
@@ -133,11 +135,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const state = await getArenaState(quizId);
-    const activeArena = state?.status === "active" ? state : null;
-    if (session.role !== "teacher" && session.role !== "admin") {
-      return NextResponse.json({ success: true, arena: activeArena });
-    }
+    let state = await getArenaState(quizId);
 
     const attempts = await prisma.studentQuiz.findMany({
       where: { quizId, quizStatus: { not: "rejected" } },
@@ -165,7 +163,26 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       }];
     });
 
-    return NextResponse.json({ success: true, arena: activeArena, participants });
+    if (quiz.quizStatus === "ended") {
+      if (state) {
+        state = { ...state, status: "ended", endedAt: state.endedAt || new Date().toISOString() };
+      }
+    }
+
+    if (state) {
+      if (!state.players) state.players = {};
+      for (const p of participants) {
+        ensureArenaPlayer(state, p);
+      }
+      await setArenaState(state);
+    }
+
+    return NextResponse.json({
+      success: true,
+      arena: state,
+      participants,
+      quizStatus: quiz.quizStatus,
+    });
   } catch (error) {
     console.error("Get arena state error:", error);
     return NextResponse.json({ error: "Failed to load arena state" }, { status: 500 });
@@ -276,6 +293,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           config: normalizeArenaConfig(payload),
         });
       }
+
+      // Initialize all enrolled students in state.players
+      const enrolled = await prisma.studentQuiz.findMany({
+        where: { quizId, quizStatus: { not: "rejected" } },
+        select: {
+          studentId: true,
+          student: { select: { fullName: true, gameProfile: { select: { equippedAvatar: true } } } },
+        },
+      });
+      for (const e of enrolled) {
+        const avatarId = e.student.gameProfile?.equippedAvatar || "shield";
+        ensureArenaPlayer(state, {
+          studentId: e.studentId,
+          studentName: e.student.fullName,
+          avatar: AVATAR_CATALOG.find((a) => a.id === avatarId)?.emoji || "🎓",
+        });
+      }
     } else {
       if (!state || state.teacherId !== session.userId) {
         return NextResponse.json({ error: "No active arena session exists for this quiz" }, { status: 409 });
@@ -289,16 +323,41 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         if (!Number.isInteger(waveIndex) || waveIndex < 0 || waveIndex >= quiz.questions.length) {
           return NextResponse.json({ error: "Invalid arena wave" }, { status: 400 });
         }
+        const waveStartedAt = new Date().toISOString();
+        const duration = state.waveDuration || 30;
+        const waveEndsAt = new Date(Date.now() + duration * 1000).toISOString();
         state = {
           ...state,
           currentWave: waveIndex,
           currentQuestionId: quiz.questions[waveIndex].id,
-          waveStartedAt: new Date().toISOString(),
+          waveStartedAt,
+          waveEndsAt,
+          pendingAttacks: {},
         };
       } else if (action === "end") {
         payouts = await awardArenaBounty(state);
         if (!isEndRetry) {
-          state = { ...state, status: "ended", endedAt: new Date().toISOString() };
+          state = {
+            ...state,
+            status: "ended",
+            endedAt: new Date().toISOString(),
+            pendingAttacks: {},
+          };
+          await prisma.quiz.update({
+            where: { id: quizId },
+            data: { quizStatus: "ended" },
+          }).catch((err) => console.error("Failed to mark quiz ended:", err));
+          await prisma.studentQuiz.updateMany({
+            where: { quizId, quizStatus: "in_progress" },
+            data: { quizStatus: "completed", endTime: new Date() },
+          }).catch((err) => console.error("Failed to mark student quizzes completed:", err));
+        }
+      } else if (action === "airdrop") {
+        if (state.players) {
+          for (const p of Object.values(state.players)) {
+            p.hasShield = true;
+            p.currentHp = Math.min(p.maxHp, p.currentHp + 15);
+          }
         }
       }
     }
@@ -333,10 +392,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { error: "Arena state was saved, but the real-time broadcast failed. Please retry." },
         { status: 503 },
       );
-    }
-
-    if (action === "end") {
-      await clearArenaState(quizId);
     }
 
     return NextResponse.json({ success: true, action, arena: state, payouts: eventData.payouts });

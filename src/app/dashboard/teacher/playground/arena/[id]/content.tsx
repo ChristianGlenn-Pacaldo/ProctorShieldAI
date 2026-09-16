@@ -26,6 +26,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import PusherClient from "pusher-js";
+import type { PlayerHealth } from "@/lib/arena";
 
 interface Choice {
   id: number;
@@ -420,35 +421,81 @@ export default function ArenaHostContent({
 
   // Load enrolled students and subscribe only to authenticated channels.
   useEffect(() => {
-    void fetch(`/api/arena/${quiz.id}`)
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((data: { participants?: Array<{ studentId: string; studentName: string; avatar?: string }>; arena?: LiveArenaState | null } | null) => {
-        if (Array.isArray(data?.participants)) data.participants.forEach(addParticipant);
-        const liveArena = data?.arena;
-        if (liveArena?.status === "active") {
-          const questionIndex = quiz.questions.findIndex(
-            (question) => question.id === liveArena.currentQuestionId,
-          );
-          const safeIndex = questionIndex >= 0
-            ? questionIndex
-            : Math.min(Math.max(liveArena.currentWave, 0), Math.max(quiz.questions.length - 1, 0));
-          const startedAt = Date.parse(liveArena.waveStartedAt || "");
-          const duration = Number.isFinite(liveArena.waveDuration)
-            ? liveArena.waveDuration
-            : waveDuration;
-          const elapsed = Number.isFinite(startedAt)
-            ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
-            : 0;
-          const remaining = Math.max(0, duration - elapsed);
-          if (remaining > 0) {
-            setCurrentQuestionIndex(safeIndex);
-            setTimeLeft(remaining);
-            setChoiceVotes({});
-            setIsTimerRunning(true);
-            setPhase("wave");
+    const syncArenaData = (data: {
+      participants?: Array<{ studentId: string; studentName: string; avatar?: string }>;
+      arena?: (LiveArenaState & { players?: Record<string, PlayerHealth> }) | null;
+      quizStatus?: string;
+    } | null) => {
+      if (!data) return;
+      if (Array.isArray(data.participants)) data.participants.forEach(addParticipant);
+      if (data.arena?.players) {
+        setBattlers((prev) => {
+          const updated = [...prev];
+          for (const [sId, p] of Object.entries(data.arena!.players!)) {
+            const idx = updated.findIndex((b) => b.id === sId);
+            if (idx >= 0) {
+              updated[idx] = {
+                ...updated[idx],
+                hp: p.currentHp,
+                maxHp: p.maxHp,
+                isAlive: p.isAlive,
+                hasShield: p.hasShield,
+                name: p.studentName || updated[idx].name,
+                avatar: p.avatar || updated[idx].avatar,
+              };
+            } else {
+              updated.push({
+                id: sId,
+                name: p.studentName || "Student Fighter",
+                avatar: p.avatar || "🎓",
+                hp: p.currentHp,
+                maxHp: p.maxHp,
+                hasShield: p.hasShield,
+                score: 0,
+                streak: 0,
+                isAi: false,
+                isAlive: p.isAlive,
+              });
+            }
           }
+          return updated;
+        });
+      }
+
+      if (data.arena?.status === "ended" || data.quizStatus === "ended") {
+        setPhase("podium");
+        return;
+      }
+
+      const liveArena = data.arena;
+      if (liveArena?.status === "active") {
+        const questionIndex = quiz.questions.findIndex(
+          (question) => question.id === liveArena.currentQuestionId,
+        );
+        const safeIndex = questionIndex >= 0
+          ? questionIndex
+          : Math.min(Math.max(liveArena.currentWave, 0), Math.max(quiz.questions.length - 1, 0));
+        const startedAt = Date.parse(liveArena.waveStartedAt || "");
+        const duration = Number.isFinite(liveArena.waveDuration)
+          ? liveArena.waveDuration
+          : waveDuration;
+        const elapsed = Number.isFinite(startedAt)
+          ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+          : 0;
+        const remaining = Math.max(0, duration - elapsed);
+        if (remaining > 0) {
+          setCurrentQuestionIndex(safeIndex);
+          setTimeLeft(remaining);
+          setChoiceVotes({});
+          setIsTimerRunning(true);
+          setPhase("wave");
         }
-      })
+      }
+    };
+
+    void fetch(`/api/arena/${quiz.id}`)
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then(syncArenaData)
       .catch(() => setArenaError("Could not load the current arena participants."));
 
     const pusher = new PusherClient(
@@ -500,22 +547,183 @@ export default function ArenaHostContent({
     arenaChannel.bind("arena-answer", handleAnswerEvent);
     teacherChannel.bind("arena-answer", handleAnswerEvent);
 
-    const handleAttackEvent = (data: {
-      attackerId?: string;
+    // ── Incoming Attack Warning ──────────────────────────────
+    const handleIncomingAttack = (data: {
+      attackId: string;
       attackerName: string;
-      targetId?: string;
       targetName: string;
       powerType: string;
-    }) => handleCombatEvent(
-      data.attackerName,
-      data.targetName,
-      data.powerType,
-      data.attackerId,
-      data.targetId,
-    );
+      damage: number;
+    }) => {
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `⚠️ ${data.attackerName} launched ${data.powerType.toUpperCase()} at ${data.targetName}! (Defend window active)`,
+          type: "attack",
+        },
+        ...prev.slice(0, 20),
+      ]);
+    };
 
-    arenaChannel.bind("battle-attack", handleAttackEvent);
-    teacherChannel.bind("battle-attack", handleAttackEvent);
+    arenaChannel.bind("arena-incoming-attack", handleIncomingAttack);
+    teacherChannel.bind("arena-incoming-attack", handleIncomingAttack);
+
+    // ── Attack Hit with authoritative Damage ──────────────────
+    const handleAttackHit = (data: {
+      attackId: string;
+      attackerName: string;
+      targetStudentId: string;
+      targetName: string;
+      powerType: string;
+      damage: number;
+      targetCurrentHp: number;
+      targetMaxHp: number;
+      isAlive: boolean;
+      playerHealth?: Record<string, PlayerHealth>;
+    }) => {
+      setBattlers((prev) => {
+        if (data.playerHealth) {
+          return prev.map((b) => {
+            const updated = data.playerHealth?.[b.id];
+            if (updated) {
+              return {
+                ...b,
+                hp: updated.currentHp,
+                maxHp: updated.maxHp,
+                isAlive: updated.isAlive,
+                hasShield: updated.hasShield,
+              };
+            }
+            return b;
+          });
+        }
+        return prev.map((b) => {
+          if (b.id === data.targetStudentId) {
+            return {
+              ...b,
+              hp: data.targetCurrentHp,
+              isAlive: data.isAlive,
+              hasShield: false,
+            };
+          }
+          return b;
+        });
+      });
+
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `💥 ${data.attackerName}'s ${data.powerType.toUpperCase()} struck ${data.targetName} for -${data.damage} HP!`,
+          type: "attack",
+        },
+        ...prev.slice(0, 20),
+      ]);
+    };
+
+    arenaChannel.bind("arena-attack-hit", handleAttackHit);
+    teacherChannel.bind("arena-attack-hit", handleAttackHit);
+
+    // ── Attack Blocked by Guardian Shield ────────────────────
+    const handleAttackBlocked = (data: {
+      attackId: string;
+      attackerName: string;
+      targetStudentId: string;
+      targetName: string;
+      powerType: string;
+    }) => {
+      setBattlers((prev) =>
+        prev.map((b) => (b.id === data.targetStudentId ? { ...b, hasShield: false } : b))
+      );
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `🛡️ ${data.targetName} deflected ${data.attackerName}'s ${data.powerType.toUpperCase()} with Guardian Shield! (0 DMG)`,
+          type: "shield",
+        },
+        ...prev.slice(0, 20),
+      ]);
+    };
+
+    arenaChannel.bind("arena-attack-blocked", handleAttackBlocked);
+    teacherChannel.bind("arena-attack-blocked", handleAttackBlocked);
+
+    // ── Shield Equipped ───────────────────────────────────────
+    const handleShieldEquipped = (data: { studentId: string; studentName?: string }) => {
+      setBattlers((prev) =>
+        prev.map((b) => (b.id === data.studentId ? { ...b, hasShield: true } : b))
+      );
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `🛡️ ${data.studentName || "A fighter"} armed a Guardian Shield!`,
+          type: "shield",
+        },
+        ...prev.slice(0, 20),
+      ]);
+    };
+
+    arenaChannel.bind("arena-shield-equipped", handleShieldEquipped);
+    teacherChannel.bind("arena-shield-equipped", handleShieldEquipped);
+
+    // ── Health Updated ───────────────────────────────────────
+    const handleHealthUpdated = (data: {
+      studentId: string;
+      currentHp: number;
+      maxHp: number;
+      isAlive: boolean;
+      playerHealth?: Record<string, PlayerHealth>;
+    }) => {
+      setBattlers((prev) => {
+        if (data.playerHealth) {
+          return prev.map((b) => {
+            const updated = data.playerHealth?.[b.id];
+            if (updated) {
+              return {
+                ...b,
+                hp: updated.currentHp,
+                maxHp: updated.maxHp,
+                isAlive: updated.isAlive,
+                hasShield: updated.hasShield,
+              };
+            }
+            return b;
+          });
+        }
+        return prev.map((b) =>
+          b.id === data.studentId
+            ? { ...b, hp: data.currentHp, maxHp: data.maxHp, isAlive: data.isAlive }
+            : b
+        );
+      });
+    };
+
+    arenaChannel.bind("arena-health-updated", handleHealthUpdated);
+
+    // ── Player Eliminated ────────────────────────────────────
+    const handlePlayerEliminated = (data: {
+      studentId: string;
+      studentName: string;
+      eliminatedBy: string;
+    }) => {
+      setBattlers((prev) =>
+        prev.map((b) => (b.id === data.studentId ? { ...b, isAlive: false, hp: 0 } : b))
+      );
+      setBattleEvents((prev) => [
+        {
+          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: "Just now",
+          text: `☠️ ${data.studentName} was ELIMINATED by ${data.eliminatedBy}!`,
+          type: "elimination",
+        },
+        ...prev.slice(0, 20),
+      ]);
+    };
+
+    arenaChannel.bind("arena-player-eliminated", handlePlayerEliminated);
 
     arenaChannel.bind("arena-start", (data?: { arena?: { waveDuration?: number }; waveDuration?: number }) => {
       setPhase("wave");
@@ -558,11 +766,11 @@ export default function ArenaHostContent({
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
-  }, [addParticipant, handleCombatEvent, quiz.id, quiz.questions, teacherId, waveDuration]);
+  }, [addParticipant, quiz.id, quiz.questions, teacherId, waveDuration]);
 
-  // Periodic background sync while waiting in lobby so joined students appear seamlessly
+  // Periodic background sync while match is not ended so participants and health remain strictly authoritative
   useEffect(() => {
-    if (phase !== "lobby") return;
+    if (phase === "podium") return;
     const interval = setInterval(async () => {
       try {
         const response = await fetch(`/api/arena/${quiz.id}`);
@@ -571,10 +779,46 @@ export default function ArenaHostContent({
         if (Array.isArray(data?.participants)) {
           data.participants.forEach(addParticipant);
         }
+        if (data?.arena?.players) {
+          setBattlers((prev) => {
+            const updated = [...prev];
+            for (const [sId, p] of Object.entries(data.arena.players as Record<string, PlayerHealth>)) {
+              const idx = updated.findIndex((b) => b.id === sId);
+              if (idx >= 0) {
+                updated[idx] = {
+                  ...updated[idx],
+                  hp: p.currentHp,
+                  maxHp: p.maxHp,
+                  isAlive: p.isAlive,
+                  hasShield: p.hasShield,
+                  name: p.studentName || updated[idx].name,
+                  avatar: p.avatar || updated[idx].avatar,
+                };
+              } else {
+                updated.push({
+                  id: sId,
+                  name: p.studentName || "Student Fighter",
+                  avatar: p.avatar || "🎓",
+                  hp: p.currentHp,
+                  maxHp: p.maxHp,
+                  hasShield: p.hasShield,
+                  score: 0,
+                  streak: 0,
+                  isAi: false,
+                  isAlive: p.isAlive,
+                });
+              }
+            }
+            return updated;
+          });
+        }
+        if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
+          setPhase("podium");
+        }
       } catch {
         // Silently ignore background polling errors
       }
-    }, 3500);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [phase, quiz.id, addParticipant]);

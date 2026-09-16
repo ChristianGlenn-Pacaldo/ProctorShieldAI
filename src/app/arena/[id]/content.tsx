@@ -19,6 +19,9 @@ import {
   Users,
   Radio,
   Gamepad2,
+  Heart,
+  X,
+  Crosshair,
 } from "lucide-react";
 import {
   playMeteorSound,
@@ -29,7 +32,7 @@ import {
 } from "@/lib/student-battle";
 import { ArenaBattleDock } from "@/components/arena/arena-battle-dock";
 import { ArenaPodium, type PodiumParticipant } from "@/components/arena/arena-podium";
-import type { ArenaState } from "@/lib/arena";
+import type { ArenaState, PlayerHealth } from "@/lib/arena";
 
 interface Choice {
   id: number;
@@ -63,6 +66,28 @@ interface ArenaContentProps {
   savedAnswers: SavedAnswer[];
 }
 
+interface RivalPlayer {
+  studentId: string;
+  studentName: string;
+  avatar: string;
+  currentHp: number;
+  maxHp: number;
+  isAlive: boolean;
+  hasShield: boolean;
+}
+
+interface IncomingAttackAlert {
+  attackId: string;
+  attackerId: string;
+  attackerName: string;
+  targetStudentId?: string;
+  targetName?: string;
+  powerType: string;
+  damage: number;
+  warningExpiry: string;
+  reactionWindowMs: number;
+}
+
 export function ArenaContent({
   quizId,
   quizTitle,
@@ -80,13 +105,22 @@ export function ArenaContent({
 
   // ── Match Phase ──────────────────────────────────────────────
   const [phase, setPhase] = useState<"lobby" | "in_wave" | "podium">(
-    initialQuizStatus === "in_progress" ? "in_wave" : "lobby"
+    initialQuizStatus === "in_progress" ? "in_wave" : initialQuizStatus === "ended" ? "podium" : "lobby"
   );
 
   // ── Questions & Waves ─────────────────────────────────────────
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [waveTimeLeft, setWaveTimeLeft] = useState(30);
   const [waveDuration, setWaveDuration] = useState(30);
+
+  // ── Health & Rivals State ─────────────────────────────────────
+  const [myHp, setMyHp] = useState<number>(100);
+  const [myMaxHp, setMyMaxHp] = useState<number>(100);
+  const [isMyAlive, setIsMyAlive] = useState<boolean>(true);
+  const [rivals, setRivals] = useState<RivalPlayer[]>([]);
+  const [targetPickerPower, setTargetPickerPower] = useState<BattlePowerType | null>(null);
+  const [incomingAttack, setIncomingAttack] = useState<IncomingAttackAlert | null>(null);
+  const [reactionTimeLeftMs, setReactionTimeLeftMs] = useState<number>(0);
 
   // ── Answers & Scoring ─────────────────────────────────────────
   const [lockedAnswers, setLockedAnswers] = useState<Map<number, { choiceId: number; isCorrect: boolean }>>(() => {
@@ -160,7 +194,6 @@ export function ArenaContent({
     if (!ctx) return;
     try {
       if (correct) {
-        // High ascending melodic arpeggio
         [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -174,7 +207,6 @@ export function ArenaContent({
           osc.stop(ctx.currentTime + idx * 0.08 + 0.3);
         });
       } else {
-        // Descending low buzzer
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sawtooth";
@@ -195,81 +227,49 @@ export function ArenaContent({
   const [allParticipants, setAllParticipants] = useState<PodiumParticipant[]>([]);
   const [studentRank, setStudentRank] = useState(1);
 
-  // ── Incoming Attack Handler ───────────────────────────────────
-  const handleIncomingAttack = useCallback((powerType: string, attackerName: string) => {
-    if (hasGuardianShieldRef.current) {
-      hasGuardianShieldRef.current = false;
-      setHasGuardianShield(false);
-      if (soundEnabled) playShieldDeflectSound();
-      setActiveAttackEffect({
-        type: "deflected",
-        attackerName,
-        message: `🛡️ GUARDIAN SHIELD DEFLECTED ${attackerName}'s ${powerType.toUpperCase()}! Your desk was completely protected!`,
-      });
-      setTimeout(() => setActiveAttackEffect(null), 4500);
-      return;
-    }
-
-    if (powerType === "meteor") {
-      if (soundEnabled) playMeteorSound();
-      setActiveAttackEffect({
-        type: "meteor",
-        attackerName,
-        message: `☄️ METEOR STRIKE! ${attackerName} rained fire on your desk!`,
-      });
-    } else if (powerType === "earthquake") {
-      if (soundEnabled) playEarthquakeSound();
-      setActiveAttackEffect({
-        type: "earthquake",
-        attackerName,
-        message: `🌋 SEISMIC EARTHQUAKE! ${attackerName} violently rumbled your screen!`,
-      });
-    } else if (powerType === "blizzard") {
-      if (soundEnabled) playBlizzardSound();
-      setActiveAttackEffect({
-        type: "blizzard",
-        attackerName,
-        message: `❄️ BLIZZARD FROST! ${attackerName} frosted your view in ice crystals!`,
-      });
-    }
-    setTimeout(() => setActiveAttackEffect(null), 4500);
-  }, [soundEnabled]);
-
-  // ── Fetch Initial Arena State ─────────────────────────────────
-  const refreshArenaState = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/arena/${quizId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data?.arena?.status === "active") {
-        setPhase("in_wave");
-        setWaveDuration(data.arena.waveDuration || 30);
-        if (Array.isArray(data.arena.enabledPowers)) {
-          setEnabledPowers(data.arena.enabledPowers);
-        }
-        const waveIdx = Number(data.arena.currentWave);
-        if (Number.isInteger(waveIdx) && waveIdx >= 0 && waveIdx < questions.length) {
-          setCurrentQuestionIndex(waveIdx);
-        }
+  // ── Health Synchronization ────────────────────────────────────
+  const syncPlayerHealth = useCallback((playerHealth?: Record<string, PlayerHealth>) => {
+    if (!playerHealth) return;
+    const me = playerHealth[studentId];
+    if (me) {
+      if (typeof me.currentHp === "number") setMyHp(me.currentHp);
+      if (typeof me.maxHp === "number") setMyMaxHp(me.maxHp);
+      if (typeof me.isAlive === "boolean") setIsMyAlive(me.isAlive);
+      if (typeof me.hasShield === "boolean") {
+        setHasGuardianShield(me.hasShield);
+        hasGuardianShieldRef.current = me.hasShield;
       }
-    } catch {}
-  }, [quizId, questions.length]);
-
-  useEffect(() => {
-    void refreshArenaState();
-  }, [refreshArenaState]);
+    }
+    setRivals((prev) => {
+      return prev.map((r) => {
+        const updated = playerHealth[r.studentId];
+        if (updated) {
+          return {
+            ...r,
+            currentHp: typeof updated.currentHp === "number" ? updated.currentHp : r.currentHp,
+            maxHp: typeof updated.maxHp === "number" ? updated.maxHp : r.maxHp,
+            isAlive: typeof updated.isAlive === "boolean" ? updated.isAlive : r.isAlive,
+            hasShield: typeof updated.hasShield === "boolean" ? updated.hasShield : r.hasShield,
+          };
+        }
+        return r;
+      });
+    });
+  }, [studentId]);
 
   // ── Conclude Match & Finalize Results ─────────────────────────
   const finalizeMatch = useCallback(async () => {
+    setIncomingAttack(null);
+    setTargetPickerPower(null);
+    setIsLaunchingPower(null);
     setPhase("podium");
+
     try {
-      // Build submitted answer array
       const answerPayload: Record<number, number> = {};
       lockedAnswers.forEach((val, qId) => {
         answerPayload[qId] = val.choiceId;
       });
 
-      // Submit attempt cleanly
       const submitRes = await fetch("/api/quizzes/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -289,7 +289,6 @@ export function ArenaContent({
       }
     } catch {}
 
-    // Load final podium rankings
     try {
       const arenaRes = await fetch(`/api/arena/${quizId}`);
       if (arenaRes.ok) {
@@ -311,6 +310,89 @@ export function ArenaContent({
     } catch {}
   }, [quizId, lockedAnswers, studentId, score]);
 
+  // ── Fetch Initial / Reconciled Arena State ─────────────────────
+  const refreshArenaState = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/arena/${quizId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // Authoritative finished state from server
+      if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
+        setIncomingAttack(null);
+        setPhase("podium");
+        void finalizeMatch();
+        return;
+      }
+
+      if (data?.arena?.status === "active") {
+        setPhase("in_wave");
+        setWaveDuration(data.arena.waveDuration || 30);
+        if (Array.isArray(data.arena.enabledPowers)) {
+          setEnabledPowers(data.arena.enabledPowers);
+        }
+
+        // Authoritative currentWave synchronization
+        const waveIdx = Number(data.arena.currentWave);
+        if (Number.isInteger(waveIdx) && waveIdx >= 0 && waveIdx < questions.length) {
+          setCurrentQuestionIndex((prev) => {
+            if (prev !== waveIdx) {
+              setSelectedChoice(null);
+              setIsSubmittingAnswer(false);
+              return waveIdx;
+            }
+            return prev;
+          });
+        }
+
+        // Authoritative remaining time calculation from server waveEndsAt
+        if (data.arena.waveEndsAt) {
+          const endsAt = Date.parse(data.arena.waveEndsAt);
+          if (Number.isFinite(endsAt)) {
+            const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+            setWaveTimeLeft(remaining);
+          }
+        }
+
+        // Sync health
+        if (data.arena.players) {
+          syncPlayerHealth(data.arena.players);
+        }
+      }
+
+      // Populate rivals from enrolled participants
+      if (Array.isArray(data?.participants)) {
+        setRivals((prev) => {
+          return data.participants
+            .filter((p: { studentId: string }) => p.studentId !== studentId)
+            .map((p: { studentId: string; studentName: string; avatar?: string }) => {
+              const existing = prev.find((r) => r.studentId === p.studentId);
+              const playerHp = data.arena?.players?.[p.studentId];
+              return {
+                studentId: p.studentId,
+                studentName: p.studentName,
+                avatar: p.avatar || "🎓",
+                currentHp: playerHp ? playerHp.currentHp : existing ? existing.currentHp : 100,
+                maxHp: playerHp ? playerHp.maxHp : existing ? existing.maxHp : 100,
+                isAlive: playerHp ? playerHp.isAlive : existing ? existing.isAlive : true,
+                hasShield: playerHp ? playerHp.hasShield : existing ? existing.hasShield : false,
+              };
+            });
+        });
+      }
+    } catch {}
+  }, [quizId, questions.length, studentId, finalizeMatch, syncPlayerHealth]);
+
+  // Periodic background state reconciliation
+  useEffect(() => {
+    if (phase === "podium") return;
+    void refreshArenaState();
+    const interval = setInterval(() => {
+      void refreshArenaState();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [phase, refreshArenaState]);
+
   // ── Realtime Pusher Subscription (private-arena-${quizId} ONLY) ──
   useEffect(() => {
     let pusher: PusherClient | null = null;
@@ -324,7 +406,6 @@ export function ArenaContent({
         }
       );
 
-      // Arena-exclusive channel
       const arenaChannel = pusher.subscribe(`private-arena-${quizId}`);
 
       arenaChannel.bind("arena-start", (data?: { arena?: ArenaState; waveDuration?: number }) => {
@@ -335,41 +416,144 @@ export function ArenaContent({
         if (Array.isArray(data?.arena?.enabledPowers)) {
           setEnabledPowers(data.arena.enabledPowers);
         }
+        if (data?.arena?.players) {
+          syncPlayerHealth(data.arena.players);
+        }
         setCurrentQuestionIndex(0);
       });
 
       arenaChannel.bind("arena-wave", (data: { arena?: ArenaState; waveIndex?: number }) => {
         setPhase("in_wave");
+        setIncomingAttack(null);
+        setSelectedChoice(null);
+        setIsSubmittingAnswer(false);
         const idx = typeof data.waveIndex === "number" ? data.waveIndex : data.arena?.currentWave ?? 0;
         if (idx >= 0 && idx < questions.length) {
           setCurrentQuestionIndex(idx);
-          setSelectedChoice(null);
           const duration = data.arena?.waveDuration || waveDuration || 30;
           setWaveTimeLeft(duration);
+        }
+        if (data.arena?.players) {
+          syncPlayerHealth(data.arena.players);
         }
       });
 
       arenaChannel.bind("arena-airdrop", () => {
         setHasGuardianShield(true);
         hasGuardianShieldRef.current = true;
+        setMyHp((prev) => Math.min(myMaxHp, prev + 15));
         if (soundEnabled) playShieldDeflectSound();
-        setCelebrationMessage("🎁 HOST AIRDROP! Guardian Shield armed for the next incoming attack!");
+        setCelebrationMessage("🎁 HOST AIRDROP! Guardian Shield armed and +15 HP restored!");
         setTimeout(() => setCelebrationMessage(null), 4000);
       });
 
-      arenaChannel.bind("battle-attack", (data: {
+      // ── Incoming Attack Warning Event ────────────────────────────
+      const handleIncomingAttackEvent = (data: IncomingAttackAlert) => {
+        if (data.targetStudentId === studentId) {
+          setIncomingAttack(data);
+          setReactionTimeLeftMs(data.reactionWindowMs || 2500);
+        } else if (data.attackerId === studentId) {
+          setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
+          setTimeout(() => setCelebrationMessage(null), 2500);
+        }
+      };
+      arenaChannel.bind("arena-incoming-attack", handleIncomingAttackEvent);
+      arenaChannel.bind("incoming-attack", handleIncomingAttackEvent);
+      arenaChannel.bind("battle-attack", handleIncomingAttackEvent);
+
+      // ── Attack Hit Event ─────────────────────────────────────────
+      const handleAttackHitEvent = (data: {
+        attackId: string;
         attackerId: string;
         attackerName: string;
-        targetId: string;
+        targetStudentId: string;
+        targetName: string;
         powerType: string;
+        damage: number;
+        targetCurrentHp: number;
+        targetMaxHp: number;
+        isAlive: boolean;
+        playerHealth?: Record<string, PlayerHealth>;
       }) => {
-        const isTarget = data.targetId === "all" || data.targetId === studentId;
-        if (isTarget && data.attackerId !== studentId && data.powerType !== "shield") {
-          handleIncomingAttack(data.powerType, data.attackerName);
+        if (data.targetStudentId === studentId) {
+          setMyHp(data.targetCurrentHp);
+          setIsMyAlive(data.isAlive);
+          setIncomingAttack(null);
+
+          if (soundEnabled) {
+            if (data.powerType === "meteor") playMeteorSound();
+            else if (data.powerType === "earthquake") playEarthquakeSound();
+            else if (data.powerType === "blizzard") playBlizzardSound();
+          }
+
+          setActiveAttackEffect({
+            type: (data.powerType as "meteor" | "earthquake" | "blizzard") || "meteor",
+            attackerName: data.attackerName,
+            message: `💥 ${data.attackerName}'s ${data.powerType.toUpperCase()} HIT YOU FOR -${data.damage} HP!`,
+          });
+          setTimeout(() => setActiveAttackEffect(null), 4000);
+        } else {
+          setRivals((prev) =>
+            prev.map((r) => {
+              if (r.studentId === data.targetStudentId) {
+                return {
+                  ...r,
+                  currentHp: data.targetCurrentHp,
+                  maxHp: data.targetMaxHp,
+                  isAlive: data.isAlive,
+                };
+              }
+              return r;
+            })
+          );
+        }
+        if (data.playerHealth) {
+          syncPlayerHealth(data.playerHealth);
+        }
+      };
+      arenaChannel.bind("arena-attack-hit", handleAttackHitEvent);
+      arenaChannel.bind("attack-hit", handleAttackHitEvent);
+
+      // ── Attack Blocked Event ─────────────────────────────────────
+      const handleAttackBlockedEvent = (data: {
+        attackId: string;
+        attackerId: string;
+        attackerName: string;
+        targetStudentId: string;
+        targetName: string;
+        powerType: string;
+        message?: string;
+      }) => {
+        if (data.targetStudentId === studentId) {
+          setIncomingAttack(null);
+          setHasGuardianShield(false);
+          hasGuardianShieldRef.current = false;
+          if (soundEnabled) playShieldDeflectSound();
+          setActiveAttackEffect({
+            type: "deflected",
+            attackerName: data.attackerName,
+            message: `🛡️ DEFLECTED! You blocked ${data.attackerName}'s ${data.powerType.toUpperCase()} with Guardian Shield!`,
+          });
+          setTimeout(() => setActiveAttackEffect(null), 4000);
+        } else if (data.attackerId === studentId) {
+          setCelebrationMessage(`🛡️ ${data.targetName} blocked your ${data.powerType.toUpperCase()} with Guardian Shield!`);
+          setTimeout(() => setCelebrationMessage(null), 3000);
+        }
+      };
+      arenaChannel.bind("arena-attack-blocked", handleAttackBlockedEvent);
+      arenaChannel.bind("attack-blocked", handleAttackBlockedEvent);
+
+      // ── Health Updated Event ─────────────────────────────────────
+      arenaChannel.bind("arena-health-updated", (data: { playerHealth?: Record<string, PlayerHealth> }) => {
+        if (data.playerHealth) {
+          syncPlayerHealth(data.playerHealth);
         }
       });
 
+      // ── Authoritative Arena End Event ────────────────────────────
       arenaChannel.bind("arena-end", () => {
+        setIncomingAttack(null);
+        setTargetPickerPower(null);
         void finalizeMatch();
       });
     } catch (e) {
@@ -382,7 +566,30 @@ export function ArenaContent({
         pusher.disconnect();
       }
     };
-  }, [quizId, questions.length, studentId, soundEnabled, waveDuration, handleIncomingAttack, finalizeMatch]);
+  }, [
+    quizId,
+    questions.length,
+    studentId,
+    soundEnabled,
+    waveDuration,
+    myMaxHp,
+    finalizeMatch,
+    syncPlayerHealth,
+  ]);
+
+  // ── Reaction Countdown Interval for Incoming Attack ───────────
+  useEffect(() => {
+    if (!incomingAttack) return;
+    const expiry = Date.parse(incomingAttack.warningExpiry);
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, expiry - Date.now());
+      setReactionTimeLeftMs(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [incomingAttack]);
 
   // ── Wave Timer Countdown ──────────────────────────────────────
   useEffect(() => {
@@ -391,6 +598,7 @@ export function ArenaContent({
     const timer = setInterval(() => {
       setWaveTimeLeft((prev) => {
         if (prev <= 1) {
+          void refreshArenaState();
           return 0;
         }
         return prev - 1;
@@ -398,7 +606,7 @@ export function ArenaContent({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [phase, currentQuestionIndex]);
+  }, [phase, currentQuestionIndex, refreshArenaState]);
 
   // ── Submit Answer for Current Question ────────────────────────
   const handleSelectChoice = async (choiceId: number) => {
@@ -422,40 +630,50 @@ export function ArenaContent({
 
       const data = await res.json();
       if (!res.ok) {
-        setErrorMessage(data.error || "Failed to record answer.");
+        setErrorMessage(data.error || "Failed to submit answer.");
         setIsSubmittingAnswer(false);
         return;
       }
 
       const isCorrect = Boolean(data.isCorrect);
       setLockedAnswers((prev) => new Map(prev).set(currentQ.id, { choiceId, isCorrect }));
-
       playFeedbackChime(isCorrect);
 
       if (isCorrect) {
         const nextStreak = streak + 1;
         setStreak(nextStreak);
         if (nextStreak > highestStreak) setHighestStreak(nextStreak);
-        const streakMultiplier = nextStreak >= 3 ? 1.5 : 1;
-        const pointsAwarded = Math.round((currentQ.points || 100) * streakMultiplier);
-        setScore((prev) => prev + pointsAwarded);
-        setCelebrationMessage(`🎯 CORRECT! +${pointsAwarded} PTS ${nextStreak >= 2 ? `(${nextStreak}X STREAK)` : ""}`);
+        const streakMultiplier = nextStreak;
+        const pointsEarned = currentQ.points || 100;
+        setScore((prev) => prev + pointsEarned * streakMultiplier);
       } else {
         setStreak(0);
       }
-      setTimeout(() => setCelebrationMessage(null), 2500);
     } catch {
-      setErrorMessage("Network error while submitting answer.");
+      setErrorMessage("Network error submitting answer.");
     } finally {
       setIsSubmittingAnswer(false);
     }
   };
 
   // ── Launch Arena Battle Power ─────────────────────────────────
-  const handleUsePower = async (powerType: BattlePowerType) => {
+  const handleUsePower = (powerType: BattlePowerType) => {
     if (battlePowerInventory[powerType] || isLaunchingPower !== null) return;
+
+    if (powerType === "shield") {
+      // Guardian Shield is self-targeted
+      void executeBattlePower("shield");
+    } else {
+      // Offensive power requires choosing a rival target
+      setTargetPickerPower(powerType);
+    }
+  };
+
+  const executeBattlePower = async (powerType: BattlePowerType, targetStudentId?: string) => {
+    if (isLaunchingPower !== null) return;
     setIsLaunchingPower(powerType);
     setErrorMessage(null);
+    setTargetPickerPower(null);
 
     try {
       const currentQ = questions[currentQuestionIndex];
@@ -466,6 +684,7 @@ export function ArenaContent({
           quizId,
           powerType,
           questionId: currentQ?.id || 1,
+          targetStudentId,
         }),
       });
 
@@ -481,19 +700,16 @@ export function ArenaContent({
         setHasGuardianShield(true);
         hasGuardianShieldRef.current = true;
         if (soundEnabled) playShieldDeflectSound();
-        setCelebrationMessage("🛡️ GUARDIAN SHIELD EQUIPPED! Next incoming rival attack is blocked!");
+        setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
       } else {
-        if (soundEnabled) {
-          if (powerType === "meteor") playMeteorSound();
-          else if (powerType === "earthquake") playEarthquakeSound();
-          else if (powerType === "blizzard") playBlizzardSound();
-        }
-        const names = {
+        const names: Record<string, string> = {
           meteor: "☄️ METEOR STRIKE",
           earthquake: "🌋 EARTHQUAKE TREMOR",
           blizzard: "❄️ BLIZZARD FROST",
         };
-        setCelebrationMessage(`🚀 CAST ${names[powerType]} AT ALL RIVALS!`);
+        const targetRival = rivals.find((r) => r.studentId === targetStudentId);
+        const targetLabel = targetRival?.studentName || "Rival";
+        setCelebrationMessage(`🚀 LAUNCHED ${names[powerType]} AT ${targetLabel.toUpperCase()}! Strike incoming!`);
       }
       setTimeout(() => setCelebrationMessage(null), 3000);
     } catch {
@@ -501,6 +717,36 @@ export function ArenaContent({
     } finally {
       setIsLaunchingPower(null);
     }
+  };
+
+  // ── Defend Incoming Attack with Shield ────────────────────────
+  const handleDefendIncomingAttack = async () => {
+    if (!incomingAttack) return;
+    try {
+      const res = await fetch("/api/arena/battle-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quizId,
+          powerType: "shield",
+          defendAttackId: incomingAttack.attackId,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.deflected) {
+        setIncomingAttack(null);
+        setHasGuardianShield(false);
+        hasGuardianShieldRef.current = false;
+        if (soundEnabled) playShieldDeflectSound();
+        setActiveAttackEffect({
+          type: "deflected",
+          attackerName: incomingAttack.attackerName,
+          message: `🛡️ GUARDIAN SHIELD DEFLECTED ${incomingAttack.attackerName}'s ${incomingAttack.powerType.toUpperCase()}!`,
+        });
+        setTimeout(() => setActiveAttackEffect(null), 4000);
+      }
+    } catch {}
   };
 
   // ── Render: Podium / Match Concluded ──────────────────────────
@@ -527,7 +773,6 @@ export function ArenaContent({
   if (phase === "lobby") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#070a14] via-[#0d1222] to-[#070a14] text-white flex flex-col justify-between p-4 sm:p-8">
-        {/* Top Bar */}
         <header className="flex items-center justify-between max-w-4xl w-full mx-auto">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-rose-500 to-indigo-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]">
@@ -553,7 +798,6 @@ export function ArenaContent({
           </button>
         </header>
 
-        {/* Center Game Station Waiting Radar */}
         <main className="max-w-md w-full mx-auto my-auto text-center flex flex-col items-center py-10">
           <div className="relative mb-6">
             <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gradient-to-tr from-amber-500/20 via-rose-500/20 to-indigo-500/20 border-2 border-indigo-500/40 flex items-center justify-center animate-pulse shadow-[0_0_50px_rgba(99,102,241,0.3)]">
@@ -582,29 +826,29 @@ export function ArenaContent({
               <div className="p-2 rounded-xl bg-[#182035]/60 border border-slate-800 flex items-center gap-2">
                 <span className="text-lg">☄️</span>
                 <div>
-                  <div className="font-black text-rose-300">Meteor</div>
-                  <div className="text-[10px] text-slate-400">-25 HP Rival Strike</div>
+                  <div className="font-black text-rose-300">Meteor Strike</div>
+                  <div className="text-[10px] text-slate-400">-25 HP Rival Target</div>
                 </div>
               </div>
               <div className="p-2 rounded-xl bg-[#182035]/60 border border-slate-800 flex items-center gap-2">
                 <span className="text-lg">🌋</span>
                 <div>
                   <div className="font-black text-amber-300">Earthquake</div>
-                  <div className="text-[10px] text-slate-400">Screen Rumble</div>
+                  <div className="text-[10px] text-slate-400">-15 HP Screen Shake</div>
                 </div>
               </div>
               <div className="p-2 rounded-xl bg-[#182035]/60 border border-slate-800 flex items-center gap-2">
                 <span className="text-lg">❄️</span>
                 <div>
-                  <div className="font-black text-cyan-300">Blizzard</div>
-                  <div className="text-[10px] text-slate-400">Ice Crystal Freeze</div>
+                  <div className="font-black text-cyan-300">Blizzard Frost</div>
+                  <div className="text-[10px] text-slate-400">-10 HP Freeze Effect</div>
                 </div>
               </div>
               <div className="p-2 rounded-xl bg-[#182035]/60 border border-slate-800 flex items-center gap-2">
                 <span className="text-lg">🛡️</span>
                 <div>
                   <div className="font-black text-indigo-300">Guardian Shield</div>
-                  <div className="text-[10px] text-slate-400">Absolute Defense</div>
+                  <div className="text-[10px] text-slate-400">Deflect Next Attack</div>
                 </div>
               </div>
             </div>
@@ -629,7 +873,6 @@ export function ArenaContent({
         activeAttackEffect?.type === "earthquake" ? "animate-[earthquake-rumble_0.5s_infinite]" : ""
       }`}
     >
-      {/* Global CSS for Earthquake Screen Rumble & Meteors */}
       <style jsx global>{`
         @keyframes earthquake-rumble {
           0% { transform: translate(0px, 0px) rotate(0deg); }
@@ -646,7 +889,157 @@ export function ArenaContent({
         }
       `}</style>
 
-      {/* Incoming Attack & Deflection Alert Banner */}
+      {/* Incoming Attack Warning Dialog with Reaction Bar & Shield Button */}
+      {incomingAttack && (
+        <div className="fixed inset-x-4 top-16 sm:top-20 z-[96] max-w-lg mx-auto bg-rose-950/95 border-2 border-rose-500 rounded-3xl p-4 sm:p-5 shadow-[0_0_50px_rgba(244,63,94,0.6)] animate-bounce text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-rose-600 flex items-center justify-center text-2xl shadow-inner shrink-0 animate-pulse">
+              {incomingAttack.powerType === "meteor" ? "☄️" : incomingAttack.powerType === "earthquake" ? "🌋" : "❄️"}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono font-black text-rose-300 uppercase tracking-wider">
+                  ⚠️ INCOMING {incomingAttack.powerType.toUpperCase()} STRIKE!
+                </span>
+                <span className="text-xs font-mono font-black text-amber-300">
+                  {(reactionTimeLeftMs / 1000).toFixed(1)}s
+                </span>
+              </div>
+              <div className="text-sm font-black text-white truncate">
+                {incomingAttack.attackerName} is attacking you! (-{incomingAttack.damage} HP)
+              </div>
+              {/* Animated Countdown Progress Bar */}
+              <div className="w-full h-2 bg-rose-900 rounded-full mt-2 overflow-hidden border border-rose-700/50">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-rose-400 transition-all duration-75"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (reactionTimeLeftMs / (incomingAttack.reactionWindowMs || 2500)) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => void handleDefendIncomingAttack()}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg hover:brightness-110 active:scale-98 cursor-pointer"
+            >
+              <Shield className="w-4 h-4" />
+              ACTIVATE GUARDIAN SHIELD (DEFLECT)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Target Selection Modal for Offensive Battle Powers */}
+      {targetPickerPower && (
+        <div className="fixed inset-0 z-[95] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0f1527] border border-indigo-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">
+                  {targetPickerPower === "meteor" ? "☄️" : targetPickerPower === "earthquake" ? "🌋" : "❄️"}
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-white">Select Rival Target</h3>
+                  <p className="text-xs text-slate-400">
+                    {targetPickerPower === "meteor"
+                      ? "Meteor Strike: -25 HP"
+                      : targetPickerPower === "earthquake"
+                      ? "Earthquake Tremor: -15 HP"
+                      : "Blizzard Frost: -10 HP"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTargetPickerPower(null)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {rivals.length === 0 ? (
+                <div className="text-center py-6 text-slate-500 text-xs font-semibold">
+                  Waiting for rivals to enter the arena...
+                </div>
+              ) : rivals.filter((r) => r.isAlive && r.currentHp > 0).length === 0 ? (
+                <div className="text-center py-6 text-slate-500 text-xs font-semibold">
+                  All rivals have been eliminated!
+                </div>
+              ) : (
+                rivals.map((rival) => {
+                  const isAlive = rival.isAlive && rival.currentHp > 0;
+                  return (
+                    <button
+                      key={rival.studentId}
+                      type="button"
+                      disabled={!isAlive}
+                      onClick={() => void executeBattlePower(targetPickerPower, rival.studentId)}
+                      className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all cursor-pointer ${
+                        isAlive
+                          ? "bg-[#161d33] hover:bg-indigo-900/40 border-slate-800 hover:border-indigo-500 text-white"
+                          : "bg-slate-900/40 border-slate-800 text-slate-500 opacity-40 cursor-not-allowed"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{rival.avatar}</span>
+                        <div className="text-left">
+                          <div className="text-xs font-black flex items-center gap-1.5">
+                            <span>{rival.studentName}</span>
+                            {rival.hasShield && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                                🛡️ SHIELD
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {isAlive ? `HP: ${rival.currentHp} / ${rival.maxHp}` : "💀 ELIMINATED"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 sm:w-28 h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${
+                              rival.currentHp > 50
+                                ? "bg-emerald-400"
+                                : rival.currentHp > 25
+                                ? "bg-amber-400"
+                                : "bg-rose-500"
+                            }`}
+                            style={{ width: `${Math.max(0, Math.min(100, (rival.currentHp / rival.maxHp) * 100))}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-black text-rose-400 uppercase tracking-wider px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                          STRIKE
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setTargetPickerPower(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hit / Deflection Alert Banner */}
       {activeAttackEffect && (
         <div
           className="fixed top-6 left-1/2 -translate-x-1/2 z-[90] px-6 py-3.5 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-bounce max-w-lg w-[92%] text-center justify-center pointer-events-none"
@@ -716,7 +1109,7 @@ export function ArenaContent({
       )}
 
       {/* Top Game Station HUD */}
-      <header className="max-w-4xl w-full mx-auto flex items-center justify-between mb-4">
+      <header className="max-w-4xl w-full mx-auto flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white shadow-md">
             <Flame className="w-4 h-4" />
@@ -725,13 +1118,35 @@ export function ArenaContent({
             <div className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">
               Wave {currentQuestionIndex + 1} of {questions.length}
             </div>
-            <div className="text-xs sm:text-sm font-black text-white truncate max-w-[160px] sm:max-w-xs">
+            <div className="text-xs sm:text-sm font-black text-white truncate max-w-[140px] sm:max-w-xs">
               {quizTitle}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* MY HEALTH BAR BADGE */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#141828] border border-slate-800 shadow-md">
+            <Heart className="w-4 h-4 fill-rose-500 text-rose-500 shrink-0" />
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono font-black">
+                <span className="text-slate-400">MY HP:</span>
+                <span className={myHp > 50 ? "text-emerald-300" : myHp > 25 ? "text-amber-300" : "text-rose-400"}>
+                  {myHp} / {myMaxHp}
+                </span>
+                {hasGuardianShield && <span title="Shield Equipped">🛡️</span>}
+              </div>
+              <div className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                <div
+                  className={`h-full transition-all ${
+                    myHp > 50 ? "bg-emerald-400" : myHp > 25 ? "bg-amber-400" : "bg-rose-500"
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, (myHp / myMaxHp) * 100))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Wave Timer */}
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono font-black text-xs sm:text-sm shadow-md border transition-all ${
@@ -745,7 +1160,7 @@ export function ArenaContent({
           </div>
 
           {/* Streak Counter */}
-          <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 font-mono font-black text-xs sm:text-sm">
+          <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 font-mono font-black text-xs sm:text-sm">
             <Flame className="w-3.5 h-3.5 text-orange-400" />
             <span>{streak}X</span>
           </div>
@@ -768,11 +1183,58 @@ export function ArenaContent({
         </div>
       </header>
 
+      {/* Rivals Health Strip */}
+      {rivals.length > 0 && (
+        <div className="max-w-4xl w-full mx-auto mb-3 p-2 rounded-2xl bg-[#0f1527]/90 border border-slate-800/80 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-inner">
+          <span className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-wider shrink-0 px-2 flex items-center gap-1">
+            <Users className="w-3 h-3 text-indigo-400" />
+            RIVALS ({rivals.filter((r) => r.isAlive && r.currentHp > 0).length}/{rivals.length}):
+          </span>
+          {rivals.map((rival) => {
+            const isAlive = rival.isAlive && rival.currentHp > 0;
+            return (
+              <div
+                key={rival.studentId}
+                className={`shrink-0 flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs transition-all ${
+                  isAlive
+                    ? "bg-[#141b30] border-slate-700/80 text-white shadow-sm"
+                    : "bg-slate-950/40 border-slate-800/50 text-slate-500 opacity-50"
+                }`}
+              >
+                <span className="text-base">{rival.avatar}</span>
+                <div className="flex flex-col min-w-[65px]">
+                  <div className="flex items-center gap-1 font-bold text-[11px] truncate max-w-[85px]">
+                    <span>{rival.studentName}</span>
+                    {rival.hasShield && <span title="Shield Armed">🛡️</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="w-12 sm:w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          rival.currentHp > 50
+                            ? "bg-emerald-400"
+                            : rival.currentHp > 25
+                            ? "bg-amber-400"
+                            : "bg-rose-500"
+                        }`}
+                        style={{ width: `${Math.max(0, Math.min(100, (rival.currentHp / rival.maxHp) * 100))}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                      {isAlive ? `${rival.currentHp}` : "💀"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Main Question Card Area */}
       <main className="max-w-4xl w-full mx-auto my-auto flex flex-col justify-center">
         {currentQ ? (
           <div className="bg-gradient-to-br from-[#12182b] to-[#0d1222] border border-indigo-500/20 rounded-3xl p-5 sm:p-8 shadow-2xl">
-            {/* Wave Progress Bar */}
             <div className="w-full h-1.5 bg-slate-800 rounded-full mb-6 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-amber-400 via-rose-500 to-indigo-500 transition-all duration-1000"
@@ -780,7 +1242,6 @@ export function ArenaContent({
               />
             </div>
 
-            {/* Question Text */}
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[11px] font-mono font-black px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
@@ -795,7 +1256,6 @@ export function ArenaContent({
               </h2>
             </div>
 
-            {/* Choice Options */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {currentQ.choices.map((choice, cIndex) => {
                 const isSelected = selectedChoice === choice.id || currentAnswer?.choiceId === choice.id;
