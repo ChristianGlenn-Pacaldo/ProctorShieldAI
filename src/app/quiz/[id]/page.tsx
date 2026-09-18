@@ -106,6 +106,7 @@ export default function QuizRoom() {
   const lastTeacherWarningIdRef = useRef("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const submissionInFlightRef = useRef(false);
   const autoSubmitAttemptedRef = useRef(false);
   const isReportingRef = useRef(false);
@@ -113,6 +114,16 @@ export default function QuizRoom() {
   const isStartupGracePeriodRef = useRef(true);
   const lastViolationAtRef = useRef(0);
   const fullscreenMonitoringRef = useRef(false);
+
+  // Security Incident Refs (Component-level to avoid stale closures)
+  const awayIncidentActiveRef = useRef(false);
+  const awayViolationRecordedRef = useRef(false);
+  const awayGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fullscreenIncidentActiveRef = useRef(false);
+  const fullscreenViolationRecordedRef = useRef(false);
+  const fullscreenGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const examActiveRef = useRef(false);
+
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
   const [teacherWarningModal, setTeacherWarningModal] = useState({ show: false, message: "" });
   const [preWarning, setPreWarning] = useState<string | null>(null);
@@ -710,7 +721,9 @@ export default function QuizRoom() {
     questionsRef.current = questions;
     studentQuizIdRef.current = studentQuizId;
     violationCountStateRef.current = violationCount;
-  }, [answersState, questions, studentQuizId, violationCount]);
+    isSubmittingRef.current = isSubmitting;
+    examActiveRef.current = hasStarted && !isSubmitting && !quizSubmittedResult && violationCount < 3;
+  }, [answersState, questions, studentQuizId, violationCount, hasStarted, isSubmitting, quizSubmittedResult]);
 
   const autosaveAnswers = useCallback(async () => {
     const currentStudentQuizId = studentQuizIdRef.current;
@@ -1013,9 +1026,11 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   const reportViolation = useCallback(async (type: string, confidenceScore = 92): Promise<boolean> => {
     const now = Date.now();
     if (
+      !examActiveRef.current ||
+      submissionInFlightRef.current ||
+      violationCountRef.current >= 3 ||
       isReportingRef.current ||
-      isAlertingRef.current ||
-      now - lastViolationAtRef.current < 1_500
+      now - lastViolationAtRef.current < 1_200
     ) return false;
 
     isReportingRef.current = true;
@@ -1051,20 +1066,14 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       const violationId = String(data.violation?.id || "");
       if (/^\d+$/.test(violationId)) {
         const clip = await evidenceClipPromise;
-        if (!clip) {
-          console.warn("This browser could not record violation video evidence; the snapshot fallback was retained.");
-        } else {
+        if (clip) {
           const formData = new FormData();
           formData.append("evidence", clip.blob, `violation-${violationId}.${clip.extension}`);
           formData.append("durationMs", String(clip.durationMs));
-          const uploadResponse = await fetch(`/api/live/violation/${violationId}/evidence`, {
+          void fetch(`/api/live/violation/${violationId}/evidence`, {
             method: "POST",
             body: formData,
-          });
-          if (!uploadResponse.ok) {
-            const uploadError = await uploadResponse.json().catch(() => null);
-            console.error("Violation video upload failed:", uploadResponse.status, uploadError?.error);
-          }
+          }).catch(() => {});
         }
       }
 
@@ -1087,9 +1096,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         });
         setTimeout(() => {
           submitQuizRef.current();
-        }, 4500);
+        }, 3000);
       } else {
-        isAlertingRef.current = true;
         setWarningModal({
           show: true,
           message: `Violation ${currentCount}/3: ${violationLabel}. Please correct this before continuing.`,
@@ -1110,6 +1118,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   }, [quizId, captureEvidenceClip, captureSnapshot, playTone, setWarningModal]);
 
   const reportViolationRef = useRef(reportViolation);
+  const triggerViolation = useCallback((type: string, score = 92) => reportViolation(type, score), [reportViolation]);
   useEffect(() => {
     reportViolationRef.current = reportViolation;
   }, [reportViolation]);
@@ -1374,11 +1383,14 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           setAiStatus("Face active · device loading");
 
           let lookingAwayFrames = 0;
+          let lookingAwayViolationRecorded = false;
           let noFaceFrames = 0;
+          let noFaceViolationRecorded = false;
           let multipleFacesFrames = 0;
+          let multipleFacesViolationRecorded = false;
           let phoneDetectedFrames = 0;
           let phoneAbsentFrames = 0;
-          let phoneIncidentReported = false;
+          let phoneViolationRecorded = false;
           let tickCounter = 0;
           let detectionBusy = false;
 
@@ -1418,13 +1430,21 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           faceDetectionInterval = setInterval(async () => {
             if (
               document.hidden ||
+              document.visibilityState === "hidden" ||
               detectionBusy ||
+              !examActiveRef.current ||
               violationCountRef.current >= 3 ||
-              isAlertingRef.current ||
+              submissionInFlightRef.current ||
               isReportingRef.current
             ) return;
+
             const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
-            if (!activeVideo || activeVideo.readyState < 2 || activeVideo.videoWidth === 0 || activeVideo.videoHeight === 0) return;
+            if (!activeVideo || activeVideo.readyState < 2 || activeVideo.videoWidth === 0 || activeVideo.videoHeight === 0) {
+              if (activeVideo && activeVideo.paused && mediaStreamRef.current?.active) {
+                activeVideo.play().catch(() => {});
+              }
+              return;
+            }
             detectionBusy = true;
 
             try {
@@ -1440,13 +1460,12 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               return;
             }
 
-            // Once device AI is ready, scan it first (tick zero) so a phone
-            // cannot be mislabeled as a faster no-face incident.
+            // Alternate scan: device AI on even ticks, face AI on odd ticks
             if (tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
                 const detections = await faceapi.detectAllFaces(
                   inferenceCanvas,
-                    new faceapi.TinyFaceDetectorOptions({
+                  new faceapi.TinyFaceDetectorOptions({
                     inputSize: performanceProfile.faceInputSize,
                     scoreThreshold: 0.5,
                   })
@@ -1454,21 +1473,30 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
                 if (detections.length === 0) {
                   noFaceFrames++;
-                  if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5)) {
-                    const persisted = await reportViolationRef.current("no_face");
-                    noFaceFrames = persisted ? 0 : 4;
+                  if (noFaceFrames === 2) {
+                    setPreWarning("⚠️ Warning: No face detected. Please face your camera.");
+                  }
+                  if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5) && !noFaceViolationRecorded) {
+                    noFaceViolationRecorded = true;
+                    await reportViolationRef.current("no_face", 100);
                   }
                   setFaceStatus("Not Detected ✗");
                 } else if (detections.length > 1) {
                   multipleFacesFrames++;
-                  if (multipleFacesFrames >= (isMobile ? 2 : 4)) {
-                    const persisted = await reportViolationRef.current("multiple_faces");
-                    multipleFacesFrames = persisted ? 0 : 3;
+                  if (multipleFacesFrames === 2) {
+                    setPreWarning("⚠️ Warning: Multiple faces detected in frame.");
+                  }
+                  if (multipleFacesFrames >= (isMobile ? 3 : 4) && !multipleFacesViolationRecorded) {
+                    multipleFacesViolationRecorded = true;
+                    await reportViolationRef.current("multiple_faces", 100);
                   }
                   setFaceStatus("Multiple ✗");
                 } else {
+                  // Exactly 1 face detected -> reset no_face & multiple_faces incident states
                   noFaceFrames = 0;
+                  noFaceViolationRecorded = false;
                   multipleFacesFrames = 0;
+                  multipleFacesViolationRecorded = false;
                   setFaceStatus("Detected ✓");
 
                   const landmarks = detections[0].landmarks;
@@ -1520,16 +1548,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     if (lookingAwayFrames === 2) {
                       setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
                     }
-                    if (lookingAwayFrames >= (isMobile ? 3 : 5)) {
-                      const persisted = await reportViolationRef.current(violationReason);
-                      lookingAwayFrames = persisted ? 0 : 4;
-                      if (persisted) setPreWarning(null);
+                    if (lookingAwayFrames >= (isMobile ? 3 : 5) && !lookingAwayViolationRecorded) {
+                      lookingAwayViolationRecorded = true;
+                      await reportViolationRef.current(violationReason, 90);
                     }
                   } else {
-                    if (lookingAwayFrames > 0) {
-                      lookingAwayFrames--;
-                      if (lookingAwayFrames < 2) setPreWarning(null);
-                    }
+                    lookingAwayFrames = 0;
+                    lookingAwayViolationRecorded = false;
                   }
                 }
               } catch (faceErr) {
@@ -1548,28 +1573,23 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                       ? `Phone ${Math.round(deviceConfidence * 100)}% ✗`
                       : `Confirming ${Math.round(deviceConfidence * 100)}%…`
                   );
-                  // A single low-resolution COCO frame is not reliable enough
-                  // to punish a student. Require two consecutive object scans
-                  // on every device before recording a violation.
-                  if (phoneDetectedFrames >= 2 && !phoneIncidentReported) {
+                  if (phoneDetectedFrames >= 2) {
                     setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
-                    const persisted = await reportViolationRef.current(
-                      "device_detected",
-                      Math.round(deviceConfidence * 100)
-                    );
-                    if (persisted) phoneIncidentReported = true;
+                    if (!phoneViolationRecorded) {
+                      phoneViolationRecorded = true;
+                      await reportViolationRef.current(
+                        "device_detected",
+                        Math.round(deviceConfidence * 100)
+                      );
+                    }
                   }
                 } else {
-                  // Confirmation must be consecutive; never accumulate weak,
-                  // unrelated matches across several minutes of an exam.
                   phoneDetectedFrames = 0;
                   phoneAbsentFrames++;
                   if (phoneAbsentFrames >= 3) {
-                    phoneDetectedFrames = 0;
-                    phoneIncidentReported = false;
-                    if (!isAlertingRef.current) setPreWarning(null);
+                    phoneViolationRecorded = false;
+                    setDeviceStatus("None ✓");
                   }
-                  setDeviceStatus("None ✓");
                 }
               } catch (cocoErr) {
                 console.warn("Object detection frame failed:", cocoErr);
@@ -1657,105 +1677,113 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     };
     requestFS();
 
-    // ── Incident State Machine for Tab/Focus Loss & Fullscreen ──
-    let awayGraceTimer: ReturnType<typeof setTimeout> | null = null;
-    let awayIncidentActive = false;
-    let awayViolationRecorded = false;
-    let awayStartedAt = 0;
-
-    let fullscreenGraceTimer: ReturnType<typeof setTimeout> | null = null;
-    let fullscreenIncidentActive = false;
-    let fullscreenViolationRecorded = false;
-
+    // ── Incident State Machine for Tab/Focus Loss & Fullscreen (Using Component Refs) ──
     let lastShortcutReportAt = 0;
 
-    const handleFocusLoss = (graceMs = 1500) => {
-      if (isStartupGracePeriodRef.current || violationCountRef.current >= 3) return;
-      if (!awayStartedAt) awayStartedAt = Date.now();
+    const beginAway = (graceMs = 1500) => {
+      if (!examActiveRef.current || isStartupGracePeriodRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
 
-      if (!awayIncidentActive) {
-        awayIncidentActive = true;
-        setPreWarning("⚠️ Warning: Return to the exam. Leaving or minimizing the exam window is prohibited.");
-      }
-
-      if (awayViolationRecorded) {
+      if (awayViolationRecordedRef.current) {
         // Continuous incident already penalized once, do not spam or add more strikes
         return;
       }
 
-      if (!awayGraceTimer) {
-        awayGraceTimer = setTimeout(async () => {
-          awayGraceTimer = null;
-          const examStillAway = document.hidden || !document.hasFocus();
-          if (examStillAway && !awayViolationRecorded && violationCountRef.current < 3) {
-            awayViolationRecorded = true;
-            await reportViolation("tab_switch", 100);
+      if (!awayIncidentActiveRef.current) {
+        awayIncidentActiveRef.current = true;
+        setPreWarning("⚠️ Warning: Return to the exam. Leaving or minimizing the exam window is prohibited.");
+      }
+
+      if (!awayGraceTimerRef.current) {
+        awayGraceTimerRef.current = setTimeout(async () => {
+          awayGraceTimerRef.current = null;
+          if (!examActiveRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+          const isStillAway = typeof document !== "undefined" && (document.visibilityState === "hidden" || document.hidden);
+          if (isStillAway && !awayViolationRecordedRef.current) {
+            awayViolationRecordedRef.current = true;
+            await reportViolationRef.current("tab_switch", 100);
           }
         }, graceMs);
       }
     };
 
-    const handleFocusReturn = () => {
-      if (awayGraceTimer) {
-        clearTimeout(awayGraceTimer);
-        awayGraceTimer = null;
+    const endAway = () => {
+      if (awayGraceTimerRef.current) {
+        clearTimeout(awayGraceTimerRef.current);
+        awayGraceTimerRef.current = null;
       }
-      awayStartedAt = 0;
       // Reset continuous incident state when student returns to exam
-      awayIncidentActive = false;
-      awayViolationRecorded = false;
-      if (!isAlertingRef.current && !fullscreenIncidentActive) {
+      awayIncidentActiveRef.current = false;
+      awayViolationRecordedRef.current = false;
+      if (!fullscreenIncidentActiveRef.current) {
         setPreWarning(null);
       }
-    };
 
-    const handleFullscreenChange = () => {
-      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
-      if (isStartupGracePeriodRef.current || violationCountRef.current >= 3) return;
-
-      if (!document.fullscreenElement) {
-        if (!fullscreenIncidentActive) {
-          fullscreenIncidentActive = true;
-          setPreWarning("⚠️ Warning: Exiting full screen is prohibited. Please re-enter full screen.");
-        }
-
-        if (fullscreenViolationRecorded) return;
-
-        if (!fullscreenGraceTimer) {
-          fullscreenGraceTimer = setTimeout(async () => {
-            fullscreenGraceTimer = null;
-            if (!document.fullscreenElement && !fullscreenViolationRecorded && violationCountRef.current < 3) {
-              fullscreenViolationRecorded = true;
-              await reportViolation("fullscreen_exit", 100);
-            }
-          }, 1500);
-        }
-      } else {
-        if (fullscreenGraceTimer) {
-          clearTimeout(fullscreenGraceTimer);
-          fullscreenGraceTimer = null;
-        }
-        fullscreenIncidentActive = false;
-        fullscreenViolationRecorded = false;
-        if (!isAlertingRef.current && !awayIncidentActive) {
-          setPreWarning(null);
-        }
+      // Resume video playback if it paused during mobile backgrounding
+      const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
+      if (activeVideo && activeVideo.paused && mediaStreamRef.current?.active) {
+        activeVideo.play().catch(() => {});
       }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) handleFocusLoss(1500);
-      else handleFocusReturn();
+      if (document.visibilityState === "hidden" || document.hidden) {
+        beginAway(1500);
+      } else {
+        endAway();
+      }
     };
 
     const handleWindowBlur = () => {
-      handleFocusLoss(isMobile ? 1200 : 1800);
+      beginAway(isMobile ? 1200 : 1800);
     };
 
-    const handlePageHide = () => handleFocusLoss(500);
-    const handlePageShow = () => handleFocusReturn();
-    const handlePageFreeze = () => handleFocusLoss(500);
-    const handlePageResume = () => handleFocusReturn();
+    const handleWindowFocus = () => {
+      endAway();
+    };
+
+    const handlePageHide = () => {
+      beginAway(400);
+    };
+
+    const handlePageShow = () => {
+      endAway();
+    };
+
+    const handleFullscreenChange = () => {
+      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
+      if (!examActiveRef.current || isStartupGracePeriodRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+
+      const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (!fsElement) {
+        if (!fullscreenIncidentActiveRef.current) {
+          fullscreenIncidentActiveRef.current = true;
+          setPreWarning("⚠️ Warning: Exiting full screen is prohibited. Please re-enter full screen.");
+        }
+
+        if (fullscreenViolationRecordedRef.current) return;
+
+        if (!fullscreenGraceTimerRef.current) {
+          fullscreenGraceTimerRef.current = setTimeout(async () => {
+            fullscreenGraceTimerRef.current = null;
+            const currentFs = document.fullscreenElement || (document as any).webkitFullscreenElement;
+            if (!currentFs && !fullscreenViolationRecordedRef.current && violationCountRef.current < 3 && examActiveRef.current) {
+              fullscreenViolationRecordedRef.current = true;
+              await reportViolationRef.current("fullscreen_exit", 100);
+            }
+          }, 1500);
+        }
+      } else {
+        if (fullscreenGraceTimerRef.current) {
+          clearTimeout(fullscreenGraceTimerRef.current);
+          fullscreenGraceTimerRef.current = null;
+        }
+        fullscreenIncidentActiveRef.current = false;
+        fullscreenViolationRecordedRef.current = false;
+        if (!awayIncidentActiveRef.current) {
+          setPreWarning(null);
+        }
+      }
+    };
 
     // Mobile render watchdog fallback
     let lastRenderedFrameAt = performance.now();
@@ -1769,9 +1797,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     const renderWatchdog = window.setInterval(() => {
       if (
         !isMobile
+        || !examActiveRef.current
         || isStartupGracePeriodRef.current
         || violationCountRef.current >= 3
-        || awayIncidentActive
+        || awayIncidentActiveRef.current
       ) {
         stalledRenderChecks = 0;
         return;
@@ -1781,13 +1810,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       stalledRenderChecks = renderGap >= 1_800 ? stalledRenderChecks + 1 : 0;
       if (stalledRenderChecks >= 2) {
         stalledRenderChecks = 0;
-        handleFocusLoss(0);
+        beginAway(0);
       }
     }, 750);
 
     const handleClipboard = (e: ClipboardEvent) => {
       e.preventDefault();
-      if (!isStartupGracePeriodRef.current) void reportViolation("clipboard_attempt", 100);
+      if (examActiveRef.current && !isStartupGracePeriodRef.current) void reportViolationRef.current("clipboard_attempt", 100);
     };
     const preventContextMenu = (e: MouseEvent) => { e.preventDefault(); };
     const preventShortcuts = (e: KeyboardEvent) => {
@@ -1799,28 +1828,29 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (!screenshotOrCapture && !clipboardShortcut && !developerShortcut) return;
 
       e.preventDefault();
-      if (isStartupGracePeriodRef.current || Date.now() - lastShortcutReportAt < 1_000) return;
+      if (!examActiveRef.current || isStartupGracePeriodRef.current || Date.now() - lastShortcutReportAt < 1_000) return;
       lastShortcutReportAt = Date.now();
       const violationType = developerShortcut
         ? "developer_tools"
         : clipboardShortcut
           ? "clipboard_attempt"
           : "attempted_screenshot";
-      void reportViolation(violationType, 100);
+      void reportViolationRef.current(violationType, 100);
     };
 
     const handleBeforePrint = () => {
-      if (!isStartupGracePeriodRef.current) void reportViolation("attempted_screenshot", 100);
+      if (examActiveRef.current && !isStartupGracePeriodRef.current) void reportViolationRef.current("attempted_screenshot", 100);
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
-    window.addEventListener("focus", handleFocusReturn);
+    window.addEventListener("focus", handleWindowFocus);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("freeze", handlePageFreeze);
-    document.addEventListener("resume", handlePageResume);
+    document.addEventListener("freeze", handlePageHide);
+    document.addEventListener("resume", handlePageShow);
     window.addEventListener("beforeprint", handleBeforePrint);
     document.addEventListener("copy", handleClipboard);
     document.addEventListener("cut", handleClipboard);
@@ -1831,18 +1861,25 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
     return () => {
       if (graceTimer) clearTimeout(graceTimer);
-      if (awayGraceTimer) clearTimeout(awayGraceTimer);
-      if (fullscreenGraceTimer) clearTimeout(fullscreenGraceTimer);
+      if (awayGraceTimerRef.current) {
+        clearTimeout(awayGraceTimerRef.current);
+        awayGraceTimerRef.current = null;
+      }
+      if (fullscreenGraceTimerRef.current) {
+        clearTimeout(fullscreenGraceTimerRef.current);
+        fullscreenGraceTimerRef.current = null;
+      }
       window.cancelAnimationFrame(renderFrameId);
       window.clearInterval(renderWatchdog);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
-      window.removeEventListener("focus", handleFocusReturn);
+      window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("freeze", handlePageFreeze);
-      document.removeEventListener("resume", handlePageResume);
+      document.removeEventListener("freeze", handlePageHide);
+      document.removeEventListener("resume", handlePageShow);
       window.removeEventListener("beforeprint", handleBeforePrint);
       document.removeEventListener("copy", handleClipboard);
       document.removeEventListener("cut", handleClipboard);

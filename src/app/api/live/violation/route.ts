@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       studentName: session.fullName,
       quizTitle: studentQuiz.quiz.title,
       violationType,
+      violationCount: violationResult.count,
       snapshot: evidence || null,
       timestamp: violation.timestamp,
     });
@@ -133,7 +134,6 @@ export async function POST(req: NextRequest) {
     // Broadcast violation event to admin
     try {
       await pusherServer.trigger("private-admin-dashboard", "activity", {
-        type: "violation",
         userId: session.userId,
         fullName: session.fullName,
         role: "student",
