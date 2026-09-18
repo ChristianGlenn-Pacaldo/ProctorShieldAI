@@ -46,7 +46,7 @@ test("6 & 7: Returning from departure resets incident state allowing future depa
 test("8: Third valid incident triggers automatic submission", () => {
   assert.match(quizPageSrc, /currentCount\s*>=\s*3/);
   assert.match(quizPageSrc, /isFinal:\s*true/);
-  assert.match(quizPageSrc, /submitQuizRef\.current\(\)/);
+  assert.match(quizPageSrc, /submitQuizRef\.current\(/);
 });
 
 test("9: Violation API response updates student strike count authoritatively", () => {

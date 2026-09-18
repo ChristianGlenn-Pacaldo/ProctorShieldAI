@@ -90,14 +90,14 @@ test("Test E: Live Monitoring runner contains no Arena attack or wave event list
 test("Test F: Tab switch and window blur still record violations for proctored quiz", () => {
   assert.match(quizPageSrc, /visibilitychange/);
   assert.match(quizPageSrc, /tab_switch/);
-  assert.match(quizPageSrc, /window_blur|fullscreen_exit/);
+  assert.match(quizPageSrc, /handleWindowBlur|fullscreenchange|fullscreen_exit/);
   assert.match(quizPageSrc, /reportViolation\(/);
   assert.match(quizPageSrc, /\/api\/live\/violation/);
 });
 
 test("Test G: 3 violations still trigger 3-strike auto-submit", () => {
   assert.match(quizPageSrc, /currentCount\s*>=\s*3/);
-  assert.match(quizPageSrc, /submitQuizRef\.current\(\)/);
+  assert.match(quizPageSrc, /submitQuizRef\.current\(/);
   assert.match(quizPageSrc, /Violation \${currentCount}\/3/);
 });
 

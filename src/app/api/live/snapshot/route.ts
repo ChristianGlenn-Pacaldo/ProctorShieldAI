@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         quizStatus: { notIn: ["completed", "rejected"] },
         quiz: { quizMode: { not: "arena" } },
       },
-      include: { quiz: { select: { title: true, teacherId: true, quizMode: true } } },
+      include: { quiz: { select: { title: true, teacherId: true, quizMode: true, quizStatus: true } } },
       orderBy: { attemptNumber: "desc" },
     });
     if (!enrollment) {
@@ -44,10 +44,10 @@ export async function POST(req: NextRequest) {
     if (enrollment.quiz.quizMode === "arena") {
       return NextResponse.json({ error: "Arena quizzes do not use live monitor" }, { status: 400 });
     }
-    if (!enrollment.startTime) {
+    if (!enrollment.startTime && enrollment.quiz.quizStatus === "in_progress" && enrollment.quizStatus === "in_progress") {
       await prisma.studentQuiz.update({
         where: { id: enrollment.id },
-        data: { startTime: new Date(), quizStatus: "in_progress" },
+        data: { startTime: new Date() },
       }).catch(() => {});
     }
     if (!await hasActiveProSubscription(enrollment.quiz.teacherId)) {

@@ -51,6 +51,13 @@ type QuizSubmittedResult = {
   totalCoins?: number;
 };
 
+export type SubmissionReason =
+  | "manual"
+  | "all_questions_completed"
+  | "timer_expired"
+  | "violation_limit"
+  | "teacher_ended";
+
 // Module-level cached promises to prevent duplicate downloads and allow preloading
 let cachedFaceApiPromise: Promise<any> | null = null;
 let cachedCocoModelPromise: Promise<any> | null = null;
@@ -776,9 +783,45 @@ export default function QuizRoom() {
     return () => window.clearInterval(heartbeat);
   }, [autosaveAnswers, autosaveStatus, hasStarted, isOnline, studentQuizId]);
 
-  // ── Submit quiz to backend ────────────────────────────
-  const submitQuiz = useCallback(async () => {
+  const timerInitializedRef = useRef(false);
+
+  // ── Submit quiz to backend with Authoritative Reason Guard ──
+  const submitQuiz = useCallback(async (reason: SubmissionReason = "manual") => {
     if (submissionInFlightRef.current) return;
+
+    const currentQuestions = questionsRef.current;
+    const currentAnswers = answersStateRef.current;
+    const currentViolations = violationCountStateRef.current;
+
+    console.log(`[QuizRunner] submitQuiz invoked with reason: "${reason}"`);
+
+    // Guard: Prevent false submission on "all_questions_completed" if not actually completed
+    if (reason === "all_questions_completed") {
+      if (
+        !currentQuestions.length ||
+        Object.keys(currentAnswers).length < currentQuestions.length
+      ) {
+        console.warn(`[SubmitGuard] Blocked premature submit "${reason}": only ${Object.keys(currentAnswers).length}/${currentQuestions.length} answered.`);
+        return;
+      }
+    }
+
+    // Guard: Prevent premature timer submission during initialization
+    if (reason === "timer_expired") {
+      if (!hasStarted || !timerInitializedRef.current || timeLeft > 0) {
+        console.warn(`[SubmitGuard] Blocked premature submit "${reason}": timer not legitimately expired (timeLeft: ${timeLeft}, initialized: ${timerInitializedRef.current}).`);
+        return;
+      }
+    }
+
+    // Guard: Prevent premature violation submission if under 3 strikes
+    if (reason === "violation_limit") {
+      if (currentViolations < 3 && violationCountRef.current < 3) {
+        console.warn(`[SubmitGuard] Blocked premature submit "${reason}": violation count ${currentViolations} < 3.`);
+        return;
+      }
+    }
+
     if (!navigator.onLine) {
       setAutosaveStatus("offline");
       setPreWarning("You are offline. Your answers are safe on this device and submission will resume when the connection returns.");
@@ -792,10 +835,7 @@ export default function QuizRoom() {
       if (pendingEvidenceUploadRef.current) {
         await pendingEvidenceUploadRef.current;
       }
-      const currentAnswers = answersStateRef.current;
-      const currentQuestions = questionsRef.current;
       const currentStudentQuizId = studentQuizIdRef.current;
-      const currentViolations = violationCountStateRef.current;
 
       const payloadAnswers = Object.entries(currentAnswers).map(([qId, cId]) => ({
         questionId: parseInt(qId),
@@ -809,6 +849,7 @@ export default function QuizRoom() {
           quizId: parseInt(quizId),
           answers: payloadAnswers,
           studentQuizId: currentStudentQuizId,
+          reason,
         })
       });
 
@@ -862,7 +903,7 @@ export default function QuizRoom() {
       submissionInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [quizId, playTone, router, setPreWarning]);
+  }, [quizId, hasStarted, timeLeft, playTone, router, setPreWarning]);
 
   const submitQuizRef = useRef(submitQuiz);
   useEffect(() => {
@@ -877,7 +918,7 @@ export default function QuizRoom() {
       message: "You have accumulated 3 security violations. Your quiz is now being submitted automatically.",
       isFinal: true,
     });
-    const timer = window.setTimeout(() => void submitQuizRef.current(), 1_500);
+    const timer = window.setTimeout(() => void submitQuizRef.current("violation_limit"), 1_500);
     return () => window.clearTimeout(timer);
   }, [hasStarted, isSubmitting, violationCount]);
 
@@ -925,9 +966,11 @@ export default function QuizRoom() {
       if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = window.setTimeout(() => {
         setIsCheckingAnswer(false);
-        if (questionIndex >= questionsRef.current.length - 1) {
-          void submitQuizRef.current();
-        } else {
+        const qList = questionsRef.current;
+        const currentAns = answersStateRef.current;
+        if (qList.length > 0 && Object.keys(currentAns).length >= qList.length) {
+          void submitQuizRef.current("all_questions_completed");
+        } else if (questionIndex < qList.length - 1) {
           setCurrentQuestionIndex(questionIndex + 1);
         }
       }, 1_100);
@@ -1095,7 +1138,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           isFinal: true,
         });
         setTimeout(() => {
-          submitQuizRef.current();
+          void submitQuizRef.current("violation_limit");
         }, 3000);
       } else {
         setWarningModal({
@@ -1636,11 +1679,27 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     };
   }, [hasStarted, isMobile, quiz?.teacherId, quiz?.title, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot]);
 
-  // ── Timer Countdown ──
+  // ── Timer Countdown & Expiration Guard ──
+  useEffect(() => {
+    if (!hasStarted) {
+      timerInitializedRef.current = false;
+      return;
+    }
+    if (timeLeft > 0) {
+      timerInitializedRef.current = true;
+    }
+  }, [hasStarted, timeLeft]);
+
   useEffect(() => {
     if (!hasStarted) return;
     const timer = setInterval(() => {
-      setTimeLeft((prev: number) => (prev > 0 ? prev - 1 : 0));
+      setTimeLeft((prev: number) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(timer);
   }, [hasStarted]);
@@ -1651,9 +1710,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       autoSubmitAttemptedRef.current = false;
       return;
     }
-    if (hasStarted && !isSubmitting && !autoSubmitAttemptedRef.current) {
+    if (hasStarted && timerInitializedRef.current && !isSubmitting && !autoSubmitAttemptedRef.current) {
       autoSubmitAttemptedRef.current = true;
-      void submitQuiz();
+      void submitQuiz("timer_expired");
     }
   }, [hasStarted, timeLeft, isSubmitting, submitQuiz]);
 
@@ -1750,25 +1809,26 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     };
 
     const handleFullscreenChange = () => {
-      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
-      if (!examActiveRef.current || isStartupGracePeriodRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+      if (monitoringLevel !== "strict") return;
+      const isFS = Boolean(document.fullscreenElement);
+      fullscreenMonitoringRef.current = isFS;
 
-      const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement;
-      if (!fsElement) {
+      if (!isFS) {
+        if (!examActiveRef.current || isStartupGracePeriodRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+        if (fullscreenViolationRecordedRef.current) return;
+
         if (!fullscreenIncidentActiveRef.current) {
           fullscreenIncidentActiveRef.current = true;
-          setPreWarning("⚠️ Warning: Exiting full screen is prohibited. Please re-enter full screen.");
+          setPreWarning("⚠️ Warning: Fullscreen exited. Return to fullscreen immediately.");
         }
-
-        if (fullscreenViolationRecordedRef.current) return;
 
         if (!fullscreenGraceTimerRef.current) {
           fullscreenGraceTimerRef.current = setTimeout(async () => {
             fullscreenGraceTimerRef.current = null;
-            const currentFs = document.fullscreenElement || (document as any).webkitFullscreenElement;
-            if (!currentFs && !fullscreenViolationRecordedRef.current && violationCountRef.current < 3 && examActiveRef.current) {
+            if (!examActiveRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+            if (!document.fullscreenElement && !fullscreenViolationRecordedRef.current) {
               fullscreenViolationRecordedRef.current = true;
-              await reportViolationRef.current("fullscreen_exit", 100);
+              await reportViolationRef.current("window_resize", 100);
             }
           }, 1500);
         }
@@ -1842,8 +1902,17 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (examActiveRef.current && !isStartupGracePeriodRef.current) void reportViolationRef.current("attempted_screenshot", 100);
     };
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!examActiveRef.current || isStartupGracePeriodRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
+      if (isScreenshotShortcut(e)) {
+        const now = Date.now();
+        if (now - lastShortcutReportAt < 3000) return;
+        lastShortcutReportAt = now;
+        e.preventDefault();
+        void reportViolationRef.current("attempted_screenshot", 96);
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("focus", handleWindowFocus);
@@ -1858,6 +1927,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     document.addEventListener("contextmenu", preventContextMenu);
     document.addEventListener("keydown", preventShortcuts);
     document.addEventListener("keyup", preventShortcuts);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       if (graceTimer) clearTimeout(graceTimer);
@@ -1871,8 +1942,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       }
       window.cancelAnimationFrame(renderFrameId);
       window.clearInterval(renderWatchdog);
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", handleWindowFocus);
@@ -1887,14 +1956,20 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       document.removeEventListener("contextmenu", preventContextMenu);
       document.removeEventListener("keydown", preventShortcuts);
       document.removeEventListener("keyup", preventShortcuts);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [hasStarted, isMobile, monitoringLevel, reportViolation]);
+  }, [hasStarted, isMobile, monitoringLevel]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
+
+  // ── Auto-save debounce logic ──
+  const answeredCount = Object.keys(answersState).length;
+  const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 
   // ─── POST-QUIZ PROCTORSHIELD CELEBRATORY PODIUM SCREEN ────────────────
   if (quizSubmittedResult) {
@@ -1949,7 +2024,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Questions Completed</div>
               <div className="text-xl font-black text-indigo-400 mt-1 flex items-center justify-center gap-1">
-                <CheckCircle className="w-4 h-4 text-indigo-400" /> {questions.length}
+                <CheckCircle className="w-4 h-4 text-indigo-400" /> {answeredCount} / {questions.length}
               </div>
             </div>
 
@@ -2235,8 +2310,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   }
 
   // ─── ACTIVE EXAM ROOM (WITH PROCTORSHIELD GAMIFICATION) ────────────
-  const answeredCount = Object.keys(answersState).length;
-  const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
@@ -2354,7 +2427,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           {/* Submit Exam Button */}
           <button
-            onClick={submitQuiz}
+            onClick={() => void submitQuiz("manual")}
             disabled={isSubmitting || loadingQuiz || !!quizError || !isOnline}
             className="hidden lg:block px-4 py-2 bg-gradient-to-r from-red-900/80 to-rose-900/80 border border-rose-600/50 hover:bg-rose-800 text-rose-100 font-black text-xs rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
           >
@@ -2670,9 +2743,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           </div>
           <button
             type="button"
-            onClick={() => void submitQuiz()}
+            onClick={() => void submitQuiz("manual")}
             disabled={isSubmitting || loadingQuiz || Boolean(quizError) || !isOnline}
-            className="shrink-0 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 px-4 py-3 text-xs font-black text-white shadow-lg disabled:opacity-50"
+            className="shrink-0 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 px-4 py-3 text-xs font-black text-white shadow-lg disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? "Submitting..." : "Submit Quiz"}
           </button>

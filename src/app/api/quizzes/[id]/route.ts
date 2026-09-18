@@ -125,7 +125,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const violationCount = session.role === "student" && studentQuiz
       ? await prisma.violation.count({ where: { studentQuizId: studentQuiz.id } })
       : undefined;
-    const remainingSeconds = session.role === "student" && studentQuiz?.startTime
+    const remainingSeconds = session.role === "student" && studentQuiz?.startTime && studentQuiz.quizStatus === "in_progress"
       ? Math.max(
           0,
           Math.ceil(

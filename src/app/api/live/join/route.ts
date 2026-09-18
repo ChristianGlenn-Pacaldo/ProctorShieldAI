@@ -36,10 +36,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: "Arena join ignored for proctored monitor" });
     }
 
-    if (!enrollment.startTime) {
+    if (!enrollment.startTime && quiz.quizStatus === "in_progress" && enrollment.quizStatus === "in_progress") {
       await prisma.studentQuiz.update({
         where: { id: enrollment.id },
-        data: { startTime: new Date(), quizStatus: "in_progress" },
+        data: { startTime: new Date() },
       }).catch(() => {});
     }
 
