@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Crown, Trophy, Medal, ArrowRight, Sparkles, Flame, Award } from "lucide-react";
+import { Crown, Trophy, Medal, ArrowRight, ArrowLeft, Sparkles, Flame, Award } from "lucide-react";
 
 export interface PodiumParticipant {
   studentId: string;
@@ -231,24 +231,23 @@ export function ArenaPodium({
       )}
 
       {/* Navigation Actions */}
-      <div className="flex items-center gap-3">
-        {onExit ? (
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Link
+          href="/dashboard/student"
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Dashboard</span>
+        </Link>
+        {onExit && (
           <button
             type="button"
             onClick={onExit}
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95"
+            className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-700 flex items-center gap-2 transition-all cursor-pointer hover:scale-105 active:scale-95"
           >
             <span>Exit Battle Station</span>
             <ArrowRight className="w-4 h-4" />
           </button>
-        ) : (
-          <Link
-            href="/dashboard/student"
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95"
-          >
-            <span>Back to Dashboard</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
         )}
       </div>
     </div>

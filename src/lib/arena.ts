@@ -216,14 +216,14 @@ export function ensureArenaParticipant(
   if (!state.players) state.players = state.participants;
   const existing = state.participants[player.studentId];
   if (existing) {
-    if (player.studentName && !existing.studentName) existing.studentName = player.studentName;
-    if (player.avatar && !existing.avatar) existing.avatar = player.avatar;
+    if (player.studentName) existing.studentName = player.studentName;
+    if (player.avatar) existing.avatar = player.avatar;
     return existing;
   }
   const created: ArenaParticipant = {
     studentId: player.studentId,
     studentName: player.studentName || "Fighter",
-    avatar: player.avatar || "🎓",
+    avatar: player.avatar || "🛡️",
     score: 0,
     rank: Object.keys(state.participants).length + 1,
     questionsAnswered: 0,

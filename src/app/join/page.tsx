@@ -208,11 +208,11 @@ function JoinContent() {
                   border: "1px solid rgba(99, 102, 241, 0.35)",
                 }}
               >
-                Arena
+                Quiz Portal
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium -mt-0.5">
-              Gamified Student Join Portal
+              Student Join Portal
             </p>
           </div>
         </Link>
@@ -308,7 +308,7 @@ function JoinContent() {
         >
           <div className="text-center mb-6">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-[family-name:var(--font-display)]">
-              Enter Join Code
+              Enter Quiz Code
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
               Enter the room access code provided by your instructor
@@ -329,7 +329,7 @@ function JoinContent() {
                 type="text"
                 value={joinCode}
                 onChange={(e) => handleInputChange(e.target.value)}
-                placeholder="ENTER CODE (e.g. PS-123)"
+                placeholder="ENTER QUIZ CODE (e.g. PS-123)"
                 autoFocus
                 autoCapitalize="characters"
                 autoCorrect="off"
@@ -387,11 +387,11 @@ function JoinContent() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>Entering Arena...</span>
+                  <span>Entering Quiz...</span>
                 </>
               ) : (
                 <>
-                  <span>Join Quiz Now</span>
+                  <span>Join Quiz</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}

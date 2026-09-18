@@ -20,10 +20,9 @@ export async function POST(req: NextRequest) {
       where: {
         studentId: session.userId,
         quizId: Number(quizId),
-        quizStatus: "in_progress",
-        startTime: { not: null },
         endTime: null,
-        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+        quizStatus: { notIn: ["completed", "rejected"] },
+        quiz: { quizMode: { not: "arena" } },
       },
       include: { quiz: true },
       orderBy: { attemptNumber: "desc" },
@@ -33,6 +32,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
     const quiz = enrollment.quiz;
+    if (quiz.quizMode === "arena") {
+      return NextResponse.json({ success: true, message: "Arena join ignored for proctored monitor" });
+    }
+
+    if (!enrollment.startTime) {
+      await prisma.studentQuiz.update({
+        where: { id: enrollment.id },
+        data: { startTime: new Date(), quizStatus: "in_progress" },
+      }).catch(() => {});
+    }
 
     // Broadcast lightweight "student-joined" event to the teacher's channel
     // NO snapshot data here — snapshots go through /api/live/snapshot instead

@@ -11,11 +11,11 @@ export async function PUT(req: NextRequest) {
 
     const { fullName } = await req.json();
 
-    if (typeof fullName !== "string" || fullName.length > 150 || !fullName.includes(",")) {
+    if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.length > 150) {
       return NextResponse.json({ error: "Invalid name format" }, { status: 400 });
     }
 
-    const uppercaseName = fullName.toUpperCase().trim();
+    const uppercaseName = fullName.trim();
 
     // Update database
     await prisma.user.update({

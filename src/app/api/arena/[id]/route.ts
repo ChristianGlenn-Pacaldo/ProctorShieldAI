@@ -201,15 +201,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       if (session.role !== "student") {
         return NextResponse.json({ error: "Only students can join an arena session" }, { status: 403 });
       }
-      if (quiz.quizStatus === "ended") {
+      if (quiz.quizStatus === "ended" || state?.status === "ended") {
         return NextResponse.json(
-          { error: "This arena match has ended.", code: "ARENA_ENDED" },
+          {
+            error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
+            code: "ARENA_QUIZ_ALREADY_COMPLETED",
+          },
           { status: 409 },
         );
       }
 
       // Initialize lobby arena state if none exists yet
-      if (!state || state.status === "ended") {
+      if (!state) {
         state = createArenaState({
           quizId,
           teacherId: quiz.teacherId,
@@ -224,13 +227,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
       const alreadyJoined = Boolean(state.participants[session.userId]);
 
-      // Find equipped avatar
+      // Resolve equipped avatar from DB
       const userProfile = await prisma.studentGameProfile.findUnique({
         where: { studentId: session.userId },
         select: { equippedAvatar: true },
       });
       const avatarId = userProfile?.equippedAvatar || "shield";
-      const studentAvatar = AVATAR_CATALOG.find((a) => a.id === avatarId)?.emoji || "🎓";
+      const catalogAvatar = AVATAR_CATALOG.find((a) => a.id === avatarId)?.emoji;
+      const studentAvatar = catalogAvatar || (avatarId.length <= 4 ? avatarId : "🛡️");
 
       const participant = ensureArenaPlayer(state, {
         studentId: session.userId,
@@ -288,6 +292,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
     if (!(await hasActiveProSubscription(session.userId))) {
       return NextResponse.json({ error: "Pro subscription required" }, { status: 403 });
+    }
+
+    // Server-Side Reuse Block: Completed Arena Quizzes cannot be re-hosted or reset
+    if (quiz.quizStatus === "ended" || (state?.status === "ended" && action !== "end")) {
+      return NextResponse.json(
+        {
+          error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
+          code: "ARENA_QUIZ_ALREADY_COMPLETED",
+        },
+        { status: 409 },
+      );
     }
 
     if (action === "reset" || action === "create_session") {

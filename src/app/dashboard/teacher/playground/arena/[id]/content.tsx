@@ -1204,25 +1204,25 @@ export default function ArenaHostContent({
             </div>
           )}
 
+          {/* Teacher Review Banner */}
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs sm:text-sm font-semibold text-center max-w-xl mx-auto flex items-center justify-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>This Power Arena has already been completed. Create a new quiz to host another match.</span>
+          </div>
+
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-800">
-            <button
-              onClick={() => {
-                void broadcastArenaAction("create_session");
-                setPhase("lobby");
-                setTimeLeft(selectedMatchDuration);
-                setIsTimerRunning(false);
-                setBattlers([]);
-              }}
+            <Link
+              href="/dashboard/teacher"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition-all cursor-pointer"
             >
-              <RotateCcw className="w-4 h-4" />
-              Play Again
-            </button>
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </Link>
 
             <Link
               href="/dashboard/teacher/playground"
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-sm shadow-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-sm shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
               Exit to Playground Studio
             </Link>

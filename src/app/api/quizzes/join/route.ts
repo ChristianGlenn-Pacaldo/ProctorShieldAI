@@ -141,21 +141,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve student avatar (passed from client, or from gameProfile, or default "🎓")
-    let studentAvatar = typeof avatar === "string" && avatar.trim() ? avatar.trim() : "";
-    if (!studentAvatar) {
-      try {
-        const studentProfile = await prisma.studentGameProfile.findUnique({
-          where: { studentId: session.userId },
-          select: { equippedAvatar: true },
-        });
-        const catalogItem = studentProfile?.equippedAvatar
-          ? AVATAR_CATALOG.find((a) => a.id === studentProfile.equippedAvatar)
-          : null;
-        studentAvatar = catalogItem?.emoji || "🎓";
-      } catch {
-        studentAvatar = "🎓";
+    // Resolve student avatar: strictly prioritize persisted DB equipped avatar
+    let studentAvatar = "🛡️";
+    try {
+      const studentProfile = await prisma.studentGameProfile.findUnique({
+        where: { studentId: session.userId },
+        select: { equippedAvatar: true },
+      });
+      const catalogItem = studentProfile?.equippedAvatar
+        ? AVATAR_CATALOG.find((a) => a.id === studentProfile.equippedAvatar)
+        : null;
+      if (catalogItem?.emoji) {
+        studentAvatar = catalogItem.emoji;
+      } else if (studentProfile?.equippedAvatar && studentProfile.equippedAvatar.length <= 4) {
+        studentAvatar = studentProfile.equippedAvatar;
+      } else if (typeof avatar === "string" && avatar.trim()) {
+        studentAvatar = avatar.trim();
       }
+    } catch {
+      studentAvatar = typeof avatar === "string" && avatar.trim() ? avatar.trim() : "🛡️";
     }
 
     if (enrollmentResult.kind === "existing") {

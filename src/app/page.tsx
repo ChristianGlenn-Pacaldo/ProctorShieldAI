@@ -329,7 +329,7 @@ export default function LandingPage() {
                 background: "linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%)",
               }}
             >
-              <span>Join Arena</span>
+              <span>Join</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

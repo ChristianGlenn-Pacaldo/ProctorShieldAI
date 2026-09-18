@@ -51,6 +51,37 @@ type QuizSubmittedResult = {
   totalCoins?: number;
 };
 
+// Module-level cached promises to prevent duplicate downloads and allow preloading
+let cachedFaceApiPromise: Promise<any> | null = null;
+let cachedCocoModelPromise: Promise<any> | null = null;
+
+function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "lite_mobilenet_v2") {
+  if (typeof window === "undefined") return;
+  if (!cachedFaceApiPromise) {
+    cachedFaceApiPromise = (async () => {
+      const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
+      const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs");
+      sharedTf.enableProdMode();
+      await sharedTf.ready();
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+        useTinyLandmarks
+          ? faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models')
+          : faceapi.nets.faceLandmark68Net.loadFromUri('/models')
+      ]);
+      return faceapi;
+    })();
+  }
+  if (!cachedCocoModelPromise) {
+    cachedCocoModelPromise = import("@tensorflow-models/coco-ssd").then((cocoSsd) =>
+      cocoSsd.load({
+        base: objectModelBase as any,
+        modelUrl: COCO_MODEL_BROWSER_URL,
+      })
+    );
+  }
+}
+
 export default function QuizRoom() {
   const params = useParams();
   const quizId = params.id as string;
@@ -1328,35 +1359,17 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
         // Load Edge AI Models
         try {
-          setAiStatus(performanceProfile.lowPower ? "Starting mobile AI..." : "Starting AI...");
-          await new Promise<void>((resolve) => window.setTimeout(resolve, isMobile ? 900 : 250));
+          setAiStatus("Loading AI detectors...");
+          preloadProctoringModels(performanceProfile.useTinyLandmarks, performanceProfile.objectModelBase);
+
+          const faceapi = await cachedFaceApiPromise;
           if (cancelled) {
             disposeLoadedModels();
             return;
           }
 
-          // Share one TensorFlow runtime between face-api and COCO-SSD. The
-          // default face-api browser bundle embeds a second runtime and can
-          // exhaust the memory available to a mobile browser tab.
-          const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
-          const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs");
-          sharedTf.enableProdMode();
-          await sharedTf.ready();
-
-          setAiStatus("Loading face scan...");
-          await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-          if (performanceProfile.useTinyLandmarks) {
-            await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models');
-          } else {
-            await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-          }
-          if (cancelled) {
-            disposeLoadedModels();
-            return;
-          }
-
-          setFaceStatus("Scanning...");
-          setGazeStatus("Scanning...");
+          setFaceStatus("Scanning ✓");
+          setGazeStatus("Focused ✓");
           setDeviceStatus("Loading device AI...");
           setAiStatus("Face active · device loading");
 
@@ -1371,34 +1384,30 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           objectModelSlowTimer = setTimeout(() => {
             if (!cancelled && !loadedCocoModel) setDeviceStatus("Still loading device AI...");
-          }, 15_000);
-          void import("@tensorflow-models/coco-ssd")
-            .then((cocoSsd) => cocoSsd.load({
-              base: performanceProfile.objectModelBase,
-              modelUrl: COCO_MODEL_BROWSER_URL,
-            }))
-            .then((cocoModel) => {
-              if (cancelled) {
-                cocoModel.dispose();
-                return;
-              }
-              loadedCocoModel = cocoModel;
-              noFaceFrames = 0;
-              phoneDetectedFrames = 0;
-              tickCounter = 0;
-              if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
-              objectModelSlowTimer = null;
-              setDeviceStatus("Scanning ✓");
-              setAiStatus("Active ✓");
-            })
-            .catch((error) => {
-              if (cancelled) return;
-              if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
-              objectModelSlowTimer = null;
-              console.warn("Object detection model initialization failed:", error);
-              setDeviceStatus("Device AI unavailable ✗");
-              setAiStatus("Face active · device unavailable");
-            });
+          }, 10_000);
+
+          if (cachedCocoModelPromise) {
+            cachedCocoModelPromise
+              .then((cocoModel) => {
+                if (cancelled) return;
+                loadedCocoModel = cocoModel;
+                noFaceFrames = 0;
+                phoneDetectedFrames = 0;
+                tickCounter = 0;
+                if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
+                objectModelSlowTimer = null;
+                setDeviceStatus("Scanning ✓");
+                setAiStatus("Active ✓");
+              })
+              .catch((error) => {
+                if (cancelled) return;
+                if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
+                objectModelSlowTimer = null;
+                console.warn("Object detection model initialization failed:", error);
+                setDeviceStatus("Device AI unavailable ✗");
+                setAiStatus("Face active · device unavailable");
+              });
+          }
 
           const inferenceCanvas = document.createElement("canvas");
           inferenceCanvas.width = performanceProfile.inferenceWidth;
@@ -1648,104 +1657,107 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     };
     requestFS();
 
-    let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
-    let fullscreenExitTimer: NodeJS.Timeout | null = null;
-    let focusIncidentActive = false;
-    let focusLossStartedAt = 0;
-    let focusReportInFlight = false;
+    // ── Incident State Machine for Tab/Focus Loss & Fullscreen ──
+    let awayGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    let awayIncidentActive = false;
+    let awayViolationRecorded = false;
+    let awayStartedAt = 0;
+
+    let fullscreenGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    let fullscreenIncidentActive = false;
+    let fullscreenViolationRecorded = false;
+
     let lastShortcutReportAt = 0;
 
-    const handleFullscreenChange = () => {
-      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
-      if (isStartupGracePeriodRef.current) return;
-      if (!document.fullscreenElement) {
-        setPreWarning("⚠️ PRE-WARNING: Exiting full screen is prohibited. Please re-enter full screen.");
-        if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
-        fullscreenExitTimer = setTimeout(async () => {
-          if (!document.fullscreenElement && violationCountRef.current < 3) {
-            const persisted = await reportViolation("fullscreen_exit", 100);
-            if (!persisted && !document.fullscreenElement && !isStartupGracePeriodRef.current) {
-              fullscreenExitTimer = setTimeout(handleFullscreenChange, 1_000);
-            }
-          } else {
-            setPreWarning(null);
+    const handleFocusLoss = (graceMs = 1500) => {
+      if (isStartupGracePeriodRef.current || violationCountRef.current >= 3) return;
+      if (!awayStartedAt) awayStartedAt = Date.now();
+
+      if (!awayIncidentActive) {
+        awayIncidentActive = true;
+        setPreWarning("⚠️ Warning: Return to the exam. Leaving or minimizing the exam window is prohibited.");
+      }
+
+      if (awayViolationRecorded) {
+        // Continuous incident already penalized once, do not spam or add more strikes
+        return;
+      }
+
+      if (!awayGraceTimer) {
+        awayGraceTimer = setTimeout(async () => {
+          awayGraceTimer = null;
+          const examStillAway = document.hidden || !document.hasFocus();
+          if (examStillAway && !awayViolationRecorded && violationCountRef.current < 3) {
+            awayViolationRecorded = true;
+            await reportViolation("tab_switch", 100);
           }
-        }, 1_000);
-      } else {
-        if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
+        }, graceMs);
+      }
+    };
+
+    const handleFocusReturn = () => {
+      if (awayGraceTimer) {
+        clearTimeout(awayGraceTimer);
+        awayGraceTimer = null;
+      }
+      awayStartedAt = 0;
+      // Reset continuous incident state when student returns to exam
+      awayIncidentActive = false;
+      awayViolationRecorded = false;
+      if (!isAlertingRef.current && !fullscreenIncidentActive) {
         setPreWarning(null);
       }
     };
 
-    const attemptFocusLossReport = async (reportAfterReturn = false) => {
-      focusLossTimer = null;
-      // Some Android Chrome builds keep reporting visible/hasFocus=true even
-      // after a real tab or app switch. A received lifecycle/blur signal is
-      // therefore evidence of focus loss on mobile even when those APIs lie.
-      const mobileLifecycleSignal = isMobile && focusLossStartedAt > 0;
-      const examLostFocus = document.hidden || !document.hasFocus() || mobileLifecycleSignal;
-      if ((!examLostFocus && !reportAfterReturn) || focusIncidentActive || focusReportInFlight || violationCountRef.current >= 3) return;
+    const handleFullscreenChange = () => {
+      if (monitoringLevel !== "strict" && !fullscreenMonitoringRef.current) return;
+      if (isStartupGracePeriodRef.current || violationCountRef.current >= 3) return;
 
-      focusReportInFlight = true;
-      try {
-        focusIncidentActive = await reportViolation("tab_switch", 100);
-        // If the browser resumed while the evidence clip/upload was still in
-        // flight, close this incident now so a later app switch can be caught.
-        if (focusIncidentActive && !document.hidden && document.hasFocus()) {
-          focusIncidentActive = false;
+      if (!document.fullscreenElement) {
+        if (!fullscreenIncidentActive) {
+          fullscreenIncidentActive = true;
+          setPreWarning("⚠️ Warning: Exiting full screen is prohibited. Please re-enter full screen.");
         }
-      } finally {
-        focusReportInFlight = false;
-      }
-      if (!focusIncidentActive && (document.hidden || !document.hasFocus())) {
-        focusLossTimer = setTimeout(() => void attemptFocusLossReport(), 1_000);
-      }
-    };
 
-    const scheduleFocusLossReport = (delayMs: number) => {
-      if (!focusLossStartedAt) focusLossStartedAt = Date.now();
-      setPreWarning("⚠️ PRE-WARNING: Leaving or minimizing the exam window is prohibited.");
-      if (focusLossTimer) return;
-      focusLossTimer = setTimeout(() => void attemptFocusLossReport(), delayMs);
-    };
+        if (fullscreenViolationRecorded) return;
 
-    const clearFocusLossReport = () => {
-      const hiddenDuration = focusLossStartedAt ? Date.now() - focusLossStartedAt : 0;
-      if (focusLossTimer) clearTimeout(focusLossTimer);
-      focusLossTimer = null;
-      focusLossStartedAt = 0;
-      // Android Chrome can make the document visible before hasFocus() turns
-      // true (and on some WebViews it remains false). Visibility is the
-      // reliable lifecycle signal on mobile, so persist the completed app
-      // switch as soon as the page returns to the foreground.
-      const isForegrounded = !document.hidden && (isMobile || document.hasFocus());
-      if (isForegrounded) {
-        if (!focusIncidentActive && !focusReportInFlight && hiddenDuration >= 200) {
-          void attemptFocusLossReport(true);
-        } else {
-          focusIncidentActive = false;
-          if (!isAlertingRef.current) setPreWarning(null);
+        if (!fullscreenGraceTimer) {
+          fullscreenGraceTimer = setTimeout(async () => {
+            fullscreenGraceTimer = null;
+            if (!document.fullscreenElement && !fullscreenViolationRecorded && violationCountRef.current < 3) {
+              fullscreenViolationRecorded = true;
+              await reportViolation("fullscreen_exit", 100);
+            }
+          }, 1500);
+        }
+      } else {
+        if (fullscreenGraceTimer) {
+          clearTimeout(fullscreenGraceTimer);
+          fullscreenGraceTimer = null;
+        }
+        fullscreenIncidentActive = false;
+        fullscreenViolationRecorded = false;
+        if (!isAlertingRef.current && !awayIncidentActive) {
+          setPreWarning(null);
         }
       }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) scheduleFocusLossReport(0);
-      else clearFocusLossReport();
+      if (document.hidden) handleFocusLoss(1500);
+      else handleFocusReturn();
     };
-    const handleWindowBlur = () => {
-      scheduleFocusLossReport(isMobile ? 350 : 650);
-    };
-    const handlePageHide = () => scheduleFocusLossReport(0);
-    const handlePageShow = () => clearFocusLossReport();
-    const handlePageFreeze = () => scheduleFocusLossReport(0);
-    const handlePageResume = () => clearFocusLossReport();
 
-    // Android vendors occasionally suppress every normal page lifecycle
-    // signal while changing Chrome tabs. Animation frames still stop when the
-    // exam is no longer being rendered, so use that as an independent mobile
-    // fallback. Two watchdog confirmations avoid treating one slow TensorFlow
-    // inference frame as a tab-switch violation.
+    const handleWindowBlur = () => {
+      handleFocusLoss(isMobile ? 1200 : 1800);
+    };
+
+    const handlePageHide = () => handleFocusLoss(500);
+    const handlePageShow = () => handleFocusReturn();
+    const handlePageFreeze = () => handleFocusLoss(500);
+    const handlePageResume = () => handleFocusReturn();
+
+    // Mobile render watchdog fallback
     let lastRenderedFrameAt = performance.now();
     let stalledRenderChecks = 0;
     let renderFrameId = 0;
@@ -1759,8 +1771,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         !isMobile
         || isStartupGracePeriodRef.current
         || violationCountRef.current >= 3
-        || focusIncidentActive
-        || focusReportInFlight
+        || awayIncidentActive
       ) {
         stalledRenderChecks = 0;
         return;
@@ -1770,8 +1781,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       stalledRenderChecks = renderGap >= 1_800 ? stalledRenderChecks + 1 : 0;
       if (stalledRenderChecks >= 2) {
         stalledRenderChecks = 0;
-        scheduleFocusLossReport(0);
-        void attemptFocusLossReport(true);
+        handleFocusLoss(0);
       }
     }, 750);
 
@@ -1806,7 +1816,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
-    window.addEventListener("focus", clearFocusLossReport);
+    window.addEventListener("focus", handleFocusReturn);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("freeze", handlePageFreeze);
@@ -1821,14 +1831,14 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
     return () => {
       if (graceTimer) clearTimeout(graceTimer);
-      if (focusLossTimer) clearTimeout(focusLossTimer);
-      if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer);
+      if (awayGraceTimer) clearTimeout(awayGraceTimer);
+      if (fullscreenGraceTimer) clearTimeout(fullscreenGraceTimer);
       window.cancelAnimationFrame(renderFrameId);
       window.clearInterval(renderWatchdog);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
-      window.removeEventListener("focus", clearFocusLossReport);
+      window.removeEventListener("focus", handleFocusReturn);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("freeze", handlePageFreeze);
@@ -2000,7 +2010,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               onClick={() => router.push("/dashboard/student")}
               className="flex-1 py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Dashboard</span>
+              <span>Back to Dashboard</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

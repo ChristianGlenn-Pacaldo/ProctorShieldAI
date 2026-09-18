@@ -24,6 +24,7 @@ import {
   Award,
   Check,
   ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import {
   playMeteorSound,
@@ -105,8 +106,14 @@ export function ArenaContent({
 }: ArenaContentProps) {
   const router = useRouter();
 
-  // ── Match Phase: Strictly lobby until teacher starts ──────────
+  // ── Match Phase: Strictly lobby until teacher starts, or podium if completed ──
+  const isAlreadyEnded = initialQuizStatus === "ended" || initialStudentStatus === "completed";
   const [phase, setPhase] = useState<"lobby" | "in_wave" | "podium">("lobby");
+  useEffect(() => {
+    if (isAlreadyEnded) {
+      setPhase("podium");
+    }
+  }, [isAlreadyEnded]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // ── Automatic Question Progression ────────────────────────────
@@ -120,7 +127,7 @@ export function ArenaContent({
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(startingQuestionIndex);
   const [questionsCompleted, setQuestionsCompleted] = useState(
-    savedAnswers.length >= questions.length && questions.length > 0
+    (savedAnswers.length >= questions.length && questions.length > 0) || isAlreadyEnded
   );
   const [isSpectating, setIsSpectating] = useState(false);
   const [battleLogs, setBattleLogs] = useState<string[]>([]);
@@ -1489,6 +1496,18 @@ export function ArenaContent({
                   </div>
                 </div>
               )}
+
+              {/* Navigation in Spectator Mode */}
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => router.push("/dashboard/student")}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Dashboard</span>
+                </button>
+              </div>
             </div>
           ) : (
             /* ── Completion Summary Card ── */
@@ -1536,6 +1555,14 @@ export function ArenaContent({
                   <Users className="w-4 h-4" />
                   <span>Back to Arena Lobby</span>
                   <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/dashboard/student")}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm border border-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
                 </button>
               </div>
 

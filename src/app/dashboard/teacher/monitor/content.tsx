@@ -407,22 +407,6 @@ export default function LiveMonitorContent({
           setFeeds((prev) => {
             const updated = [...prev];
 
-            // Single Student Direct Bind Guarantee
-            if (updated.length === 1 && snapshots.length === 1 && snapshots[0].snapshot) {
-              updated[0] = {
-                ...updated[0],
-                snapshot: snapshots[0].snapshot,
-                deviceType: snapshots[0].deviceType === "mobile" ? "mobile" : "desktop",
-                monitoringLevel: snapshots[0].monitoringLevel === "strict" ? "strict" : "reduced",
-                connectionStatus: "online",
-                status: "✓ Active",
-                statusColor: "text-emerald-500",
-                border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
-                lastSeen: new Date(),
-              };
-              return updated;
-            }
-
             for (const snap of snapshots) {
               const sIdStr = String(snap.studentId || "");
               const sNameStr = String(snap.studentName || "").toLowerCase().trim();
@@ -433,8 +417,7 @@ export default function LiveMonitorContent({
 
                 if (fIdStr && fIdStr === sIdStr) return true;
                 if (fNameLower && sNameStr && fNameLower === sNameStr) return true;
-                if (fNameLower && sNameStr && fNameLower.includes(sNameStr)) return true;
-                if (fNameLower && sNameStr && sNameStr.includes(fNameLower.split(",")[0].trim())) return true;
+                if (fNameLower && sNameStr && (fNameLower.includes(sNameStr) || sNameStr.includes(fNameLower))) return true;
                 return false;
               });
 
@@ -442,25 +425,27 @@ export default function LiveMonitorContent({
                 updated[idx] = {
                   ...updated[idx],
                   id: sIdStr || updated[idx].id,
+                  name: snap.studentName || updated[idx].name,
+                  quizTitle: snap.quizTitle || updated[idx].quizTitle,
                   snapshot: snap.snapshot || updated[idx].snapshot,
                   deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
                   monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
                   connectionStatus: "online",
-                  status: "✓ Active",
-                  statusColor: "text-emerald-500",
-                  border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
+                  status: updated[idx].statusColor === "text-red-500" ? updated[idx].status : "✓ Active",
+                  statusColor: updated[idx].statusColor === "text-red-500" ? updated[idx].statusColor : "text-emerald-500",
+                  border: updated[idx].border.includes("red") ? updated[idx].border : "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
                   lastSeen: new Date(),
                 };
               } else {
                 updated.push({
                   id: sIdStr,
-                  name: snap.studentName,
+                  name: snap.studentName || "Student",
                   quizTitle: snap.quizTitle || "Quiz",
                   status: "✓ Active",
                   statusColor: "text-emerald-500",
                   border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
-                  joinedAt: new Date(),
-                  lastSeen: new Date(),
+                  joinedAt: new Date(snap.updatedAt || Date.now()),
+                  lastSeen: new Date(snap.updatedAt || Date.now()),
                   violationCount: 0,
                   snapshot: snap.snapshot,
                   deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",

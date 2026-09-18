@@ -29,6 +29,7 @@ function teacherIndexKey(teacherId: string) {
 }
 
 export async function saveSnapshot(record: SnapshotRecord): Promise<void> {
+  localSnapshots.set(record.studentId, record);
   const redis = getRedis();
   if (redis) {
     try {
@@ -37,12 +38,10 @@ export async function saveSnapshot(record: SnapshotRecord): Promise<void> {
       pipeline.zadd(teacherIndexKey(record.teacherId), record.updatedAt, record.studentId);
       pipeline.pexpire(teacherIndexKey(record.teacherId), SNAPSHOT_TTL_MS);
       await pipeline.exec();
-      return;
     } catch (error) {
-      console.error("Redis snapshot store unavailable; using local cache:", error);
+      console.error("Redis snapshot store unavailable; local cache kept:", error);
     }
   }
-  localSnapshots.set(record.studentId, record);
 }
 
 function getLocalSnapshots(teacherId: string, cutoff: number) {

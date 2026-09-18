@@ -12,8 +12,9 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // If the name doesn't contain a comma, it doesn't match the format LAST NAME, FIRST NAME, MIDDLE NAME
-    if (!initialName.includes(",") || initialName === "Google User") {
+    // Only prompt on first login if persistent profile name is missing or default placeholder
+    const trimmed = (initialName || "").trim();
+    if (!trimmed || trimmed === "Google User" || trimmed.toLowerCase() === "student" || trimmed.toLowerCase() === "student user") {
       setIsOpen(true);
     }
   }, [initialName]);
@@ -22,9 +23,9 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
     e.preventDefault();
     setError("");
 
-    const upperName = fullName.toUpperCase().trim();
-    if (!upperName.includes(",")) {
-      setError("Name must include a comma separating the Last Name and First Name.");
+    const cleanName = fullName.trim();
+    if (cleanName.length < 2) {
+      setError("Please enter your full name.");
       return;
     }
 
@@ -34,7 +35,7 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
       const res = await fetch("/api/users/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: upperName }),
+        body: JSON.stringify({ fullName: cleanName }),
       });
 
       if (res.ok) {

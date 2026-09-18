@@ -49,10 +49,9 @@ export async function POST(req: NextRequest) {
       where: {
         studentId: session.userId,
         quizId: numericQuizId,
-        quizStatus: "in_progress",
         endTime: null,
-        startTime: { not: null },
-        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+        quizStatus: { notIn: ["completed", "rejected"] },
+        quiz: { quizMode: { not: "arena" } },
       },
       include: {
         quiz: true,
@@ -62,6 +61,9 @@ export async function POST(req: NextRequest) {
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
+    }
+    if (studentQuiz.quiz.quizMode === "arena") {
+      return NextResponse.json({ error: "Arena quizzes do not use proctoring violations" }, { status: 400 });
     }
 
     // Serialize violations per attempt. The three-strike contract must be

@@ -18,6 +18,7 @@ import {
   Settings,
   Radio,
   Gamepad2,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -709,16 +710,27 @@ export default function TeacherQuizzesPage({
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        {/* Arena Host vs Live Monitor Flow */}
+                        {/* Arena Host vs Review Results vs Live Monitor Flow */}
                         {e.quizMode === "arena" ? (
-                          <button
-                            onClick={() => router.push(`/dashboard/teacher/playground/arena/${e.id}`)}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all cursor-pointer"
-                            title="Host Power Arena Game Station"
-                          >
-                            <Gamepad2 className="w-3.5 h-3.5" />
-                            <span>Host Arena</span>
-                          </button>
+                          e.quizStatus === "ended" ? (
+                            <button
+                              onClick={() => router.push(`/dashboard/teacher/playground/arena/${e.id}`)}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer"
+                              title="Review Final Power Arena Results"
+                            >
+                              <Trophy className="w-3.5 h-3.5" />
+                              <span>Review Results</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => router.push(`/dashboard/teacher/playground/arena/${e.id}`)}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all cursor-pointer"
+                              title="Host Power Arena Game Station"
+                            >
+                              <Gamepad2 className="w-3.5 h-3.5" />
+                              <span>Host Arena</span>
+                            </button>
+                          )
                         ) : (
                           <button
                             onClick={() => router.push(`/dashboard/teacher/monitor?quizId=${e.id}`)}
@@ -748,7 +760,7 @@ export default function TeacherQuizzesPage({
                           Manage
                         </button>
 
-                        {e.quizStatus === "active" && (
+                        {e.quizStatus === "active" && e.quizMode !== "arena" && (
                           <button
                             onClick={async () => {
                               if (
@@ -875,10 +887,17 @@ export default function TeacherQuizzesPage({
                 <div>
                   <div className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                     {manageQuiz.quizMode === "arena" ? (
-                      <>
-                        <Gamepad2 className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Power Arena Host</span>
-                      </>
+                      manageQuiz.quizStatus === "ended" ? (
+                        <>
+                          <Trophy className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Power Arena Results</span>
+                        </>
+                      ) : (
+                        <>
+                          <Gamepad2 className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Power Arena Host</span>
+                        </>
+                      )
                     ) : (
                       <>
                         <Radio className="w-3.5 h-3.5 text-emerald-500" />
@@ -888,21 +907,36 @@ export default function TeacherQuizzesPage({
                   </div>
                   <div className="text-[11px] text-[var(--muted)] mt-0.5">
                     {manageQuiz.quizMode === "arena"
-                      ? "Launch the interactive Arena game board and battle controls"
+                      ? manageQuiz.quizStatus === "ended"
+                        ? "Review the final championship podium, scores, and full leaderboard"
+                        : "Launch the interactive Arena game board and battle controls"
                       : "Monitor examinee webcams, audio anomalies, and AI violations"}
                   </div>
                 </div>
                 {manageQuiz.quizMode === "arena" ? (
-                  <button
-                    onClick={() => {
-                      const qId = manageQuiz.id;
-                      setManageQuiz(null);
-                      router.push(`/dashboard/teacher/playground/arena/${qId}`);
-                    }}
-                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Gamepad2 className="w-3.5 h-3.5" /> Arena Host
-                  </button>
+                  manageQuiz.quizStatus === "ended" ? (
+                    <button
+                      onClick={() => {
+                        const qId = manageQuiz.id;
+                        setManageQuiz(null);
+                        router.push(`/dashboard/teacher/playground/arena/${qId}`);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trophy className="w-3.5 h-3.5" /> Review Results
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const qId = manageQuiz.id;
+                        setManageQuiz(null);
+                        router.push(`/dashboard/teacher/playground/arena/${qId}`);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Gamepad2 className="w-3.5 h-3.5" /> Arena Host
+                    </button>
+                  )
                 ) : (
                   <button
                     onClick={() => {

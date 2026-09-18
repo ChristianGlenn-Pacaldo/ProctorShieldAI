@@ -31,16 +31,24 @@ export async function POST(req: NextRequest) {
       where: {
         studentId: session.userId,
         quizId: numericQuizId,
-        quizStatus: "in_progress",
-        startTime: { not: null },
         endTime: null,
-        quiz: { quizStatus: { in: ["in_progress", "ended"] } },
+        quizStatus: { notIn: ["completed", "rejected"] },
+        quiz: { quizMode: { not: "arena" } },
       },
-      include: { quiz: { select: { title: true, teacherId: true } } },
+      include: { quiz: { select: { title: true, teacherId: true, quizMode: true } } },
       orderBy: { attemptNumber: "desc" },
     });
     if (!enrollment) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 403 });
+    }
+    if (enrollment.quiz.quizMode === "arena") {
+      return NextResponse.json({ error: "Arena quizzes do not use live monitor" }, { status: 400 });
+    }
+    if (!enrollment.startTime) {
+      await prisma.studentQuiz.update({
+        where: { id: enrollment.id },
+        data: { startTime: new Date(), quizStatus: "in_progress" },
+      }).catch(() => {});
     }
     if (!await hasActiveProSubscription(enrollment.quiz.teacherId)) {
       return NextResponse.json(
