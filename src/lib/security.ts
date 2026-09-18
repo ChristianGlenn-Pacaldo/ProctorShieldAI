@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
-import { getRedis } from "./redis.ts";
+import { getRedis, isRedisReady } from "./redis.ts";
 
 type Bucket = { count: number; resetAt: number };
 const globalRateLimits = globalThis as typeof globalThis & {
@@ -18,10 +18,10 @@ export function getClientIp(req: NextRequest): string {
 export async function consumeRateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     try {
       const safeKey = crypto.createHash("sha256").update(key).digest("hex");
-      const result = await redis.eval(
+      const result = await redis!.eval(
         `local count = redis.call('INCR', KEYS[1])
          if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
          local ttl = redis.call('PTTL', KEYS[1])
@@ -34,8 +34,8 @@ export async function consumeRateLimit(key: string, limit: number, windowMs: num
         allowed: result[0] <= limit,
         retryAfterSeconds: Math.max(1, Math.ceil(result[1] / 1000)),
       };
-    } catch (error) {
-      console.error("Redis rate limiter unavailable; using local limiter:", error);
+    } catch {
+      // Redis rate limiter unavailable; fail-fast to local memory bucket
     }
   }
 

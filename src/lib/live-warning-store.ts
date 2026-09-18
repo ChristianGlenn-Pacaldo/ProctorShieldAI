@@ -1,4 +1,4 @@
-import { getRedis } from "./redis.ts";
+import { getRedis, isRedisReady } from "./redis.ts";
 
 export const DEFAULT_TEACHER_WARNING = "Your teacher has sent a warning. Please keep your face visible, stay on the exam screen, and follow the quiz rules.";
 
@@ -30,27 +30,27 @@ export function normalizeTeacherWarningMessage(value: unknown) {
 
 export async function saveLiveWarning(record: LiveWarningRecord) {
   const key = warningKey(record.studentId, record.quizId);
+  localWarnings.set(key, record);
+
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     try {
-      await redis.set(key, JSON.stringify(record), "PX", WARNING_TTL_MS);
-      return;
-    } catch (error) {
-      console.error("Redis live-warning store unavailable; using local cache:", error);
+      await redis!.set(key, JSON.stringify(record), "PX", WARNING_TTL_MS);
+    } catch {
+      // Redis offline; local cache remains authoritative
     }
   }
-  localWarnings.set(key, record);
 }
 
 export async function getLatestLiveWarning(studentId: string, quizId: number) {
   const key = warningKey(studentId, quizId);
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     try {
-      const value = await redis.get(key);
-      return value ? JSON.parse(value) as LiveWarningRecord : null;
-    } catch (error) {
-      console.error("Redis live-warning lookup unavailable; using local cache:", error);
+      const value = await redis!.get(key);
+      if (value) return JSON.parse(value) as LiveWarningRecord;
+    } catch {
+      // Fallback to local cache below
     }
   }
 

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getRedis } from "./redis.ts";
+import { getRedis, isRedisReady } from "./redis.ts";
 import prisma from "./prisma.ts";
 
 export const ARENA_MODES = ["score_arena", "battle_royale", "wave_sprint"] as const;
@@ -275,7 +275,7 @@ export async function setArenaState(state: ArenaState): Promise<void> {
 
   // 3. Redis cache write (optional non-blocking speed cache)
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     void redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS).catch((error) => {
       console.warn("Arena Redis write failed (cache only):", error);
     });
@@ -297,7 +297,7 @@ export async function clearArenaState(quizId: number): Promise<void> {
   globalArena.__proctorShieldArenaState?.delete(quizId);
 
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     try {
       await redis.del(arenaKey(quizId));
     } catch (error) {
@@ -325,7 +325,7 @@ export async function getArenaState(quizId: number): Promise<ArenaState | null> 
           expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
         });
         const redis = getRedis();
-        if (redis) {
+        if (isRedisReady(redis)) {
           void redis.set(arenaKey(quizId), JSON.stringify(dbState), "EX", ARENA_TTL_SECONDS).catch(() => {});
         }
         return dbState;
@@ -344,7 +344,7 @@ export async function getArenaState(quizId: number): Promise<ArenaState | null> 
   }
 
   const redis = getRedis();
-  if (redis) {
+  if (isRedisReady(redis)) {
     try {
       const val = await redis.get(arenaKey(quizId));
       if (val) {
