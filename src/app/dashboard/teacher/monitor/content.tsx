@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
 import { Crown, Shield, Check, Camera, Radio, AlertTriangle } from "lucide-react";
@@ -21,74 +21,99 @@ interface Feed {
   connectionStatus?: "online" | "offline";
 }
 
-function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
-  const [imgError, setImgError] = useState(false);
-  const hasValidSnapshot = Boolean(feed.snapshot && feed.snapshot.startsWith("data:image/") && !imgError);
+const StudentVideoFeed = React.memo(
+  function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
+    const [imgError, setImgError] = useState(false);
+    const lastSnapshotRef = useRef(feed.snapshot);
 
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}
-    >
-      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
-        {/* Adaptive snapshot stream */}
-        {hasValidSnapshot ? (
-          <img 
-            key={feed.snapshot?.slice(-20)}
-            src={feed.snapshot!} 
-            alt={feed.name} 
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover transition-opacity duration-200" 
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-2.5 px-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl font-extrabold text-blue-400 shadow-inner">
-              {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-            </div>
-            <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
-              {feed.snapshot ? "Capturing AI Snapshot..." : "In Exam Lobby (Waiting to Start)"}
-            </span>
-          </div>
-        )}
+    // Reset imgError if a new snapshot string arrives
+    if (feed.snapshot !== lastSnapshotRef.current) {
+      lastSnapshotRef.current = feed.snapshot;
+      if (imgError) setImgError(false);
+    }
 
-        {/* Top-Left Live Indicator Badge */}
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[10px] font-extrabold border border-white/10 shadow-md">
+    const hasValidSnapshot = Boolean(feed.snapshot && feed.snapshot.startsWith("data:image/") && !imgError);
+
+    return (
+      <div
+        onClick={onClick}
+        className={`rounded-2xl overflow-hidden border-2 ${feed.border} transition-all duration-300 hover:scale-[1.02] cursor-pointer bg-slate-950 shadow-xl`}
+      >
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 h-48 flex items-center justify-center relative overflow-hidden">
+          {/* Adaptive snapshot stream */}
           {hasValidSnapshot ? (
-            <>
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
-              <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT · LIVE SYNC</span>
-            </>
+            <img 
+              key={feed.snapshot?.slice(-20)}
+              src={feed.snapshot!} 
+              alt={feed.name} 
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover transition-opacity duration-200" 
+            />
           ) : (
-            <>
-              <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
-              <span className="text-amber-400 tracking-wider">⏳ IN LOBBY</span>
-            </>
+            <div className="flex flex-col items-center gap-2.5 px-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl font-extrabold text-blue-400 shadow-inner">
+                {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+              </div>
+              <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
+                {feed.snapshot ? "Capturing AI Snapshot..." : "In Exam Lobby (Waiting to Start)"}
+              </span>
+            </div>
+          )}
+
+          {/* Top-Left Live Indicator Badge */}
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-lg text-[10px] font-extrabold border border-white/10 shadow-md">
+            {hasValidSnapshot ? (
+              <>
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
+                <span className="text-emerald-400 tracking-wider font-mono">📸 AI SNAPSHOT · LIVE SYNC</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                <span className="text-amber-400 tracking-wider">⏳ IN LOBBY</span>
+              </>
+            )}
+          </div>
+
+          {/* Top-Right Violation Badge */}
+          {feed.violationCount > 0 && (
+            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-red-600 rounded-lg text-[10px] font-extrabold text-white shadow-md border border-red-400/40 animate-pulse">
+              {feed.violationCount}/3 ⚠ VIOLATION
+            </div>
           )}
         </div>
 
-        {/* Top-Right Violation Badge */}
-        {feed.violationCount > 0 && (
-          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-red-600 rounded-lg text-[10px] font-extrabold text-white shadow-md border border-red-400/40 animate-pulse">
-            {feed.violationCount}/3 ⚠ VIOLATION
+        <div className="px-4 py-3 bg-[var(--surface2)] border-t border-[var(--border)]">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-[var(--ink)] truncate max-w-[160px] font-semibold">{feed.name}</span>
+            <span className={`${feed.statusColor} whitespace-nowrap text-[11px]`}>{feed.status}</span>
           </div>
-        )}
-      </div>
-
-      <div className="px-4 py-3 bg-[var(--surface2)] border-t border-[var(--border)]">
-        <div className="flex items-center justify-between text-xs font-bold">
-          <span className="text-[var(--ink)] truncate max-w-[160px] font-semibold">{feed.name}</span>
-          <span className={`${feed.statusColor} whitespace-nowrap text-[11px]`}>{feed.status}</span>
-        </div>
-        <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
-          <span>{feed.quizTitle}</span>
-          <span className={`text-[9px] font-bold ${feed.monitoringLevel === "reduced" ? "text-violet-400" : "text-emerald-500"}`}>
-            {feed.deviceType === "mobile" ? "Mobile" : "Desktop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
-          </span>
+          <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
+            <span>{feed.quizTitle}</span>
+            <span className={`text-[9px] font-bold ${feed.monitoringLevel === "reduced" ? "text-violet-400" : "text-emerald-500"}`}>
+              {feed.deviceType === "mobile" ? "Mobile" : "Desktop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.feed.id === next.feed.id &&
+      prev.feed.name === next.feed.name &&
+      prev.feed.snapshot === next.feed.snapshot &&
+      prev.feed.status === next.feed.status &&
+      prev.feed.statusColor === next.feed.statusColor &&
+      prev.feed.border === next.feed.border &&
+      prev.feed.violationCount === next.feed.violationCount &&
+      prev.feed.deviceType === next.feed.deviceType &&
+      prev.feed.monitoringLevel === next.feed.monitoringLevel &&
+      prev.feed.connectionStatus === next.feed.connectionStatus &&
+      prev.feed.quizTitle === next.feed.quizTitle
+    );
+  }
+);
 
 export default function LiveMonitorContent({
   teacherId,
@@ -101,36 +126,34 @@ export default function LiveMonitorContent({
   const [totalViolations, setTotalViolations] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
-  const [selectedStudentModal, setSelectedStudentModal] = useState<Feed | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [warningSendState, setWarningSendState] = useState<"idle" | "sending" | "sent" | "queued" | "error">("idle");
   const [warningSendMessage, setWarningSendMessage] = useState("");
 
-  // Subscription gating
+  // Subscription gating: use initial server value directly to avoid blocking loader
   const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
-  const [isCheckingSub, setIsCheckingSub] = useState(true);
+  const [isCheckingSub, setIsCheckingSub] = useState(false);
 
+  // Sync prop changes if re-rendered by parent
   useEffect(() => {
-    const checkSub = async () => {
-      try {
-        const res = await fetch("/api/billing/status");
-        if (res.ok) {
-          const data = await res.json();
-          setIsSubscribed(data.isSubscribed);
-        }
-      } catch (err) {
-        console.error("Subscription check failed:", err);
-      } finally {
-        setIsCheckingSub(false);
-      }
-    };
-    checkSub();
-  }, []);
+    setIsSubscribed(initialIsSubscribed);
+  }, [initialIsSubscribed]);
 
-  const openStudentModal = (feed: Feed) => {
+  // Derived modal student object from feeds
+  const selectedStudentModal = useMemo(
+    () => (selectedStudentId ? feeds.find((f) => f.id === selectedStudentId) || null : null),
+    [feeds, selectedStudentId]
+  );
+
+  const openStudentModal = useCallback((feed: Feed) => {
     setWarningSendState("idle");
     setWarningSendMessage("");
-    setSelectedStudentModal(feed);
-  };
+    setSelectedStudentId(feed.id);
+  }, []);
+
+  const closeStudentModal = useCallback(() => {
+    setSelectedStudentId(null);
+  }, []);
 
   const handleSendWarning = async () => {
     if (!selectedStudentModal || warningSendState === "sending") return;
@@ -212,12 +235,27 @@ export default function LiveMonitorContent({
         );
 
         if (existingIndex >= 0) {
+          const cur = prev[existingIndex];
+          const newDevice = data.deviceType === "mobile" ? "mobile" : "desktop";
+          const newLevel = data.monitoringLevel === "strict" ? "strict" : "reduced";
+
+          if (
+            cur.snapshot === data.snapshot &&
+            cur.deviceType === newDevice &&
+            cur.monitoringLevel === newLevel &&
+            cur.connectionStatus === "online" &&
+            cur.status === "✓ Active"
+          ) {
+            cur.lastSeen = new Date();
+            return prev;
+          }
+
           const updated = [...prev];
           updated[existingIndex] = {
-            ...updated[existingIndex],
+            ...cur,
             snapshot: data.snapshot,
-            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
-            monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+            deviceType: newDevice,
+            monitoringLevel: newLevel,
             connectionStatus: "online",
             status: "✓ Active",
             statusColor: "text-emerald-500",
@@ -269,12 +307,19 @@ export default function LiveMonitorContent({
       setFeeds((prev) => {
         const exists = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
         if (exists >= 0) {
+          const cur = prev[exists];
+          const newDevice = data.deviceType === "mobile" ? "mobile" : "desktop";
+          const newLevel = data.monitoringLevel === "strict" ? "strict" : "reduced";
+          if (cur.deviceType === newDevice && cur.monitoringLevel === newLevel && cur.connectionStatus === "online") {
+            cur.lastSeen = new Date();
+            return prev;
+          }
           const updated = [...prev];
           updated[exists] = {
-            ...updated[exists],
+            ...cur,
             id: studentId,
-            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
-            monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
+            deviceType: newDevice,
+            monitoringLevel: newLevel,
             connectionStatus: "online",
             lastSeen: new Date(),
           };
@@ -354,17 +399,21 @@ export default function LiveMonitorContent({
       });
 
       setTimeout(() => {
-        setFeeds((prev) =>
-          prev.map((f) =>
-            (String(f.id) === studentId || String(f.name || "").toLowerCase().trim() === studentNameLower) && f.statusColor === "text-red-500"
-              ? {
-                  ...f,
-                  statusColor: "text-amber-500",
-                  border: "border-amber-500/50 shadow-[0_0_0_1px_rgba(245,158,11,0.2)]",
-                }
-              : f
-          )
-        );
+        setFeeds((prev) => {
+          let hasChanges = false;
+          const next = prev.map((f) => {
+            if ((String(f.id) === studentId || String(f.name || "").toLowerCase().trim() === studentNameLower) && f.statusColor === "text-red-500") {
+              hasChanges = true;
+              return {
+                ...f,
+                statusColor: "text-amber-500",
+                border: "border-amber-500/50 shadow-[0_0_0_1px_rgba(245,158,11,0.2)]",
+              };
+            }
+            return f;
+          });
+          return hasChanges ? next : prev;
+        });
       }, 6000);
     });
 
@@ -378,33 +427,45 @@ export default function LiveMonitorContent({
     if (!isSubscribed) return;
     const connectionCheck = window.setInterval(() => {
       const cutoff = Date.now() - 10_000;
-      setFeeds((current) => current.map((feed) => {
-        if (feed.lastSeen.getTime() >= cutoff || feed.connectionStatus === "offline") return feed;
-        return {
-          ...feed,
-          connectionStatus: "offline",
-          status: "Connection lost",
-          statusColor: "text-rose-500",
-          border: "border-rose-500/50",
-        };
-      }));
+      setFeeds((current) => {
+        let changed = false;
+        const next = current.map((feed) => {
+          if (feed.lastSeen.getTime() >= cutoff || feed.connectionStatus === "offline") return feed;
+          changed = true;
+          return {
+            ...feed,
+            connectionStatus: "offline" as const,
+            status: "Connection lost",
+            statusColor: "text-rose-500",
+            border: "border-rose-500/50",
+          };
+        });
+        return changed ? next : current;
+      });
     }, 5_000);
     return () => window.clearInterval(connectionCheck);
   }, [isSubscribed]);
 
-  // ── Poll the snapshot store as an adaptive background sync ──
+  // ── Poll the snapshot store with change-detection to prevent continuous re-rendering ──
   useEffect(() => {
     if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
+    let isMounted = true;
+    let isPolling = false;
+
     const pollSnapshots = async () => {
+      if (isPolling) return;
+      isPolling = true;
+
       try {
         const res = await fetch("/api/live/snapshot");
-        if (!res.ok) return;
+        if (!res.ok || !isMounted) return;
         const data = await res.json();
         const snapshots: any[] = data.snapshots || [];
 
         if (snapshots.length > 0) {
           setFeeds((prev) => {
+            let hasChanges = false;
             const updated = [...prev];
 
             for (const snap of snapshots) {
@@ -422,21 +483,41 @@ export default function LiveMonitorContent({
               });
 
               if (idx >= 0) {
-                updated[idx] = {
-                  ...updated[idx],
-                  id: sIdStr || updated[idx].id,
-                  name: snap.studentName || updated[idx].name,
-                  quizTitle: snap.quizTitle || updated[idx].quizTitle,
-                  snapshot: snap.snapshot || updated[idx].snapshot,
-                  deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
-                  monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
-                  connectionStatus: "online",
-                  status: updated[idx].statusColor === "text-red-500" ? updated[idx].status : "✓ Active",
-                  statusColor: updated[idx].statusColor === "text-red-500" ? updated[idx].statusColor : "text-emerald-500",
-                  border: updated[idx].border.includes("red") ? updated[idx].border : "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
-                  lastSeen: new Date(),
-                };
+                const cur = updated[idx];
+                const newSnapshot = snap.snapshot || cur.snapshot;
+                const newDevice = snap.deviceType === "mobile" ? "mobile" : "desktop";
+                const newLevel = snap.monitoringLevel === "strict" ? "strict" : "reduced";
+                const newStatus = cur.statusColor === "text-red-500" ? cur.status : "✓ Active";
+                const newStatusColor = cur.statusColor === "text-red-500" ? cur.statusColor : "text-emerald-500";
+                const newBorder = cur.border.includes("red") ? cur.border : "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]";
+
+                const snapshotChanged = cur.snapshot !== newSnapshot;
+                const deviceChanged = cur.deviceType !== newDevice;
+                const levelChanged = cur.monitoringLevel !== newLevel;
+                const connectionChanged = cur.connectionStatus !== "online";
+                const statusChanged = cur.status !== newStatus || cur.statusColor !== newStatusColor;
+
+                if (snapshotChanged || deviceChanged || levelChanged || connectionChanged || statusChanged) {
+                  hasChanges = true;
+                  updated[idx] = {
+                    ...cur,
+                    id: sIdStr || cur.id,
+                    name: snap.studentName || cur.name,
+                    quizTitle: snap.quizTitle || cur.quizTitle,
+                    snapshot: newSnapshot,
+                    deviceType: newDevice,
+                    monitoringLevel: newLevel,
+                    connectionStatus: "online",
+                    status: newStatus,
+                    statusColor: newStatusColor,
+                    border: newBorder,
+                    lastSeen: new Date(),
+                  };
+                } else {
+                  cur.lastSeen = new Date();
+                }
               } else {
+                hasChanges = true;
                 updated.push({
                   id: sIdStr,
                   name: snap.studentName || "Student",
@@ -454,16 +535,23 @@ export default function LiveMonitorContent({
                 });
               }
             }
-            return updated;
+            return hasChanges ? updated : prev;
           });
         }
-      } catch {}
+      } catch {
+        // Silently tolerate snapshot polling network hiccups
+      } finally {
+        isPolling = false;
+      }
     };
 
-    const interval = setInterval(pollSnapshots, 1000);
+    const interval = setInterval(pollSnapshots, 2000);
     pollSnapshots();
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [isSubscribed, teacherId]);
 
   // Subscription paywall
@@ -625,7 +713,7 @@ export default function LiveMonitorContent({
         <div
           className="app-modal-backdrop bg-black/80 backdrop-blur-md animate-fade-in"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedStudentModal(null);
+            if (e.target === e.currentTarget) closeStudentModal();
           }}
         >
           <div
@@ -644,7 +732,7 @@ export default function LiveMonitorContent({
                 </div>
               </div>
               <button
-                onClick={() => setSelectedStudentModal(null)}
+                onClick={closeStudentModal}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
               >
                 ✕
@@ -726,7 +814,7 @@ export default function LiveMonitorContent({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedStudentModal(null)}
+                  onClick={closeStudentModal}
                   className="w-full px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/20 cursor-pointer sm:w-auto"
                 >
                   Done
