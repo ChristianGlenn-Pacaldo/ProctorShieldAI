@@ -9,6 +9,7 @@ import {
   getUnauthorizedDeviceConfidence,
   isScreenshotShortcut,
 } from "@/lib/proctoring-detection";
+import { allQuestionsAnswered, remainingExamSeconds, isCurrentTeacherEnd, canSubmitProctored, resumeProctoredMedia } from "@/lib/proctored-runtime";
 import { COCO_MODEL_BROWSER_URL } from "@/lib/coco-model";
 import {
   getBrowserDeviceCapabilities,
@@ -40,6 +41,8 @@ import {
 type QuizSubmittedResult = {
   score: number | null;
   total: number;
+  answeredCount: number;
+  totalQuestions: number;
   violations: number;
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
@@ -77,7 +80,7 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
           : faceapi.nets.faceLandmark68Net.loadFromUri('/models')
       ]);
       return faceapi;
-    })();
+    })().catch((error) => { cachedFaceApiPromise = null; throw error; });
   }
   if (!cachedCocoModelPromise) {
     cachedCocoModelPromise = import("@tensorflow-models/coco-ssd").then((cocoSsd) =>
@@ -85,13 +88,16 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
         base: objectModelBase as any,
         modelUrl: COCO_MODEL_BROWSER_URL,
       })
-    );
+    ).catch((error) => { cachedCocoModelPromise = null; throw error; });
   }
 }
 
 export default function QuizRoom() {
   const params = useParams();
-  const quizId = params.id as string;
+  return <QuizAttempt key={String(params.id)} quizId={String(params.id)} />;
+}
+
+function QuizAttempt({ quizId }: { quizId: string }) {
   const router = useRouter();
 
   const [hasStarted, setHasStarted] = useState(false);
@@ -115,15 +121,23 @@ export default function QuizRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const submissionInFlightRef = useRef(false);
-  const autoSubmitAttemptedRef = useRef(false);
+  const pendingSubmissionRef = useRef<SubmissionReason | null>(null);
+  const deadlineRef = useRef<number | null>(null);
+  const startedAtRef = useRef(0);
+  const teacherEndedRef = useRef(false);
+  const answerInFlightRef = useRef(false);
+  const [mediaGeneration, setMediaGeneration] = useState(0);
   const isReportingRef = useRef(false);
   const isAlertingRef = useRef(false);
   const isStartupGracePeriodRef = useRef(true);
   const lastViolationAtRef = useRef(0);
+  const pendingIncidentIdsRef = useRef(new Map<string, string>());
   const fullscreenMonitoringRef = useRef(false);
 
   // Security Incident Refs (Component-level to avoid stale closures)
   const awayIncidentActiveRef = useRef(false);
+  const awayStartedAtRef = useRef(0);
+  const awayGraceMsRef = useRef(1500);
   const awayViolationRecordedRef = useRef(false);
   const awayGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fullscreenIncidentActiveRef = useRef(false);
@@ -235,6 +249,7 @@ export default function QuizRoom() {
     if (!hasStarted || !userId || !quiz?.teacherId) return;
 
     let pusherClient: any;
+    let cancelled = false;
     const teacherChannelName = `private-teacher-${quiz.teacherId}`;
     const studentChannelName = `private-student-${userId}`;
 
@@ -307,6 +322,7 @@ export default function QuizRoom() {
     };
 
     import("pusher-js").then((Pusher) => {
+      if (cancelled) return;
       pusherClient = new Pusher.default(
         process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
         { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
@@ -326,9 +342,10 @@ export default function QuizRoom() {
           data: { quizId },
         }),
       }).catch(() => {});
-    });
+    }).catch(() => {});
 
     return () => {
+      cancelled = true;
       pcMapRef.current.forEach((pc) => pc.close());
       pcMapRef.current.clear();
       if (pusherClient) {
@@ -363,6 +380,7 @@ export default function QuizRoom() {
     };
   }, []);
 
+  const restoredAttemptRef = useRef("");
   const restoreSavedAnswers = useCallback((data: any) => {
     const restored: Record<number, number> = {};
     const restoredFeedback: Record<number, { choiceId: number; isCorrect: boolean }> = {};
@@ -386,10 +404,16 @@ export default function QuizRoom() {
           const numericQuestionId = Number(questionId);
           const numericChoiceId = Number(choiceId);
           if (Number.isInteger(numericQuestionId) && Number.isInteger(numericChoiceId)) {
-            restored[numericQuestionId] = numericChoiceId;
+            if (restored[numericQuestionId] === undefined && data.questions?.some((q: any) => q.id === numericQuestionId && q.choices.some((c: any) => c.id === numericChoiceId))) restored[numericQuestionId] = numericChoiceId;
           }
         }
       } catch {}
+    }
+    const changedAttempt = attemptId !== restoredAttemptRef.current;
+    restoredAttemptRef.current = attemptId;
+    if (changedAttempt) {
+      setAnswersState(restored); setAnswerFeedback(restoredFeedback);
+      answersStateRef.current = restored;
     }
     if (Object.keys(restored).length > 0) {
       setAnswersState((current) => Object.keys(current).length > 0 ? current : restored);
@@ -456,6 +480,9 @@ export default function QuizRoom() {
         throw new Error(result.error || "Device check failed.");
       }
 
+      const profile = getBrowserProctoringPerformanceProfile(verified.deviceType);
+      preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase);
+      await Promise.all([cachedFaceApiPromise, cachedCocoModelPromise]);
       setDeviceCapabilities(verified);
       setMonitoringLevel(result.monitoringLevel);
       setPreflightPassed(true);
@@ -469,19 +496,23 @@ export default function QuizRoom() {
       testStream?.getTracks().forEach((track) => track.stop());
       setIsCheckingDevice(false);
     }
-  }, [isCheckingDevice, quizId]);
+  }, [isCheckingDevice, quizId, quiz?.quizMode, router]);
 
   useEffect(() => {
+    if (hasStarted || quizSubmittedResult) return;
+    let cancelled = false;
     const loadQuiz = async () => {
       try {
         const res = await fetch(`/api/quizzes/${quizId}`);
         const data = await res.json();
+        if (cancelled) return;
         if (res.ok && data.success) {
           // ARENA ROUTE GUARD: If quiz is an arena quiz, redirect immediately
           if (data.quiz?.quizMode === "arena") {
             router.replace(`/arena/${quizId}`);
             return;
           }
+          if (data.studentQuizStatus === "completed" || data.endTime) { router.replace("/dashboard/student/results"); return; }
           setQuiz(data.quiz);
           setQuestions(data.questions || []);
           setStudentQuizStatus(data.studentQuizStatus || "");
@@ -512,7 +543,7 @@ export default function QuizRoom() {
         fetch(`/api/quizzes/${quizId}`)
           .then((res) => res.json())
           .then((data) => {
-            if (data.success && data.quiz) {
+            if (!cancelled && data.success && data.quiz) {
               if (data.quiz.quizMode === "arena") {
                 router.replace(`/arena/${quizId}`);
                 return;
@@ -531,8 +562,8 @@ export default function QuizRoom() {
       }
     }, 3000);
 
-    return () => clearInterval(pollInterval);
-  }, [quizId, hasStarted, restoreSavedAnswers]);
+    return () => { cancelled = true; clearInterval(pollInterval); };
+  }, [quizId, hasStarted, quizSubmittedResult, restoreSavedAnswers, router]);
 
   // Handle pusher lobby real-time updates
   useEffect(() => {
@@ -550,11 +581,18 @@ export default function QuizRoom() {
 
       const quizChannel = pusherClient.subscribe(`private-quiz-${quizId}`);
       quizChannel.bind("quiz-started", (data: any) => {
+        if (hasStarted) {
+          if (isCurrentTeacherEnd(data, quizId, startedAtRef.current)) {
+            teacherEndedRef.current = true;
+            void submitQuizRef.current("teacher_ended");
+          }
+          return;
+        }
         // Teacher started quiz! Fetch full quiz data immediately
         fetch(`/api/quizzes/${quizId}`)
           .then((res) => res.json())
           .then((freshData) => {
-            if (freshData.success) {
+            if (!cancelled && !submissionInFlightRef.current && freshData.success) {
               setQuiz(freshData.quiz);
               setQuestions(freshData.questions || []);
               setStudentQuizStatus(freshData.studentQuizStatus || "");
@@ -592,7 +630,7 @@ export default function QuizRoom() {
         pusherClient.disconnect();
       }
     };
-  }, [quizId, userId, receiveTeacherWarning, restoreSavedAnswers]);
+  }, [quizId, userId, hasStarted, receiveTeacherWarning, restoreSavedAnswers]);
 
   // Reconcile missed realtime events after a phone wakes, reconnects, or
   // returns from the background. Warning IDs prevent duplicate pop-ups.
@@ -673,8 +711,19 @@ export default function QuizRoom() {
         return;
       }
 
-      if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
-      else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
+      const startResponse = await fetch("/api/quizzes/session", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: Number(quizId), studentQuizId: data.studentQuizId, action: "start" }),
+      });
+      const started = await startResponse.json();
+      if (!startResponse.ok || !Number.isInteger(started.remainingSeconds)) {
+        setLobbyError(started.error || "Could not start this attempt."); return;
+      }
+      startedAtRef.current = Date.parse(started.startTime);
+      deadlineRef.current = Date.now() + started.remainingSeconds * 1000;
+      timerInitializedRef.current = true;
+      setTimeLeft(started.remainingSeconds);
+      setStudentQuizStatus("in_progress");
       setHasStarted(true);
     } catch {
       setLobbyError("Could not verify the quiz status. Check your connection and try again.");
@@ -749,7 +798,7 @@ export default function QuizRoom() {
       const response = await fetch("/api/quizzes/autosave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quizId: Number(quizId), answers: payloadAnswers }),
+        body: JSON.stringify({ quizId: Number(quizId), studentQuizId: currentStudentQuizId, answers: payloadAnswers }),
       });
       if (!response.ok) {
         setAutosaveStatus("error");
@@ -787,7 +836,7 @@ export default function QuizRoom() {
 
   // ── Submit quiz to backend with Authoritative Reason Guard ──
   const submitQuiz = useCallback(async (reason: SubmissionReason = "manual") => {
-    if (submissionInFlightRef.current) return;
+    if (submissionInFlightRef.current || !hasStarted || quizSubmittedResult) return;
 
     const currentQuestions = questionsRef.current;
     const currentAnswers = answersStateRef.current;
@@ -799,7 +848,7 @@ export default function QuizRoom() {
     if (reason === "all_questions_completed") {
       if (
         !currentQuestions.length ||
-        Object.keys(currentAnswers).length < currentQuestions.length
+        !allQuestionsAnswered(currentQuestions, currentAnswers)
       ) {
         console.warn(`[SubmitGuard] Blocked premature submit "${reason}": only ${Object.keys(currentAnswers).length}/${currentQuestions.length} answered.`);
         return;
@@ -822,6 +871,11 @@ export default function QuizRoom() {
       }
     }
 
+    if (!canSubmitProctored({ reason, active: hasStarted, questionCount: currentQuestions.length,
+      answeredCount: currentQuestions.filter((q) => Number.isInteger(currentAnswers[q.id])).length,
+      remainingSeconds: timerInitializedRef.current && deadlineRef.current !== null ? remainingExamSeconds(deadlineRef.current) : Infinity,
+      violationCount: Math.max(currentViolations, violationCountRef.current), teacherEnded: teacherEndedRef.current })) return;
+    pendingSubmissionRef.current = reason;
     if (!navigator.onLine) {
       setAutosaveStatus("offline");
       setPreWarning("You are offline. Your answers are safe on this device and submission will resume when the connection returns.");
@@ -829,6 +883,7 @@ export default function QuizRoom() {
     }
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
+    if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
     try {
       // A page transition can cancel MediaRecorder/upload work on mobile. Keep the
       // quiz alive until an in-progress evidence clip has finished persisting.
@@ -843,6 +898,7 @@ export default function QuizRoom() {
       }));
 
       const res = await fetch("/api/quizzes/submit", {
+        signal: AbortSignal.timeout(45_000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -874,15 +930,16 @@ export default function QuizRoom() {
               ? "suspicious"
               : "clean";
         const integrityInvalidated = data.result?.integrityInvalidated === true
-          || serverVerdict === "cheated"
           || serverViolationCount >= 3;
         setQuizSubmittedResult({
           score: data.result?.score == null ? null : Number(data.result.score),
           total: 100,
+          answeredCount: data.result?.answeredCount ?? Object.keys(currentAnswers).length,
+          totalQuestions: data.result?.totalQuestions ?? currentQuestions.length,
           violations: serverViolationCount,
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
-          expEarned: typeof data.result?.expEarned === "number" ? data.result.expEarned : 100,
+          expEarned: typeof data.result?.expEarned === "number" ? data.result.expEarned : 0,
           coinsEarned: typeof data.result?.coinsEarned === "number" ? data.result.coinsEarned : 0,
           rank: data.result?.rank ?? 1,
           isTopOne: data.result?.isTopOne === true,
@@ -903,7 +960,7 @@ export default function QuizRoom() {
       submissionInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [quizId, hasStarted, timeLeft, playTone, router, setPreWarning]);
+  }, [quizId, hasStarted, timeLeft, playTone, router, setPreWarning, quizSubmittedResult]);
 
   const submitQuizRef = useRef(submitQuiz);
   useEffect(() => {
@@ -926,27 +983,31 @@ export default function QuizRoom() {
     questionId: number,
     choiceId: number,
     questionIndex: number,
+    textAnswer?: string,
   ) => {
     if (
-      isCheckingAnswer
+      !examActiveRef.current || submissionInFlightRef.current || answerInFlightRef.current || isCheckingAnswer
       || answerFeedback[questionId]
     ) return;
 
+    answerInFlightRef.current = true;
     setIsCheckingAnswer(true);
     setPreWarning(null);
     try {
       const response = await fetch("/api/quizzes/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quizId: Number(quizId), questionId, choiceId }),
+        body: JSON.stringify({ quizId: Number(quizId), studentQuizId: studentQuizIdRef.current, questionId, choiceId, textAnswer }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
         setPreWarning(data.error || "Your answer could not be recorded. Please try again.");
+        answerInFlightRef.current = false;
         setIsCheckingAnswer(false);
         return;
       }
 
+      if (submissionInFlightRef.current) return;
       const recordedChoiceId = Number(data.choiceId);
       const isCorrect = data.isCorrect === true;
       const nextAnswers = { ...answersStateRef.current, [questionId]: recordedChoiceId };
@@ -965,16 +1026,19 @@ export default function QuizRoom() {
 
       if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = window.setTimeout(() => {
+        answerInFlightRef.current = false;
         setIsCheckingAnswer(false);
+        if (submissionInFlightRef.current) return;
         const qList = questionsRef.current;
         const currentAns = answersStateRef.current;
-        if (qList.length > 0 && Object.keys(currentAns).length >= qList.length) {
+        if (allQuestionsAnswered(qList, currentAns)) {
           void submitQuizRef.current("all_questions_completed");
         } else if (questionIndex < qList.length - 1) {
           setCurrentQuestionIndex(questionIndex + 1);
         }
       }, 1_100);
     } catch {
+      answerInFlightRef.current = false;
       setPreWarning("Network error. Your answer was not recorded; please tap it again.");
       setIsCheckingAnswer(false);
     }
@@ -985,19 +1049,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     const currentQ = questions[currentQuestionIndex];
     if (!currentQ || !fillBlankInput.trim() || isCheckingAnswer || answerFeedback[currentQ.id]) return;
 
-    const trimmed = fillBlankInput.trim().toLowerCase();
-    const matched = currentQ.choices.find(
-      (ch: any) => ch.isCorrect && ch.choiceText.trim().toLowerCase() === trimmed
-    );
-
-    if (matched) {
-      void handleSelectChoice(currentQ.id, matched.id, currentQuestionIndex);
-    } else {
-      const fallbackChoice = currentQ.choices.find((ch: any) => !ch.isCorrect) || currentQ.choices[0];
-      if (fallbackChoice) {
-        void handleSelectChoice(currentQ.id, fallbackChoice.id, currentQuestionIndex);
-      }
-    }
+    void handleSelectChoice(currentQ.id, 0, currentQuestionIndex, fillBlankInput.trim());
   }, [questions, currentQuestionIndex, fillBlankInput, isCheckingAnswer, answerFeedback, handleSelectChoice]);
 
   useEffect(() => () => {
@@ -1076,6 +1128,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       now - lastViolationAtRef.current < 1_200
     ) return false;
 
+    const incidentId = pendingIncidentIdsRef.current.get(type) || crypto.randomUUID();
+    pendingIncidentIdsRef.current.set(type, incidentId);
     isReportingRef.current = true;
     lastViolationAtRef.current = now;
 
@@ -1090,22 +1144,28 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       const base64Img = captureSnapshot();
 
       const response = await fetch("/api/live/violation", {
+        signal: AbortSignal.timeout(20_000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId: parseInt(quizId),
           studentQuizId: studentQuizIdRef.current,
           violationType: type,
+          incidentId,
           confidenceScore,
           screenshot: base64Img,
         }),
       });
       const data = await response.json().catch(() => null);
+      if (data?.code === "VIOLATION_LIMIT_REACHED") {
+        violationCountRef.current = 3; setViolationCount(3); return true;
+      }
       if (!response.ok || !data?.success) {
         console.error("Violation API rejected event:", type, response.status, data?.error);
         return false;
       }
 
+      pendingIncidentIdsRef.current.delete(type);
       const violationId = String(data.violation?.id || "");
       if (/^\d+$/.test(violationId)) {
         const clip = await evidenceClipPromise;
@@ -1113,7 +1173,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           const formData = new FormData();
           formData.append("evidence", clip.blob, `violation-${violationId}.${clip.extension}`);
           formData.append("durationMs", String(clip.durationMs));
-          void fetch(`/api/live/violation/${violationId}/evidence`, {
+          await fetch(`/api/live/violation/${violationId}/evidence`, {
+            signal: AbortSignal.timeout(15_000),
             method: "POST",
             body: formData,
           }).catch(() => {});
@@ -1181,7 +1242,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         }),
       });
     } catch (err) {}
-  }, [quiz, quizId, studentQuizId]);
+  }, [quiz?.teacherId, quiz?.title, quizId, studentQuizId]);
 
   // ── Camera and Edge AI Tracking Loop ──────────────────
   useEffect(() => {
@@ -1198,15 +1259,12 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     let audioResumeListener: (() => void) | null = null;
     let cancelled = false;
     let loadedCocoModel: any = null;
+    let resetDetectorIncidents: (() => void) | null = null;
+    let joinedTimer: ReturnType<typeof setTimeout> | null = null;
     const desktopVideoElement = videoRef.current;
     const mobileVideoElement = mobileVideoRef.current;
 
     const disposeLoadedModels = () => {
-      try {
-        loadedCocoModel?.dispose?.();
-      } catch {
-        // The object model may already have been released during a fast remount.
-      }
       loadedCocoModel = null;
 
       // face-api's network objects are module-level singletons shared by every
@@ -1240,6 +1298,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         let calibrationTotal = 0;
         let noiseFloor = 0;
         let anomalyFrames = 0;
+        let audioViolationRecorded = false;
 
         const resumeAudio = () => {
           if (!audioContext || audioContext.state !== "suspended") return;
@@ -1286,23 +1345,25 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           const threshold = getAudioAnomalyThreshold(noiseFloor);
           if (levelPercent >= threshold) {
-            anomalyFrames++;
+            anomalyFrames = Math.min(5, anomalyFrames + 1);
             if (anomalyFrames === 2) {
               setPreWarning("⚠️ Pre-Warning: Sustained sound or speaking detected. Please remain quiet.");
             }
             if (
-              anomalyFrames >= 5 &&
+              anomalyFrames >= 5 && !audioViolationRecorded &&
               violationCountRef.current < 3 &&
               !isAlertingRef.current &&
               !isReportingRef.current
             ) {
               const persisted = await reportViolationRef.current("audio_anomaly");
-              anomalyFrames = persisted ? 0 : 3;
+              audioViolationRecorded = persisted;
+              anomalyFrames = persisted ? 5 : 3;
               if (persisted) setPreWarning(null);
             }
           } else {
             anomalyFrames = Math.max(0, anomalyFrames - 2);
             noiseFloor = Math.min(12, noiseFloor * 0.9 + levelPercent * 0.1);
+            if (anomalyFrames === 0) audioViolationRecorded = false;
             if (anomalyFrames === 0 && !isAlertingRef.current) {
               setPreWarning((current) => current?.includes("Sustained sound") ? null : current);
             }
@@ -1388,15 +1449,16 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.addEventListener("ended", () => {
+            if (cancelled) return;
             setCameraActive(false);
             setAiStatus("Camera disconnected");
             setDeviceStatus("Camera disconnected ✗");
             setPreWarning("Camera feed was disconnected. Reconnect it immediately.");
-            void reportViolationRef.current("camera_unavailable", 100);
+            if (!document.hidden) void reportViolationRef.current("camera_unavailable", 100);
           }, { once: true });
         }
 
-        setTimeout(() => notifyTeacherJoined(), 1500);
+        joinedTimer = setTimeout(() => { if (!cancelled) void notifyTeacherJoined(); }, 1500);
 
         // Keep the teacher preview current without continuously encoding and
         // uploading JPEG frames on constrained mobile devices.
@@ -1436,6 +1498,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           let phoneViolationRecorded = false;
           let tickCounter = 0;
           let detectionBusy = false;
+          resetDetectorIncidents = () => {
+            // Clear pending frame evidence across suspension, keeping already
+            // penalized incidents latched until a clear frame is observed.
+            noFaceFrames = 0; multipleFacesFrames = 0; lookingAwayFrames = 0;
+            phoneDetectedFrames = 0; phoneAbsentFrames = 0;
+          };
+          document.addEventListener("visibilitychange", resetDetectorIncidents);
 
           objectModelSlowTimer = setTimeout(() => {
             if (!cancelled && !loadedCocoModel) setDeviceStatus("Still loading device AI...");
@@ -1472,7 +1541,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           faceDetectionInterval = setInterval(async () => {
             if (
-              document.hidden ||
+              cancelled || document.hidden ||
               document.visibilityState === "hidden" ||
               detectionBusy ||
               !examActiveRef.current ||
@@ -1482,6 +1551,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             ) return;
 
             const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
+            if (activeVideo?.paused && mediaStreamRef.current?.active) { void activeVideo.play().catch(() => {}); return; }
             if (!activeVideo || activeVideo.readyState < 2 || activeVideo.videoWidth === 0 || activeVideo.videoHeight === 0) {
               if (activeVideo && activeVideo.paused && mediaStreamRef.current?.active) {
                 activeVideo.play().catch(() => {});
@@ -1514,24 +1584,27 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   })
                 ).withFaceLandmarks(performanceProfile.useTinyLandmarks);
 
+                if (cancelled || document.hidden) { detectionBusy = false; return; }
                 if (detections.length === 0) {
+                  multipleFacesFrames = 0; multipleFacesViolationRecorded = false;
+                  lookingAwayFrames = 0; lookingAwayViolationRecorded = false;
                   noFaceFrames++;
                   if (noFaceFrames === 2) {
                     setPreWarning("⚠️ Warning: No face detected. Please face your camera.");
                   }
                   if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5) && !noFaceViolationRecorded) {
-                    noFaceViolationRecorded = true;
-                    await reportViolationRef.current("no_face", 100);
+                    noFaceViolationRecorded = await reportViolationRef.current("no_face", 100);
                   }
                   setFaceStatus("Not Detected ✗");
                 } else if (detections.length > 1) {
+                  noFaceFrames = 0; noFaceViolationRecorded = false;
+                  lookingAwayFrames = 0; lookingAwayViolationRecorded = false;
                   multipleFacesFrames++;
                   if (multipleFacesFrames === 2) {
                     setPreWarning("⚠️ Warning: Multiple faces detected in frame.");
                   }
                   if (multipleFacesFrames >= (isMobile ? 3 : 4) && !multipleFacesViolationRecorded) {
-                    multipleFacesViolationRecorded = true;
-                    await reportViolationRef.current("multiple_faces", 100);
+                    multipleFacesViolationRecorded = await reportViolationRef.current("multiple_faces", 100);
                   }
                   setFaceStatus("Multiple ✗");
                 } else {
@@ -1592,8 +1665,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                       setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
                     }
                     if (lookingAwayFrames >= (isMobile ? 3 : 5) && !lookingAwayViolationRecorded) {
-                      lookingAwayViolationRecorded = true;
-                      await reportViolationRef.current(violationReason, 90);
+                      lookingAwayViolationRecorded = await reportViolationRef.current(violationReason, 90);
                     }
                   } else {
                     lookingAwayFrames = 0;
@@ -1606,6 +1678,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             } else {
               try {
                 const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, isMobile ? 0.2 : 0.25);
+                if (cancelled || document.hidden) { detectionBusy = false; return; }
                 const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
 
                 if (deviceConfidence > 0) {
@@ -1616,11 +1689,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                       ? `Phone ${Math.round(deviceConfidence * 100)}% ✗`
                       : `Confirming ${Math.round(deviceConfidence * 100)}%…`
                   );
+                  if (phoneDetectedFrames === 2) setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
                   if (phoneDetectedFrames >= 2) {
-                    setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
                     if (!phoneViolationRecorded) {
-                      phoneViolationRecorded = true;
-                      await reportViolationRef.current(
+                      phoneViolationRecorded = await reportViolationRef.current(
                         "device_detected",
                         Math.round(deviceConfidence * 100)
                       );
@@ -1663,6 +1735,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
     return () => {
       cancelled = true;
+      if (joinedTimer) clearTimeout(joinedTimer);
+      if (resetDetectorIncidents) document.removeEventListener("visibilitychange", resetDetectorIncidents);
       if (snapshotInterval) clearInterval(snapshotInterval);
       if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
       if (faceDetectionInterval) clearInterval(faceDetectionInterval);
@@ -1677,44 +1751,58 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (desktopVideoElement) desktopVideoElement.srcObject = null;
       if (mobileVideoElement) mobileVideoElement.srcObject = null;
     };
-  }, [hasStarted, isMobile, quiz?.teacherId, quiz?.title, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot]);
+  }, [hasStarted, isMobile, quiz?.teacherId, quiz?.title, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot, mediaGeneration]);
 
-  // ── Timer Countdown & Expiration Guard ──
+  // Use an absolute deadline: suspended background intervals cannot extend an exam.
   useEffect(() => {
     if (!hasStarted) {
       timerInitializedRef.current = false;
       return;
     }
-    if (timeLeft > 0) {
-      timerInitializedRef.current = true;
-    }
-  }, [hasStarted, timeLeft]);
-
-  useEffect(() => {
-    if (!hasStarted) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev: number) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (deadlineRef.current !== null) setTimeLeft(remainingExamSeconds(deadlineRef.current));
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
   }, [hasStarted]);
 
-  // ── Auto Submit on Time Up ──
   useEffect(() => {
-    if (timeLeft > 0) {
-      autoSubmitAttemptedRef.current = false;
-      return;
-    }
-    if (hasStarted && timerInitializedRef.current && !isSubmitting && !autoSubmitAttemptedRef.current) {
-      autoSubmitAttemptedRef.current = true;
-      void submitQuiz("timer_expired");
-    }
+    if (hasStarted && timerInitializedRef.current && timeLeft === 0 && !isSubmitting && !pendingSubmissionRef.current) void submitQuiz("timer_expired");
   }, [hasStarted, timeLeft, isSubmitting, submitQuiz]);
+
+  // Retry interrupted terminal requests and reconcile missed teacher-end events.
+  useEffect(() => {
+    if (!hasStarted) return;
+    let cancelled = false;
+    let busy = false;
+    const reconcile = async () => {
+      if (busy || submissionInFlightRef.current || !navigator.onLine) return;
+      busy = true;
+      try {
+        const response = await fetch(`/api/quizzes/${quizId}`, { cache: "no-store" });
+        const data = await response.json();
+        if (cancelled || !response.ok || data.studentQuizId !== studentQuizIdRef.current) return;
+        if (data.studentQuizStatus === "completed" || data.endTime) {
+          setHasStarted(false); router.replace("/dashboard/student/results"); return;
+        }
+        violationCountRef.current = Math.max(violationCountRef.current, Number(data.violationCount) || 0);
+        setViolationCount(violationCountRef.current);
+        if (data.quiz?.quizStatus === "ended" && (data.teacherEndedAt
+          ? Date.parse(data.teacherEndedAt) >= startedAtRef.current : data.attemptNumber === 1)) teacherEndedRef.current = true;
+        const reason = violationCountRef.current >= 3 ? "violation_limit"
+          : teacherEndedRef.current ? "teacher_ended"
+          : deadlineRef.current !== null && remainingExamSeconds(deadlineRef.current) === 0 ? "timer_expired"
+          : pendingSubmissionRef.current || (allQuestionsAnswered(questionsRef.current, answersStateRef.current) ? "all_questions_completed" : null);
+        if (reason) await submitQuizRef.current(reason);
+      } catch {} finally { busy = false; }
+    };
+    const timer = window.setInterval(() => void reconcile(), 5000);
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); };
+  }, [hasStarted, quizId, router]);
 
   // ── Fullscreen & Anti-Cheat Lockdown ──
   useEffect(() => {
@@ -1749,6 +1837,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
       if (!awayIncidentActiveRef.current) {
         awayIncidentActiveRef.current = true;
+        awayStartedAtRef.current = Date.now();
+        awayGraceMsRef.current = graceMs;
         setPreWarning("⚠️ Warning: Return to the exam. Leaving or minimizing the exam window is prohibited.");
       }
 
@@ -1756,16 +1846,25 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         awayGraceTimerRef.current = setTimeout(async () => {
           awayGraceTimerRef.current = null;
           if (!examActiveRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
-          const isStillAway = typeof document !== "undefined" && (document.visibilityState === "hidden" || document.hidden);
+          const isStillAway = typeof document !== "undefined" && (document.visibilityState === "hidden" || document.hidden || !document.hasFocus());
           if (isStillAway && !awayViolationRecordedRef.current) {
             awayViolationRecordedRef.current = true;
-            await reportViolationRef.current("tab_switch", 100);
+            fullscreenViolationRecordedRef.current = fullscreenIncidentActiveRef.current;
+            const persisted = await reportViolationRef.current("tab_switch", 100);
+            if (!persisted) awayViolationRecordedRef.current = false;
           }
         }, graceMs);
       }
     };
 
     const endAway = () => {
+      if (document.hidden) return;
+      if (awayIncidentActiveRef.current && !awayViolationRecordedRef.current
+        && Date.now() - awayStartedAtRef.current >= awayGraceMsRef.current) {
+        awayViolationRecordedRef.current = true;
+        fullscreenViolationRecordedRef.current = fullscreenIncidentActiveRef.current;
+        void reportViolationRef.current("tab_switch", 100);
+      }
       if (awayGraceTimerRef.current) {
         clearTimeout(awayGraceTimerRef.current);
         awayGraceTimerRef.current = null;
@@ -1777,6 +1876,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         setPreWarning(null);
       }
 
+      if (resumeProctoredMedia(mediaStreamRef.current, isMobile ? mobileVideoRef.current : videoRef.current)) {
+        mediaStreamRef.current = null;
+        setMediaGeneration((generation) => generation + 1);
+      }
       // Resume video playback if it paused during mobile backgrounding
       const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
       if (activeVideo && activeVideo.paused && mediaStreamRef.current?.active) {
@@ -1826,9 +1929,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           fullscreenGraceTimerRef.current = setTimeout(async () => {
             fullscreenGraceTimerRef.current = null;
             if (!examActiveRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
-            if (!document.fullscreenElement && !fullscreenViolationRecordedRef.current) {
+            if (!awayIncidentActiveRef.current && !document.hidden && !document.fullscreenElement && !fullscreenViolationRecordedRef.current) {
               fullscreenViolationRecordedRef.current = true;
-              await reportViolationRef.current("window_resize", 100);
+              fullscreenViolationRecordedRef.current = await reportViolationRef.current("window_resize", 100);
             }
           }, 1500);
         }
@@ -1974,7 +2077,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   // ─── POST-QUIZ PROCTORSHIELD CELEBRATORY PODIUM SCREEN ────────────────
   if (quizSubmittedResult) {
     const resultInvalidated = quizSubmittedResult.integrityInvalidated
-      || quizSubmittedResult.aiVerdict === "cheated"
       || quizSubmittedResult.violations >= 3;
     const resultFlagged = !resultInvalidated && quizSubmittedResult.violations > 0;
     return (
@@ -2024,7 +2126,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Questions Completed</div>
               <div className="text-xl font-black text-indigo-400 mt-1 flex items-center justify-center gap-1">
-                <CheckCircle className="w-4 h-4 text-indigo-400" /> {answeredCount} / {questions.length}
+                <CheckCircle className="w-4 h-4 text-indigo-400" /> {quizSubmittedResult.answeredCount} / {quizSubmittedResult.totalQuestions}
               </div>
             </div>
 
@@ -2428,7 +2530,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           {/* Submit Exam Button */}
           <button
             onClick={() => void submitQuiz("manual")}
-            disabled={isSubmitting || loadingQuiz || !!quizError || !isOnline}
+            disabled={isSubmitting || isCheckingAnswer || loadingQuiz || !!quizError || !isOnline}
             className="hidden lg:block px-4 py-2 bg-gradient-to-r from-red-900/80 to-rose-900/80 border border-rose-600/50 hover:bg-rose-800 text-rose-100 font-black text-xs rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? "Submitting..." : isOnline ? "Submit Exam" : "Waiting for connection"}
@@ -2744,7 +2846,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           <button
             type="button"
             onClick={() => void submitQuiz("manual")}
-            disabled={isSubmitting || loadingQuiz || Boolean(quizError) || !isOnline}
+            disabled={isSubmitting || isCheckingAnswer || loadingQuiz || Boolean(quizError) || !isOnline}
             className="shrink-0 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 px-4 py-3 text-xs font-black text-white shadow-lg disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? "Submitting..." : "Submit Quiz"}

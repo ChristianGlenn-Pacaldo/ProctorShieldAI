@@ -21,7 +21,7 @@ type IntegrityResult = {
 
 function verdictDetails(result: IntegrityResult) {
   const verdict = String(result.aiVerdict || "pending").toLowerCase();
-  if (verdict === "cheated" || result.integrityInvalidated) {
+  if (result.integrityInvalidated) {
     return {
       label: "Cheated",
       description: result.remarks || result.aiAnalysis?.aiExplanation || "The three-strike integrity limit was reached and this result was invalidated.",
@@ -29,7 +29,7 @@ function verdictDetails(result: IntegrityResult) {
       Icon: ShieldAlert,
     };
   }
-  if (verdict === "suspicious") {
+  if (verdict === "suspicious" || verdict === "cheated") {
     return {
       label: "Review",
       description: result.aiAnalysis?.aiExplanation || result.remarks || "Integrity signals were recorded for instructor review.",

@@ -17,8 +17,11 @@ import {
   calculateQuizCoinReward,
 } from "@/lib/student-coins";
 import { ensureStudentGameProfile } from "@/lib/student-game-profile";
-import { awardStudentExp, EXP_REWARDS } from "@/lib/student-progression";
+import { awardStudentExp, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
 
+import { canSubmitProctored } from "@/lib/proctored-runtime";
+
+class InvalidSubmissionError extends Error {}
 class SubmissionConflictError extends Error {}
 
 export async function POST(req: NextRequest) {
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { quizId, answers } = await req.json();
+    const { quizId, answers, studentQuizId: requestedAttemptId, reason } = await req.json();
     if (!quizId) {
       return NextResponse.json({ error: "quizId is required" }, { status: 400 });
     }
@@ -50,6 +53,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
+    if (studentQuiz.attemptMode !== "arena" && requestedAttemptId !== studentQuiz.id) {
+      return NextResponse.json({ error: "Stale attempt" }, { status: 409 });
+    }
     if (!["in_progress", "ended"].includes(studentQuiz.quiz.quizStatus)) {
       return NextResponse.json({ error: "This quiz is not accepting submissions" }, { status: 409 });
     }
@@ -85,11 +91,11 @@ export async function POST(req: NextRequest) {
       const choiceId = Number(answer.answerText);
       return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
     });
-    const grading = gradeSubmission(
+    let grading = gradeSubmission(
       dbQuestions,
       mergeLockedAnswers(submittedAnswers, lockedAnswers),
     );
-    const score = grading.score;
+    let score = grading.score;
     const effectiveMode = studentQuiz.attemptMode === "arena" ? "arena" : "proctored";
     const isArena = effectiveMode === "arena";
     const completedAt = new Date();
@@ -262,7 +268,7 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     // 3. PROCTORED EXAM AI VERDICT & INTEGRITY POLICY ENFORCEMENT
     // ─────────────────────────────────────────────────────────────
-    const violations = studentQuiz.violations;
+    let violations = studentQuiz.violations;
     const violationSummary = violations.map(v => 
       `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
     ).join("\n");
@@ -299,8 +305,8 @@ Return ONLY the valid JSON object.`;
     }
 
     verdictData = enforceIntegrityPolicy(verdictData, violations.length);
-    const integrityInvalidated = isIntegrityInvalidated(violations.length);
-    const recordedScore = integrityInvalidated ? null : score;
+    let integrityInvalidated = isIntegrityInvalidated(violations.length);
+    let recordedScore = integrityInvalidated ? null : score;
 
     // Claim and complete the attempt atomically. A concurrent request cannot
     // pass the conditional update after the first transaction commits.
@@ -311,12 +317,47 @@ Return ONLY the valid JSON object.`;
           where: {
             id: studentQuiz.id,
             endTime: null,
-            quizStatus: { notIn: ["completed", "submitting", "pending_approval", "rejected"] },
+            quizStatus: "in_progress",
             quiz: { quizStatus: { in: ["in_progress", "ended"] } },
           },
           data: { quizStatus: "submitting" },
         });
         if (claimed.count !== 1) throw new SubmissionConflictError();
+
+        // The attempt row lock also serializes answer/autosave/violation writes.
+        const freshViolations = await tx.violation.findMany({ where: { studentQuizId: studentQuiz.id } });
+        if (freshViolations.length !== violations.length) verdictData = fallbackVerdict(freshViolations.length);
+        violations = freshViolations;
+        verdictData = enforceIntegrityPolicy(verdictData, violations.length);
+        integrityInvalidated = isIntegrityInvalidated(violations.length);
+        const saved = await tx.answer.findMany({ where: { studentQuizId: studentQuiz.id } });
+        const persisted = saved.flatMap((answer) => {
+          const choiceId = Number(answer.answerText);
+          return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
+        });
+        grading = gradeSubmission(dbQuestions, mergeLockedAnswers(submittedAnswers, persisted));
+        score = grading.score;
+        recordedScore = integrityInvalidated ? null : score;
+        const currentQuiz = await tx.quiz.findUnique({ where: { id: studentQuiz.quizId } });
+        const teacherEnd = reason === "teacher_ended"
+          ? await tx.setting.findUnique({ where: { settingKey: `proctored:quiz-ended:${studentQuiz.quizId}` } }) : null;
+        const validTeacherEnd = currentQuiz?.quizStatus === "ended" && (teacherEnd?.settingValue
+          ? Date.parse(teacherEnd.settingValue) >= studentQuiz.startTime!.getTime() : studentQuiz.attemptNumber === 1);
+        if (!canSubmitProctored({ reason, active: Boolean(studentQuiz.startTime),
+          questionCount: dbQuestions.length, answeredCount: grading.records.length,
+          remainingSeconds: Math.ceil((studentQuiz.startTime!.getTime() + durationMinutes * 60_000 - Date.now()) / 1000),
+          violationCount: violations.length, teacherEnded: validTeacherEnd })) {
+          throw new InvalidSubmissionError();
+        }
+        // Initialize/award before completion so the history bootstrap cannot
+        // include this same attempt, and commit the reward with the result.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${session.userId}`}))`;
+        await getStudentProgression(session.userId, tx);
+        let expEarned = 0;
+        if (!integrityInvalidated) {
+          const reward = await awardStudentExp(session.userId, EXP_REWARDS.PROCTORED_COMPLETION, "Exam Completion", tx);
+          expEarned = reward.expAwarded;
+        }
 
         await tx.answer.deleteMany({ where: { studentQuizId: studentQuiz.id } });
         if (grading.records.length > 0) {
@@ -419,9 +460,10 @@ Return ONLY the valid JSON object.`;
           });
         }
 
-        return { completed, coinReward, studentRank, totalCoins };
+        return { completed, coinReward, studentRank, totalCoins, expEarned };
       });
     } catch (error) {
+      if (error instanceof InvalidSubmissionError) return NextResponse.json({ error: "Submission reason preconditions not met" }, { status: 409 });
       if (error instanceof SubmissionConflictError) {
         return NextResponse.json({ error: "This quiz is already being submitted or completed" }, { status: 409 });
       }
@@ -461,21 +503,15 @@ Return ONLY the valid JSON object.`;
 
     const { coinReward, studentRank, totalCoins } = completion;
 
-    let expEarned = 0;
-    if (!integrityInvalidated) {
-      try {
-        const expResult = await awardStudentExp(session.userId, EXP_REWARDS.PROCTORED_COMPLETION, "Exam Completion");
-        expEarned = expResult.expAwarded;
-      } catch (err) {
-        console.error("Failed to award student exp for proctored exam:", err);
-      }
-    }
+    const expEarned = completion.expEarned;
 
     return NextResponse.json({
       success: true,
       studentQuiz: updatedStudentQuiz,
       result: {
         score: recordedScore,
+        answeredCount: grading.records.length,
+        totalQuestions: dbQuestions.length,
         violationCount: violations.length,
         integrityInvalidated,
         deadlineExpired,

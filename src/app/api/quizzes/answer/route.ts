@@ -9,6 +9,8 @@ import {
 } from "@/lib/arena";
 import { pusherServer } from "@/lib/pusher";
 
+class AnswerConflictError extends Error {}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession("student");
@@ -19,8 +21,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const quizId = Number(body.quizId);
     const questionId = Number(body.questionId);
-    const choiceId = Number(body.choiceId);
-    if (![quizId, questionId, choiceId].every(Number.isInteger)) {
+    let choiceId = Number(body.choiceId);
+    const textAnswer = typeof body.textAnswer === "string" ? body.textAnswer.trim().slice(0, 2000) : null;
+    if (![quizId, questionId].every(Number.isInteger) || (textAnswer === null && !Number.isInteger(choiceId))) {
       return NextResponse.json({ error: "Invalid answer" }, { status: 400 });
     }
 
@@ -35,11 +38,12 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         startTime: true,
+        attemptMode: true,
         quiz: { select: { duration: true, teacherId: true } },
       },
       orderBy: { attemptNumber: "desc" },
     });
-    if (!attempt?.startTime) {
+    if (!attempt?.startTime || (attempt.attemptMode !== "arena" && body.studentQuizId !== attempt.id)) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
     }
 
@@ -48,7 +52,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "The answer deadline has passed" }, { status: 409 });
     }
 
-    const selectedChoice = await prisma.choice.findFirst({
+    if (textAnswer !== null && attempt.attemptMode !== "arena") {
+      const question = await prisma.question.findFirst({ where: { id: questionId, quizId, questionType: "fill_in_blank" }, include: { choices: true } });
+      if (!question || !textAnswer) return NextResponse.json({ error: "Invalid text answer" }, { status: 400 });
+      const match = question.choices.find((choice) => choice.isCorrect && choice.choiceText.trim().toLowerCase() === textAnswer.toLowerCase());
+      const selected = match || question.choices.find((choice) => !choice.isCorrect);
+      choiceId = selected?.id ?? 0;
+    }
+    const wrongTextQuestion = textAnswer !== null && choiceId === 0
+      ? await prisma.question.findFirst({ where: { id: questionId, quizId, questionType: "fill_in_blank" }, select: { points: true } }) : null;
+    const selectedChoice = wrongTextQuestion ? { id: 0, isCorrect: false, question: wrongTextQuestion } : await prisma.choice.findFirst({
       where: { id: choiceId, questionId, question: { quizId } },
       select: { id: true, isCorrect: true, question: { select: { points: true } } },
     });
@@ -58,6 +71,13 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-answer:${attempt.id}:${questionId}`}))`;
+      if (attempt.attemptMode !== "arena") {
+        const active = await tx.studentQuiz.updateMany({
+          where: { id: attempt.id, endTime: null, quizStatus: "in_progress" },
+          data: { lastHeartbeatAt: new Date() },
+        });
+        if (active.count !== 1) throw new AnswerConflictError();
+      }
       const existing = await tx.answer.findUnique({
         where: { studentQuizId_questionId: { studentQuizId: attempt.id, questionId } },
         select: { answerText: true, isCorrect: true },
@@ -167,6 +187,7 @@ export async function POST(req: NextRequest) {
       totalCount,
     });
   } catch (error) {
+    if (error instanceof AnswerConflictError) return NextResponse.json({ error: "Attempt is already completed" }, { status: 409 });
     console.error("Record quiz answer error:", error);
     return NextResponse.json({ error: "Failed to record answer" }, { status: 500 });
   }

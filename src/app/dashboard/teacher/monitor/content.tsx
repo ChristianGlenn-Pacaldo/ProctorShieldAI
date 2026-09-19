@@ -55,7 +55,7 @@ const StudentVideoFeed = React.memo(
                 {feed.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
               </div>
               <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
-                {feed.snapshot ? "Capturing AI Snapshot..." : "In Exam Lobby (Waiting to Start)"}
+                {feed.snapshot ? "Capturing AI Snapshot..." : "Waiting for camera snapshot"}
               </span>
             </div>
           )}
@@ -70,7 +70,7 @@ const StudentVideoFeed = React.memo(
             ) : (
               <>
                 <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
-                <span className="text-amber-400 tracking-wider">⏳ IN LOBBY</span>
+                <span className="text-amber-400 tracking-wider">⏳ CAMERA PENDING</span>
               </>
             )}
           </div>
@@ -89,7 +89,7 @@ const StudentVideoFeed = React.memo(
             <span className={`${feed.statusColor} whitespace-nowrap text-[11px]`}>{feed.status}</span>
           </div>
           <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
-            <span>{feed.quizTitle}</span>
+            <span title={`Student ID: ${feed.id}`}>{feed.quizTitle}</span>
             <span className={`text-[9px] font-bold ${feed.monitoringLevel === "reduced" ? "text-violet-400" : "text-emerald-500"}`}>
               {feed.deviceType === "mobile" ? "Mobile" : "Desktop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
             </span>
@@ -463,39 +463,30 @@ export default function LiveMonitorContent({
         const data = await res.json();
         const snapshots: any[] = data.snapshots || [];
 
-        if (snapshots.length > 0) {
+        if (isMounted) {
           setFeeds((prev) => {
-            let hasChanges = false;
-            const updated = [...prev];
+            const updated = prev.filter((feed) => snapshots.some((snap) => String(snap.studentId) === feed.id));
+            let hasChanges = updated.length !== prev.length;
 
             for (const snap of snapshots) {
               const sIdStr = String(snap.studentId || "");
-              const sNameStr = String(snap.studentName || "").toLowerCase().trim();
-
-              const idx = updated.findIndex((f) => {
-                const fIdStr = String(f.id || "");
-                const fNameLower = String(f.name || "").toLowerCase().trim();
-
-                if (fIdStr && fIdStr === sIdStr) return true;
-                if (fNameLower && sNameStr && fNameLower === sNameStr) return true;
-                if (fNameLower && sNameStr && (fNameLower.includes(sNameStr) || sNameStr.includes(fNameLower))) return true;
-                return false;
-              });
+              const idx = updated.findIndex((feed) => feed.id === sIdStr);
 
               if (idx >= 0) {
                 const cur = updated[idx];
-                const newSnapshot = snap.snapshot || cur.snapshot;
+                const newSnapshot = snap.snapshot || null;
                 const newDevice = snap.deviceType === "mobile" ? "mobile" : "desktop";
                 const newLevel = snap.monitoringLevel === "strict" ? "strict" : "reduced";
-                const newStatus = cur.statusColor === "text-red-500" ? cur.status : "✓ Active";
-                const newStatusColor = cur.statusColor === "text-red-500" ? cur.statusColor : "text-emerald-500";
-                const newBorder = cur.border.includes("red") ? cur.border : "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]";
+                const newStatus = snap.connectionStatus === "offline" ? "Offline" : snap.violationCount > 0 ? "⚠ Flagged" : "✓ Active";
+                const newStatusColor = snap.violationCount > 0 ? "text-red-500" : "text-emerald-500";
+                const newBorder = snap.violationCount > 0 ? "border-red-500/40" : "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]";
 
                 const snapshotChanged = cur.snapshot !== newSnapshot;
                 const deviceChanged = cur.deviceType !== newDevice;
                 const levelChanged = cur.monitoringLevel !== newLevel;
-                const connectionChanged = cur.connectionStatus !== "online";
-                const statusChanged = cur.status !== newStatus || cur.statusColor !== newStatusColor;
+                const connectionChanged = cur.connectionStatus !== snap.connectionStatus || cur.violationCount !== snap.violationCount;
+                const statusChanged = cur.status !== newStatus || cur.statusColor !== newStatusColor
+                  || cur.border !== newBorder || cur.quizTitle !== snap.quizTitle || cur.name !== snap.studentName;
 
                 if (snapshotChanged || deviceChanged || levelChanged || connectionChanged || statusChanged) {
                   hasChanges = true;
@@ -505,16 +496,17 @@ export default function LiveMonitorContent({
                     name: snap.studentName || cur.name,
                     quizTitle: snap.quizTitle || cur.quizTitle,
                     snapshot: newSnapshot,
+                    violationCount: snap.violationCount,
                     deviceType: newDevice,
                     monitoringLevel: newLevel,
-                    connectionStatus: "online",
+                    connectionStatus: snap.connectionStatus,
                     status: newStatus,
                     statusColor: newStatusColor,
                     border: newBorder,
-                    lastSeen: new Date(),
+                    lastSeen: new Date(snap.updatedAt),
                   };
                 } else {
-                  cur.lastSeen = new Date();
+                  cur.lastSeen = new Date(snap.updatedAt);
                 }
               } else {
                 hasChanges = true;
@@ -527,11 +519,11 @@ export default function LiveMonitorContent({
                   border: "border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
                   joinedAt: new Date(snap.updatedAt || Date.now()),
                   lastSeen: new Date(snap.updatedAt || Date.now()),
-                  violationCount: 0,
+                  violationCount: snap.violationCount,
                   snapshot: snap.snapshot,
                   deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
                   monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
-                  connectionStatus: "online",
+                  connectionStatus: snap.connectionStatus,
                 });
               }
             }

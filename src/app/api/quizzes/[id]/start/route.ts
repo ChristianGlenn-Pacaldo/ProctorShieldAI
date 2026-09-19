@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
       include: {
-        questions: { select: { choices: { select: { isCorrect: true } } } },
+        questions: { select: { questionType: true, choices: { select: { isCorrect: true } } } },
       },
     });
 
@@ -31,6 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Add at least one question before starting the quiz" }, { status: 409 });
     }
     if (quiz.questions.some((question) => (
+      quiz.quizMode !== "arena" && question.questionType === "fill_in_blank"
+        ? !question.choices.some((choice) => choice.isCorrect) :
       question.choices.length < 2
       || question.choices.filter((choice) => choice.isCorrect).length !== 1
     ))) {
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
       if (claimed.count !== 1) return false;
       await tx.studentQuiz.updateMany({
-        where: { quizId, quizStatus: "enrolled" },
+        where: { quizId, quizStatus: "enrolled", attemptMode: "arena" },
         data: { quizStatus: "in_progress", startTime: startedAt },
       });
       return true;

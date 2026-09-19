@@ -16,6 +16,7 @@ export async function GET() {
       include: {
         quiz: true,
         aiAnalysis: true,
+        _count: { select: { violations: true } },
       },
       orderBy: {
         createdAt: "desc",
@@ -39,7 +40,7 @@ export async function GET() {
         };
       }
 
-      const isInvalidated = result.aiVerdict === "cheated";
+      const isInvalidated = result._count.violations >= 3;
       return {
         ...result,
         effectiveMode: "proctored" as const,

@@ -283,9 +283,9 @@ test("13. authoritative violationCount 3 submits exactly once", () => {
 
 test("14. lobby snapshots/joins do not set premature startTime or drain fresh attempt timer", () => {
   // Verifies live snapshot does not prematurely set startTime during lobby
-  assert.match(snapshotRouteSrc, /if \(!enrollment\.startTime && enrollment\.quiz\.quizStatus === "in_progress" && enrollment\.quizStatus === "in_progress"\)/);
+  assert.doesNotMatch(snapshotRouteSrc, /data: \{ startTime:/);
   // Verifies live join does not prematurely set startTime during lobby
-  assert.match(joinRouteSrc, /if \(!enrollment\.startTime && quiz\.quizStatus === "in_progress" && enrollment\.quizStatus === "in_progress"\)/);
+  assert.doesNotMatch(joinRouteSrc, /data: \{ startTime:/);
   // Verifies quizzes/[id] remainingSeconds only calculates from startTime when in_progress
   assert.match(quizDetailsRouteSrc, /studentQuiz\.quizStatus === "in_progress"/);
 });

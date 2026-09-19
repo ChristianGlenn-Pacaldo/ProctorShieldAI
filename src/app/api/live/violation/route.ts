@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { quizId, violationType, confidenceScore, screenshot, snapshot } = await req.json();
+    const { quizId, studentQuizId, incidentId, violationType, confidenceScore, screenshot, snapshot } = await req.json();
+    if (incidentId != null && (typeof incidentId !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(incidentId))) return NextResponse.json({ error: "Invalid incident ID" }, { status: 400 });
     const evidence = screenshot ?? snapshot;
     const numericQuizId = Number(quizId);
 
@@ -50,7 +51,8 @@ export async function POST(req: NextRequest) {
         studentId: session.userId,
         quizId: numericQuizId,
         endTime: null,
-        quizStatus: { notIn: ["completed", "rejected"] },
+        quizStatus: "in_progress",
+        startTime: { not: null },
         quiz: { quizMode: { not: "arena" } },
       },
       include: {
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
       orderBy: { attemptNumber: "desc" },
     });
 
-    if (!studentQuiz) {
+    if (!studentQuiz || studentQuizId !== studentQuiz.id) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
     if (studentQuiz.quiz.quizMode === "arena") {
@@ -70,7 +72,20 @@ export async function POST(req: NextRequest) {
     // enforced by the server, not only by browser code that can be bypassed.
     const violationResult = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-violations:${studentQuiz.id}`}))`;
+      const active = await tx.studentQuiz.updateMany({
+        where: { id: studentQuiz.id, endTime: null, quizStatus: "in_progress" },
+        data: { lastHeartbeatAt: new Date() },
+      });
+      if (active.count !== 1) return { violation: null, count: -1 };
+      const incidentKey = incidentId ? `proctored:incident:${studentQuiz.id}:${incidentId}` : null;
       const existingCount = await tx.violation.count({ where: { studentQuizId: studentQuiz.id } });
+      if (incidentKey) {
+        const recorded = await tx.setting.findUnique({ where: { settingKey: incidentKey } });
+        if (recorded?.settingValue) {
+          const violation = await tx.violation.findUnique({ where: { id: BigInt(recorded.settingValue) } });
+          if (violation) return { violation, count: existingCount, replayed: true };
+        }
+      }
       if (existingCount >= 3) return { violation: null, count: existingCount };
 
       const violation = await tx.violation.create({
@@ -84,9 +99,11 @@ export async function POST(req: NextRequest) {
           screenshotPath: null,
         },
       });
-      return { violation, count: existingCount + 1 };
+      if (incidentKey) await tx.setting.create({ data: { settingKey: incidentKey, settingValue: String(violation.id) } });
+      return { violation, count: existingCount + 1, replayed: false };
     });
 
+    if (violationResult.count < 0) return NextResponse.json({ error: "Attempt is already completed" }, { status: 409 });
     if (!violationResult.violation) {
       return NextResponse.json(
         { error: "Violation limit reached", code: "VIOLATION_LIMIT_REACHED", violationCount: 3 },
@@ -94,6 +111,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const violation = violationResult.violation;
+    if (violationResult.replayed) return NextResponse.json({ success: true, violationCount: violationResult.count,
+      violation: { id: String(violation.id), studentQuizId: violation.studentQuizId, violationType: violation.violationType, timestamp: violation.timestamp.toISOString() } });
 
     if (evidence) {
       try {
@@ -129,7 +148,8 @@ export async function POST(req: NextRequest) {
       violationCount: violationResult.count,
       snapshot: evidence || null,
       timestamp: violation.timestamp,
-    });
+      quizId: studentQuiz.quizId,
+    }).catch((error) => console.warn("Violation broadcast failed:", error));
 
     // Broadcast violation event to admin
     try {

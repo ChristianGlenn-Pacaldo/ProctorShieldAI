@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
         quizStatus: "in_progress",
         quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
-      select: { id: true, startTime: true, quiz: { select: { duration: true } } },
+      select: { id: true, startTime: true, attemptMode: true, quiz: { select: { duration: true } } },
       orderBy: { attemptNumber: "desc" },
     });
-    if (!studentQuiz || !studentQuiz.startTime) {
+    if (!studentQuiz || !studentQuiz.startTime || (studentQuiz.attemptMode !== "arena" && body.studentQuizId !== studentQuiz.id)) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
     }
 

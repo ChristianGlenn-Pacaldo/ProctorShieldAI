@@ -20,6 +20,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid quiz" }, { status: 400 });
     }
 
+    if (body.action === "start") {
+      const attempt = await prisma.studentQuiz.findFirst({
+        where: { id: String(body.studentQuizId || ""), studentId: session.userId, quizId },
+        include: { quiz: { include: { _count: { select: { questions: true } } } } },
+      });
+      if (!attempt || attempt.attemptMode === "arena" || attempt.quiz.quizMode === "arena"
+        || attempt.endTime || !["enrolled", "in_progress"].includes(attempt.quizStatus || "")
+        || !(attempt.quiz.quizStatus === "in_progress" || (attempt.quiz.quizStatus === "ended" && (attempt.attemptNumber > 1 || attempt.startTime)))
+        || !["strict", "reduced"].includes(attempt.monitoringLevel || "")
+        || attempt.quiz._count.questions < 1) {
+        return NextResponse.json({ error: "This attempt is not ready to start" }, { status: 409 });
+      }
+      // Only the explicit student start may set the clock; retries preserve it.
+      await prisma.studentQuiz.updateMany({
+        where: { id: attempt.id, endTime: null, startTime: null, quizStatus: "enrolled" },
+        data: { quizStatus: "in_progress", startTime: new Date() },
+      });
+      const active = await prisma.studentQuiz.findUnique({ where: { id: attempt.id } });
+      if (!active?.startTime || active.endTime || active.quizStatus !== "in_progress") {
+        return NextResponse.json({ error: "Attempt is no longer active" }, { status: 409 });
+      }
+      return NextResponse.json({ success: true, startTime: active.startTime,
+        remainingSeconds: Math.max(0, Math.ceil((active.startTime.getTime() + (attempt.quiz.duration ?? 60) * 60_000 - Date.now()) / 1000)) });
+    }
+
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
       select: { id: true, quizMode: true },

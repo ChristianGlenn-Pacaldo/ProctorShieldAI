@@ -84,7 +84,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "You are not enrolled in this quiz" }, { status: 403 });
       }
 
-      if (quiz.quizStatus === "ended" && studentQuiz.quizStatus !== "in_progress") {
+      if (quiz.quizStatus === "ended" && !studentQuiz.endTime && studentQuiz.quizStatus !== "in_progress" && !(studentQuiz.quizStatus === "enrolled" && studentQuiz.attemptNumber > 1)) {
         return NextResponse.json({ error: "This quiz has already ended." }, { status: 403 });
       }
 
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         endTime: studentQuiz.endTime,
       });
 
-      if (canEnterQuiz && quiz.shuffleQuestions) {
+      if (quiz.shuffleQuestions) {
         // Shuffle questions deterministically using the student's unique studentQuiz.id
         questions = shuffleArray(quiz.questions, studentQuiz.id);
         
@@ -115,7 +115,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           endTime: studentQuiz?.endTime,
         })
       : true;
-    const safeQuestions = session.role === "student" && !canEnterQuiz ? [] : questions;
+    const canStartProctored = session.role === "student" && quiz.quizMode !== "arena"
+      && studentQuiz?.quizStatus === "enrolled" && !studentQuiz.endTime
+      && (quiz.quizStatus === "in_progress" || (quiz.quizStatus === "ended" && studentQuiz.attemptNumber > 1));
+    const safeQuestions = session.role === "student" && !canEnterQuiz && !canStartProctored ? [] : questions;
     const savedAnswers = session.role === "student" && studentQuiz && canEnterQuiz
       ? await prisma.answer.findMany({
           where: { studentQuizId: studentQuiz.id },
@@ -125,6 +128,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const violationCount = session.role === "student" && studentQuiz
       ? await prisma.violation.count({ where: { studentQuizId: studentQuiz.id } })
       : undefined;
+    const teacherEnd = session.role === "student" && quiz.quizMode !== "arena" && quiz.quizStatus === "ended"
+      ? await prisma.setting.findUnique({ where: { settingKey: `proctored:quiz-ended:${quiz.id}` } }) : null;
     const remainingSeconds = session.role === "student" && studentQuiz?.startTime && studentQuiz.quizStatus === "in_progress"
       ? Math.max(
           0,
@@ -140,8 +145,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       studentQuizStatus: session.role === "student" ? studentQuiz?.quizStatus : undefined,
       studentQuizId: session.role === "student" ? studentQuiz?.id : undefined,
       attemptMode: session.role === "student" ? studentQuiz?.attemptMode || "proctored" : undefined,
-      canEnterQuiz: session.role === "student" ? canEnterQuiz : undefined,
+      canEnterQuiz: session.role === "student" ? canEnterQuiz || canStartProctored : undefined,
+      startTime: studentQuiz?.startTime,
+      endTime: studentQuiz?.endTime,
+      attemptNumber: studentQuiz?.attemptNumber,
       remainingSeconds,
+      teacherEndedAt: teacherEnd?.settingValue || null,
       deviceType: session.role === "student" ? studentQuiz?.deviceType : undefined,
       monitoringLevel: session.role === "student" ? studentQuiz?.monitoringLevel : undefined,
       violationCount: session.role === "student" ? Math.min(violationCount ?? 0, 3) : undefined,
@@ -321,6 +330,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const totalQCount = Array.isArray(body.questions) ? body.questions.length : undefined;
 
+      if (requestedStatus === "ended" && existingQuiz.quizMode !== "arena") {
+        const endedAt = new Date().toISOString();
+        await tx.setting.upsert({ where: { settingKey: `proctored:quiz-ended:${quizId}` },
+          create: { settingKey: `proctored:quiz-ended:${quizId}`, settingValue: endedAt },
+          update: { settingValue: endedAt } });
+      }
       return tx.quiz.update({
         where: { id: quizId },
         data: {

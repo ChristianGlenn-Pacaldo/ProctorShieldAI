@@ -49,8 +49,9 @@ export async function POST(req: NextRequest) {
             studentId: studentQuiz.studentId,
             quizId: studentQuiz.quizId,
             attemptNumber: (latest?.attemptNumber ?? studentQuiz.attemptNumber) + 1,
-            quizStatus: "in_progress",
-            startTime: new Date(),
+            quizStatus: studentQuiz.attemptMode === "arena" ? "in_progress" : "enrolled",
+            attemptMode: studentQuiz.attemptMode,
+            startTime: studentQuiz.attemptMode === "arena" ? new Date() : null,
           },
         });
       });

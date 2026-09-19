@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { snapshot, quizId } = await req.json();
+    const { snapshot, quizId, studentQuizId } = await req.json();
     if (
       typeof snapshot !== "string" ||
       snapshot.length > MAX_SNAPSHOT_LENGTH ||
@@ -32,24 +32,20 @@ export async function POST(req: NextRequest) {
         studentId: session.userId,
         quizId: numericQuizId,
         endTime: null,
-        quizStatus: { notIn: ["completed", "rejected"] },
+        quizStatus: "in_progress",
+        startTime: { not: null },
         quiz: { quizMode: { not: "arena" } },
       },
       include: { quiz: { select: { title: true, teacherId: true, quizMode: true, quizStatus: true } } },
       orderBy: { attemptNumber: "desc" },
     });
-    if (!enrollment) {
+    if (!enrollment || studentQuizId !== enrollment.id) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 403 });
     }
     if (enrollment.quiz.quizMode === "arena") {
       return NextResponse.json({ error: "Arena quizzes do not use live monitor" }, { status: 400 });
     }
-    if (!enrollment.startTime && enrollment.quiz.quizStatus === "in_progress" && enrollment.quizStatus === "in_progress") {
-      await prisma.studentQuiz.update({
-        where: { id: enrollment.id },
-        data: { startTime: new Date() },
-      }).catch(() => {});
-    }
+
     if (!await hasActiveProSubscription(enrollment.quiz.teacherId)) {
       return NextResponse.json(
         { error: "Live monitoring requires the teacher's active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
@@ -91,17 +87,29 @@ export async function GET() {
       );
     }
 
-    const snapshots = (await getSnapshotsForTeacher(session.userId))
-      .map(({ studentId, studentName, quizTitle, snapshot, deviceType, monitoringLevel, connectionStatus, updatedAt }) => ({
-        studentId,
-        studentName,
-        quizTitle,
-        snapshot,
-        deviceType,
-        monitoringLevel,
-        connectionStatus,
-        updatedAt,
-      }));
+    const [cached, active] = await Promise.all([
+      getSnapshotsForTeacher(session.userId),
+      prisma.studentQuiz.findMany({
+        where: { quizStatus: "in_progress", endTime: null, startTime: { not: null }, attemptMode: "proctored",
+          quiz: { teacherId: session.userId, quizMode: { not: "arena" } } },
+        include: { student: { select: { fullName: true } }, quiz: { select: { title: true } }, _count: { select: { violations: true } } },
+        orderBy: { attemptNumber: "desc" },
+      }),
+    ]);
+    const seen = new Set<string>();
+    const snapshots = active.filter((attempt) => {
+      if (seen.has(attempt.studentId)) return false;
+      seen.add(attempt.studentId); return true;
+    }).map((attempt) => {
+      const snap = cached.find((item) => item.studentId === attempt.studentId && item.quizId === attempt.quizId
+        && item.updatedAt >= attempt.startTime!.getTime());
+      const updatedAt = Math.max(snap?.updatedAt || 0, attempt.lastHeartbeatAt?.getTime() || attempt.startTime!.getTime());
+      return { studentId: attempt.studentId, studentQuizId: attempt.id, quizId: attempt.quizId,
+        studentName: attempt.student.fullName, quizTitle: attempt.quiz.title,
+        snapshot: snap?.snapshot || null, violationCount: Math.min(3, attempt._count.violations),
+        deviceType: attempt.deviceType, monitoringLevel: attempt.monitoringLevel,
+        connectionStatus: Date.now() - updatedAt < 30_000 ? "online" : "offline", updatedAt };
+    });
 
     return NextResponse.json({ snapshots });
   } catch (error: unknown) {

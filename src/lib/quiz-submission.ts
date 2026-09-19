@@ -3,6 +3,7 @@ export type SubmittedAnswer = { questionId: number; choiceId: number };
 export type GradingQuestion = {
   id: number;
   points: number;
+  questionType?: string | null;
   choices: Array<{ id: number; isCorrect: boolean }>;
 };
 
@@ -76,13 +77,14 @@ export function gradeSubmission(questions: GradingQuestion[], answers: Submitted
     const selectedChoiceId = submittedByQuestion.get(question.id);
     if (selectedChoiceId === undefined) continue;
     const selectedChoice = question.choices.find((choice) => choice.id === selectedChoiceId);
-    if (!selectedChoice) continue;
-    const isCorrect = selectedChoice.isCorrect;
+    const wrongTextAnswer = question.questionType === "fill_in_blank" && selectedChoiceId === 0;
+    if (!selectedChoice && !wrongTextAnswer) continue;
+    const isCorrect = selectedChoice?.isCorrect ?? false;
     const pointsEarned = isCorrect ? question.points : 0;
     earnedPoints += pointsEarned;
     records.push({
       questionId: question.id,
-      answerText: String(selectedChoice.id),
+      answerText: String(selectedChoice?.id ?? 0),
       isCorrect,
       pointsEarned,
     });

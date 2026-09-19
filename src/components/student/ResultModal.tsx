@@ -13,7 +13,7 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
   const isArena = result.attemptMode === "arena" || result.effectiveMode === "arena";
   const verdict = String(result.aiVerdict || "").toLowerCase();
   const isClean = verdict === "clean";
-  const isInvalidated = !isArena && verdict === "cheated";
+  const isInvalidated = !isArena && result.integrityInvalidated === true;
 
   return (
     <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">

@@ -31,7 +31,7 @@ export default function ResultsContent() {
   const calculateAverage = () => {
     const recordedResults = results.filter((result) => {
       const isArena = result.attemptMode === "arena" || result.effectiveMode === "arena";
-      return !isArena && result.score != null && String(result.aiVerdict || "").toLowerCase() !== "cheated";
+      return !isArena && result.score != null && !result.integrityInvalidated;
     });
     if (recordedResults.length === 0) return 0;
     const total = recordedResults.reduce((sum, result) => sum + Number(result.score), 0);
@@ -87,7 +87,7 @@ export default function ResultsContent() {
                   const verdict = String(r.aiVerdict || "").toLowerCase();
                   const isClean = verdict === "clean";
                   const isSuspicious = verdict === "suspicious";
-                  const isInvalidated = verdict === "cheated";
+                  const isInvalidated = r.integrityInvalidated === true;
                   const verdictClass = isClean
                     ? "bg-emerald-500/15 text-emerald-600"
                     : isSuspicious

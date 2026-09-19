@@ -28,13 +28,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Student is not pending approval" }, { status: 400 });
     }
 
-    const newStatus = action === "accept" ? "in_progress" : "rejected";
+    const newStatus = action === "accept" ? (studentQuiz.quiz.quizMode === "arena" ? "in_progress" : "enrolled") : "rejected";
 
     await prisma.studentQuiz.update({
       where: { id: studentQuizId },
       data: {
         quizStatus: newStatus,
-        startTime: action === "accept" ? new Date() : studentQuiz.startTime,
+        startTime: action === "accept" && studentQuiz.quiz.quizMode === "arena" ? new Date() : studentQuiz.startTime,
       },
     });
 
