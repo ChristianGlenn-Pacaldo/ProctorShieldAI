@@ -195,11 +195,13 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
     contentType: "application/json",
     body: JSON.stringify(quizResponse),
   }));
-  await page.route("**/api/quizzes/session", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ success: true, monitoringLevel: "reduced" }),
-  }));
+  await page.route("**/api/quizzes/session", (route) => {
+    const payload = route.request().postDataJSON() as { action?: string } | null;
+    const body = payload?.action === "start"
+      ? { success: true, startTime: new Date().toISOString(), remainingSeconds: 3600 }
+      : { success: true, monitoringLevel: "reduced" };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
   await page.route("**/api/live/violation", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -223,10 +225,11 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
   await page.goto("/quiz/901");
   await page.getByRole("button", { name: /Start Quiz/i }).click();
   await expect(page.getByText("Visibility regression question")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(5_200);
   await page.evaluate(() => {
     (window as typeof window & { setTestHidden?: (value: boolean) => void }).setTestHidden?.(true);
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(1_700);
   await page.evaluate(() => {
     (window as typeof window & { setTestHidden?: (value: boolean) => void }).setTestHidden?.(false);
   });

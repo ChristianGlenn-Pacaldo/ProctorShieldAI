@@ -176,32 +176,6 @@ export default function TeacherQuizzesPage({
     fetchQuizzes();
   }, []);
 
-  // Handle URL query parameters (e.g. ?create=true or ?ai=true)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const modeParam = params.get("mode") === "arena" ? "arena" : "proctored";
-      if (params.get("create") === "true" || params.get("new") === "true") {
-        openNewQuizStudio(modeParam);
-        const url = new URL(window.location.href);
-        url.searchParams.delete("create");
-        url.searchParams.delete("new");
-        url.searchParams.delete("mode");
-        window.history.replaceState({}, "", url.pathname);
-      } else if (params.get("ai") === "true") {
-        if (!isSubscribed) {
-          setUpgradeReason("ai");
-          setShowBillingModal(true);
-        } else {
-          setIsAiModalOpen(true);
-        }
-        const url = new URL(window.location.href);
-        url.searchParams.delete("ai");
-        window.history.replaceState({}, "", url.pathname);
-      }
-    }
-  }, [isSubscribed, manualQuizCount, manualQuizLimit]);
-
   const openNewQuizStudio = (mode: "proctored" | "arena" = "proctored") => {
     if (mode === "arena" && !isSubscribed) {
       setUpgradeReason("quiz_limit");
@@ -228,6 +202,32 @@ export default function TeacherQuizzesPage({
     });
     setIsEditorOpen(true);
   };
+
+  // Handle URL query parameters (e.g. ?create=true or ?ai=true)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get("mode") === "arena" ? "arena" : "proctored";
+      if (params.get("create") === "true" || params.get("new") === "true") {
+        openNewQuizStudio(modeParam);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("create");
+        url.searchParams.delete("new");
+        url.searchParams.delete("mode");
+        window.history.replaceState({}, "", url.pathname);
+      } else if (params.get("ai") === "true") {
+        if (!isSubscribed) {
+          setUpgradeReason("ai");
+          setShowBillingModal(true);
+        } else {
+          setIsAiModalOpen(true);
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("ai");
+        window.history.replaceState({}, "", url.pathname);
+      }
+    }
+  }, [isSubscribed, manualQuizCount, manualQuizLimit]);
 
   // Open Quiz in ProctorShield Studio (Overview & Question Editor)
   const handleEditQuizInStudio = async (quiz: any) => {

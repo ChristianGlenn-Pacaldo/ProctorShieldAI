@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { getRedis, isRedisReady } from "./redis.ts";
 import prisma from "./prisma.ts";
 import { getStudentInitials } from "./student-identity.ts";
@@ -92,6 +93,25 @@ export interface ArenaState {
   players?: Record<string, ArenaParticipant>;
 }
 
+export type ArenaAttackResolutionCode =
+  | "resolved"
+  | "arena_inactive"
+  | "attack_not_found"
+  | "not_participant"
+  | "wrong_student"
+  | "wrong_target"
+  | "invalid_attack"
+  | "premature"
+  | "already_resolved";
+
+export interface ArenaAttackResolution {
+  code: ArenaAttackResolutionCode;
+  attack?: PendingAttack;
+  target?: ArenaParticipant;
+  participants?: ArenaParticipant[];
+  penalty?: number;
+}
+
 const ARENA_TTL_SECONDS = 6 * 60 * 60;
 const globalArena = globalThis as typeof globalThis & {
   __proctorShieldArenaState?: Map<number, { value: ArenaState; expiresAt: number }>;
@@ -168,6 +188,47 @@ export function computeArenaRankings(
     p.rank = idx + 1;
   });
   return list;
+}
+
+export function resolvePendingAttackInState(
+  state: ArenaState,
+  attackId: string,
+  options: {
+    now?: number;
+    resolverStudentId?: string;
+    expectedTargetStudentId?: string;
+  } = {},
+): ArenaAttackResolution {
+  const now = options.now ?? Date.now();
+  if (state.status !== "active" || (state.matchEndsAt && now >= Date.parse(state.matchEndsAt))) {
+    return { code: "arena_inactive" };
+  }
+
+  const attack = state.pendingAttacks?.[attackId];
+  if (!attack) return { code: "attack_not_found" };
+
+  if (options.resolverStudentId) {
+    if (!state.participants?.[options.resolverStudentId]) return { code: "not_participant", attack };
+    if (attack.targetStudentId !== options.resolverStudentId) return { code: "wrong_student", attack };
+  }
+  if (options.expectedTargetStudentId && attack.targetStudentId !== options.expectedTargetStudentId) {
+    return { code: "wrong_target", attack };
+  }
+  if (!state.participants?.[attack.attackerId] || !state.participants?.[attack.targetStudentId]) {
+    return { code: "invalid_attack", attack };
+  }
+  if (attack.status !== "pending") return { code: "already_resolved", attack };
+  if (now < attack.expiresAt) return { code: "premature", attack };
+
+  const target = state.participants[attack.targetStudentId];
+  const penalty = getPowerPenalty(attack.powerType);
+  attack.scorePenalty = penalty;
+  attack.damage = penalty;
+  attack.status = "hit";
+  target.score = Math.max(0, target.score - penalty);
+  const participants = computeArenaRankings(state.participants);
+
+  return { code: "resolved", attack, target, participants, penalty };
 }
 
 export function createArenaState(params: {
@@ -253,37 +314,105 @@ function arenaSettingKey(quizId: number) {
   return `arena:state:${quizId}`;
 }
 
-/**
- * Persists Arena state authoritatively into PostgreSQL (Setting table).
- * Uses globalThis and Redis as speed caches only.
- */
-export async function setArenaState(state: ArenaState): Promise<void> {
-  const jsonString = JSON.stringify(state);
+type ArenaDbClient = PrismaClient | Prisma.TransactionClient;
 
-  // 1. Fast in-memory cache update (immediate visibility)
+function syncArenaCaches(state: ArenaState) {
+  const jsonString = JSON.stringify(state);
   globalArena.__proctorShieldArenaState!.set(state.quizId, {
     value: state,
     expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
   });
 
-  // 2. Authoritative PostgreSQL write
-  try {
-    await prisma.setting.upsert({
-      where: { settingKey: arenaSettingKey(state.quizId) },
-      update: { settingValue: jsonString },
-      create: { settingKey: arenaSettingKey(state.quizId), settingValue: jsonString },
-    });
-  } catch (error) {
-    console.error("Authoritative Arena DB write failed:", error);
-  }
-
-  // 3. Redis cache write (optional non-blocking speed cache)
   const redis = getRedis();
   if (isRedisReady(redis)) {
     void redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS).catch((error) => {
       console.warn("Arena Redis write failed (cache only):", error);
     });
   }
+}
+
+async function withArenaLock<T>(
+  quizId: number,
+  client: ArenaDbClient,
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  if ("$transaction" in client && typeof client.$transaction === "function") {
+    return client.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
+      return operation(tx);
+    });
+  }
+
+  await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
+  return operation(client as Prisma.TransactionClient);
+}
+
+async function readArenaState(client: ArenaDbClient, quizId: number): Promise<ArenaState | null> {
+  const record = await client.setting.findUnique({
+    where: { settingKey: arenaSettingKey(quizId) },
+  });
+  if (!record?.settingValue) return null;
+  return JSON.parse(record.settingValue) as ArenaState;
+}
+
+async function persistArenaState(client: ArenaDbClient, state: ArenaState): Promise<void> {
+  await client.setting.upsert({
+    where: { settingKey: arenaSettingKey(state.quizId) },
+    update: { settingValue: JSON.stringify(state) },
+    create: { settingKey: arenaSettingKey(state.quizId), settingValue: JSON.stringify(state) },
+  });
+}
+
+export async function resolveArenaAttack(
+  quizId: number,
+  attackId: string,
+  options: {
+    now?: number;
+    resolverStudentId?: string;
+    expectedTargetStudentId?: string;
+  } = {},
+  client: ArenaDbClient = prisma,
+): Promise<{ state: ArenaState | null; resolution: ArenaAttackResolution }> {
+  const result = await withArenaLock(quizId, client, async (tx) => {
+    const state = await readArenaState(tx, quizId);
+    if (!state) return { state: null, resolution: { code: "attack_not_found" } as ArenaAttackResolution };
+    const resolution = resolvePendingAttackInState(state, attackId, options);
+    if (resolution.code === "resolved") await persistArenaState(tx, state);
+    return { state, resolution };
+  });
+  if (result.state && client === prisma) syncArenaCaches(result.state);
+  return result;
+}
+
+export async function reconcileExpiredArenaAttacks(
+  quizId: number,
+  now = Date.now(),
+  client: ArenaDbClient = prisma,
+): Promise<{ state: ArenaState | null; resolved: ArenaAttackResolution[] }> {
+  const result = await withArenaLock(quizId, client, async (tx) => {
+    const state = await readArenaState(tx, quizId);
+    if (!state) return { state: null, resolved: [] as ArenaAttackResolution[] };
+
+    const resolved: ArenaAttackResolution[] = [];
+    for (const attack of Object.values(state.pendingAttacks || {})) {
+      if (attack.status !== "pending" || attack.expiresAt > now) continue;
+      const resolution = resolvePendingAttackInState(state, attack.attackId, { now });
+      if (resolution.code === "resolved") resolved.push(resolution);
+    }
+    if (resolved.length > 0) await persistArenaState(tx, state);
+    return { state, resolved };
+  });
+  if (result.state && client === prisma) syncArenaCaches(result.state);
+  return result;
+}
+
+/**
+ * Persists Arena state authoritatively into PostgreSQL (Setting table).
+ * Uses globalThis and Redis as speed caches only.
+ */
+export async function setArenaState(state: ArenaState): Promise<void> {
+  await persistArenaState(prisma, state);
+  syncArenaCaches(state);
 }
 
 /**
@@ -322,15 +451,16 @@ export async function getArenaState(quizId: number): Promise<ArenaState | null> 
     });
     if (record?.settingValue) {
       try {
-        const dbState = JSON.parse(record.settingValue) as ArenaState;
-        // Keep in-memory cache synchronized with authoritative DB
-        globalArena.__proctorShieldArenaState!.set(quizId, {
-          value: dbState,
-          expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
-        });
-        const redis = getRedis();
-        if (isRedisReady(redis)) {
-          void redis.set(arenaKey(quizId), JSON.stringify(dbState), "EX", ARENA_TTL_SECONDS).catch(() => {});
+        let dbState = JSON.parse(record.settingValue) as ArenaState;
+        const now = Date.now();
+        const hasExpiredAttack = dbState.status === "active" && Object.values(dbState.pendingAttacks || {}).some(
+          (attack) => attack.status === "pending" && attack.expiresAt <= now,
+        );
+        if (hasExpiredAttack) {
+          const reconciled = await reconcileExpiredArenaAttacks(quizId, now);
+          if (reconciled.state) dbState = reconciled.state;
+        } else {
+          syncArenaCaches(dbState);
         }
         return dbState;
       } catch (err) {

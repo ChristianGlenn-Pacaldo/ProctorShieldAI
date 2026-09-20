@@ -7,6 +7,7 @@ import {
   getArenaState,
   getPowerPenalty,
   isArenaPowerId,
+  resolveArenaAttack,
   setArenaState,
   type ArenaParticipant,
   type ArenaPowerId,
@@ -19,26 +20,20 @@ import { consumeRateLimit } from "@/lib/security";
 const REACTION_WINDOW_MS = 2500;
 
 // Resolve an expired pending attack into a confirmed hit with score deduction
-async function applyPendingAttackHit(quizId: number, attackId: string) {
-  const arena = await getArenaState(quizId);
-  if (!arena || arena.status !== "active" || !arena.pendingAttacks) return null;
-
-  const attack = arena.pendingAttacks[attackId];
-  if (!attack || attack.status !== "pending") return null;
-
-  // Mark attack as hit
-  attack.status = "hit";
-  if (!arena.participants) arena.participants = {};
-
-  const target = arena.participants[attack.targetStudentId];
-  const penalty = attack.scorePenalty || attack.damage || 40;
-  if (target) {
-    // Score must never drop below zero
-    target.score = Math.max(0, target.score - penalty);
+async function applyPendingAttackHit(
+  quizId: number,
+  attackId: string,
+  options: { resolverStudentId?: string; expectedTargetStudentId?: string } = {},
+) {
+  const { state: arena, resolution } = await resolveArenaAttack(quizId, attackId, options);
+  if (!arena || resolution.code !== "resolved" || !resolution.attack || !resolution.target) {
+    return { code: resolution.code, hit: null };
   }
 
-  // Recompute rankings dynamically across all participants
-  const updatedRankings = computeArenaRankings(arena.participants);
+  const attack = resolution.attack;
+  const target = resolution.target;
+  const penalty = resolution.penalty ?? getPowerPenalty(attack.powerType);
+  const updatedRankings = resolution.participants ?? computeArenaRankings(arena.participants);
 
   const hitEventData = {
     attackId: attack.attackId,
@@ -49,14 +44,13 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     powerType: attack.powerType,
     scorePenalty: penalty,
     damage: penalty, // backwards compatibility
-    targetCurrentScore: target ? target.score : 0,
-    targetRank: target ? target.rank : 1,
+    targetCurrentScore: target.score,
+    targetRank: target.rank,
     participants: updatedRankings,
     timestamp: new Date().toISOString(),
   };
 
-  // Broadcast hit events and persist state concurrently
-  const broadcastPromise = Promise.allSettled([
+  await Promise.allSettled([
     pusherServer.trigger(
       [`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`],
       "arena-attack-hit",
@@ -66,8 +60,8 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     pusherServer.trigger(`private-arena-${quizId}`, "arena-score-updated", {
       quizId,
       studentId: attack.targetStudentId,
-      score: target ? target.score : 0,
-      rank: target ? target.rank : 1,
+      score: target.score,
+      rank: target.rank,
       totalCount: updatedRankings.length,
       penalty,
     }),
@@ -77,15 +71,7 @@ async function applyPendingAttackHit(quizId: number, attackId: string) {
     }),
   ]);
 
-  const persistPromise = setArenaState(arena);
-
-  try {
-    await Promise.all([broadcastPromise, persistPromise]);
-  } catch (err) {
-    console.error("Failed to broadcast attack-hit event:", err);
-  }
-
-  return hitEventData;
+  return { code: resolution.code, hit: hitEventData };
 }
 
 // POST /api/arena/battle-action — authoritative realtime targeted score-based combat
@@ -108,17 +94,6 @@ export async function POST(req: NextRequest) {
     if (!Number.isSafeInteger(quizId) || quizId <= 0) {
       return NextResponse.json({ error: "Valid quizId is required" }, { status: 400 });
     }
-
-    // Handle manual/client trigger to resolve an expired attack
-    if (isResolveAction) {
-      const result = await applyPendingAttackHit(quizId, record.attackId as string);
-      return NextResponse.json({ success: true, resolved: true, hit: result });
-    }
-
-    if (!isArenaPowerId(rawPower)) {
-      return NextResponse.json({ error: "Invalid battle power" }, { status: 400 });
-    }
-    const powerType = rawPower as ArenaPowerId;
 
     // Parallelize student enrollment validation and arena state retrieval
     const [attempt, arena] = await Promise.all([
@@ -184,6 +159,39 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+
+    if (isResolveAction) {
+      const attackId = (record.attackId as string).trim();
+      if (!/^[a-zA-Z0-9_-]{1,128}$/.test(attackId)) {
+        return NextResponse.json({ error: "Invalid attack ID", code: "INVALID_ATTACK_ID" }, { status: 400 });
+      }
+      const result = await applyPendingAttackHit(quizId, attackId, {
+        resolverStudentId: session.userId,
+        expectedTargetStudentId: targetStudentId || undefined,
+      });
+      const code = result.code;
+      if (code === "resolved" || code === "already_resolved") {
+        return NextResponse.json({ success: true, resolved: code === "resolved", code });
+      }
+      if (code === "wrong_student" || code === "not_participant") {
+        return NextResponse.json({ error: "You cannot resolve another student's attack", code }, { status: 403 });
+      }
+      if (code === "wrong_target" || code === "invalid_attack") {
+        return NextResponse.json({ error: "Attack target does not match the pending action", code }, { status: 400 });
+      }
+      if (code === "premature") {
+        return NextResponse.json({ error: "Attack reaction window is still active", code }, { status: 409 });
+      }
+      if (code === "arena_inactive") {
+        return NextResponse.json({ error: "Arena match is no longer active", code }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Pending attack not found", code }, { status: 404 });
+    }
+
+    if (!isArenaPowerId(rawPower)) {
+      return NextResponse.json({ error: "Invalid battle power" }, { status: 400 });
+    }
+    const powerType = rawPower as ArenaPowerId;
 
     if (Array.isArray(arena.enabledPowers) && !arena.enabledPowers.includes(powerType)) {
       return NextResponse.json(

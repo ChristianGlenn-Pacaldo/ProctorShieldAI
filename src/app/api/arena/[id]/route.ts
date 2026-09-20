@@ -15,10 +15,8 @@ import {
   type PlayerHealth,
 } from "@/lib/arena";
 import {
-  awardStudentExp,
+  awardArenaExpOnce,
   EXP_REWARDS,
-  isArenaExpAlreadyAwarded,
-  markArenaExpAwarded,
 } from "@/lib/student-progression";
 import type { ArenaState } from "@/lib/arena";
 
@@ -67,16 +65,14 @@ async function awardArenaExp(state: ArenaState) {
     else if (p.rank === 2) exp += EXP_REWARDS.ARENA_RANK_2;
     else if (p.rank === 3) exp += EXP_REWARDS.ARENA_RANK_3;
 
-    // Idempotency: ensure each student receives Arena final EXP at most once per sessionId
-    const alreadyAwarded = await isArenaExpAlreadyAwarded(state.sessionId, p.studentId);
-    if (!alreadyAwarded) {
-      await awardStudentExp(p.studentId, exp, `Arena Match Completion (Rank #${p.rank})`).catch((err) => {
-        console.error(`Failed to award Arena EXP to ${p.studentId}:`, err);
-      });
-      await markArenaExpAwarded(state.sessionId, p.studentId, exp).catch((err) => {
-        console.error(`Failed to mark Arena EXP awarded to ${p.studentId}:`, err);
-      });
-    }
+    await awardArenaExpOnce(
+      state.sessionId,
+      p.studentId,
+      exp,
+      `Arena Match Completion (Rank #${p.rank})`,
+    ).catch((err) => {
+      console.error(`Failed to award Arena EXP to ${p.studentId}:`, err);
+    });
 
     awards.push({ studentId: p.studentId, rank: p.rank, amount: exp });
   }

@@ -180,6 +180,13 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const [studentQuizStatus, setStudentQuizStatus] = useState<string>("");
   const [studentQuizId, setStudentQuizId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string>("");
+  const answersStateRef = useRef<Record<number, number>>({});
+  const questionsRef = useRef(questions);
+  const studentQuizIdRef = useRef(studentQuizId);
+  const violationCountStateRef = useRef(violationCount);
+  const pendingEvidenceUploadRef = useRef<Promise<void> | null>(null);
+  const timerInitializedRef = useRef(false);
+  const submitQuizRef = useRef<(reason?: SubmissionReason) => Promise<void>>(async () => {});
 
   // ── PROCTORSHIELD EXAM STATE ──────────────────────────
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -477,7 +484,8 @@ function QuizAttempt({ quizId }: { quizId: string }) {
 
       const profile = getBrowserProctoringPerformanceProfile(verified.deviceType);
       preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase);
-      await Promise.all([cachedFaceApiPromise, cachedCocoModelPromise]);
+      void cachedFaceApiPromise?.catch(() => {});
+      void cachedCocoModelPromise?.catch(() => {});
       setDeviceCapabilities(verified);
       setMonitoringLevel(result.monitoringLevel);
       setPreflightPassed(true);
@@ -760,13 +768,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
     }
   }, [isMobile]);
 
-  // Stable refs for exam state
-  const answersStateRef = useRef<Record<number, number>>({});
-  const questionsRef = useRef(questions);
-  const studentQuizIdRef = useRef(studentQuizId);
-  const violationCountStateRef = useRef(violationCount);
-  const pendingEvidenceUploadRef = useRef<Promise<void> | null>(null);
-
   useEffect(() => {
     answersStateRef.current = answersState;
     questionsRef.current = questions;
@@ -826,8 +827,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
     if (isOnline && autosaveStatus === "offline") void autosaveAnswers();
     return () => window.clearInterval(heartbeat);
   }, [autosaveAnswers, autosaveStatus, hasStarted, isOnline, studentQuizId]);
-
-  const timerInitializedRef = useRef(false);
 
   // ── Submit quiz to backend with Authoritative Reason Guard ──
   const submitQuiz = useCallback(async (reason: SubmissionReason = "manual") => {
@@ -952,7 +951,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
     }
   }, [quizId, hasStarted, timeLeft, playTone, router, setPreWarning, quizSubmittedResult]);
 
-  const submitQuizRef = useRef(submitQuiz);
   useEffect(() => {
     submitQuizRef.current = submitQuiz;
   }, [submitQuiz]);
@@ -1218,21 +1216,23 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   }, [reportViolation]);
 
   // ── Notify Teacher on Student Joining ─────────────────
+  const teacherId = quiz?.teacherId;
+  const quizTitle = quiz?.title;
   const notifyTeacherJoined = useCallback(async () => {
-    if (!quiz?.teacherId) return;
+    if (!teacherId) return;
     try {
       await fetch("/api/live/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          teacherId: quiz.teacherId,
+          teacherId,
           quizId: parseInt(quizId),
-          quizTitle: quiz.title,
+          quizTitle,
           studentQuizId: studentQuizId,
         }),
       });
     } catch (err) {}
-  }, [quiz?.teacherId, quiz?.title, quizId, studentQuizId]);
+  }, [teacherId, quizTitle, quizId, studentQuizId]);
 
   // ── Camera and Edge AI Tracking Loop ──────────────────
   useEffect(() => {
@@ -1921,7 +1921,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             if (!examActiveRef.current || violationCountRef.current >= 3 || submissionInFlightRef.current) return;
             if (!awayIncidentActiveRef.current && !document.hidden && !document.fullscreenElement && !fullscreenViolationRecordedRef.current) {
               fullscreenViolationRecordedRef.current = true;
-              fullscreenViolationRecordedRef.current = await reportViolationRef.current("window_resize", 100);
+              fullscreenViolationRecordedRef.current = await reportViolationRef.current("fullscreen_exit", 100);
             }
           }, 1500);
         }

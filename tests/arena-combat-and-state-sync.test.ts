@@ -10,6 +10,7 @@ import {
   getPowerPenalty,
   getPowerDamage,
   POWER_SCORE_PENALTIES,
+  resolvePendingAttackInState,
   normalizeMatchDuration,
   VALID_MATCH_DURATIONS,
   type ArenaParticipant,
@@ -223,7 +224,7 @@ test("Requirement 25, 26, 27, 28: Incoming attack warning, reaction window, and 
 
 test("Requirement 29: Score never drops below zero", () => {
   // Server-enforced score deduction Math.max(0, target.score - penalty)
-  assert.match(battleActionRouteSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
+  assert.match(libArenaSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
 
   // Test deduction logic
   const target: ArenaParticipant = {
@@ -241,8 +242,53 @@ test("Requirement 29: Score never drops below zero", () => {
   assert.equal(target.score, 0); // Never drops below 0
 });
 
+test("Attack resolution enforces expiry, ownership, target, score floor, and exactly-once semantics", () => {
+  const state = createArenaState({ quizId: 40, teacherId: "teacher", status: "active", totalQuestions: 5 });
+  ensureArenaParticipant(state, { studentId: "attacker", studentName: "Attack Student" }).score = 300;
+  ensureArenaParticipant(state, { studentId: "target", studentName: "Target Student" }).score = 50;
+  ensureArenaParticipant(state, { studentId: "other", studentName: "Other Student" }).score = 20;
+  state.pendingAttacks = {
+    "attack-1": {
+      attackId: "attack-1", attackerId: "attacker", attackerName: "Attack Student",
+      targetStudentId: "target", targetName: "Target Student", powerType: "meteor",
+      scorePenalty: 100, damage: 100, createdAt: 1_000, expiresAt: 3_500, status: "pending",
+    },
+  };
+
+  assert.equal(resolvePendingAttackInState(state, "attack-1", { now: 3_499, resolverStudentId: "target" }).code, "premature");
+  assert.equal(resolvePendingAttackInState(state, "attack-1", { now: 3_500, resolverStudentId: "other" }).code, "wrong_student");
+  assert.equal(resolvePendingAttackInState(state, "attack-1", {
+    now: 3_500, resolverStudentId: "target", expectedTargetStudentId: "other",
+  }).code, "wrong_target");
+
+  const resolved = resolvePendingAttackInState(state, "attack-1", {
+    now: 3_500, resolverStudentId: "target", expectedTargetStudentId: "target",
+  });
+  assert.equal(resolved.code, "resolved");
+  assert.equal(state.participants.target.score, 0);
+  assert.equal(state.pendingAttacks["attack-1"].status, "hit");
+  assert.equal(resolvePendingAttackInState(state, "attack-1", { now: 4_000, resolverStudentId: "target" }).code, "already_resolved");
+  assert.equal(state.participants.target.score, 0);
+});
+
+test("Shield deflection remains terminal and causes no score deduction", () => {
+  const state = createArenaState({ quizId: 41, teacherId: "teacher", status: "active", totalQuestions: 5 });
+  ensureArenaParticipant(state, { studentId: "attacker", studentName: "Attack Student" });
+  ensureArenaParticipant(state, { studentId: "target", studentName: "Target Student" }).score = 150;
+  state.pendingAttacks = {
+    "attack-shielded": {
+      attackId: "attack-shielded", attackerId: "attacker", attackerName: "Attack Student",
+      targetStudentId: "target", targetName: "Target Student", powerType: "earthquake",
+      scorePenalty: 60, createdAt: 1_000, expiresAt: 2_000, status: "deflected",
+    },
+  };
+
+  assert.equal(resolvePendingAttackInState(state, "attack-shielded", { now: 3_000 }).code, "already_resolved");
+  assert.equal(state.participants.target.score, 150);
+});
+
 test("Requirement 30 & 31: Score deduction triggers ranking recalculation and broadcasts leaderboard update", () => {
-  assert.match(battleActionRouteSrc, /const\s+updatedRankings\s*=\s*computeArenaRankings\(arena\.participants\)/);
+  assert.match(libArenaSrc, /const participants = computeArenaRankings\(state\.participants\)/);
   assert.match(battleActionRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*["']arena-leaderboard-updated["']/);
   assert.match(battleActionRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*["']arena-score-updated["']/);
 });
@@ -369,7 +415,7 @@ test("Test I: Student receives arena-start and transitions to active game view",
 });
 
 test("Test J: Server-persisted Arena state matches active session (PostgreSQL Setting row as authoritative source)", () => {
-  assert.match(libArenaSrc, /prisma\.setting\.upsert/);
+  assert.match(libArenaSrc, /client\.setting\.upsert/);
   assert.match(libArenaSrc, /arena:state:\${quizId}/);
   assert.match(libArenaSrc, /arenaSettingKey\(state\.quizId\)/);
 });
@@ -484,9 +530,9 @@ test("Test 9F: Shield still works within reaction window", () => {
 });
 
 test("Test 9G: Score deduction still happens only after reaction window if unblocked", () => {
-  // applyPendingAttackHit only deducts score when attack status is still pending
-  assert.match(battleActionRouteSrc, /if\s*\(!attack\s*\|\|\s*attack\.status\s*!==\s*["']pending["']\)\s*return\s+null;/);
-  assert.match(battleActionRouteSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
+  assert.match(libArenaSrc, /if \(attack\.status !== "pending"\) return \{ code: "already_resolved", attack \}/);
+  assert.match(libArenaSrc, /if \(now < attack\.expiresAt\) return \{ code: "premature", attack \}/);
+  assert.match(libArenaSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
 });
 
 test("Test 9H: One-use power logic still works", () => {

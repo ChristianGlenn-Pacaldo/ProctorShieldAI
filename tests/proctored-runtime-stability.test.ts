@@ -230,6 +230,27 @@ test("Pusher outage does not hide a persisted authoritative violation count", as
   const result = await f.load("live/violation").POST(request({ quizId: 7, studentQuizId: "attempt-1", violationType: "tab_switch", confidenceScore: 100 }));
   assert.equal(result.status, 200); assert.equal(result.body.violationCount, 1);
 });
+test("fullscreen exit is canonical, accepted, and counted authoritatively while resize is rejected", async () => {
+  const f = fixture();
+  const first = await f.load("live/violation").POST(request({
+    quizId: 7, studentQuizId: "attempt-1", violationType: "fullscreen_exit", confidenceScore: 100,
+  }));
+  assert.equal(first.status, 200); assert.equal(first.body.violationCount, 1);
+
+  const resize = await f.load("live/violation").POST(request({
+    quizId: 7, studentQuizId: "attempt-1", violationType: "window_resize", confidenceScore: 100,
+  }));
+  assert.equal(resize.status, 400); assert.equal(f.state.violations.length, 1);
+
+  const second = await f.load("live/violation").POST(request({
+    quizId: 7, studentQuizId: "attempt-1", violationType: "fullscreen_exit", confidenceScore: 100,
+  }));
+  assert.equal(second.status, 200); assert.equal(second.body.violationCount, 2);
+
+  const source = fs.readFileSync("src/app/quiz/[id]/page.tsx", "utf8");
+  assert.match(source, /reportViolationRef\.current\("fullscreen_exit",\s*100\)/);
+  assert.doesNotMatch(source, /reportViolationRef\.current\("window_resize"/);
+});
 test("evidence storage outage preserves the captured snapshot on the violation", async () => {
   const f = fixture();
   f.deps["@/lib/evidence-storage"].uploadEvidence = async () => { throw Error("storage offline"); };

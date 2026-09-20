@@ -24,13 +24,10 @@ interface Feed {
 const StudentVideoFeed = React.memo(
   function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
     const [imgError, setImgError] = useState(false);
-    const lastSnapshotRef = useRef(feed.snapshot);
 
-    // Reset imgError if a new snapshot string arrives
-    if (feed.snapshot !== lastSnapshotRef.current) {
-      lastSnapshotRef.current = feed.snapshot;
-      if (imgError) setImgError(false);
-    }
+    useEffect(() => {
+      setImgError(false);
+    }, [feed.snapshot]);
 
     const hasValidSnapshot = Boolean(feed.snapshot && feed.snapshot.startsWith("data:image/") && !imgError);
 

@@ -106,6 +106,7 @@ test("7. Live warning store persists and retrieves warnings under memory fallbac
 
 test("8. Arena operations check isRedisReady and maintain PostgreSQL and memory cache authority", () => {
   assert.match(arenaSrc, /isRedisReady\(redis\)/);
-  assert.match(arenaSrc, /prisma\.setting\.upsert/);
+  assert.match(arenaSrc, /client\.setting\.upsert/);
+  assert.match(arenaSrc, /persistArenaState\(prisma, state\)/);
   assert.match(arenaSrc, /globalArena\.__proctorShieldArenaState/);
 });

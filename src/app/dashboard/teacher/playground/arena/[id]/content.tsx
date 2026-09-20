@@ -597,6 +597,14 @@ export default function ArenaHostContent({
     return () => clearInterval(interval);
   }, [phase, quiz.id, syncRankedBattlers]);
 
+  // End Arena Match Manually
+  const handleEndArena = async () => {
+    setIsTimerRunning(false);
+    if (!(await broadcastArenaAction("end"))) return;
+    playFanfareSound();
+    setPhase("podium");
+  };
+
   // Overall Match Timer Countdown
   useEffect(() => {
     if (phase !== "wave" || !isTimerRunning) return;
@@ -636,14 +644,6 @@ export default function ArenaHostContent({
     setTimeLeft(selectedMatchDuration);
     setIsTimerRunning(true);
     setPhase("wave");
-  };
-
-  // End Arena Match Manually
-  const handleEndArena = async () => {
-    setIsTimerRunning(false);
-    if (!(await broadcastArenaAction("end"))) return;
-    playFanfareSound();
-    setPhase("podium");
   };
 
   const handleDropAirdrop = async () => {

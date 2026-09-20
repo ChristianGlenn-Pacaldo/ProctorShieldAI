@@ -273,3 +273,36 @@ export async function markArenaExpAwarded(
   });
 }
 
+export async function awardArenaExpOnce(
+  sessionId: string,
+  studentId: string,
+  expAwarded: number,
+  reason: string,
+  client: DbClient = prisma,
+): Promise<{ awarded: boolean; progression: Awaited<ReturnType<typeof awardStudentExp>> | null }> {
+  const key = arenaExpRewardedKey(sessionId, studentId);
+  const runAward = async (tx: DbClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    const existing = await tx.setting.findUnique({ where: { settingKey: key } });
+    if (existing) return { awarded: false, progression: null };
+
+    const progression = await awardStudentExp(studentId, expAwarded, reason, tx);
+    await tx.setting.create({
+      data: {
+        settingKey: key,
+        settingValue: JSON.stringify({
+          sessionId,
+          studentId,
+          expAwarded: progression.expAwarded,
+          rewardedAt: new Date().toISOString(),
+        }),
+      },
+    });
+    return { awarded: true, progression };
+  };
+
+  if ("$transaction" in client && typeof (client as PrismaClient).$transaction === "function") {
+    return (client as PrismaClient).$transaction((tx) => runAward(tx));
+  }
+  return runAward(client);
+}

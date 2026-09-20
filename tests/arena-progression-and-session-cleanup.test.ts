@@ -224,9 +224,10 @@ test("X, Y, Z: Arena final EXP is awarded only once per sessionId/student and gu
   const key = arenaExpRewardedKey("session-abc", "student-xyz");
   assert.equal(key, "arena:exp_rewarded:session-abc:student-xyz");
 
-  // Arena finalization route guards against duplicate awards per sessionId
-  assert.match(apiArenaRouteSrc, /isArenaExpAlreadyAwarded\(state\.sessionId,\s*p\.studentId\)/);
-  assert.match(apiArenaRouteSrc, /markArenaExpAwarded\(state\.sessionId,\s*p\.studentId,\s*exp\)/);
+  // Arena finalization route atomically combines the award and marker.
+  assert.match(apiArenaRouteSrc, /awardArenaExpOnce\(/);
+  assert.match(progressionLibSrc, /pg_advisory_xact_lock\(hashtext\(\$\{key\}\)\)/);
+  assert.match(progressionLibSrc, /const progression = await awardStudentExp\(studentId, expAwarded, reason, tx\)/);
 });
 
 // ─────────────────────────────────────────────────────────────
