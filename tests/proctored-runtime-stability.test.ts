@@ -71,7 +71,11 @@ function fixture() {
       create: async ({ data }: any) => { state.settings[data.settingKey] = data; } },
     violation: { findMany: async () => copy(state.violations), count: async () => state.violations.length,
       findUnique: async ({ where }: any) => state.violations.find((v: any) => v.id === where.id),
-      create: async ({ data }: any) => { const v = { ...data, id: BigInt(1) }; state.violations.push(v); return v; } },
+      create: async ({ data }: any) => { const v = { ...data, id: BigInt(1) }; state.violations.push(v); return v; },
+      update: async ({ where, data }: any) => {
+        const violation = state.violations.find((item: any) => item.id === where.id);
+        Object.assign(violation, data); return copy(violation);
+      } },
     notification: { createMany: async () => { state.notifications++; } },
     aiAnalysis: { upsert: async () => {} },
     $executeRaw: async () => {},
@@ -227,6 +231,16 @@ test("Pusher outage does not hide a persisted authoritative violation count", as
   const f = fixture(); f.deps["@/lib/pusher"].pusherServer.trigger = async () => { throw Error("offline"); };
   const result = await f.load("live/violation").POST(request({ quizId: 7, studentQuizId: "attempt-1", violationType: "tab_switch", confidenceScore: 100 }));
   assert.equal(result.status, 200); assert.equal(result.body.violationCount, 1);
+});
+test("evidence storage outage preserves the captured snapshot on the violation", async () => {
+  const f = fixture();
+  f.deps["@/lib/evidence-storage"].uploadEvidence = async () => { throw Error("storage offline"); };
+  const screenshot = "data:image/jpeg;base64,YQ==";
+  const result = await f.load("live/violation").POST(request({
+    quizId: 7, studentQuizId: "attempt-1", violationType: "no_face", confidenceScore: 100, screenshot,
+  }));
+  assert.equal(result.status, 200);
+  assert.equal(f.state.violations[0].screenshotPath, screenshot);
 });
 test("teacher snapshot fallback queries active proctored attempts and returns authoritative count without Redis", async () => {
   const f = fixture(); f.deps["@/lib/auth"].getSession = async () => ({ userId: "teacher", role: "teacher" });

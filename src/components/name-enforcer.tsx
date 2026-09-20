@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
+import { normalizeStudentName, requiresStudentNameSetup } from "@/lib/student-name";
 
 export default function NameEnforcer({ initialName }: { initialName: string }) {
   const router = useRouter();
@@ -12,20 +13,16 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Only prompt on first login if persistent profile name is missing or default placeholder
-    const trimmed = (initialName || "").trim();
-    if (!trimmed || trimmed === "Google User" || trimmed.toLowerCase() === "student" || trimmed.toLowerCase() === "student user") {
-      setIsOpen(true);
-    }
+    setIsOpen(requiresStudentNameSetup(initialName));
   }, [initialName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const cleanName = fullName.trim();
-    if (cleanName.length < 2) {
-      setError("Please enter your full name.");
+    const cleanName = normalizeStudentName(fullName);
+    if (requiresStudentNameSetup(cleanName)) {
+      setError("Use the format LAST NAME, FIRST NAME, MIDDLE NAME.");
       return;
     }
 

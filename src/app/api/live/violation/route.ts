@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
               filePath: stored.key,
             },
           });
-        } else if (process.env.NODE_ENV !== "production") {
+        } else {
           await prisma.violation.update({
             where: { id: violation.id },
             data: { screenshotPath: evidence },
@@ -133,6 +133,14 @@ export async function POST(req: NextRequest) {
         }
       } catch (error) {
         console.error("Permanent evidence upload failed:", error);
+        try {
+          await prisma.violation.update({
+            where: { id: violation.id },
+            data: { screenshotPath: evidence },
+          });
+        } catch (fallbackError) {
+          console.error("Evidence snapshot fallback failed:", fallbackError);
+        }
       }
     }
 

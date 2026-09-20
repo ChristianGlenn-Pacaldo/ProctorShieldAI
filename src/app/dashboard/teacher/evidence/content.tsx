@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Camera, AlertCircle, PlayCircle, Download, Trash2 } from "lucide-react";
 
 interface EvidenceItem {
@@ -30,6 +31,34 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [mediaStatus, setMediaStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [mediaAttempt, setMediaAttempt] = useState(0);
+
+  const openReplay = useCallback((evidence: EvidenceItem) => {
+    setSelectedEvidence(evidence);
+    setMediaStatus(evidence.screenshotPath ? "loading" : "idle");
+    setMediaAttempt((attempt) => attempt + 1);
+    setIsFullscreen(true);
+  }, []);
+
+  const retryEvidence = useCallback(() => {
+    setMediaStatus("loading");
+    setMediaAttempt((attempt) => attempt + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullscreen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isFullscreen]);
 
   const handleClearCache = async () => {
     if (!confirm("Are you sure you want to purge all evidence logs and video clips from the database? This will free up storage space on Neon DB.")) return;
@@ -148,8 +177,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
                 <button
                   onClick={(event) => {
                     event.stopPropagation();
-                    setSelectedEvidence(e);
-                    setIsFullscreen(true);
+                    openReplay(e);
                   }}
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all ${e.btnClass}`}
                 >
@@ -173,7 +201,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               <div 
                 className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden border border-[var(--border)] flex items-center justify-center text-white text-sm cursor-pointer group"
                 onClick={() => {
-                  if (selectedEvidence.screenshotPath) setIsFullscreen(true);
+                  openReplay(selectedEvidence);
                 }}
               >
                 {selectedEvidence.screenshotPath ? (
@@ -260,18 +288,21 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
         </div>
       </div>
       {/* FULLSCREEN REPLAY MODAL */}
-      {isFullscreen && selectedEvidence && (
+      {isFullscreen && selectedEvidence && typeof document !== "undefined" && createPortal((
         <div 
-          className="app-modal-backdrop bg-black/90 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[2000] flex items-center justify-center overflow-y-auto bg-black/90 p-2 backdrop-blur-md sm:p-6"
           onClick={() => setIsFullscreen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="evidence-replay-title"
         >
           <div 
-            className="app-modal-panel min-h-0 max-w-5xl bg-[#111] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex flex-col"
+            className="my-auto flex max-h-[calc(100dvh-1rem)] min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-800 bg-[#111] shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-800 bg-[#0a0a0a] px-4 py-3 sm:items-center sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <h2 className="flex min-w-0 items-center gap-2 text-base font-bold text-white sm:text-lg">
+                <h2 id="evidence-replay-title" className="flex min-w-0 items-center gap-2 text-base font-bold text-white sm:text-lg">
                   <Camera className="w-5 h-5 text-indigo-400" />
                   Evidence Replay — {selectedEvidence.name}
                 </h2>
@@ -279,42 +310,73 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               </div>
               <button 
                 onClick={() => setIsFullscreen(false)} 
+                aria-label="Close Replay"
                 className="p-2 text-gray-400 hover:text-white transition-colors"
               >
                 ✕
               </button>
             </div>
             
-            <div className="relative flex min-h-[35vh] min-w-0 flex-1 items-center justify-center overflow-hidden bg-black p-2 sm:min-h-[50vh] sm:p-4">
+            <div className="relative flex min-h-[35vh] min-w-0 flex-1 items-center justify-center overflow-auto bg-black p-2 sm:min-h-[50vh] sm:p-4">
               {selectedEvidence.screenshotPath ? (
-                isVideoEvidence(selectedEvidence) ? (
-                  <video
-                    src={selectedEvidence.screenshotPath}
-                    controls
-                    autoPlay
-                    preload="metadata"
-                    playsInline
-                    aria-label={`Violation evidence replay for ${selectedEvidence.name}`}
-                    className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
-                  >
-                    Your browser does not support evidence video playback.
-                  </video>
+                mediaStatus === "error" ? (
+                  <div className="flex max-w-sm flex-col items-center gap-3 text-center text-gray-300">
+                    <AlertCircle className="h-10 w-10 text-rose-400" />
+                    <div>
+                      <p className="font-semibold">Evidence could not be loaded</p>
+                      <p className="mt-1 text-xs text-gray-500">The file may be unavailable or the evidence service may be offline.</p>
+                    </div>
+                    <button type="button" onClick={retryEvidence} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500">
+                      Retry
+                    </button>
+                  </div>
                 ) : (
-                  <img
-                    src={selectedEvidence.screenshotPath}
-                    alt={`Evidence: ${selectedEvidence.name}`}
-                    className="max-w-full max-h-full object-contain rounded border border-gray-800 shadow-2xl"
-                  />
+                  <>
+                    {mediaStatus === "loading" && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black text-sm font-semibold text-gray-300">
+                        Loading evidence...
+                      </div>
+                    )}
+                    {isVideoEvidence(selectedEvidence) ? (
+                      <video
+                        key={`${selectedEvidence.id}-${mediaAttempt}`}
+                        src={selectedEvidence.screenshotPath}
+                        controls
+                        autoPlay
+                        preload="metadata"
+                        playsInline
+                        onLoadedData={() => setMediaStatus("ready")}
+                        onError={() => setMediaStatus("error")}
+                        aria-label={`Violation evidence replay for ${selectedEvidence.name}`}
+                        className="max-h-full max-w-full rounded border border-gray-800 object-contain shadow-2xl"
+                      >
+                        Your browser does not support evidence video playback.
+                      </video>
+                    ) : (
+                      <img
+                        key={`${selectedEvidence.id}-${mediaAttempt}`}
+                        src={selectedEvidence.screenshotPath}
+                        onLoad={() => setMediaStatus("ready")}
+                        onError={() => setMediaStatus("error")}
+                        alt={`Evidence: ${selectedEvidence.name}`}
+                        className="max-h-full max-w-full rounded border border-gray-800 object-contain shadow-2xl"
+                      />
+                    )}
+                  </>
                 )
               ) : (
-                <p className="text-gray-500">No evidence available</p>
+                <div className="flex flex-col items-center gap-2 text-center text-gray-500">
+                  <Camera className="h-10 w-10" />
+                  <p className="font-semibold">No evidence available</p>
+                  <p className="text-xs">This violation was recorded without a usable camera snapshot or video clip.</p>
+                </div>
               )}
             </div>
             
             <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-800 bg-[#0a0a0a] p-3 sm:flex-row sm:justify-end sm:gap-3 sm:p-4">
               <button 
                 onClick={handleDownload}
-                disabled={!selectedEvidence.screenshotPath}
+                disabled={!selectedEvidence.screenshotPath || mediaStatus !== "ready"}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500 disabled:opacity-50 sm:w-auto"
               >
                 <Download className="w-4 h-4" /> Download
@@ -328,7 +390,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

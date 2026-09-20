@@ -6,6 +6,7 @@ import {
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
+  type GetObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 
 type StorageConfig = {
@@ -13,6 +14,8 @@ type StorageConfig = {
   client: S3Client;
   serverSideEncryption?: "AES256" | "aws:kms";
 };
+
+const storageRequestTimeoutMs = 8_000;
 
 let cachedConfig: StorageConfig | null | undefined;
 
@@ -48,11 +51,22 @@ function getStorageConfig(): StorageConfig | null {
       endpoint,
       region: process.env.S3_REGION?.trim() || "us-east-1",
       forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
+      maxAttempts: 1,
       credentials: { accessKeyId, secretAccessKey },
     }),
   };
   cachedConfig = config;
   return config;
+}
+
+async function sendStorageCommand<T>(send: (abortSignal: AbortSignal) => Promise<T>) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), storageRequestTimeoutMs);
+  try {
+    return await send(controller.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function uploadEvidence(dataUrl: string, studentQuizId: string) {
@@ -75,7 +89,7 @@ export async function uploadEvidenceBytes(
   const maxBytes = normalizedContentType.startsWith("video/") ? 6_000_000 : 2_000_000;
   if (bytes.byteLength > maxBytes) throw new Error(`Evidence exceeds ${maxBytes / 1_000_000} MB`);
   const key = `evidence/${studentQuizId}/${crypto.randomUUID()}.${extension}`;
-  await config.client.send(new PutObjectCommand({
+  await sendStorageCommand((abortSignal) => config.client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: bytes,
@@ -83,14 +97,17 @@ export async function uploadEvidenceBytes(
     ...(config.serverSideEncryption
       ? { ServerSideEncryption: config.serverSideEncryption }
       : {}),
-  }));
+  }), { abortSignal }));
   return { key, contentType: normalizedContentType };
 }
 
 export async function readEvidence(key: string) {
   const config = getStorageConfig();
   if (!config) return null;
-  const result = await config.client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }));
+  const result = await sendStorageCommand((abortSignal) => config.client.send(
+    new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+    { abortSignal },
+  )) as GetObjectCommandOutput;
   if (!result.Body) return null;
   return {
     bytes: await result.Body.transformToByteArray(),
@@ -102,21 +119,24 @@ export async function deleteEvidence(keys: string[]) {
   const config = getStorageConfig();
   if (!config || keys.length === 0) return;
   for (let index = 0; index < keys.length; index += 1_000) {
-    await config.client.send(new DeleteObjectsCommand({
+    await sendStorageCommand((abortSignal) => config.client.send(new DeleteObjectsCommand({
       Bucket: config.bucket,
       Delete: { Objects: keys.slice(index, index + 1_000).map((Key) => ({ Key })), Quiet: true },
-    }));
+    }), { abortSignal }));
   }
 }
 
 export async function checkEvidenceStorage() {
   const config = getStorageConfig();
   if (!config) return false;
-  await config.client.send(new HeadBucketCommand({ Bucket: config.bucket }));
+  await sendStorageCommand((abortSignal) => config.client.send(
+    new HeadBucketCommand({ Bucket: config.bucket }),
+    { abortSignal },
+  ));
   const key = `healthchecks/${crypto.randomUUID()}.txt`;
   const expected = Buffer.from("proctorshield-evidence-healthcheck", "utf8");
   try {
-    await config.client.send(new PutObjectCommand({
+    await sendStorageCommand((abortSignal) => config.client.send(new PutObjectCommand({
       Bucket: config.bucket,
       Key: key,
       Body: expected,
@@ -124,15 +144,18 @@ export async function checkEvidenceStorage() {
       ...(config.serverSideEncryption
         ? { ServerSideEncryption: config.serverSideEncryption }
         : {}),
-    }));
-    const stored = await config.client.send(new GetObjectCommand({
+    }), { abortSignal }));
+    const stored = await sendStorageCommand((abortSignal) => config.client.send(new GetObjectCommand({
       Bucket: config.bucket,
       Key: key,
-    }));
+    }), { abortSignal })) as GetObjectCommandOutput;
     if (!stored.Body) return false;
     const bytes = await stored.Body.transformToByteArray();
     return Buffer.from(bytes).equals(expected);
   } finally {
-    await config.client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+    await sendStorageCommand((abortSignal) => config.client.send(
+      new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
+      { abortSignal },
+    ));
   }
 }
