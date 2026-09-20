@@ -62,8 +62,7 @@ function JoinContent() {
                 title: q.quiz.title,
                 accessCode: q.quiz.accessCode,
                 quizMode: q.quiz.quizMode,
-              }))
-              .slice(0, 3);
+              }));
             setActiveQuizzes(live);
           }
         }
@@ -148,6 +147,12 @@ function JoinContent() {
       playBloop(350 + Math.min(clean.length * 40, 400), 0.05);
     }
   };
+
+  const normalizedJoinCode = normalizeQuizAccessCode(joinCode);
+  const matchedAssignment = activeQuizzes.find(
+    (quiz) => quiz.accessCode && normalizeQuizAccessCode(quiz.accessCode) === normalizedJoinCode,
+  );
+  const destinationName = matchedAssignment?.quizMode === "arena" ? "Arena" : "Quiz";
 
   return (
     <div
@@ -308,7 +313,7 @@ function JoinContent() {
         >
           <div className="text-center mb-6">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-[family-name:var(--font-display)]">
-              Enter Quiz Code
+              Enter {destinationName} Code
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
               Enter the room access code provided by your instructor
@@ -329,7 +334,7 @@ function JoinContent() {
                 type="text"
                 value={joinCode}
                 onChange={(e) => handleInputChange(e.target.value)}
-                placeholder="ENTER QUIZ CODE (e.g. PS-123)"
+                placeholder={`ENTER ${destinationName.toUpperCase()} CODE (e.g. PS-123)`}
                 autoFocus
                 autoCapitalize="characters"
                 autoCorrect="off"
@@ -387,11 +392,11 @@ function JoinContent() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>Entering Quiz...</span>
+                  <span>Entering {destinationName}...</span>
                 </>
               ) : (
                 <>
-                  <span>Join Quiz</span>
+                  <span>Join {destinationName}</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
@@ -463,7 +468,7 @@ function JoinContent() {
                 <span>Active Assignments For You</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {activeQuizzes.map((quiz) => (
+                {activeQuizzes.slice(0, 3).map((quiz) => (
                   <button
                     key={quiz.id}
                     type="button"

@@ -79,6 +79,14 @@ test("Test C: Missing quizMode falls back safely to proctored route", () => {
   assert.equal(simulateRoute("arena"), "/arena/42");
 });
 
+test("Join wording follows a safely matched assigned quiz mode", () => {
+  assert.match(joinPageSrc, /normalizeQuizAccessCode\(quiz\.accessCode\) === normalizedJoinCode/);
+  assert.match(joinPageSrc, /matchedAssignment\?\.quizMode === "arena" \? "Arena" : "Quiz"/);
+  assert.match(joinPageSrc, /Enter \{destinationName\} Code/);
+  assert.match(joinPageSrc, /Join \{destinationName\}/);
+  assert.match(joinPageSrc, /activeQuizzes\.slice\(0, 3\)\.map/);
+});
+
 test("Test D & E: Student dashboard cards and enrolled list link Arena to /arena/[id] and Proctored to /quiz/[id]", () => {
   // Student dashboard quick join routes by quizMode
   assert.match(

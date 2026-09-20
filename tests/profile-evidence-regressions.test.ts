@@ -35,3 +35,16 @@ test("evidence storage requests are bounded before database fallback", () => {
   assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), storageRequestTimeoutMs\)/);
   assert.match(source, /send\(controller\.signal\)/);
 });
+
+test("evidence storage has a private and explicitly gated local fallback", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/lib/evidence-storage.ts"),
+    "utf8",
+  );
+  assert.match(source, /path\.resolve\(process\.cwd\(\), "\.data", "evidence"\)/);
+  assert.match(source, /process\.env\.NODE_ENV !== "production"/);
+  assert.match(source, /process\.env\.EVIDENCE_LOCAL_FALLBACK === "true"/);
+  assert.match(source, /localEvidenceKeyPattern/);
+  assert.match(source, /\^local\\\/evidence\\\//);
+  assert.match(source, /flag: "wx", mode: 0o600/);
+});
