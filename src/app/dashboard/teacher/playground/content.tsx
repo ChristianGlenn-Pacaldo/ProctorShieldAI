@@ -180,7 +180,7 @@ export default function PlaygroundContent({
             </div>
             <h3 className="text-lg font-bold text-white">Classroom EXP Progression</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Top Arena podium winners and all participants earn authoritative EXP to level up their student rank and unlock free avatar customizations.
+              Top Arena podium winners and all participants earn authoritative EXP to level up their student rank.
             </p>
             <div className="inline-flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
               <Lock className="w-3.5 h-3.5" /> Requires Pro Subscription

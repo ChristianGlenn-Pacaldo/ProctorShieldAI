@@ -99,7 +99,7 @@ const steps = [
     num: "02",
     tag: "Students",
     title: "Enter Pin & Join Gamified Arena",
-    desc: "Students enter a 6-digit room PIN, choose their custom spirit mascot or 2D avatar, and enter a verified, distraction-free examination arena.",
+    desc: "Students enter a room code and continue into a verified, distraction-free examination or Power Arena session.",
     icon: <Zap className="w-6 h-6 text-amber-400" />,
   },
   {

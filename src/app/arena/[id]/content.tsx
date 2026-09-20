@@ -35,7 +35,9 @@ import {
 } from "@/lib/student-battle";
 import { ArenaBattleDock } from "@/components/arena/arena-battle-dock";
 import { ArenaPodium, type PodiumParticipant } from "@/components/arena/arena-podium";
+import { ArenaIdentity } from "@/components/arena/arena-identity";
 import type { ArenaParticipant, ArenaState } from "@/lib/arena";
+import { getStudentInitials } from "@/lib/student-identity";
 
 function playAttackSound(powerType: string) {
   if (powerType === "meteor") playMeteorSound();
@@ -275,7 +277,7 @@ export function ArenaContent({
       const podiumList: PodiumParticipant[] = sorted.map((p) => ({
         studentId: p.studentId,
         studentName: p.studentName,
-        avatar: p.avatar || "🎓",
+        initials: p.initials || getStudentInitials(p.studentName, "ST"),
         score: p.score,
         rank: p.rank,
       }));
@@ -995,7 +997,7 @@ export function ArenaContent({
                         : "bg-slate-800/60 border-slate-700/60 text-slate-300"
                     }`}
                   >
-                    <span>{p.avatar || "🎓"}</span>
+                    <ArenaIdentity studentName={p.studentName} initials={p.initials} className="w-8 h-8 text-[10px]" />
                     <span>{p.studentName}{p.studentId === studentId ? " (You)" : ""}</span>
                   </span>
                 ))}
@@ -1041,6 +1043,7 @@ export function ArenaContent({
         </main>
 
         <footer className="text-center text-xs text-slate-500">
+          <ArenaIdentity studentName={studentName} className="w-7 h-7 text-[9px]" />
           Player: <span className="font-bold text-slate-300">{studentName}</span> • Zero Camera / Mic Requirements
         </footer>
       </div>
@@ -1167,7 +1170,7 @@ export function ArenaContent({
                       className="w-full p-3 rounded-2xl border flex items-center justify-between transition-all cursor-pointer bg-[#161d33] hover:bg-indigo-900/40 border-slate-800 hover:border-indigo-500 text-white"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{rival.avatar}</span>
+                        <ArenaIdentity studentName={rival.studentName} initials={rival.initials} className="w-10 h-10 text-xs" />
                         <div className="text-left">
                           <div className="text-xs font-black flex items-center gap-1.5">
                             <span className="text-amber-400 font-mono">#{rival.rank}</span>
@@ -1303,6 +1306,7 @@ export function ArenaContent({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <ArenaIdentity studentName={studentName} className="w-9 h-9 text-[10px]" />
           {/* PERSONAL RANK BADGE (#X of N) */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141828] border border-slate-800 shadow-md">
             <Trophy className="w-3.5 h-3.5 text-amber-400" />
@@ -1357,7 +1361,7 @@ export function ArenaContent({
                 key={rival.studentId}
                 className="shrink-0 flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs bg-[#141b30] border-slate-700/80 text-white shadow-sm"
               >
-                <span className="text-base">{rival.avatar || "🎓"}</span>
+                <ArenaIdentity studentName={rival.studentName} initials={rival.initials} className="w-8 h-8 text-[10px]" />
                 <div className="flex flex-col min-w-[70px]">
                   <div className="flex items-center gap-1 font-bold text-[11px] truncate max-w-[95px]">
                     <span className="text-amber-400 font-mono">#{rival.rank}</span>
@@ -1439,7 +1443,7 @@ export function ArenaContent({
                     {
                       studentId,
                       studentName: studentName || "You",
-                      avatar: "🎓",
+                      initials: getStudentInitials(studentName, "ST"),
                       score,
                       rank: studentRank,
                       hasShield: hasGuardianShield,
@@ -1447,7 +1451,7 @@ export function ArenaContent({
                     ...rivals.map((r) => ({
                       studentId: r.studentId,
                       studentName: r.studentName,
-                      avatar: r.avatar,
+                      initials: r.initials,
                       score: r.score,
                       rank: r.rank,
                       hasShield: r.hasShield,
@@ -1467,7 +1471,7 @@ export function ArenaContent({
                         >
                           <div className="flex items-center gap-2.5">
                             <span className="font-mono font-black text-slate-400 w-5">#{idx + 1}</span>
-                            <span className="text-base">{p.avatar || "🎓"}</span>
+                            <ArenaIdentity studentName={p.studentName} initials={p.initials} className="w-8 h-8 text-[10px]" />
                             <span className="font-medium text-white truncate max-w-[150px]">
                               {p.studentName} {isMe && "(You)"}
                             </span>
@@ -1620,6 +1624,7 @@ export function ArenaContent({
                   <button
                     key={choice.id}
                     type="button"
+                    data-arena-choice={choice.id}
                     onClick={() => void handleSelectChoice(choice.id)}
                     disabled={isQuestionAnswered || isSubmittingAnswer}
                     className={`relative p-4 sm:p-5 rounded-2xl border text-left flex items-center justify-between transition-all duration-200 cursor-pointer shadow-md ${cardStyle} ${

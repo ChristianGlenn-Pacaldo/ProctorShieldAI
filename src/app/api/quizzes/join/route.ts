@@ -6,7 +6,7 @@ import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/li
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { getQuizCapacityDecision } from "@/lib/subscription-rules";
 import { getArenaState } from "@/lib/arena";
-import { AVATAR_CATALOG } from "@/lib/student-coins";
+import { getStudentInitials } from "@/lib/student-identity";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { accessCode, avatar } = body as { accessCode?: unknown; avatar?: unknown };
+    const { accessCode } = body as { accessCode?: unknown };
 
     if (typeof accessCode !== "string" || !accessCode.trim()) {
       return NextResponse.json({ error: "Access code is required" }, { status: 400 });
@@ -141,26 +141,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve student avatar: strictly prioritize persisted DB equipped avatar
-    let studentAvatar = "🛡️";
-    try {
-      const studentProfile = await prisma.studentGameProfile.findUnique({
-        where: { studentId: session.userId },
-        select: { equippedAvatar: true },
-      });
-      const catalogItem = studentProfile?.equippedAvatar
-        ? AVATAR_CATALOG.find((a) => a.id === studentProfile.equippedAvatar)
-        : null;
-      if (catalogItem?.emoji) {
-        studentAvatar = catalogItem.emoji;
-      } else if (studentProfile?.equippedAvatar && studentProfile.equippedAvatar.length <= 4) {
-        studentAvatar = studentProfile.equippedAvatar;
-      } else if (typeof avatar === "string" && avatar.trim()) {
-        studentAvatar = avatar.trim();
-      }
-    } catch {
-      studentAvatar = typeof avatar === "string" && avatar.trim() ? avatar.trim() : "🛡️";
-    }
+    const studentInitials = getStudentInitials(session.fullName, "ST");
 
     if (enrollmentResult.kind === "existing") {
       // Trigger live arena join event so the teacher's lobby displays returning students immediately
@@ -171,7 +152,7 @@ export async function POST(req: NextRequest) {
             quizId: quiz.id,
             studentId: session.userId,
             studentName: session.fullName,
-            avatar: studentAvatar,
+            initials: studentInitials,
             timestamp: new Date().toISOString(),
           };
           await Promise.allSettled([
@@ -261,7 +242,7 @@ export async function POST(req: NextRequest) {
           quizId: quiz.id,
           studentId: session.userId,
           studentName: session.fullName,
-          avatar: studentAvatar,
+          initials: studentInitials,
           timestamp: new Date().toISOString(),
         };
         await Promise.allSettled([

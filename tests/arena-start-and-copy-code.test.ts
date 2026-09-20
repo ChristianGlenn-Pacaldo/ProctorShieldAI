@@ -24,7 +24,7 @@ test("Bug 1 Test A: Teacher Start Arena button calls correct Arena API action 's
   // Verifies handleStartMatch dispatches action: "start" via broadcastArenaAction
   assert.match(
     teacherHostSrc,
-    /broadcastArenaAction\(\s*["']start["'],\s*\{[\s\S]*?mode,[\s\S]*?waveDuration,[\s\S]*?coinBounty,[\s\S]*?enabledPowers/
+    /broadcastArenaAction\(\s*["']start["'],\s*\{[\s\S]*?mode,[\s\S]*?waveDuration,[\s\S]*?matchDuration:\s*selectedMatchDuration,[\s\S]*?enabledPowers/
   );
 
   // Verifies broadcastArenaAction performs POST to /api/arena/${quiz.id}

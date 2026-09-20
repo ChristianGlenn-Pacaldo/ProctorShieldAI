@@ -14,11 +14,11 @@ import {
   Volume2,
   VolumeX,
   Compass,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  MASCOTS,
   playBloop,
   playSuccessFanfare,
   playErrorBuzz,
@@ -58,7 +58,6 @@ export default function StudentDashboardContent() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [soundActive, setSoundActive] = useState(true);
-  const [activeMascotId, setActiveMascotId] = useState("shield");
   const [progression, setProgression] = useState<{
     totalExp: number;
     level: number;
@@ -78,8 +77,6 @@ export default function StudentDashboardContent() {
 
   useEffect(() => {
     setSoundActive(isSoundEnabled());
-    const savedMascot = localStorage.getItem("proctor_chosen_mascot");
-    if (savedMascot) setActiveMascotId(savedMascot);
 
     async function loadProgression() {
       try {
@@ -95,10 +92,6 @@ export default function StudentDashboardContent() {
               progressPercent: data.progressPercent,
               title: data.title,
             });
-          }
-          if (data.equippedAvatar) {
-            setActiveMascotId(data.equippedAvatar);
-            localStorage.setItem("proctor_chosen_mascot", data.equippedAvatar);
           }
         }
       } catch {}
@@ -194,8 +187,6 @@ export default function StudentDashboardContent() {
     avgTrust = Math.max(0, 100 - Math.round(totalCheatProb / completedCount));
   }
 
-  const currentMascot = MASCOTS.find((m) => m.id === activeMascotId) || MASCOTS[0];
-
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* ── GAMIFIED HERO ARENA BANNER ────────────────────────────── */}
@@ -205,12 +196,10 @@ export default function StudentDashboardContent() {
         <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-violet-600/10 blur-[80px] rounded-full pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          {/* Student Status & Mascot */}
+          {/* Student Status */}
           <div className="flex items-center gap-4 sm:gap-5">
-            <div
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${currentMascot.color} p-1 shadow-lg shadow-indigo-500/25 flex items-center justify-center text-3xl sm:text-4xl transition-transform hover:scale-105 select-none`}
-            >
-              <span>{currentMascot.emoji}</span>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-1 shadow-lg shadow-indigo-500/25 flex items-center justify-center">
+              <UserRound className="w-8 h-8 sm:w-10 sm:h-10 text-white" aria-hidden="true" />
             </div>
 
             <div>
@@ -225,13 +214,6 @@ export default function StudentDashboardContent() {
                   {progression.totalExp.toLocaleString()} Total EXP
                 </span>
 
-                <Link
-                  href="/join/avatar-shop"
-                  className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 border border-white/20 flex items-center gap-1 hover:scale-105 transition-transform"
-                  title="Customize 2D Avatar for Free"
-                >
-                  <span>Customize Avatar</span>
-                </Link>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1.5 font-[family-name:var(--font-display)]">
@@ -496,25 +478,17 @@ export default function StudentDashboardContent() {
 
             <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-transparent border border-indigo-500/20 mb-4">
               <div className="flex items-center gap-4 mb-3">
-                <div
-                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentMascot.color} p-1 shadow-md flex items-center justify-center text-2xl select-none`}
-                >
-                  <span>{currentMascot.emoji}</span>
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-1 shadow-md flex items-center justify-center">
+                  <UserRound className="w-7 h-7 text-white" aria-hidden="true" />
                 </div>
                 <div>
                   <div className="text-sm font-extrabold text-[var(--ink)]">
-                    {currentMascot.name}
+                    EXP Progress
                   </div>
                   <div className="text-xs text-[var(--muted)]">
                     {progression.totalExp.toLocaleString()} Total EXP
                   </div>
                 </div>
-                <Link
-                  href="/join/avatar-shop"
-                  className="ml-auto text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-xs"
-                >
-                  Change Avatar
-                </Link>
               </div>
 
               <div className="space-y-1.5">

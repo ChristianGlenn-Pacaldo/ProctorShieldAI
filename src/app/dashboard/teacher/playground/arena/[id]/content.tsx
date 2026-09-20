@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import PusherClient from "pusher-js";
 import { computeArenaRankings, type ArenaParticipant } from "@/lib/arena";
+import { ArenaIdentity } from "@/components/arena/arena-identity";
+import { getStudentInitials } from "@/lib/student-identity";
 
 interface Choice {
   id: number;
@@ -58,7 +60,7 @@ interface QuizData {
 interface Battler {
   id: string;
   name: string;
-  avatar: string;
+  initials: string;
   score: number;
   rank: number;
   questionsAnswered: number;
@@ -80,29 +82,18 @@ interface ArenaHostContentProps {
   mode?: string;
   matchDuration?: number;
   waveDuration?: number;
-  coinBounty: number;
   enabledPowers: string[];
   teacherId: string;
 }
 
 // Default AI Challenger Pool
-const BOT_NAMES = [
-  { name: "Nova", avatar: "⚡" },
-  { name: "Blaze", avatar: "🔥" },
-  { name: "Viper", avatar: "🐉" },
-  { name: "Zephyr", avatar: "🌪️" },
-  { name: "Apex", avatar: "👑" },
-  { name: "Titan", avatar: "🛡️" },
-  { name: "Frostbite", avatar: "❄️" },
-  { name: "Shadow", avatar: "🥷" },
-];
+const BOT_NAMES = ["Nova", "Blaze", "Viper", "Zephyr", "Apex", "Titan", "Frostbite", "Shadow"];
 
 export default function ArenaHostContent({
   quiz,
   mode = "score_arena",
   matchDuration = 1800,
   waveDuration,
-  coinBounty,
   enabledPowers,
   teacherId,
 }: ArenaHostContentProps) {
@@ -234,7 +225,7 @@ export default function ArenaHostContent({
       const studentList: Battler[] = participants.map((p, idx) => ({
         id: p.studentId,
         name: p.studentName,
-        avatar: p.avatar || "🎓",
+        initials: p.initials || getStudentInitials(p.studentName, "ST"),
         score: p.score || 0,
         rank: p.rank || idx + 1,
         questionsAnswered: p.questionsAnswered || 0,
@@ -253,10 +244,9 @@ export default function ArenaHostContent({
     });
   }, [quiz.questions.length]);
 
-  const addParticipant = useCallback((data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
+  const addParticipant = useCallback((data: { studentId: string; studentName?: string; name?: string; initials?: string }) => {
     const sId = data.studentId;
     const sName = data.studentName || data.name || "Student Fighter";
-    const sAvatar = data.avatar || "🎓";
     if (!sId) return;
 
     setBattlers((prev) => {
@@ -266,7 +256,7 @@ export default function ArenaHostContent({
         {
           id: sId,
           name: sName,
-          avatar: sAvatar,
+          initials: data.initials || getStudentInitials(sName, "ST"),
           score: 0,
           rank: prev.length + 1,
           questionsAnswered: 0,
@@ -322,7 +312,7 @@ export default function ArenaHostContent({
     const arenaChannel = pusher.subscribe(`private-arena-${quiz.id}`);
     const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
 
-    const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; avatar?: string }) => {
+    const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; initials?: string }) => {
       addParticipant(data);
       playJoinChime();
       const displayName = data.studentName || data.name || "A fighter";
@@ -541,7 +531,6 @@ export default function ArenaHostContent({
         if (data?.status === "lobby") {
           setPhase("lobby");
           setIsTimerRunning(false);
-          setBattlers(Array.isArray(data?.participants) ? data.participants : []);
         } else if (data?.status === "ended" || data?.arena?.status === "ended" || data?.quizStatus === "ended") {
           setPhase("podium");
           setIsTimerRunning(false);
@@ -640,7 +629,6 @@ export default function ArenaHostContent({
       mode,
       waveDuration,
       matchDuration: selectedMatchDuration,
-      coinBounty,
       enabledPowers,
     });
     if (!started) return;
@@ -680,16 +668,16 @@ export default function ArenaHostContent({
   };
 
   const handleAddBot = () => {
-    const available = BOT_NAMES.filter((b) => !battlers.some((x) => x.name === b.name));
+    const available = BOT_NAMES.filter((name) => !battlers.some((x) => x.name === name));
     if (available.length === 0) return;
-    const bot = available[0];
+    const botName = available[0];
     setBattlers((prev) => {
       const updated = [
         ...prev,
         {
           id: `bot-${Date.now()}`,
-          name: bot.name,
-          avatar: bot.avatar,
+          name: botName,
+          initials: getStudentInitials(botName, "AI"),
           score: 0,
           rank: prev.length + 1,
           questionsAnswered: 0,
@@ -907,7 +895,7 @@ export default function ArenaHostContent({
                   className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col items-center text-center space-y-2 animate-in zoom-in-95 duration-200"
                 >
                   <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-amber-400/40 flex items-center justify-center text-2xl shadow-inner">
-                    {b.avatar}
+                    <ArenaIdentity studentName={b.name} initials={b.initials} className="w-12 h-12 text-sm" />
                   </div>
                   <div className="font-bold text-xs text-white truncate max-w-full">
                     {b.name}
@@ -1013,7 +1001,7 @@ export default function ArenaHostContent({
                       >
                         {idx + 1}
                       </span>
-                      <span className="text-xl shrink-0">{b.avatar}</span>
+                      <ArenaIdentity studentName={b.name} initials={b.initials} />
                       <div className="min-w-0">
                         <div className="font-bold text-white text-sm sm:text-base truncate">
                           {b.name}
@@ -1124,7 +1112,7 @@ export default function ArenaHostContent({
             {/* 2nd Place */}
             {podiumLeaderboard[1] && (
               <div className="flex flex-col items-center space-y-2 w-28 sm:w-36">
-                <div className="text-2xl sm:text-4xl">{podiumLeaderboard[1].avatar}</div>
+                <ArenaIdentity studentName={podiumLeaderboard[1].name} initials={podiumLeaderboard[1].initials} className="w-16 h-16 text-lg" />
                 <div className="font-bold text-xs sm:text-sm text-white truncate max-w-full">
                   {podiumLeaderboard[1].name}
                 </div>
@@ -1145,7 +1133,7 @@ export default function ArenaHostContent({
               <div className="flex flex-col items-center space-y-2 w-32 sm:w-44 -mt-8">
                 <div className="relative">
                   <Crown className="w-8 h-8 text-amber-400 absolute -top-8 left-1/2 -translate-x-1/2 animate-bounce" />
-                  <div className="text-4xl sm:text-6xl">{podiumLeaderboard[0].avatar}</div>
+                  <ArenaIdentity studentName={podiumLeaderboard[0].name} initials={podiumLeaderboard[0].initials} className="w-20 h-20 text-xl" />
                 </div>
                 <div className="font-black text-sm sm:text-base text-amber-300 truncate max-w-full">
                   {podiumLeaderboard[0].name}
@@ -1165,7 +1153,7 @@ export default function ArenaHostContent({
             {/* 3rd Place */}
             {podiumLeaderboard[2] && (
               <div className="flex flex-col items-center space-y-2 w-28 sm:w-36">
-                <div className="text-2xl sm:text-4xl">{podiumLeaderboard[2].avatar}</div>
+                <ArenaIdentity studentName={podiumLeaderboard[2].name} initials={podiumLeaderboard[2].initials} className="w-16 h-16 text-lg" />
                 <div className="font-bold text-xs sm:text-sm text-white truncate max-w-full">
                   {podiumLeaderboard[2].name}
                 </div>
@@ -1195,7 +1183,7 @@ export default function ArenaHostContent({
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-black text-slate-400 w-5">#{idx + 1}</span>
-                    <span className="text-base">{b.avatar}</span>
+                    <ArenaIdentity studentName={b.name} initials={b.initials} className="w-8 h-8 text-[10px]" />
                     <span className="font-bold text-white">{b.name}</span>
                   </div>
                   <div className="font-mono font-black text-amber-300">{b.score} pts</div>

@@ -61,21 +61,6 @@ export const BATTLE_POWERS: BattlePower[] = [
   },
 ];
 
-export interface QuizRival {
-  id: string;
-  name: string;
-  emoji: string;
-  score: number;
-  isBot?: boolean;
-}
-
-export const DEFAULT_RIVALS: QuizRival[] = [
-  { id: "rival_fox", name: "Alex (Swift Fox)", emoji: "🦊", score: 88, isBot: true },
-  { id: "rival_bot", name: "Jordan (Cyber Bot)", emoji: "🤖", score: 92, isBot: true },
-  { id: "rival_owl", name: "Taylor (Wise Owl)", emoji: "🦉", score: 85, isBot: true },
-  { id: "rival_sparky", name: "Morgan (Sparky)", emoji: "⚡", score: 79, isBot: true },
-];
-
 let audioCtx: AudioContext | null = null;
 
 function getAudioCtx(): AudioContext | null {

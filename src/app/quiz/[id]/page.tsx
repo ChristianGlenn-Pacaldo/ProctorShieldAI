@@ -47,11 +47,6 @@ type QuizSubmittedResult = {
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
   expEarned?: number;
-  coinsEarned?: number;
-  rank?: number;
-  isTopOne?: boolean;
-  rankTitle?: string;
-  totalCoins?: number;
 };
 
 export type SubmissionReason =
@@ -940,11 +935,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
           expEarned: typeof data.result?.expEarned === "number" ? data.result.expEarned : 0,
-          coinsEarned: typeof data.result?.coinsEarned === "number" ? data.result.coinsEarned : 0,
-          rank: data.result?.rank ?? 1,
-          isTopOne: data.result?.isTopOne === true,
-          rankTitle: data.result?.rankTitle ?? "Rank #1",
-          totalCoins: data.result?.totalCoins ?? 100,
         });
       } else {
         if (res.status === 409 && /already (?:been )?(?:submitted|completed)|already being submitted/i.test(data.error || "")) {
@@ -2173,25 +2163,16 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
           {/* EXP Earned Banner (Student Progression) */}
           {!resultInvalidated && (quizSubmittedResult.expEarned ?? 100) > 0 && (
-            <div className={`p-4 rounded-2xl border text-left flex items-center justify-between gap-3 ${
-              quizSubmittedResult.isTopOne
-                ? "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 border-amber-400/50 shadow-lg shadow-amber-500/10"
-                : "bg-indigo-500/15 border-indigo-500/30"
-            }`}>
+            <div className="p-4 rounded-2xl border text-left flex items-center justify-between gap-3 bg-indigo-500/15 border-indigo-500/30">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-2xl shrink-0">
-                  {quizSubmittedResult.isTopOne ? "🥇" : "⚡"}
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-6 h-6 text-indigo-300" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black uppercase text-indigo-400">
-                      {quizSubmittedResult.isTopOne ? "Top 1 Leaderboard Champion!" : "Student Progression"}
+                      Student Progression
                     </span>
-                    {quizSubmittedResult.isTopOne && (
-                      <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full">
-                        HONOR ROLL
-                      </span>
-                    )}
                   </div>
                   <div className="text-base font-black text-white mt-0.5">
                     +{quizSubmittedResult.expEarned ?? 100} EXP Earned!
@@ -2202,24 +2183,11 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => router.push("/join/avatar-shop")}
-                className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
-              >
-                Avatar Look 🎨
-              </button>
             </div>
           )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              onClick={() => router.push("/join/avatar-shop")}
-              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>🎨 Customize Avatar</span>
-            </button>
             <button
               onClick={() => router.push("/dashboard/student")}
               className="flex-1 py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer"

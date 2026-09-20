@@ -49,8 +49,8 @@ interface DashboardShellProps {
   children: React.ReactNode;
   role: "student" | "teacher" | "admin";
   userName: string;
-  userAvatar: string;
-  avatarColor?: string;
+  userInitials: string;
+  identityColor?: string;
 }
 
 const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
@@ -121,8 +121,8 @@ export default function DashboardShell({
   children,
   role,
   userName,
-  userAvatar,
-  avatarColor = "from-blue-600 to-slate-800",
+  userInitials,
+  identityColor = "from-blue-600 to-slate-800",
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState("light");
@@ -376,8 +376,8 @@ export default function DashboardShell({
         {/* User */}
         <div className="px-4 py-4 border-t border-white/10 bg-black/10">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
-              {userAvatar}
+            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${identityColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
+              {userInitials}
             </div>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-white truncate">{userName}</div>
@@ -497,8 +497,8 @@ export default function DashboardShell({
                 aria-expanded={profileOpen}
                 className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 pr-2.5 text-left shadow-sm hover:border-blue-400/50"
               >
-                <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarColor} flex items-center justify-center text-[10px] font-bold text-white`}>
-                  {userAvatar}
+                <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${identityColor} flex items-center justify-center text-[10px] font-bold text-white`}>
+                  {userInitials}
                 </span>
                 <span className="hidden xl:block max-w-28 truncate text-xs font-semibold text-[var(--ink)]">{userName}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${profileOpen ? "rotate-180" : ""}`} aria-hidden="true" />

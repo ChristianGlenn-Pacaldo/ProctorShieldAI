@@ -144,7 +144,7 @@ test("Requirement 11 & 12: 20 students generate ranks #1 through #20 and full le
     participants[`student-${i}`] = {
       studentId: `student-${i}`,
       studentName: `Student ${i}`,
-      avatar: "🎓",
+      initials: "ST",
       score: i * 50,
       rank: 0,
       questionsAnswered: i,
@@ -229,7 +229,7 @@ test("Requirement 29: Score never drops below zero", () => {
   const target: ArenaParticipant = {
     studentId: "student-1",
     studentName: "Juan",
-    avatar: "🎓",
+    initials: "ST",
     score: 50,
     rank: 1,
     questionsAnswered: 5,

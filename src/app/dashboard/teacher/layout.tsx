@@ -21,8 +21,8 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     <DashboardShell
       role="teacher"
       userName={name}
-      userAvatar={initials || "TR"}
-      avatarColor="from-violet-600 to-indigo-600"
+      userInitials={initials || "TR"}
+      identityColor="from-violet-600 to-indigo-600"
     >
       {children}
     </DashboardShell>

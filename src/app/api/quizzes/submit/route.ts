@@ -13,10 +13,6 @@ import {
   parseVerdict,
 } from "@/lib/quiz-submission";
 
-import {
-  calculateQuizCoinReward,
-} from "@/lib/student-coins";
-import { ensureStudentGameProfile } from "@/lib/student-game-profile";
 import { awardStudentExp, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
 
 import { canSubmitProctored } from "@/lib/proctored-runtime";
@@ -153,60 +149,7 @@ export async function POST(req: NextRequest) {
             ],
           });
 
-          const allSubmissions = await tx.studentQuiz.findMany({
-            where: {
-              quizId: Number(quizId),
-              quizStatus: "completed",
-            },
-            select: { id: true, score: true },
-            orderBy: [{ score: "desc" }, { endTime: "asc" }],
-          });
-          const foundIndex = allSubmissions.findIndex((submission) => submission.id === studentQuiz.id);
-          const studentRank = foundIndex >= 0 ? foundIndex + 1 : allSubmissions.length + 1;
-          const coinReward = calculateQuizCoinReward({
-            rank: studentRank,
-            score: recordedScore,
-            violationsCount: 0,
-            isInvalidated: false,
-            attemptMode: "arena",
-          });
-
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
-          const currentProfile = await ensureStudentGameProfile(tx, session.userId);
-          let totalCoins = currentProfile.coins;
-          if (coinReward.coins > 0) {
-            await tx.studentCoinLedger.create({
-              data: {
-                studentId: session.userId,
-                sourceType: "arena-completion",
-                sourceId: studentQuiz.id,
-                amount: coinReward.coins,
-                metadata: {
-                  quizId: studentQuiz.quiz.id,
-                  rank: studentRank,
-                  score: recordedScore,
-                  attemptMode: "arena",
-                },
-              },
-            });
-            const rewardedProfile = await tx.studentGameProfile.update({
-              where: { studentId: session.userId },
-              data: {
-                coins: { increment: coinReward.coins },
-                topOneWins: coinReward.isTopOne ? { increment: 1 } : undefined,
-              },
-            });
-            totalCoins = rewardedProfile.coins;
-            await tx.notification.create({
-              data: {
-                userId: session.userId,
-                title: coinReward.isTopOne ? "🥇 Top 1 Arena Champion!" : "🪙 Arena Coins Earned!",
-                message: `You earned +${coinReward.coins} coins for finishing ${coinReward.rankTitle}! Visit the Avatar Shop to unlock new avatars.`,
-              },
-            });
-          }
-
-          return { completed, coinReward, studentRank, totalCoins };
+          return { completed };
         });
       } catch (error) {
         if (error instanceof SubmissionConflictError) {
@@ -216,7 +159,6 @@ export async function POST(req: NextRequest) {
       }
 
       const updatedStudentQuiz = completion.completed;
-      const { coinReward, studentRank, totalCoins } = completion;
 
       try {
         const channelName = `private-teacher-${studentQuiz.quiz.teacherId}`;
@@ -254,12 +196,6 @@ export async function POST(req: NextRequest) {
           aiVerdict: null,
           cheatingProbability: null,
           expEarned: 0,
-          coinsEarned: coinReward.coins,
-          rank: studentRank,
-          isTopOne: coinReward.isTopOne,
-          rankTitle: coinReward.rankTitle,
-          totalCoins,
-          rewardBreakdown: coinReward.breakdown,
           attemptMode: "arena",
         },
       });
@@ -406,61 +342,7 @@ Return ONLY the valid JSON object.`;
             },
           ],
         });
-        const allSubmissions = await tx.studentQuiz.findMany({
-          where: {
-            quizId: Number(quizId),
-            quizStatus: "completed",
-            aiVerdict: { not: "cheated" },
-          },
-          select: { id: true, score: true },
-          orderBy: [{ score: "desc" }, { endTime: "asc" }],
-        });
-        const foundIndex = allSubmissions.findIndex((submission) => submission.id === studentQuiz.id);
-        const studentRank = foundIndex >= 0 ? foundIndex + 1 : allSubmissions.length + 1;
-        const coinReward = calculateQuizCoinReward({
-          rank: studentRank,
-          score: recordedScore ?? 0,
-          violationsCount: violations.length,
-          isInvalidated: integrityInvalidated,
-          attemptMode: "proctored",
-        });
-
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-game-profile:${session.userId}`}))`;
-        const currentProfile = await ensureStudentGameProfile(tx, session.userId);
-        let totalCoins = currentProfile.coins;
-        if (coinReward.coins > 0) {
-          await tx.studentCoinLedger.create({
-            data: {
-              studentId: session.userId,
-              sourceType: "quiz-completion",
-              sourceId: studentQuiz.id,
-              amount: coinReward.coins,
-              metadata: {
-                quizId: studentQuiz.quiz.id,
-                rank: studentRank,
-                score: recordedScore,
-                violations: violations.length,
-              },
-            },
-          });
-          const rewardedProfile = await tx.studentGameProfile.update({
-            where: { studentId: session.userId },
-            data: {
-              coins: { increment: coinReward.coins },
-              topOneWins: coinReward.isTopOne ? { increment: 1 } : undefined,
-            },
-          });
-          totalCoins = rewardedProfile.coins;
-          await tx.notification.create({
-            data: {
-              userId: session.userId,
-              title: coinReward.isTopOne ? "🥇 Top 1 Leaderboard Champion!" : "🪙 Quiz Coins Earned!",
-              message: `You earned +${coinReward.coins} coins for finishing ${coinReward.rankTitle}! Visit the Avatar Shop to unlock new avatars.`,
-            },
-          });
-        }
-
-        return { completed, coinReward, studentRank, totalCoins, expEarned };
+        return { completed, expEarned };
       });
     } catch (error) {
       if (error instanceof InvalidSubmissionError) return NextResponse.json({ error: "Submission reason preconditions not met" }, { status: 409 });
@@ -501,8 +383,6 @@ Return ONLY the valid JSON object.`;
       console.error("Pusher submit broadcast error:", pusherErr);
     }
 
-    const { coinReward, studentRank, totalCoins } = completion;
-
     const expEarned = completion.expEarned;
 
     return NextResponse.json({
@@ -518,12 +398,6 @@ Return ONLY the valid JSON object.`;
         aiVerdict: verdictData.finalVerdict,
         cheatingProbability: verdictData.cheatingProbability,
         expEarned,
-        coinsEarned: coinReward.coins,
-        rank: studentRank,
-        isTopOne: coinReward.isTopOne,
-        rankTitle: coinReward.rankTitle,
-        totalCoins,
-        rewardBreakdown: coinReward.breakdown,
         attemptMode: "proctored",
       },
     });

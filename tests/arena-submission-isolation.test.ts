@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
-import { calculateQuizCoinReward } from "../src/lib/student-coins.ts";
 import { isIntegrityInvalidated, enforceIntegrityPolicy } from "../src/lib/quiz-submission.ts";
 
 const submitRouteSrc = fs.readFileSync(
@@ -67,32 +66,14 @@ test("Test B, C, D & E: Arena submission never invalidates score, sets null AI v
   assert.equal(arenaSubstring.includes("enforceIntegrityPolicy"), false);
 });
 
-test("Test F: Arena rewards are never penalized or invalidated by violations", () => {
-  // Arena with violations still receives full rewards and is never invalidated
-  const arenaReward = calculateQuizCoinReward({
-    rank: 1,
-    score: 95,
-    violationsCount: 5,
-    isInvalidated: true, // even if passed true accidentally
-    attemptMode: "arena",
-  });
-
-  assert.equal(arenaReward.coins, 280); // 250 (rank 1) + 30 (mastery >= 90)
-  assert.equal(arenaReward.isTopOne, true);
-  assert.equal(arenaReward.rankTitle, "🥇 Top 1 Leaderboard Champion");
-  assert.equal(arenaReward.breakdown.some((b) => b.includes("integrity policy violation")), false);
-  assert.equal(arenaReward.breakdown.some((b) => b.includes("Zero-Violation Clean Proctor Shield")), false);
-
-  // Proctored with invalidation receives 0 coins
-  const proctoredReward = calculateQuizCoinReward({
-    rank: 1,
-    score: 95,
-    violationsCount: 3,
-    isInvalidated: true,
-    attemptMode: "proctored",
-  });
-  assert.equal(proctoredReward.coins, 0);
-  assert.equal(proctoredReward.rankTitle, "Invalidated Result");
+test("Test F: Arena scoring remains independent from retired coin rewards", () => {
+  const arenaBlockIndex = submitRouteSrc.indexOf("if (isArena) {");
+  const proctoredSectionIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
+  const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
+  assert.match(arenaSubstring, /const recordedScore = score;/);
+  assert.match(arenaSubstring, /expEarned:\s*0/);
+  assert.equal(arenaSubstring.includes("studentCoinLedger"), false);
+  assert.equal(arenaSubstring.includes("integrityInvalidated: true"), false);
 });
 
 test("Test H: Proctored 3-strike invalidation still functions", () => {

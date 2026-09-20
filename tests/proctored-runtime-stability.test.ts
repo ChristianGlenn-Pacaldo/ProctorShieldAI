@@ -96,8 +96,6 @@ function fixture() {
     "@/lib/gemini": { generateGeminiWithFallback: async () => null },
     "@/lib/quiz-submission": grading,
     "@/lib/proctored-runtime": runtime,
-    "@/lib/student-coins": { calculateQuizCoinReward: () => ({ coins: 0, isTopOne: false, rankTitle: "Rank #1", breakdown: {} }) },
-    "@/lib/student-game-profile": { ensureStudentGameProfile: async () => ({ coins: 0 }) },
     "@/lib/student-progression": { EXP_REWARDS: { PROCTORED_COMPLETION: 100 }, getStudentProgression: async () => ({}),
       awardStudentExp: async (_id: string, amount: number, _reason: string, client: any) => {
         assert.equal(client, db, "EXP must commit with completion");

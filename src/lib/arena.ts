@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getRedis, isRedisReady } from "./redis.ts";
 import prisma from "./prisma.ts";
+import { getStudentInitials } from "./student-identity.ts";
 
 export const ARENA_MODES = ["score_arena", "battle_royale", "wave_sprint"] as const;
 export const ARENA_POWER_IDS = ["meteor", "earthquake", "blizzard", "shield"] as const;
@@ -42,7 +43,7 @@ export function getPowerDamage(power: ArenaPowerId): number {
 export interface ArenaParticipant {
   studentId: string;
   studentName: string;
-  avatar: string;
+  initials: string;
   score: number;
   rank: number;
   questionsAnswered: number;
@@ -75,7 +76,6 @@ export interface ArenaState {
   mode: ArenaMode;
   matchDuration: number; // overall match duration in seconds (1800 or 3600)
   matchEndsAt?: string | null;
-  coinBounty: number;
   enabledPowers: ArenaPowerId[];
   totalQuestions: number;
   startedAt?: string | null;
@@ -119,7 +119,7 @@ function allowedNumber(value: unknown, allowed: readonly number[], fallback: num
 
 export function normalizeArenaConfig(input: unknown): Pick<
   ArenaState,
-  "mode" | "waveDuration" | "coinBounty" | "enabledPowers"
+  "mode" | "waveDuration" | "enabledPowers"
 > {
   const record = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   const mode =
@@ -132,7 +132,6 @@ export function normalizeArenaConfig(input: unknown): Pick<
   return {
     mode,
     waveDuration: allowedNumber(record.waveDuration, [20, 30, 45], 30),
-    coinBounty: allowedNumber(record.coinBounty, [250, 500, 1000], 500),
     enabledPowers: enabledPowers.length > 0 ? enabledPowers : [...ARENA_POWER_IDS],
   };
 }
@@ -148,6 +147,10 @@ export function computeArenaRankings(
   participants: Record<string, ArenaParticipant>,
 ): ArenaParticipant[] {
   const list = Object.values(participants);
+  list.forEach((participant) => {
+    participant.initials = getStudentInitials(participant.studentName, "ST");
+    delete (participant as ArenaParticipant & { avatar?: unknown }).avatar;
+  });
   list.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (b.questionsAnswered !== a.questionsAnswered) return b.questionsAnswered - a.questionsAnswered;
@@ -210,20 +213,21 @@ export function createArenaState(params: {
 
 export function ensureArenaParticipant(
   state: ArenaState,
-  player: { studentId: string; studentName: string; avatar?: string; isAi?: boolean },
+  player: { studentId: string; studentName: string; isAi?: boolean },
 ): ArenaParticipant {
   if (!state.participants) state.participants = {};
   if (!state.players) state.players = state.participants;
   const existing = state.participants[player.studentId];
   if (existing) {
     if (player.studentName) existing.studentName = player.studentName;
-    if (player.avatar) existing.avatar = player.avatar;
+    existing.initials = getStudentInitials(existing.studentName, "ST");
+    delete (existing as ArenaParticipant & { avatar?: unknown }).avatar;
     return existing;
   }
   const created: ArenaParticipant = {
     studentId: player.studentId,
     studentName: player.studentName || "Fighter",
-    avatar: player.avatar || "🛡️",
+    initials: getStudentInitials(player.studentName || "Fighter", "ST"),
     score: 0,
     rank: Object.keys(state.participants).length + 1,
     questionsAnswered: 0,

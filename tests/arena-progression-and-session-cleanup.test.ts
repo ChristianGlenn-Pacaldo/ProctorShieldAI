@@ -9,7 +9,6 @@ import {
   EXP_PER_LEVEL,
   arenaExpRewardedKey,
 } from "../src/lib/student-progression.ts";
-import { AVATAR_CATALOG, DEFAULT_STARTER_IDS } from "../src/lib/student-coins.ts";
 
 const studentArenaContentSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/arena/[id]/content.tsx"),
@@ -41,10 +40,6 @@ const battleDockSrc = fs.readFileSync(
 );
 const arenaPodiumSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/components/arena/arena-podium.tsx"),
-  "utf-8"
-);
-const avatarShopSrc = fs.readFileSync(
-  path.resolve(process.cwd(), "src/app/join/avatar-shop/page.tsx"),
   "utf-8"
 );
 const liveMonitoringRunnerSrc = fs.readFileSync(
@@ -164,14 +159,11 @@ test("P: Arena does not award or show coins on podium or setup", () => {
   assert.equal(arenaPodiumSrc.includes("Coins Earned"), false);
 });
 
-test("Q: All avatars are 100% free with no coins required", () => {
-  for (const item of AVATAR_CATALOG) {
-    assert.equal(item.price, 0, `Avatar ${item.id} must be 0 coins`);
-  }
-  assert.match(avatarShopSrc, /All items are 100% unlocked!/);
-  assert.match(avatarShopSrc, /Equip/);
-  assert.equal(avatarShopSrc.includes("Buy for"), false);
-  assert.equal(avatarShopSrc.includes("Coins required"), false);
+test("Q: Retired avatar and coin systems have no active runtime path", () => {
+  assert.equal(fs.existsSync(path.resolve(process.cwd(), "src/app/join/avatar-shop/page.tsx")), false);
+  assert.equal(fs.existsSync(path.resolve(process.cwd(), "src/app/api/student/avatar-shop/route.ts")), false);
+  assert.equal(submitRouteSrc.includes("studentCoinLedger"), false);
+  assert.equal(submitRouteSrc.includes("coinsEarned"), false);
 });
 
 // ─────────────────────────────────────────────────────────────

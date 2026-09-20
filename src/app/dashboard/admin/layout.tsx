@@ -21,8 +21,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <DashboardShell
       role="admin"
       userName={name}
-      userAvatar={initials || "AD"}
-      avatarColor="from-red-500 to-rose-500"
+      userInitials={initials || "AD"}
+      identityColor="from-red-500 to-rose-500"
     >
       {children}
     </DashboardShell>

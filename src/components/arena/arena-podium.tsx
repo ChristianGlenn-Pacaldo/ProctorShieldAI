@@ -3,14 +3,14 @@
 import React from "react";
 import Link from "next/link";
 import { Crown, Trophy, Medal, ArrowRight, ArrowLeft, Sparkles, Flame, Award } from "lucide-react";
+import { ArenaIdentity } from "./arena-identity";
 
 export interface PodiumParticipant {
   studentId: string;
   studentName: string;
-  avatar: string;
+  initials: string;
   score: number;
   rank: number;
-  coinsEarned?: number;
   streak?: number;
 }
 
@@ -22,7 +22,6 @@ interface ArenaPodiumProps {
   currentStudentId: string;
   studentScore: number;
   studentRank: number;
-  studentCoins?: number;
   expEarned?: number;
   highestStreak: number;
   onExit?: () => void;
@@ -36,7 +35,6 @@ export function ArenaPodium({
   currentStudentId,
   studentScore,
   studentRank,
-  studentCoins,
   expEarned = 100,
   highestStreak,
   onExit,
@@ -69,8 +67,8 @@ export function ArenaPodium({
             <div className="flex flex-col items-center animate-fade-in">
               <div className="relative mb-2">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-500 p-0.5 shadow-[0_0_25px_rgba(203,213,225,0.4)]">
-                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center text-3xl sm:text-4xl">
-                    {secondPlace.avatar || "🥈"}
+                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center">
+                    <ArenaIdentity studentName={secondPlace.studentName} initials={secondPlace.initials} className="w-12 h-12 sm:w-16 sm:h-16 text-sm sm:text-lg" />
                   </div>
                 </div>
                 <div className="absolute -top-3 -right-2 w-7 h-7 rounded-full bg-slate-300 text-slate-900 flex items-center justify-center font-black text-xs shadow-md">
@@ -102,8 +100,8 @@ export function ArenaPodium({
               </div>
               <div className="relative mb-2">
                 <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-amber-300 via-yellow-500 to-amber-600 p-1 shadow-[0_0_35px_rgba(245,158,11,0.6)]">
-                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center text-4xl sm:text-5xl">
-                    {firstPlace.avatar || "👑"}
+                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center">
+                    <ArenaIdentity studentName={firstPlace.studentName} initials={firstPlace.initials} className="w-14 h-14 sm:w-20 sm:h-20 text-base sm:text-xl" />
                   </div>
                 </div>
                 <div className="absolute -top-3 -right-2 w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-amber-500 text-amber-950 flex items-center justify-center font-black text-sm shadow-md">
@@ -132,8 +130,8 @@ export function ArenaPodium({
             <div className="flex flex-col items-center animate-fade-in">
               <div className="relative mb-2">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-700 to-amber-900 p-0.5 shadow-[0_0_25px_rgba(180,83,9,0.3)]">
-                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center text-3xl sm:text-4xl">
-                    {thirdPlace.avatar || "🥉"}
+                  <div className="w-full h-full bg-[#0d1222] rounded-2xl flex items-center justify-center">
+                    <ArenaIdentity studentName={thirdPlace.studentName} initials={thirdPlace.initials} className="w-12 h-12 sm:w-16 sm:h-16 text-sm sm:text-lg" />
                   </div>
                 </div>
                 <div className="absolute -top-3 -right-2 w-7 h-7 rounded-full bg-amber-700 text-amber-100 flex items-center justify-center font-black text-xs shadow-md">
@@ -217,7 +215,7 @@ export function ArenaPodium({
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="font-mono font-bold w-5 text-slate-400">#{p.rank}</span>
-                    <span className="text-base">{p.avatar || "🎓"}</span>
+                    <ArenaIdentity studentName={p.studentName} initials={p.initials} className="w-8 h-8 text-[10px]" />
                     <span className="truncate max-w-[150px] font-medium">
                       {p.studentName} {isCurrent && "(You)"}
                     </span>

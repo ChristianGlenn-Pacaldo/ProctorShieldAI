@@ -3,7 +3,6 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { parseQuizMode, canChangeQuizMode, InvalidQuizModeError } from "../src/lib/quiz-mode.ts";
-import { calculateQuizCoinReward } from "../src/lib/student-coins.ts";
 
 const createHubSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/components/teacher/proctorshield-create-hub.tsx"),
@@ -176,27 +175,8 @@ test("Test K: Wrong direct route redirects correctly", () => {
   assert.match(proctoredRouteSrc, /router\.replace\(`\/arena\/\$\{/);
 });
 
-test("Test L: Rewards are cleanly separated with no cross-mode contamination", () => {
-  // Arena rewards: rank + mastery bonus, NO clean integrity bonus, never zeroed by violations
-  const arenaReward = calculateQuizCoinReward({
-    rank: 1,
-    score: 95,
-    violationsCount: 10,
-    isInvalidated: true,
-    attemptMode: "arena",
-  });
-  assert.equal(arenaReward.coins, 280); // 250 (rank 1) + 30 (mastery >= 90)
-  assert.equal(arenaReward.breakdown.some((b) => b.includes("Zero-Violation Clean Proctor Shield")), false);
-  assert.equal(arenaReward.breakdown.some((b) => b.includes("integrity policy violation")), false);
-
-  // Proctored rewards: 0 when invalidated
-  const proctoredReward = calculateQuizCoinReward({
-    rank: 1,
-    score: 95,
-    violationsCount: 3,
-    isInvalidated: true,
-    attemptMode: "proctored",
-  });
-  assert.equal(proctoredReward.coins, 0);
-  assert.equal(proctoredReward.breakdown.some((b) => b.includes("integrity policy violation")), true);
+test("Test L: EXP remains the only active student progression reward", () => {
+  assert.match(submitRouteSrc, /awardStudentExp/);
+  assert.equal(submitRouteSrc.includes("studentCoinLedger"), false);
+  assert.equal(submitRouteSrc.includes("coinsEarned"), false);
 });

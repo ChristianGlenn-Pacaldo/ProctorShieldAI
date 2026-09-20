@@ -14,8 +14,6 @@ import {
   setArenaState,
   type PlayerHealth,
 } from "@/lib/arena";
-import { AVATAR_CATALOG } from "@/lib/student-coins";
-import { ensureStudentGameProfile } from "@/lib/student-game-profile";
 import {
   awardStudentExp,
   EXP_REWARDS,
@@ -227,19 +225,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
       const alreadyJoined = Boolean(state.participants[session.userId]);
 
-      // Resolve equipped avatar from DB
-      const userProfile = await prisma.studentGameProfile.findUnique({
-        where: { studentId: session.userId },
-        select: { equippedAvatar: true },
-      });
-      const avatarId = userProfile?.equippedAvatar || "shield";
-      const catalogAvatar = AVATAR_CATALOG.find((a) => a.id === avatarId)?.emoji;
-      const studentAvatar = catalogAvatar || (avatarId.length <= 4 ? avatarId : "🛡️");
-
       const participant = ensureArenaPlayer(state, {
         studentId: session.userId,
         studentName: session.fullName || "Student Fighter",
-        avatar: studentAvatar,
       });
 
       await setArenaState(state);
@@ -252,7 +240,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           sessionId: state.sessionId,
           studentId: session.userId,
           studentName: session.fullName,
-          avatar: participant.avatar,
+          initials: participant.initials,
           participants: rankedParticipants,
           timestamp: new Date().toISOString(),
         };
@@ -260,13 +248,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           await pusherServer.trigger(`private-arena-${quizId}`, "arena-student-joined", {
             studentId: session.userId,
             studentName: session.fullName,
-            avatar: studentAvatar,
+            initials: participant.initials,
             participantsCount: Object.keys(state.participants).length,
           });
           await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
             studentId: session.userId,
             studentName: session.fullName,
-            avatar: studentAvatar,
+            initials: participant.initials,
             participantsCount: Object.keys(state.participants).length,
           });
         } catch (pusherErr) {
@@ -315,7 +303,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mode: "score_arena",
         matchDuration: 1800,
         matchEndsAt: null,
-        coinBounty: 0,
         enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
         totalQuestions: quiz.questions.length,
         startedAt: null,
@@ -400,7 +387,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mode: "score_arena",
         matchDuration,
         matchEndsAt,
-        coinBounty: 0,
         enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
         totalQuestions: quiz.questions.length,
         startedAt: startedAtStr,
@@ -486,7 +472,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       matchDuration: state.matchDuration,
       matchEndsAt: state.matchEndsAt,
       waveDuration: state.matchDuration,
-      coinBounty: state.coinBounty,
       enabledPowers: state.enabledPowers,
       totalQuestions: state.totalQuestions,
       participants: rankedParticipants,

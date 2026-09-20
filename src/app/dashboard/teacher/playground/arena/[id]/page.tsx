@@ -51,7 +51,6 @@ export default async function ArenaHostPage({ params, searchParams }: PageProps)
   const config = normalizeArenaConfig({
     mode: typeof sp.mode === "string" ? sp.mode : undefined,
     waveDuration: matchDuration === 3600 ? 3600 : 1800,
-    coinBounty: typeof sp.bounty === "string" ? sp.bounty : undefined,
     enabledPowers: typeof sp.powers === "string" ? sp.powers.split(",") : undefined,
   });
 
@@ -82,7 +81,6 @@ export default async function ArenaHostPage({ params, searchParams }: PageProps)
       mode={config.mode}
       matchDuration={matchDuration}
       waveDuration={matchDuration}
-      coinBounty={config.coinBounty}
       enabledPowers={config.enabledPowers}
       teacherId={session.userId}
     />

@@ -1,22 +1,4 @@
-// Web Audio API lightweight sound effects and gamification helpers for ProctorShieldAI
-
-export const MASCOTS = [
-  { id: "shield", name: "Guardian Shield", emoji: "🛡️", color: "from-blue-500 to-indigo-600", desc: "Integrity Specialist" },
-  { id: "fox", name: "Swift Fox", emoji: "🦊", color: "from-amber-500 to-orange-600", desc: "Quick Thinker" },
-  { id: "owl", name: "Wise Owl", emoji: "🦉", color: "from-purple-500 to-violet-600", desc: "Deep Knowledge" },
-  { id: "robot", name: "Cyber Bot", emoji: "🤖", color: "from-cyan-500 to-blue-600", desc: "AI Powered" },
-  { id: "lightning", name: "Sparky", emoji: "⚡", color: "from-yellow-400 to-amber-500", desc: "Speed Master" },
-  { id: "rocket", name: "Astro Jet", emoji: "🚀", color: "from-rose-500 to-pink-600", desc: "Sky High Scorer" },
-];
-
-export const ACHIEVEMENTS = [
-  { id: "clean_shield", title: "Iron Shield", desc: "Completed a quiz with 100% clean AI proctor record", icon: "🛡️", unlocked: true },
-  { id: "focus_streak", title: "Focus Beast", desc: "Maintained a 3+ day quiz activity streak", icon: "🔥", unlocked: true },
-  { id: "high_scorer", title: "Century Master", desc: "Achieved 90%+ score on an exam", icon: "⭐", unlocked: true },
-  { id: "speed_demon", title: "Swift Reflexes", desc: "Submitted quiz in the top 20% fastest time", icon: "⚡", unlocked: false },
-  { id: "early_bird", title: "Front Row Cadet", desc: "Joined quiz room before starting bell", icon: "🎯", unlocked: true },
-  { id: "unshakable", title: "Zen Prodigy", desc: "Zero tab switches or face deviations recorded", icon: "🧘", unlocked: false },
-];
+// Web Audio API lightweight sound effects for ProctorShieldAI
 
 let audioCtx: AudioContext | null = null;
 

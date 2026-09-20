@@ -8,7 +8,6 @@ import {
   Loader2,
   Volume2,
   VolumeX,
-  Sparkles,
   Shield,
   Zap,
   CheckCircle,
@@ -17,7 +16,6 @@ import {
 import Link from "next/link";
 import { normalizeQuizAccessCode } from "@/lib/quiz-access-code";
 import {
-  MASCOTS,
   playBloop,
   playSuccessFanfare,
   playErrorBuzz,
@@ -34,18 +32,12 @@ function JoinContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [soundActive, setSoundActive] = useState(true);
-  const [selectedMascot, setSelectedMascot] = useState(MASCOTS[0]);
   const [activeQuizzes, setActiveQuizzes] = useState<Array<{ id: number; title: string; accessCode?: string; quizMode?: string }>>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSoundActive(isSoundEnabled());
-    const saved = localStorage.getItem("proctor_chosen_mascot");
-    if (saved) {
-      const found = MASCOTS.find((m) => m.id === saved);
-      if (found) setSelectedMascot(found);
-    }
   }, []);
 
   useEffect(() => {
@@ -79,12 +71,6 @@ function JoinContent() {
     if (next) playBloop(640, 0.1);
   };
 
-  const handleSelectMascot = (m: (typeof MASCOTS)[0]) => {
-    setSelectedMascot(m);
-    localStorage.setItem("proctor_chosen_mascot", m.id);
-    playBloop(480, 0.08);
-  };
-
   const handleJoinQuiz = async (codeToUse?: string) => {
     const code = normalizeQuizAccessCode(codeToUse || joinCode);
     if (!code) {
@@ -101,10 +87,7 @@ function JoinContent() {
       const res = await fetch("/api/quizzes/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accessCode: code,
-          avatar: selectedMascot?.emoji || "🎓",
-        }),
+        body: JSON.stringify({ accessCode: code }),
       });
 
       const data = await res.json();
@@ -265,16 +248,16 @@ function JoinContent() {
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 relative z-10 max-w-xl mx-auto w-full">
-        {/* Mascot & Speech Bubble */}
+        {/* Join Guidance */}
         <div className="flex flex-col items-center mb-5 text-center">
           <div className="relative mb-3">
             <div
-              className={`w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-br ${selectedMascot.color} p-1 shadow-2xl flex items-center justify-center text-4xl sm:text-5xl transition-transform`}
+              className="w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 p-1 shadow-2xl flex items-center justify-center"
               style={{
                 boxShadow: "0 10px 30px rgba(79, 70, 229, 0.45)",
               }}
             >
-              <span className="drop-shadow-md">{selectedMascot.emoji}</span>
+              <Shield className="w-10 h-10 text-white drop-shadow-md" aria-hidden="true" />
             </div>
             <div
               className="absolute -bottom-1 -right-1 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 text-white"
@@ -295,9 +278,8 @@ function JoinContent() {
               color: "#e2e8f0",
             }}
           >
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
             <span>
-              {selectedMascot.name}: <strong>&ldquo;Ready to test your knowledge? Enter your code below!&rdquo;</strong>
+              <strong>Ready to test your knowledge?</strong> Enter your code below.
             </span>
           </div>
         </div>
@@ -402,60 +384,6 @@ function JoinContent() {
               )}
             </button>
           </form>
-
-          {/* Spirit Mascot Selection */}
-          <div
-            className="mt-6 pt-5"
-            style={{ borderTop: "1px solid rgba(255, 255, 255, 0.1)" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Choose Your Spirit Mascot
-              </span>
-              <span className="text-xs font-bold text-indigo-300">
-                {selectedMascot.name}
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-                gap: "8px",
-              }}
-            >
-              {MASCOTS.map((m) => {
-                const isSelected = selectedMascot.id === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => handleSelectMascot(m)}
-                    title={`${m.name} - ${m.desc}`}
-                    className="aspect-square rounded-2xl flex items-center justify-center text-xl sm:text-2xl transition-all cursor-pointer"
-                    style={{
-                      backgroundColor: isSelected ? "#4f46e5" : "rgba(255, 255, 255, 0.05)",
-                      border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255, 255, 255, 0.1)",
-                      transform: isSelected ? "scale(1.08)" : "scale(1)",
-                      boxShadow: isSelected ? "0 4px 15px rgba(79, 70, 229, 0.5)" : "none",
-                    }}
-                  >
-                    <span>{m.emoji}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-3.5 text-center">
-              <Link
-                href="/join/avatar-shop"
-                className="inline-flex items-center gap-1.5 text-xs font-extrabold text-cyan-400 hover:text-cyan-300 transition-colors py-1 px-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                Open 2D Avatar Shop & Customizer &rarr;
-              </Link>
-            </div>
-          </div>
 
           {/* Active Assigned Quizzes (Quick Chips) */}
           {activeQuizzes.length > 0 && (
