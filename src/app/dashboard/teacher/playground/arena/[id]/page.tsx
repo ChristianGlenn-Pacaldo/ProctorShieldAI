@@ -45,6 +45,10 @@ export default async function ArenaHostPage({ params, searchParams }: PageProps)
     notFound();
   }
 
+  if (quiz.quizMode !== "arena") {
+    redirect("/dashboard/teacher/playground");
+  }
+
   const sp = await searchParams;
   const rawDuration = typeof sp.duration === "string" ? sp.duration : undefined;
   const matchDuration = rawDuration ? normalizeMatchDuration(rawDuration) : 1800;

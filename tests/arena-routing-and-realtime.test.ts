@@ -3,6 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { parseQuizMode, isArenaQuiz, isProctoredQuiz } from "../src/lib/quiz-mode.ts";
+import { getQuizJoinDestination } from "../src/lib/quiz-join.ts";
 
 const joinPageSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/join/page.tsx"),
@@ -57,12 +58,12 @@ const pusherAuthSrc = fs.readFileSync(
   "utf-8"
 );
 
-test("Test A & B: Join page routes to /arena/[id] for arena and /quiz/[id] for proctored", () => {
-  // Verifies join page routing based strictly on data.quiz.quizMode
-  assert.match(
-    joinPageSrc,
-    /data\.quiz\.quizMode\s*===\s*["']arena["']\s*\?\s*`\/arena\/\${data\.quiz\.id}`\s*:\s*`\/quiz\/\${data\.quiz\.id}`/
-  );
+test("Test A & B: Join page uses the server destination for Arena and proctored routes", () => {
+  assert.equal(getQuizJoinDestination(42, "arena"), "/arena/42");
+  assert.equal(getQuizJoinDestination(42, "proctored"), "/quiz/42");
+  assert.match(joinPageSrc, /typeof data\.destination === "string"/);
+  assert.match(joinPageSrc, /router\.push\(targetRoute\)/);
+  assert.equal(joinPageSrc.includes("data.quiz.quizMode === \"arena\""), false);
 });
 
 test("Test C: Missing quizMode falls back safely to proctored route", () => {
@@ -79,11 +80,11 @@ test("Test C: Missing quizMode falls back safely to proctored route", () => {
   assert.equal(simulateRoute("arena"), "/arena/42");
 });
 
-test("Join wording follows a safely matched assigned quiz mode", () => {
-  assert.match(joinPageSrc, /normalizeQuizAccessCode\(quiz\.accessCode\) === normalizedJoinCode/);
-  assert.match(joinPageSrc, /matchedAssignment\?\.quizMode === "arena" \? "Arena" : "Quiz"/);
+test("Join wording follows the authoritative code lookup mode", () => {
+  assert.match(joinPageSrc, /api\/quizzes\/join\?accessCode=/);
+  assert.match(joinPageSrc, /codeLookup\?\.quiz\.isArena/);
   assert.match(joinPageSrc, /Enter \{destinationName\} Code/);
-  assert.match(joinPageSrc, /Join \{destinationName\}/);
+  assert.match(joinPageSrc, /`Join \${destinationName}`/);
   assert.match(joinPageSrc, /activeQuizzes\.slice\(0, 3\)\.map/);
 });
 
@@ -158,10 +159,10 @@ test("Test J: Live Monitoring proctored quiz still uses quiz-started", () => {
 
 test("Test K: Arena join event does not trigger proctored teacher monitoring notifications", () => {
   // Teacher monitoring notification is only created for non-arena quizzes
-  assert.match(joinApiSrc, /if\s*\(\s*quiz\.quizMode\s*!==\s*["']arena["']\s*\)\s*\{[\s\S]*?title:\s*isLateJoin\s*\?\s*"Late Join Request"\s*:\s*"Student Joined Quiz"/);
+  assert.match(joinApiSrc, /if\s*\(\s*quizMode\s*!==\s*["']arena["']\s*\)\s*\{[\s\S]*?title:\s*isLateJoin\s*\?\s*"Late Join Request"\s*:\s*"Student Joined Quiz"/);
 
   // Push notification is only triggered for non-arena quizzes
-  assert.match(joinApiSrc, /if\s*\(\s*quiz\.quizMode\s*!==\s*["']arena["']\s*\)\s*\{[\s\S]*?pusherServer\.trigger\(`private-user-\${quiz\.teacherId}`,\s*"notification"/);
+  assert.match(joinApiSrc, /if\s*\(\s*quizMode\s*!==\s*["']arena["']\s*\)\s*\{[\s\S]*?pusherServer\.trigger\(`private-user-\${quiz\.teacherId}`,\s*"notification"/);
 
   // For arena quizzes, arena-student-joined is emitted only on private-arena- and private-teacher-
   assert.match(joinApiSrc, /pusherServer\.trigger\(`private-arena-\${quiz\.id}`,\s*"arena-student-joined"/);

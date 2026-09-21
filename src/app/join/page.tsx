@@ -23,6 +23,25 @@ import {
   toggleSoundEnabled,
 } from "@/lib/student-gamify";
 
+type JoinLookupResponse = {
+  quiz: {
+    id: number;
+    title: string;
+    teacher: string;
+    quizMode: "proctored" | "arena";
+    isArena: boolean;
+    quizStatus: string;
+  };
+  destination: string;
+  join: {
+    eligible: boolean;
+    reviewOnly: boolean;
+    state: "joinable" | "review" | "closed";
+    message: string;
+  };
+  arenaSession: { exists: boolean; status: string | null; sessionId: string | null } | null;
+};
+
 function JoinContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,6 +52,8 @@ function JoinContent() {
   const [message, setMessage] = useState("");
   const [soundActive, setSoundActive] = useState(true);
   const [activeQuizzes, setActiveQuizzes] = useState<Array<{ id: number; title: string; accessCode?: string; quizMode?: string }>>([]);
+  const [codeLookup, setCodeLookup] = useState<JoinLookupResponse | null>(null);
+  const [isResolvingCode, setIsResolvingCode] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +86,45 @@ function JoinContent() {
     loadQuickQuizzes();
   }, []);
 
+  useEffect(() => {
+    const normalizedCode = normalizeQuizAccessCode(joinCode);
+    if (normalizedCode.length < 3) {
+      setCodeLookup(null);
+      setIsResolvingCode(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsResolvingCode(true);
+      try {
+        const response = await fetch(`/api/quizzes/join?accessCode=${encodeURIComponent(normalizedCode)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.quiz?.id) {
+          setCodeLookup(null);
+          return;
+        }
+        const lookup = data as JoinLookupResponse;
+        setCodeLookup(lookup);
+        setMessage(lookup.join.eligible ? "" : lookup.join.message);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setCodeLookup(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsResolvingCode(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [joinCode]);
+
   const handleToggleSound = () => {
     const next = toggleSoundEnabled();
     setSoundActive(next);
@@ -92,15 +152,18 @@ function JoinContent() {
 
       const data = await res.json();
 
-      if (res.ok && data.quiz?.id) {
+      const targetRoute = typeof data.destination === "string" && /^\/(?:arena|quiz)\/\d+$/.test(data.destination)
+        ? data.destination
+        : null;
+
+      if (res.ok && data.quiz?.id && targetRoute) {
         playSuccessFanfare();
-        const targetRoute =
-          data.quiz.quizMode === "arena"
-            ? `/arena/${data.quiz.id}`
-            : `/quiz/${data.quiz.id}`;
         setTimeout(() => {
           router.push(targetRoute);
         }, 250);
+      } else if (res.ok) {
+        playErrorBuzz();
+        setMessage("The server did not return a valid quiz destination. Please try again.");
       } else if (res.status === 401) {
         localStorage.setItem("pendingJoinCode", code);
         router.push("/login/student");
@@ -125,6 +188,7 @@ function JoinContent() {
   const handleInputChange = (val: string) => {
     const clean = val.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16);
     setJoinCode(clean);
+    setCodeLookup(null);
     setMessage("");
     if (clean.length > joinCode.length) {
       playBloop(350 + Math.min(clean.length * 40, 400), 0.05);
@@ -135,7 +199,8 @@ function JoinContent() {
   const matchedAssignment = activeQuizzes.find(
     (quiz) => quiz.accessCode && normalizeQuizAccessCode(quiz.accessCode) === normalizedJoinCode,
   );
-  const destinationName = matchedAssignment?.quizMode === "arena" ? "Arena" : "Quiz";
+  const destinationName = codeLookup?.quiz.isArena || matchedAssignment?.quizMode === "arena" ? "Arena" : "Quiz";
+  const isClosedCode = codeLookup?.join.state === "closed";
 
   return (
     <div
@@ -279,7 +344,7 @@ function JoinContent() {
             }}
           >
             <span>
-              <strong>Ready to test your knowledge?</strong> Enter your code below.
+              <strong>{destinationName === "Arena" ? "Ready to enter the Power Arena?" : "Ready to test your knowledge?"}</strong> Enter your code below.
             </span>
           </div>
         </div>
@@ -336,6 +401,19 @@ function JoinContent() {
               )}
             </div>
 
+            {codeLookup && (
+              <div className="w-full rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-left">
+                <div className="text-xs font-black uppercase tracking-wider text-indigo-300">
+                  {codeLookup.quiz.isArena ? "Power Arena" : "Proctored Quiz"}
+                </div>
+                <div className="mt-1 text-sm font-bold text-white">{codeLookup.quiz.title}</div>
+                <div className="mt-0.5 text-xs text-slate-300">
+                  Instructor: {codeLookup.quiz.teacher}
+                  {codeLookup.join.reviewOnly ? " · Results review only" : ""}
+                </div>
+              </div>
+            )}
+
             {/* Error / Alert Message */}
             {message && (
               <div
@@ -353,7 +431,7 @@ function JoinContent() {
             {/* Tactile 3D Action Button */}
             <button
               type="submit"
-              disabled={isLoading || joinCode.trim().length === 0}
+              disabled={isLoading || isResolvingCode || isClosedCode || joinCode.trim().length === 0}
               className="w-full py-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wider flex items-center justify-center gap-3 transition-all duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #7c3aed 100%)",
@@ -371,14 +449,14 @@ function JoinContent() {
                 e.currentTarget.style.boxShadow = "0 6px 0 #312e81, 0 12px 25px rgba(79, 70, 229, 0.4)";
               }}
             >
-              {isLoading ? (
+              {isLoading || isResolvingCode ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>Entering {destinationName}...</span>
+                  <span>{isResolvingCode ? "Checking Code..." : `Entering ${destinationName}...`}</span>
                 </>
               ) : (
                 <>
-                  <span>Join {destinationName}</span>
+                  <span>{codeLookup?.join.reviewOnly ? "Review Arena" : `Join ${destinationName}`}</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
@@ -433,18 +511,37 @@ function JoinContent() {
 
         {/* Security & Features Badges */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-slate-400 text-xs font-semibold">
-          <div className="flex items-center gap-1.5">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-300">AI Verified Proctoring</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-400" />
-            <span className="text-slate-300">Instant Results</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <HelpCircle className="w-4 h-4 text-blue-400" />
-            <span className="text-slate-300">Anti-Cheating Guard</span>
-          </div>
+          {destinationName === "Arena" ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span className="text-slate-300">Live Multiplayer Arena</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-400" />
+                <span className="text-slate-300">Score-Based Powers</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <HelpCircle className="w-4 h-4 text-blue-400" />
+                <span className="text-slate-300">No Exam Proctoring</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span className="text-slate-300">AI Verified Proctoring</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-400" />
+                <span className="text-slate-300">Instant Results</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <HelpCircle className="w-4 h-4 text-blue-400" />
+                <span className="text-slate-300">Anti-Cheating Guard</span>
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>

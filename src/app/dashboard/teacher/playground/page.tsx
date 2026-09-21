@@ -13,9 +13,13 @@ export default async function TeacherPlaygroundPage() {
 
   const entitlements = await getTeacherEntitlements(session.userId);
 
-  // Fetch teacher quizzes so they can select any quiz to launch in Arena
+  // Only persisted Arena quizzes can be launched from Playground.
   const rawQuizzes = await prisma.quiz.findMany({
-    where: { teacherId: session.userId },
+    where: {
+      teacherId: session.userId,
+      quizMode: "arena",
+      quizStatus: { not: "ended" },
+    },
     include: {
       subject: { select: { subjectName: true, subjectCode: true } },
       _count: { select: { questions: true, studentQuizzes: true } },
@@ -29,6 +33,7 @@ export default async function TeacherPlaygroundPage() {
     description: q.description || "",
     accessCode: q.accessCode || "",
     quizType: q.quizType || "standard",
+    quizMode: "arena" as const,
     quizStatus: q.quizStatus,
     duration: q.duration || 10,
     passingScore: q.passingScore || 70,
