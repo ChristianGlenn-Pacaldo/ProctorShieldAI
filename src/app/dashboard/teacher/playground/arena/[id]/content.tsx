@@ -31,6 +31,7 @@ import PusherClient from "pusher-js";
 import { computeArenaRankings, type ArenaParticipant } from "@/lib/arena";
 import { ArenaIdentity } from "@/components/arena/arena-identity";
 import { getStudentInitials } from "@/lib/student-identity";
+import { claimArenaFeedback } from "@/lib/arena-feedback";
 
 interface Choice {
   id: number;
@@ -127,6 +128,7 @@ export default function ArenaHostContent({
       type: "info",
     },
   ]);
+  const displayedCombatFeedbackRef = useRef(new Set<string>());
 
   // Audio Context Ref
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -382,6 +384,7 @@ export default function ArenaHostContent({
       scorePenalty?: number;
       damage?: number;
     }) => {
+      if (!claimArenaFeedback(displayedCombatFeedbackRef.current, data.attackId, "launched")) return;
       const penalty = data.scorePenalty || data.damage || 40;
       setBattleEvents((prev) => [
         {
@@ -410,6 +413,7 @@ export default function ArenaHostContent({
       targetRank: number;
       participants?: ArenaParticipant[];
     }) => {
+      if (!claimArenaFeedback(displayedCombatFeedbackRef.current, data.attackId, "hit")) return;
       const penalty = data.scorePenalty || data.damage || 40;
       setBattleEvents((prev) => [
         {
@@ -448,6 +452,7 @@ export default function ArenaHostContent({
       targetName: string;
       powerType: string;
     }) => {
+      if (!claimArenaFeedback(displayedCombatFeedbackRef.current, data.attackId, "deflected")) return;
       setBattlers((prev) =>
         prev.map((b) => (b.id === data.targetStudentId ? { ...b, hasShield: false } : b))
       );

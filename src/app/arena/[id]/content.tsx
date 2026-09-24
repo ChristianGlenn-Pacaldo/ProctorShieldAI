@@ -38,6 +38,7 @@ import { ArenaPodium, type PodiumParticipant } from "@/components/arena/arena-po
 import { ArenaIdentity } from "@/components/arena/arena-identity";
 import type { ArenaParticipant, ArenaState } from "@/lib/arena";
 import { getStudentInitials } from "@/lib/student-identity";
+import { claimArenaFeedback, getShieldTerminalOutcome, type ArenaFeedbackOutcome } from "@/lib/arena-feedback";
 
 function playAttackSound(powerType: string) {
   if (powerType === "meteor") playMeteorSound();
@@ -213,6 +214,32 @@ export function ArenaContent({
   const [scoreDeductionPopup, setScoreDeductionPopup] = useState<number | null>(null);
   const [celebrationMessage, setCelebrationMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const displayedAttackFeedbackRef = useRef(new Set<string>());
+  const attackFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const claimAttackFeedback = useCallback((attackId: string, outcome: ArenaFeedbackOutcome) =>
+    claimArenaFeedback(displayedAttackFeedbackRef.current, attackId, outcome), []);
+  const showAttackFeedback = useCallback((
+    attackId: string,
+    outcome: ArenaFeedbackOutcome,
+    effect: NonNullable<typeof activeAttackEffect>,
+    scoreDeduction?: number,
+  ) => {
+    if (!claimAttackFeedback(attackId, outcome)) return false;
+    if (attackFeedbackTimerRef.current) clearTimeout(attackFeedbackTimerRef.current);
+    setActiveAttackEffect(effect);
+    setScoreDeductionPopup(scoreDeduction ?? null);
+    attackFeedbackTimerRef.current = setTimeout(() => {
+      setActiveAttackEffect(null);
+      setScoreDeductionPopup(null);
+      attackFeedbackTimerRef.current = null;
+    }, 4000);
+    return true;
+  }, [claimAttackFeedback]);
+
+  useEffect(() => () => {
+    if (attackFeedbackTimerRef.current) clearTimeout(attackFeedbackTimerRef.current);
+  }, []);
 
   // ── Sound & Audio ─────────────────────────────────────────────
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -472,11 +499,27 @@ export function ArenaContent({
           if (authoritativeAttack?.status === "deflected") {
             setHasGuardianShield(false);
             setUsedPowers((prev) => ({ ...prev, shield: true }));
+            showAttackFeedback(activeIncomingAttack.attackId, "deflected", {
+              type: "deflected",
+              attackerName: activeIncomingAttack.attackerName,
+              penalty: 0,
+              message: `DEFLECTED! Guardian Shield protected your score from ${activeIncomingAttack.attackerName}'s ${activeIncomingAttack.powerType.toUpperCase()}! (0 PTS lost)`,
+            });
+            setErrorMessage(null);
+          } else if (authoritativeAttack?.status === "hit") {
+            const penalty = authoritativeAttack.scorePenalty || activeIncomingAttack.scorePenalty || 40;
+            showAttackFeedback(activeIncomingAttack.attackId, "hit", {
+              type: activeIncomingAttack.powerType as "meteor" | "earthquake" | "blizzard",
+              attackerName: activeIncomingAttack.attackerName,
+              penalty,
+              message: `${activeIncomingAttack.attackerName}'s ${activeIncomingAttack.powerType.toUpperCase()} HIT YOU FOR -${penalty} PTS!`,
+            }, penalty);
+            setErrorMessage(null);
           }
         }
       }
     } catch {}
-  }, [quizId, finalizeMatch, updateRankingsFromParticipants, clearIncomingAttack]);
+  }, [quizId, finalizeMatch, updateRankingsFromParticipants, clearIncomingAttack, showAttackFeedback]);
 
   // Periodic background state reconciliation
   useEffect(() => {
@@ -589,8 +632,10 @@ export function ArenaContent({
             : (data.warningExpiry ? Date.parse(data.warningExpiry) : getServerAdjustedNow() + 2500);
           setReactionTimeLeftMs(Math.max(0, expiry - getServerAdjustedNow()));
         } else if (data.attackerId === studentId) {
-          setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
-          setTimeout(() => setCelebrationMessage(null), 2500);
+          if (claimAttackFeedback(data.attackId, "launched")) {
+            setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
+            setTimeout(() => setCelebrationMessage(null), 2500);
+          }
         }
       };
       const handleIncomingAttack = handleIncomingAttackEvent;
@@ -626,32 +671,27 @@ export function ArenaContent({
           setScore(data.targetCurrentScore);
           setStudentRank(data.targetRank);
           if (isStaleForModal) {
+            claimAttackFeedback(data.attackId, "hit");
             if (Array.isArray(data.participants)) updateRankingsFromParticipants(data.participants);
             return;
           }
           clearIncomingAttack(data.attackId);
-          setScoreDeductionPopup(penalty);
-
-          if (soundEnabled) {
+          const feedbackShown = showAttackFeedback(data.attackId, "hit", {
+            type: (data.powerType as "meteor" | "earthquake" | "blizzard") || "meteor",
+            attackerName: data.attackerName,
+            penalty,
+            message: `${data.attackerName}'s ${data.powerType.toUpperCase()} HIT YOU FOR -${penalty} PTS!`,
+          }, penalty);
+          if (feedbackShown && soundEnabled) {
             if (data.powerType === "meteor") playMeteorSound();
             else if (data.powerType === "earthquake") playEarthquakeSound();
             else if (data.powerType === "blizzard") playBlizzardSound();
           }
-
-          setActiveAttackEffect({
-            type: (data.powerType as "meteor" | "earthquake" | "blizzard") || "meteor",
-            attackerName: data.attackerName,
-            penalty,
-            message: `💥 ${data.attackerName}'s ${data.powerType.toUpperCase()} HIT YOU FOR -${penalty} PTS!`,
-          });
-
-          setTimeout(() => {
-            setActiveAttackEffect(null);
-            setScoreDeductionPopup(null);
-          }, 4000);
         } else if (data.attackerId === studentId) {
-          setCelebrationMessage(`🎯 DIRECT HIT on ${data.targetName}! -${penalty} PTS deducted!`);
-          setTimeout(() => setCelebrationMessage(null), 3000);
+          if (claimAttackFeedback(data.attackId, "hit")) {
+            setCelebrationMessage(`🎯 DIRECT HIT on ${data.targetName}! -${penalty} PTS deducted!`);
+            setTimeout(() => setCelebrationMessage(null), 3000);
+          }
         }
 
         if (Array.isArray(data.participants)) {
@@ -677,6 +717,7 @@ export function ArenaContent({
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         if (data.targetStudentId === studentId) {
           if (incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId) {
+            claimAttackFeedback(data.attackId, "deflected");
             setHasGuardianShield(false);
             setUsedPowers((prev) => ({ ...prev, shield: true }));
             return;
@@ -684,17 +725,18 @@ export function ArenaContent({
           clearIncomingAttack(data.attackId);
           setHasGuardianShield(false);
           setUsedPowers((prev) => ({ ...prev, shield: true }));
-          if (soundEnabled) playShieldDeflectSound();
-          setActiveAttackEffect({
+          const feedbackShown = showAttackFeedback(data.attackId, "deflected", {
             type: "deflected",
             attackerName: data.attackerName,
             penalty: 0,
-            message: `🛡️ DEFLECTED! Guardian Shield protected your score from ${data.attackerName}'s ${data.powerType.toUpperCase()}! (0 PTS lost)`,
+            message: `DEFLECTED! Guardian Shield protected your score from ${data.attackerName}'s ${data.powerType.toUpperCase()}! (0 PTS lost)`,
           });
-          setTimeout(() => setActiveAttackEffect(null), 4000);
+          if (feedbackShown && soundEnabled) playShieldDeflectSound();
         } else if (data.attackerId === studentId) {
-          setCelebrationMessage(`🛡️ ${data.targetName} blocked your ${data.powerType.toUpperCase()} with Guardian Shield! (0 PTS deducted)`);
-          setTimeout(() => setCelebrationMessage(null), 3000);
+          if (claimAttackFeedback(data.attackId, "deflected")) {
+            setCelebrationMessage(`🛡️ ${data.targetName} blocked your ${data.powerType.toUpperCase()} with Guardian Shield! (0 PTS deducted)`);
+            setTimeout(() => setCelebrationMessage(null), 3000);
+          }
         }
       };
       arenaChannel.bind("arena-attack-blocked", handleAttackBlockedEvent);
@@ -745,6 +787,8 @@ export function ArenaContent({
     updateRankingsFromParticipants,
     clearIncomingAttack,
     getServerAdjustedNow,
+    claimAttackFeedback,
+    showAttackFeedback,
   ]);
 
   // ── Reaction Countdown Interval for Incoming Attack ───────────
@@ -967,39 +1011,47 @@ export function ArenaContent({
       });
 
       const data = await res.json();
+      const terminalOutcome = getShieldTerminalOutcome(data);
       const hasNewerIncomingAttack = Boolean(
         incomingAttackRef.current && incomingAttackRef.current.attackId !== attackToDefend.attackId,
       );
       if (hasNewerIncomingAttack) {
-        if (data.code === "blocked" || data.deflected) {
+        if (terminalOutcome === "deflected") {
+          claimAttackFeedback(attackToDefend.attackId, "deflected");
           setHasGuardianShield(false);
           setUsedPowers((prev) => ({ ...prev, shield: true }));
         }
         return;
       }
-      if (data.code === "blocked" || data.deflected) {
+      if (terminalOutcome === "deflected") {
         clearIncomingAttack(attackToDefend.attackId);
         setErrorMessage(null);
         setHasGuardianShield(false);
         setUsedPowers((prev) => ({ ...prev, shield: true }));
-        if (soundEnabled) playShieldDeflectSound();
-        setActiveAttackEffect({
+        const feedbackShown = showAttackFeedback(attackToDefend.attackId, "deflected", {
           type: "deflected",
           attackerName: attackToDefend.attackerName,
           penalty: 0,
-          message: `🛡️ GUARDIAN SHIELD DEFLECTED ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()}! 0 PTS LOST!`,
+          message: `GUARDIAN SHIELD DEFLECTED ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()}! 0 PTS LOST!`,
         });
-        setTimeout(() => setActiveAttackEffect(null), 4000);
+        if (feedbackShown && soundEnabled) playShieldDeflectSound();
         return;
       }
 
-      const isTerminal = ["deflected", "hit", "cancelled"].includes(data.attackStatus);
-      if (isTerminal) clearIncomingAttack(attackToDefend.attackId);
+      if (terminalOutcome === "hit") {
+        if (!displayedAttackFeedbackRef.current.has(`${attackToDefend.attackId}:hit`)) {
+          setErrorMessage("Guardian Shield was too late; the attack hit.");
+        }
+        void refreshArenaState();
+        return;
+      }
+
+      if (data.attackStatus === "cancelled") clearIncomingAttack(attackToDefend.attackId);
 
       if (data.code === "too_late") {
         setErrorMessage("Guardian Shield was too late; the attack already resolved.");
       } else if (data.code === "already_resolved") {
-        setErrorMessage(data.attackStatus === "deflected" ? "That attack was already blocked." : "That attack already resolved.");
+        setErrorMessage("That attack already resolved.");
       } else if (data.code === "shield_already_used") {
         setUsedPowers((prev) => ({ ...prev, shield: true }));
         setErrorMessage("Guardian Shield has already been used in this match.");
@@ -1008,7 +1060,9 @@ export function ArenaContent({
       }
       void refreshArenaState();
     } catch {
-      setErrorMessage("Network error activating Guardian Shield.");
+      if (!displayedAttackFeedbackRef.current.has(`${attackToDefend.attackId}:deflected`)) {
+        setErrorMessage("Network error activating Guardian Shield.");
+      }
       void refreshArenaState();
     } finally {
       setIsShieldActivating(false);
@@ -1190,7 +1244,7 @@ export function ArenaContent({
 
       {/* Incoming Attack Warning Dialog with Reaction Bar & Shield Button */}
       {incomingAttack && (
-        <div className="fixed inset-x-4 top-16 sm:top-20 z-[96] max-w-lg mx-auto bg-rose-950/95 border-2 border-rose-500 rounded-3xl p-4 sm:p-5 shadow-[0_0_50px_rgba(244,63,94,0.6)] animate-bounce text-white">
+        <div className="fixed inset-x-4 top-16 sm:top-20 z-[96] max-w-lg mx-auto bg-rose-950/95 border-2 border-rose-500 rounded-3xl p-4 sm:p-5 shadow-[0_0_50px_rgba(244,63,94,0.6)] text-white">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-rose-600 flex items-center justify-center text-2xl shadow-inner shrink-0 animate-pulse">
               {incomingAttack.powerType === "meteor" ? "☄️" : incomingAttack.powerType === "earthquake" ? "🌋" : "❄️"}

@@ -11,6 +11,7 @@ import {
   resolvePendingAttackInState,
   type ArenaState,
 } from "../src/lib/arena.ts";
+import { claimArenaFeedback, getShieldTerminalOutcome } from "../src/lib/arena-feedback.ts";
 
 function transactionalStore(state: ArenaState) {
   const settings = new Map([
@@ -189,4 +190,61 @@ test("Arena modal uses authoritative terminal state and an activation guard", ()
   assert.match(source, /ACTIVATING SHIELD\.\.\./);
   assert.match(source, /reactionTimeLeftMs\s*<=\s*0/);
   assert.match(source, /setTimeout\([\s\S]*10_000/);
+});
+
+test("Shield feedback appears once across both realtime aliases and the API response", () => {
+  for (const order of [
+    ["arena-attack-blocked", "attack-blocked", "response"],
+    ["response", "arena-attack-blocked", "attack-blocked"],
+  ]) {
+    const displayed = new Set<string>();
+    const results = order.map(() => claimArenaFeedback(displayed, "attack-one", "deflected"));
+    assert.deepEqual(results, [true, false, false]);
+  }
+});
+
+test("later Arena attacks and terminal outcomes retain independent feedback", () => {
+  const displayed = new Set<string>();
+  assert.equal(claimArenaFeedback(displayed, "attack-one", "launched"), true);
+  assert.equal(claimArenaFeedback(displayed, "attack-one", "launched"), false);
+  assert.equal(claimArenaFeedback(displayed, "attack-one", "deflected"), true);
+  assert.equal(claimArenaFeedback(displayed, "attack-two", "hit"), true);
+  assert.equal(claimArenaFeedback(displayed, "attack-two", "hit"), false);
+  assert.equal(claimArenaFeedback(displayed, "attack-three", "hit"), true);
+});
+
+test("Shield response distinguishes a confirmed block from a late hit", () => {
+  assert.equal(getShieldTerminalOutcome({ code: "blocked", attackStatus: "deflected" }), "deflected");
+  assert.equal(getShieldTerminalOutcome({ code: "already_resolved", attackStatus: "deflected" }), "deflected");
+  assert.equal(getShieldTerminalOutcome({ code: "already_resolved", attackStatus: "hit" }), "hit");
+  assert.equal(getShieldTerminalOutcome({ code: "too_late", attackStatus: "hit" }), "hit");
+  assert.equal(getShieldTerminalOutcome({ code: "shield_already_used", attackStatus: "pending" }), null);
+});
+
+test("Arena client gates duplicate events and response feedback and uses one Shield icon", () => {
+  const source = fs.readFileSync(path.resolve(process.cwd(), "src/app/arena/[id]/content.tsx"), "utf8");
+  assert.match(source, /arenaChannel\.bind\("arena-attack-blocked", handleAttackBlockedEvent\)/);
+  assert.match(source, /arenaChannel\.bind\("attack-blocked", handleAttackBlockedEvent\)/);
+  assert.match(source, /showAttackFeedback\(data\.attackId, "deflected"/);
+  assert.match(source, /showAttackFeedback\(attackToDefend\.attackId, "deflected"/);
+  assert.match(source, /claimAttackFeedback\(data\.attackId, "launched"\)/);
+  assert.doesNotMatch(source, /message:\s*`🛡️/);
+  assert.match(source, /authoritativeAttack\?\.status === "deflected"/);
+  assert.match(source, /authoritativeAttack\?\.status === "hit"/);
+  assert.match(source, /getShieldTerminalOutcome\(data\)/);
+  assert.doesNotMatch(source, /rounded-3xl p-4 sm:p-5[^\n]*animate-bounce/);
+});
+
+test("teacher Arena feed shows one launch and one terminal result per attack across both channels", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/app/dashboard/teacher/playground/arena/[id]/content.tsx"),
+    "utf8",
+  );
+  for (const event of ["arena-incoming-attack", "arena-attack-hit", "arena-attack-blocked"]) {
+    assert.match(source, new RegExp(`arenaChannel\\.bind\\("${event}"`));
+    assert.match(source, new RegExp(`teacherChannel\\.bind\\("${event}"`));
+  }
+  for (const outcome of ["launched", "hit", "deflected"]) {
+    assert.match(source, new RegExp(`claimArenaFeedback\\(displayedCombatFeedbackRef\\.current, data\\.attackId, "${outcome}"\\)`));
+  }
 });
