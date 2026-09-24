@@ -7,6 +7,7 @@ import * as runtime from "../src/lib/proctored-runtime.ts";
 import * as grading from "../src/lib/quiz-submission.ts";
 import * as devices from "../src/lib/device-capabilities.ts";
 import * as detection from "../src/lib/proctoring-detection.ts";
+import * as quizAvailability from "../src/lib/quiz-availability.ts";
 
 // Execute the real route handlers with controlled database/network boundaries.
 // Transactions serialize writes and roll back on failure, just as the row claim
@@ -107,6 +108,7 @@ function fixture() {
     "@/lib/security": { consumeRateLimitGroup: async () => ({ allowed: true }), getClientIp: () => "local" },
     "@/lib/evidence-storage": { uploadEvidence: async () => null },
     "@/lib/proctoring-detection": detection,
+    "@/lib/quiz-availability": quizAvailability,
     "@/lib/teacher-entitlements": { hasActiveProSubscription: async () => true },
     "@/lib/snapshot-store": { saveSnapshot: async () => {}, getSnapshotsForTeacher: async () => [] },
   };

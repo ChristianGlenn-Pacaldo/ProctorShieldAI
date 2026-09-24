@@ -8,12 +8,20 @@ import { getQuizCapacityDecision } from "@/lib/subscription-rules";
 import { getStudentInitials } from "@/lib/student-identity";
 import { parseQuizMode, type QuizMode } from "@/lib/quiz-mode";
 import { getQuizJoinDestination, getQuizJoinEligibility } from "@/lib/quiz-join";
+import {
+  isQuizAvailable,
+  quizNotAvailableResponse,
+  UNAVAILABLE_QUIZ_STATUSES,
+} from "@/lib/quiz-availability";
 
 type JoinQuizRecord = Awaited<ReturnType<typeof findQuizByAccessCode>>;
 
 async function findQuizByAccessCode(accessCode: string) {
-  return prisma.quiz.findUnique({
-    where: { accessCode },
+  return prisma.quiz.findFirst({
+    where: {
+      accessCode,
+      quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
+    },
     include: {
       subject: true,
       teacher: { select: { fullName: true } },
@@ -181,8 +189,11 @@ export async function POST(req: NextRequest) {
         where: { id: quiz.id },
         select: { quizStatus: true },
       });
-      if (!currentQuiz || currentQuiz.quizStatus === "ended") {
-        return { kind: "closed" as const };
+      if (!currentQuiz || !isQuizAvailable(currentQuiz.quizStatus)) {
+        return { kind: "closed" as const, reason: "unavailable" as const };
+      }
+      if (currentQuiz.quizStatus === "ended") {
+        return { kind: "closed" as const, reason: "ended" as const };
       }
 
       // Returning students and approved retakes do not consume another seat.
@@ -231,7 +242,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (enrollmentResult.kind === "closed") {
-      return NextResponse.json({ error: "This quiz has already ended and is no longer accepting submissions." }, { status: 403 });
+      return enrollmentResult.reason === "unavailable"
+        ? NextResponse.json(quizNotAvailableResponse(), { status: 410 })
+        : NextResponse.json({ error: "This quiz has already ended and is no longer accepting submissions." }, { status: 403 });
     }
 
     if (enrollmentResult.kind === "full") {

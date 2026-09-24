@@ -19,6 +19,7 @@ import {
   EXP_REWARDS,
 } from "@/lib/student-progression";
 import type { ArenaState } from "@/lib/arena";
+import { isQuizAvailable, quizNotAvailableResponse } from "@/lib/quiz-availability";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -45,7 +46,13 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
   if (role === "teacher" && quiz.teacherId !== userId) return null;
   if (role === "student") {
     const enrolled = await prisma.studentQuiz.findFirst({
-      where: { quizId, studentId: userId, quizStatus: { notIn: ["rejected", "pending_approval"] } },
+      where: {
+        quizId,
+        studentId: userId,
+        ...(isQuizAvailable(quiz.quizStatus)
+          ? { quizStatus: { notIn: ["rejected", "pending_approval"] } }
+          : {}),
+      },
       select: { id: true },
       orderBy: { attemptNumber: "desc" },
     });
@@ -91,6 +98,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
     if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+    if (!isQuizAvailable(quiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+    }
     if (quiz.quizMode !== "arena") {
       return NextResponse.json(
         {
@@ -136,13 +146,14 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({
       success: true,
+      serverTime: Date.now(),
       arena: state,
       status: state?.status || "lobby",
       sessionId: state?.sessionId,
       participants: rankedParticipants,
       usedPowers: (state?.usedPowers && state.usedPowers[session.userId]) || {},
       quizStatus: quiz.quizStatus,
-    });
+    }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     console.error("Get arena state error:", error);
     return NextResponse.json({ error: "Failed to load arena state" }, { status: 500 });
@@ -162,6 +173,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
     if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+    if (!isQuizAvailable(quiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+    }
     if (quiz.quizMode !== "arena") {
       return NextResponse.json(
         {

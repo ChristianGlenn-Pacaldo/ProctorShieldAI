@@ -6,6 +6,11 @@ import {
   getMonitoringLevel,
   normalizeDeviceCapabilities,
 } from "@/lib/device-capabilities";
+import {
+  isQuizAvailable,
+  quizNotAvailableResponse,
+  UNAVAILABLE_QUIZ_STATUSES,
+} from "@/lib/quiz-availability";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +30,9 @@ export async function POST(req: NextRequest) {
         where: { id: String(body.studentQuizId || ""), studentId: session.userId, quizId },
         include: { quiz: { include: { _count: { select: { questions: true } } } } },
       });
+      if (attempt && !isQuizAvailable(attempt.quiz.quizStatus)) {
+        return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+      }
       if (!attempt || attempt.attemptMode === "arena" || attempt.quiz.quizMode === "arena"
         || attempt.endTime || !["enrolled", "in_progress"].includes(attempt.quizStatus || "")
         || !(attempt.quiz.quizStatus === "in_progress" || (attempt.quiz.quizStatus === "ended" && (attempt.attemptNumber > 1 || attempt.startTime)))
@@ -47,10 +55,13 @@ export async function POST(req: NextRequest) {
 
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
-      select: { id: true, quizMode: true },
+      select: { id: true, quizMode: true, quizStatus: true },
     });
     if (!quiz) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    }
+    if (!isQuizAvailable(quiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
     if (quiz.quizMode === "arena") {
       return NextResponse.json(
@@ -94,6 +105,7 @@ export async function POST(req: NextRequest) {
         quizId,
         endTime: null,
         quizStatus: { notIn: ["completed", "rejected"] },
+        quiz: { quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] } },
       },
       data: {
         deviceType: capabilities.deviceType,

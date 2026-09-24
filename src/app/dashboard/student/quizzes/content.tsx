@@ -17,7 +17,7 @@ export default function QuizzesContent({ userId }: { userId: string }) {
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
-        const res = await fetch("/api/quizzes");
+        const res = await fetch("/api/quizzes", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           // The API returns studentQuizzes which wraps the actual quiz

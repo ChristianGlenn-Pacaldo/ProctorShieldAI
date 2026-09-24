@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { ArenaContent } from "./content";
+import { isQuizAvailable } from "@/lib/quiz-availability";
 
 interface ArenaPageProps {
   params: Promise<{ id: string }>;
@@ -37,7 +38,7 @@ export default async function ArenaPage({ params }: ArenaPageProps) {
     },
   });
 
-  if (!quiz) {
+  if (!quiz || !isQuizAvailable(quiz.quizStatus)) {
     notFound();
   }
 

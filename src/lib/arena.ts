@@ -41,6 +41,10 @@ export function getPowerDamage(power: ArenaPowerId): number {
   return getPowerPenalty(power);
 }
 
+export function createArenaAttackId(sessionId: string): string {
+  return `atk_${sessionId}_${crypto.randomUUID()}`;
+}
+
 export interface ArenaParticipant {
   studentId: string;
   studentName: string;
@@ -57,6 +61,7 @@ export interface ArenaParticipant {
 
 export interface PendingAttack {
   attackId: string;
+  sessionId?: string;
   attackerId: string;
   attackerName: string;
   targetStudentId: string;
@@ -110,6 +115,26 @@ export interface ArenaAttackResolution {
   target?: ArenaParticipant;
   participants?: ArenaParticipant[];
   penalty?: number;
+}
+
+export type ArenaShieldResolutionCode =
+  | "blocked"
+  | "too_late"
+  | "already_resolved"
+  | "shield_already_used"
+  | "arena_inactive"
+  | "attack_not_found"
+  | "not_participant"
+  | "wrong_student"
+  | "invalid_attack";
+
+export interface ArenaShieldResolution {
+  code: ArenaShieldResolutionCode;
+  attack?: PendingAttack;
+  target?: ArenaParticipant;
+  participants?: ArenaParticipant[];
+  penalty?: number;
+  resolvedHit?: boolean;
 }
 
 const ARENA_TTL_SECONDS = 6 * 60 * 60;
@@ -218,7 +243,7 @@ export function resolvePendingAttackInState(
     return { code: "invalid_attack", attack };
   }
   if (attack.status !== "pending") return { code: "already_resolved", attack };
-  if (now < attack.expiresAt) return { code: "premature", attack };
+  if (now <= attack.expiresAt) return { code: "premature", attack };
 
   const target = state.participants[attack.targetStudentId];
   const penalty = getPowerPenalty(attack.powerType);
@@ -229,6 +254,69 @@ export function resolvePendingAttackInState(
   const participants = computeArenaRankings(state.participants);
 
   return { code: "resolved", attack, target, participants, penalty };
+}
+
+export function deflectPendingAttackInState(
+  state: ArenaState,
+  attackId: string,
+  options: { now?: number; defenderStudentId: string },
+): ArenaShieldResolution {
+  const now = options.now ?? Date.now();
+  if (state.status !== "active" || (state.matchEndsAt && now >= Date.parse(state.matchEndsAt))) {
+    return { code: "arena_inactive" };
+  }
+
+  const attack = state.pendingAttacks?.[attackId];
+  if (!attack) return { code: "attack_not_found" };
+
+  const defender = state.participants?.[options.defenderStudentId];
+  if (!defender) return { code: "not_participant", attack };
+  if (attack.targetStudentId !== options.defenderStudentId) {
+    return { code: "wrong_student", attack };
+  }
+  if (!state.participants?.[attack.attackerId]) {
+    return { code: "invalid_attack", attack };
+  }
+  if (attack.status !== "pending") {
+    return { code: "already_resolved", attack, target: defender };
+  }
+
+  if (now > attack.expiresAt) {
+    const hit = resolvePendingAttackInState(state, attackId, {
+      now,
+      resolverStudentId: options.defenderStudentId,
+      expectedTargetStudentId: options.defenderStudentId,
+    });
+    if (hit.code === "resolved") {
+      return {
+        code: "too_late",
+        attack: hit.attack,
+        target: hit.target,
+        participants: hit.participants,
+        penalty: hit.penalty,
+        resolvedHit: true,
+      };
+    }
+    return { code: "already_resolved", attack, target: defender };
+  }
+
+  if (state.usedPowers?.[options.defenderStudentId]?.shield) {
+    return { code: "shield_already_used", attack, target: defender };
+  }
+
+  if (!state.usedPowers) state.usedPowers = {};
+  if (!state.usedPowers[options.defenderStudentId]) state.usedPowers[options.defenderStudentId] = {};
+  state.usedPowers[options.defenderStudentId].shield = true;
+  attack.status = "deflected";
+  defender.hasShield = false;
+
+  return {
+    code: "blocked",
+    attack,
+    target: defender,
+    participants: computeArenaRankings(state.participants),
+    penalty: 0,
+  };
 }
 
 export function createArenaState(params: {
@@ -378,6 +466,25 @@ export async function resolveArenaAttack(
     if (!state) return { state: null, resolution: { code: "attack_not_found" } as ArenaAttackResolution };
     const resolution = resolvePendingAttackInState(state, attackId, options);
     if (resolution.code === "resolved") await persistArenaState(tx, state);
+    return { state, resolution };
+  });
+  if (result.state && client === prisma) syncArenaCaches(result.state);
+  return result;
+}
+
+export async function deflectArenaAttack(
+  quizId: number,
+  attackId: string,
+  options: { now?: number; defenderStudentId: string },
+  client: ArenaDbClient = prisma,
+): Promise<{ state: ArenaState | null; resolution: ArenaShieldResolution }> {
+  const result = await withArenaLock(quizId, client, async (tx) => {
+    const state = await readArenaState(tx, quizId);
+    if (!state) return { state: null, resolution: { code: "attack_not_found" } as ArenaShieldResolution };
+    const resolution = deflectPendingAttackInState(state, attackId, options);
+    if (resolution.code === "blocked" || resolution.resolvedHit) {
+      await persistArenaState(tx, state);
+    }
     return { state, resolution };
   });
   if (result.state && client === prisma) syncArenaCaches(result.state);

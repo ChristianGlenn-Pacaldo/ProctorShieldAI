@@ -5,6 +5,9 @@ import crypto from "node:crypto";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { getQuizCreationDecision } from "@/lib/subscription-rules";
 import { parseQuizMode, InvalidQuizModeError } from "@/lib/quiz-mode";
+import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
+
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" };
 
 type RawChoice = { choiceText?: unknown; isCorrect?: unknown };
 type RawQuestion = { questionText?: unknown; questionType?: unknown; points?: unknown; choices?: unknown };
@@ -23,7 +26,10 @@ export async function GET(req: NextRequest) {
     if (session.role === "teacher") {
       // Teachers get the quizzes they created
       const quizzes = await prisma.quiz.findMany({
-        where: { teacherId: session.userId },
+        where: {
+          teacherId: session.userId,
+          quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
+        },
         include: {
           subject: true,
           _count: { select: { studentQuizzes: true } },
@@ -86,11 +92,14 @@ export async function GET(req: NextRequest) {
           quizTitle: pa.quiz.title,
           quizId: pa.quizId,
         })),
-      });
+      }, { headers: NO_STORE_HEADERS });
     } else if (session.role === "student") {
       // Students get the quizzes they have joined
       const studentQuizzes = await prisma.studentQuiz.findMany({
-        where: { studentId: session.userId },
+        where: {
+          studentId: session.userId,
+          quiz: { quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] } },
+        },
         include: {
           quiz: {
             include: { subject: true, teacher: true },
@@ -99,10 +108,11 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, quizzes: studentQuizzes });
+      return NextResponse.json({ success: true, quizzes: studentQuizzes }, { headers: NO_STORE_HEADERS });
     } else if (session.role === "admin") {
       // Admins get all quizzes
       const quizzes = await prisma.quiz.findMany({
+        where: { quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] } },
         include: {
           subject: true,
           teacher: true,
@@ -110,7 +120,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, quizzes });
+      return NextResponse.json({ success: true, quizzes }, { headers: NO_STORE_HEADERS });
     }
 
     return NextResponse.json({ error: "Invalid role" }, { status: 403 });

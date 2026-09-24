@@ -171,6 +171,6 @@ test("Test K: Arena join event does not trigger proctored teacher monitoring not
 
 test("Test L: Pusher auth strictly enforces quizMode and attemptMode for Arena channel", () => {
   assert.match(pusherAuthSrc, /attemptMode:\s*["']arena["']/);
-  assert.match(pusherAuthSrc, /quiz:\s*\{\s*quizMode:\s*["']arena["']\s*\}/);
+  assert.match(pusherAuthSrc, /quiz:\s*\{[\s\S]*?quizStatus:\s*\{\s*notIn:\s*\[\.\.\.UNAVAILABLE_QUIZ_STATUSES\]\s*\}[\s\S]*?quizMode:\s*["']arena["']/);
   assert.match(pusherAuthSrc, /quizMode:\s*["']arena["']/);
 });

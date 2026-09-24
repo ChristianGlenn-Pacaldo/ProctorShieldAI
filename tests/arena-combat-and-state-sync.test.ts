@@ -213,8 +213,9 @@ test("Requirement 25, 26, 27, 28: Incoming attack warning, reaction window, and 
   assert.match(battleActionRouteSrc, /REACTION_WINDOW_MS\s*=\s*2500/);
 
   // Shield within reaction window deflects attack with 0 score penalty
-  assert.match(battleActionRouteSrc, /if\s*\(now\s*<=\s*attackToDefend\.expiresAt\)\s*\{/);
-  assert.match(battleActionRouteSrc, /attackToDefend\.status\s*=\s*["']deflected["']/);
+  assert.match(battleActionRouteSrc, /deflectArenaAttack\(quizId,\s*defendAttackId/);
+  assert.match(libArenaSrc, /if\s*\(now\s*>\s*attack\.expiresAt\)/);
+  assert.match(libArenaSrc, /attack\.status\s*=\s*["']deflected["']/);
   assert.match(battleActionRouteSrc, /arena-attack-blocked/);
 
   // Auto-resolution after reaction window deducts configured score
@@ -262,7 +263,7 @@ test("Attack resolution enforces expiry, ownership, target, score floor, and exa
   }).code, "wrong_target");
 
   const resolved = resolvePendingAttackInState(state, "attack-1", {
-    now: 3_500, resolverStudentId: "target", expectedTargetStudentId: "target",
+    now: 3_501, resolverStudentId: "target", expectedTargetStudentId: "target",
   });
   assert.equal(resolved.code, "resolved");
   assert.equal(state.participants.target.score, 0);
@@ -498,13 +499,13 @@ test("Test 9A: arena-incoming-attack is emitted immediately after validation/pow
 test("Test 9B: Incoming warning is not delayed by score deduction logic", () => {
   // Score deduction happens in applyPendingAttackHit, scheduled via setTimeout after reaction window
   assert.match(battleActionRouteSrc, /setTimeout\(async\s*\(\)\s*=>\s*\{[\s\S]*applyPendingAttackHit/);
-  // Auto-resolution timeout is strictly at least REACTION_WINDOW_MS
-  assert.match(battleActionRouteSrc, /REACTION_WINDOW_MS\s*\+\s*100/);
+  // Auto-resolution timeout is based on the authoritative expiry plus a small grace
+  assert.match(battleActionRouteSrc, /expiresAt\s*-\s*Date\.now\(\)\s*\+\s*100/);
 });
 
 test("Test 9C: Target UI responds directly to Pusher event", () => {
   // Target handler sets incoming attack immediately upon receiving event
-  assert.match(studentArenaContentSrc, /if\s*\(data\.targetStudentId\s*===\s*studentId\)\s*\{\s*setIncomingAttack\(data\);/);
+  assert.match(studentArenaContentSrc, /if\s*\(data\.targetStudentId\s*===\s*studentId\)\s*\{[\s\S]*setIncomingAttack\(data\);/);
 });
 
 test("Test 9D: No polling is required to display incoming warning", () => {
@@ -518,20 +519,20 @@ test("Test 9E: Reaction countdown uses server expiresAt", () => {
   // Event handler and reaction interval compute remaining time from server expiresAt
   assert.match(studentArenaContentSrc, /typeof\s+data\.expiresAt\s*===\s*["']number["']\s*\?\s*data\.expiresAt/);
   assert.match(studentArenaContentSrc, /typeof\s+incomingAttack\.expiresAt\s*===\s*["']number["']\s*\?\s*incomingAttack\.expiresAt/);
-  assert.match(studentArenaContentSrc, /Math\.max\(0,\s*expiry\s*-\s*Date\.now\(\)\)/);
+  assert.match(studentArenaContentSrc, /Math\.max\(0,\s*expiry\s*-\s*getServerAdjustedNow\(\)\)/);
 });
 
 test("Test 9F: Shield still works within reaction window", () => {
   // Server checks if deflection occurred within reaction window
-  assert.match(battleActionRouteSrc, /if\s*\(now\s*<=\s*attackToDefend\.expiresAt\)\s*\{/);
-  assert.match(battleActionRouteSrc, /attackToDefend\.status\s*=\s*["']deflected["']/);
+  assert.match(battleActionRouteSrc, /deflectArenaAttack\(quizId,\s*defendAttackId/);
+  assert.match(libArenaSrc, /attack\.status\s*=\s*["']deflected["']/);
   assert.match(battleActionRouteSrc, /arena-attack-blocked/);
   assert.match(battleActionRouteSrc, /arena-attack-deflected/);
 });
 
 test("Test 9G: Score deduction still happens only after reaction window if unblocked", () => {
   assert.match(libArenaSrc, /if \(attack\.status !== "pending"\) return \{ code: "already_resolved", attack \}/);
-  assert.match(libArenaSrc, /if \(now < attack\.expiresAt\) return \{ code: "premature", attack \}/);
+  assert.match(libArenaSrc, /if \(now <= attack\.expiresAt\) return \{ code: "premature", attack \}/);
   assert.match(libArenaSrc, /target\.score\s*=\s*Math\.max\(0,\s*target\.score\s*-\s*penalty\)/);
 });
 

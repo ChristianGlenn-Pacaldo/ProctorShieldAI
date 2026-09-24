@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
-import { deleteEvidence } from "@/lib/evidence-storage";
 import { parseQuizMode, InvalidQuizModeError, canChangeQuizMode, type QuizMode } from "@/lib/quiz-mode";
+import {
+  DELETED_QUIZ_STATUS,
+  isQuizAvailable,
+  quizNotAvailableResponse,
+} from "@/lib/quiz-availability";
 
 // Seeded random number generator (Mulberry32 variant)
 function seededRandom(seed: string) {
@@ -54,6 +58,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!quiz) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    }
+
+    if (!isQuizAvailable(quiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
 
     if (session.role === "teacher" && quiz.teacherId !== session.userId) {
@@ -187,7 +195,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           ...(session.role !== "student" ? { isCorrect: c.isCorrect } : {})
         }))
       }))
-    });
+    }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
 
   } catch (error) {
     console.error("Get quiz details error:", error);
@@ -217,6 +225,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!existingQuiz || existingQuiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+    }
+    if (!isQuizAvailable(existingQuiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
 
     const requestedStatus = body.quizStatus;
@@ -396,82 +407,37 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!existingQuiz) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
+    if (!isQuizAvailable(existingQuiz.quizStatus)) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+    }
 
     // Only the teacher who created the quiz or an admin can delete it
     if (session.role !== "admin" && existingQuiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const storedEvidence = await prisma.evidenceFile.findMany({
-      where: { violation: { studentQuiz: { quizId } } },
-      select: { filePath: true },
+    const deletedAt = new Date();
+    const deleted = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${quizId}`}))`;
+      const markedDeleted = await tx.quiz.updateMany({
+        where: { id: quizId, quizStatus: { not: DELETED_QUIZ_STATUS } },
+        data: { quizStatus: DELETED_QUIZ_STATUS, accessCode: null },
+      });
+      if (markedDeleted.count !== 1) return false;
+
+      await tx.studentQuiz.updateMany({
+        where: {
+          quizId,
+          quizStatus: { notIn: ["completed", "rejected"] },
+        },
+        data: { quizStatus: "rejected", endTime: deletedAt },
+      });
+      return true;
     });
-    // Delete private objects first. If the later database transaction fails,
-    // retrying this endpoint is safe because S3 deletion is idempotent.
-    await deleteEvidence(storedEvidence.map((file) => file.filePath));
 
-    // Perform cascade delete in a transaction
-    await prisma.$transaction(async (tx) => {
-      // 1. Get questions
-      const questions = await tx.question.findMany({
-        where: { quizId },
-        select: { id: true }
-      });
-      const questionIds = questions.map(q => q.id);
-
-      // 2. Get student quizzes
-      const studentQuizzes = await tx.studentQuiz.findMany({
-        where: { quizId },
-        select: { id: true }
-      });
-      const studentQuizIds = studentQuizzes.map(se => se.id);
-
-      if (studentQuizIds.length > 0) {
-        // Get violations to delete evidence files first
-        const violations = await tx.violation.findMany({
-          where: { studentQuizId: { in: studentQuizIds } },
-          select: { id: true }
-        });
-        const violationIds = violations.map(v => v.id);
-
-        if (violationIds.length > 0) {
-          await tx.evidenceFile.deleteMany({
-            where: { violationId: { in: violationIds } }
-          });
-        }
-
-        await tx.violation.deleteMany({
-          where: { studentQuizId: { in: studentQuizIds } }
-        });
-
-        await tx.aiAnalysis.deleteMany({
-          where: { studentQuizId: { in: studentQuizIds } }
-        });
-
-        await tx.answer.deleteMany({
-          where: { studentQuizId: { in: studentQuizIds } }
-        });
-
-        await tx.studentQuiz.deleteMany({
-          where: { id: { in: studentQuizIds } }
-        });
-      }
-
-      if (questionIds.length > 0) {
-        await tx.choice.deleteMany({
-          where: { questionId: { in: questionIds } }
-        });
-
-        await tx.question.deleteMany({
-          where: { quizId }
-        });
-      }
-
-      // Finally, delete the quiz itself
-      await tx.quiz.delete({
-        where: { id: quizId }
-      });
-    });
+    if (!deleted) {
+      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+    }
 
     // Log activity
     await prisma.activityLog.create({

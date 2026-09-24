@@ -353,7 +353,7 @@ export default function TeacherQuizzesPage({
   const deleteQuiz = async (quiz: any) => {
     if (
       !confirm(
-        `Are you sure you want to permanently delete "${quiz.title}"?\n\nThis will permanently delete all questions, choices, student attempts, and violation evidence associated with it. This action cannot be undone.`
+        `Are you sure you want to remove "${quiz.title}"?\n\nStudents will no longer see or join this quiz. Completed results and violation evidence will remain available for historical review. This action cannot be undone from the dashboard.`
       )
     )
       return;

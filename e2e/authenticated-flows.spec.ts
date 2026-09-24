@@ -11,10 +11,10 @@ test.describe("authenticated entitlement and quiz flows", () => {
   test("student join input retains a complete current-format access code", async ({ context, page }) => {
     await authenticateAsExistingRole(context, "student");
     await page.goto("/join");
-    const input = page.getByPlaceholder("Enter join code");
+    const input = page.getByPlaceholder(/enter quiz code/i);
     await input.fill("PS-1CD0309D3B");
     await expect(input).toHaveValue("PS-1CD0309D3B");
-    await expect(input).toHaveAttribute("maxlength", "64");
+    await expect(input).toHaveAttribute("maxlength", "16");
   });
 
   test("free teacher sees AI and sixth-manual-quiz paywalls", async ({ context, page }) => {
@@ -52,7 +52,7 @@ test.describe("authenticated entitlement and quiz flows", () => {
     await expect(page.getByText("5/5 free quizzes")).toBeVisible();
 
     await page.getByRole("button", { name: /AI Create/i }).click();
-    await expect(page.getByRole("heading", { name: "Premium Feature" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ProctorShield Pro Feature" })).toBeVisible();
     await page.getByRole("button", { name: "Maybe Later" }).click();
 
     await page.getByRole("button", { name: "Manual Quiz" }).click();
@@ -89,7 +89,7 @@ test.describe("authenticated entitlement and quiz flows", () => {
     await page.goto("/dashboard/teacher/quizzes");
     await expect(page.getByRole("button", { name: "New Quiz" })).toBeVisible();
     await page.getByRole("button", { name: /AI Create/i }).click();
-    await expect(page.getByRole("heading", { name: /Auto-Generate with AI/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Auto-Generate with (?:ProctorShield )?AI/i })).toBeVisible();
   });
 
   test("student stays in the lobby until the teacher starts the quiz", async ({ context, page }) => {

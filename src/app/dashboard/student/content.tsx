@@ -101,7 +101,7 @@ export default function StudentDashboardContent() {
 
   const fetchQuizzes = async () => {
     try {
-      const res = await fetch("/api/quizzes");
+      const res = await fetch("/api/quizzes", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setStudentQuizzes(data.quizzes || []);

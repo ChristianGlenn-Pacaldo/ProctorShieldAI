@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
+import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
         where: {
           id: quizId,
           teacherId: session.userId,
+          quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
           ...(channelType === "arena" ? { quizMode: "arena" } : {}),
         },
         select: { id: true },
@@ -45,11 +47,12 @@ export async function POST(req: NextRequest) {
           studentId: session.userId,
           endTime: null,
           quizStatus: { in: ["enrolled", "in_progress", "pending_approval"] },
+          quiz: {
+            quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
+            ...(channelType === "arena" ? { quizMode: "arena" } : {}),
+          },
           ...(channelType === "arena"
-            ? {
-                attemptMode: "arena",
-                quiz: { quizMode: "arena" },
-              }
+            ? { attemptMode: "arena" }
             : {}),
         },
         select: { id: true },

@@ -80,9 +80,11 @@ interface ArenaContentProps {
 
 interface IncomingAttackAlert {
   attackId: string;
+  sessionId?: string;
   attackerId: string;
   attackerName: string;
   targetStudentId?: string;
+  targetId?: string;
   targetName?: string;
   powerType: string;
   scorePenalty: number;
@@ -91,6 +93,7 @@ interface IncomingAttackAlert {
   expiresAt?: number;
   warningExpiry: string;
   reactionWindowMs: number;
+  status?: "pending" | "deflected" | "hit" | "cancelled";
 }
 
 export function ArenaContent({
@@ -157,6 +160,24 @@ export function ArenaContent({
   const [targetPickerPower, setTargetPickerPower] = useState<BattlePowerType | null>(null);
   const [incomingAttack, setIncomingAttack] = useState<IncomingAttackAlert | null>(null);
   const [reactionTimeLeftMs, setReactionTimeLeftMs] = useState<number>(0);
+  const [isShieldActivating, setIsShieldActivating] = useState(false);
+  const incomingAttackRef = useRef<IncomingAttackAlert | null>(null);
+  const serverTimeOffsetRef = useRef(0);
+
+  useEffect(() => {
+    incomingAttackRef.current = incomingAttack;
+  }, [incomingAttack]);
+
+  const getServerAdjustedNow = useCallback(() => Date.now() + serverTimeOffsetRef.current, []);
+  const clearIncomingAttack = useCallback((attackId?: string) => {
+    if (attackId && incomingAttackRef.current?.attackId !== attackId) return;
+    setIncomingAttack((current) => {
+      if (attackId && current?.attackId !== attackId) return current;
+      return null;
+    });
+    incomingAttackRef.current = null;
+    setIsShieldActivating(false);
+  }, []);
 
   // ── Answers State & Feedback ──────────────────────────────────
   const [lockedAnswers, setLockedAnswers] = useState<Map<number, { choiceId: number; isCorrect: boolean }>>(() => {
@@ -384,9 +405,14 @@ export function ArenaContent({
   // ── Fetch Initial / Reconciled Arena State ─────────────────────
   const refreshArenaState = useCallback(async () => {
     try {
+      const requestStartedAt = Date.now();
       const res = await fetch(`/api/arena/${quizId}`);
       if (!res.ok) return;
       const data = await res.json();
+      const responseReceivedAt = Date.now();
+      if (typeof data?.serverTime === "number") {
+        serverTimeOffsetRef.current = data.serverTime - ((requestStartedAt + responseReceivedAt) / 2);
+      }
 
       const sessId = data?.sessionId || data?.arena?.sessionId;
       if (sessId) {
@@ -437,8 +463,20 @@ export function ArenaContent({
       if (Array.isArray(data?.participants)) {
         updateRankingsFromParticipants(data.participants);
       }
+
+      const activeIncomingAttack = incomingAttackRef.current;
+      if (activeIncomingAttack) {
+        const authoritativeAttack = data?.arena?.pendingAttacks?.[activeIncomingAttack.attackId];
+        if (!authoritativeAttack || authoritativeAttack.status !== "pending") {
+          clearIncomingAttack(activeIncomingAttack.attackId);
+          if (authoritativeAttack?.status === "deflected") {
+            setHasGuardianShield(false);
+            setUsedPowers((prev) => ({ ...prev, shield: true }));
+          }
+        }
+      }
     } catch {}
-  }, [quizId, finalizeMatch, updateRankingsFromParticipants]);
+  }, [quizId, finalizeMatch, updateRankingsFromParticipants, clearIncomingAttack]);
 
   // Periodic background state reconciliation
   useEffect(() => {
@@ -539,12 +577,17 @@ export function ArenaContent({
 
       // ── Incoming Attack Warning Event ────────────────────────────
       const handleIncomingAttackEvent = (data: IncomingAttackAlert) => {
+        if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         if (data.targetStudentId === studentId) {
+          if (incomingAttackRef.current?.attackId === data.attackId) return;
+          incomingAttackRef.current = data;
           setIncomingAttack(data);
+          setIsShieldActivating(false);
+          setErrorMessage(null);
           const expiry = typeof data.expiresAt === "number"
             ? data.expiresAt
-            : (data.warningExpiry ? Date.parse(data.warningExpiry) : Date.now() + 2500);
-          setReactionTimeLeftMs(Math.max(0, expiry - Date.now()));
+            : (data.warningExpiry ? Date.parse(data.warningExpiry) : getServerAdjustedNow() + 2500);
+          setReactionTimeLeftMs(Math.max(0, expiry - getServerAdjustedNow()));
         } else if (data.attackerId === studentId) {
           setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
           setTimeout(() => setCelebrationMessage(null), 2500);
@@ -562,6 +605,7 @@ export function ArenaContent({
         attackerId: string;
         attackerName: string;
         targetStudentId: string;
+        targetId?: string;
         targetName: string;
         powerType: string;
         scorePenalty?: number;
@@ -569,13 +613,23 @@ export function ArenaContent({
         targetCurrentScore: number;
         targetRank: number;
         participants?: ArenaParticipant[];
+        sessionId?: string;
+        status?: string;
       }) => {
+        if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         const penalty = data.scorePenalty || data.damage || 40;
+        const isStaleForModal = Boolean(
+          incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId,
+        );
 
         if (data.targetStudentId === studentId) {
-          setIncomingAttack(null);
           setScore(data.targetCurrentScore);
           setStudentRank(data.targetRank);
+          if (isStaleForModal) {
+            if (Array.isArray(data.participants)) updateRankingsFromParticipants(data.participants);
+            return;
+          }
+          clearIncomingAttack(data.attackId);
           setScoreDeductionPopup(penalty);
 
           if (soundEnabled) {
@@ -613,12 +667,21 @@ export function ArenaContent({
         attackerId: string;
         attackerName: string;
         targetStudentId: string;
+        targetId?: string;
         targetName: string;
         powerType: string;
         message?: string;
+        sessionId?: string;
+        status?: string;
       }) => {
+        if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         if (data.targetStudentId === studentId) {
-          setIncomingAttack(null);
+          if (incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId) {
+            setHasGuardianShield(false);
+            setUsedPowers((prev) => ({ ...prev, shield: true }));
+            return;
+          }
+          clearIncomingAttack(data.attackId);
           setHasGuardianShield(false);
           setUsedPowers((prev) => ({ ...prev, shield: true }));
           if (soundEnabled) playShieldDeflectSound();
@@ -676,9 +739,12 @@ export function ArenaContent({
   }, [
     quizId,
     studentId,
+    currentSessionId,
     soundEnabled,
     finalizeMatch,
     updateRankingsFromParticipants,
+    clearIncomingAttack,
+    getServerAdjustedNow,
   ]);
 
   // ── Reaction Countdown Interval for Incoming Attack ───────────
@@ -686,19 +752,29 @@ export function ArenaContent({
     if (!incomingAttack) return;
     const expiry = typeof incomingAttack.expiresAt === "number"
       ? incomingAttack.expiresAt
-      : (incomingAttack.warningExpiry ? Date.parse(incomingAttack.warningExpiry) : Date.now() + 2500);
+      : (incomingAttack.warningExpiry ? Date.parse(incomingAttack.warningExpiry) : getServerAdjustedNow() + 2500);
 
-    setReactionTimeLeftMs(Math.max(0, expiry - Date.now()));
+    setReactionTimeLeftMs(Math.max(0, expiry - getServerAdjustedNow()));
 
     const interval = setInterval(() => {
-      const remaining = Math.max(0, expiry - Date.now());
+      const remaining = Math.max(0, expiry - getServerAdjustedNow());
       setReactionTimeLeftMs(remaining);
       if (remaining <= 0) {
         clearInterval(interval);
+        void refreshArenaState();
       }
     }, 50);
-    return () => clearInterval(interval);
-  }, [incomingAttack]);
+    const staleSafeguard = setTimeout(() => {
+      if (incomingAttackRef.current?.attackId === incomingAttack.attackId) {
+        clearIncomingAttack(incomingAttack.attackId);
+        void refreshArenaState();
+      }
+    }, Math.max(0, expiry - getServerAdjustedNow()) + 10_000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(staleSafeguard);
+    };
+  }, [incomingAttack, getServerAdjustedNow, refreshArenaState, clearIncomingAttack]);
 
   // ── Overall Match Timer Countdown ─────────────────────────────
   useEffect(() => {
@@ -874,7 +950,10 @@ export function ArenaContent({
 
   // ── Defend Incoming Attack with Guardian Shield ───────────────
   const handleDefendIncomingAttack = async () => {
-    if (!incomingAttack) return;
+    if (!incomingAttack || isShieldActivating || usedPowers.shield || reactionTimeLeftMs <= 0) return;
+    const attackToDefend = incomingAttack;
+    setIsShieldActivating(true);
+    setErrorMessage(null);
     try {
       const res = await fetch("/api/arena/battle-action", {
         method: "POST",
@@ -883,25 +962,57 @@ export function ArenaContent({
           quizId,
           sessionId: currentSessionId,
           powerType: "shield",
-          defendAttackId: incomingAttack.attackId,
+          defendAttackId: attackToDefend.attackId,
         }),
       });
 
       const data = await res.json();
-      if (data.deflected) {
-        setIncomingAttack(null);
+      const hasNewerIncomingAttack = Boolean(
+        incomingAttackRef.current && incomingAttackRef.current.attackId !== attackToDefend.attackId,
+      );
+      if (hasNewerIncomingAttack) {
+        if (data.code === "blocked" || data.deflected) {
+          setHasGuardianShield(false);
+          setUsedPowers((prev) => ({ ...prev, shield: true }));
+        }
+        return;
+      }
+      if (data.code === "blocked" || data.deflected) {
+        clearIncomingAttack(attackToDefend.attackId);
+        setErrorMessage(null);
         setHasGuardianShield(false);
         setUsedPowers((prev) => ({ ...prev, shield: true }));
         if (soundEnabled) playShieldDeflectSound();
         setActiveAttackEffect({
           type: "deflected",
-          attackerName: incomingAttack.attackerName,
+          attackerName: attackToDefend.attackerName,
           penalty: 0,
-          message: `🛡️ GUARDIAN SHIELD DEFLECTED ${incomingAttack.attackerName}'s ${incomingAttack.powerType.toUpperCase()}! 0 PTS LOST!`,
+          message: `🛡️ GUARDIAN SHIELD DEFLECTED ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()}! 0 PTS LOST!`,
         });
         setTimeout(() => setActiveAttackEffect(null), 4000);
+        return;
       }
-    } catch {}
+
+      const isTerminal = ["deflected", "hit", "cancelled"].includes(data.attackStatus);
+      if (isTerminal) clearIncomingAttack(attackToDefend.attackId);
+
+      if (data.code === "too_late") {
+        setErrorMessage("Guardian Shield was too late; the attack already resolved.");
+      } else if (data.code === "already_resolved") {
+        setErrorMessage(data.attackStatus === "deflected" ? "That attack was already blocked." : "That attack already resolved.");
+      } else if (data.code === "shield_already_used") {
+        setUsedPowers((prev) => ({ ...prev, shield: true }));
+        setErrorMessage("Guardian Shield has already been used in this match.");
+      } else if (!res.ok) {
+        setErrorMessage(data.error || "Guardian Shield could not be activated.");
+      }
+      void refreshArenaState();
+    } catch {
+      setErrorMessage("Network error activating Guardian Shield.");
+      void refreshArenaState();
+    } finally {
+      setIsShieldActivating(false);
+    }
   };
 
   // Format MM:SS for overall timer
@@ -1112,15 +1223,21 @@ export function ArenaContent({
             <button
               type="button"
               onClick={() => void handleDefendIncomingAttack()}
-              disabled={usedPowers.shield}
+              disabled={usedPowers.shield || isShieldActivating || reactionTimeLeftMs <= 0}
               className={`w-full py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-                usedPowers.shield
+                usedPowers.shield || isShieldActivating || reactionTimeLeftMs <= 0
                   ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
                   : "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:brightness-110 active:scale-98 cursor-pointer"
               }`}
             >
               <Shield className="w-4 h-4" />
-              {usedPowers.shield ? "GUARDIAN SHIELD ALREADY USED" : "ACTIVATE GUARDIAN SHIELD (DEFLECT)"}
+              {isShieldActivating
+                ? "ACTIVATING SHIELD..."
+                : usedPowers.shield
+                  ? "GUARDIAN SHIELD ALREADY USED"
+                  : reactionTimeLeftMs <= 0
+                    ? "REACTION WINDOW CLOSED"
+                    : "ACTIVATE GUARDIAN SHIELD (DEFLECT)"}
             </button>
           </div>
         </div>

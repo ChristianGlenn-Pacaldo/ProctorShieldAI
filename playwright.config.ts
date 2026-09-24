@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const authenticatedRun = process.env.RUN_AUTHENTICATED_E2E === "true";
 const authenticatedDatabaseUrl = process.env.E2E_DATABASE_URL?.trim();
+const reuseExistingServer = process.env.E2E_REUSE_SERVER === "true";
 const baseURL = process.env.E2E_BASE_URL || (authenticatedRun ? "http://localhost:3100" : "http://localhost:3000");
 const webServerPort = new URL(baseURL).port || (baseURL.startsWith("https:") ? "443" : "80");
 
@@ -48,7 +49,7 @@ export default defineConfig({
           HOSTNAME: "127.0.0.1",
         }
       : undefined,
-    reuseExistingServer: authenticatedRun ? false : !process.env.CI,
+    reuseExistingServer: reuseExistingServer || (authenticatedRun ? false : !process.env.CI),
     timeout: 120_000,
   },
 });
