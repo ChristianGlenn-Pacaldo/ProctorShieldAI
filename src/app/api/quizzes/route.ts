@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
         },
         include: {
           quiz: {
-            include: { subject: true, teacher: true },
+            include: { subject: true, teacher: { select: { fullName: true } } },
           },
           aiAnalysis: true,
         },
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
         where: { quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] } },
         include: {
           subject: true,
-          teacher: true,
+          teacher: { select: { fullName: true } },
           _count: { select: { studentQuizzes: true } },
         },
         orderBy: { createdAt: "desc" },
