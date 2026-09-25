@@ -128,8 +128,13 @@ export default function AdminDashboardContent() {
         setStats(data.stats);
         setPlatformBars(data.platformBars);
         setActivityBars(data.activityBars);
-        // Pre-populate activities if needed, but start empty to prevent old "data left" from showing
-        setActivities(data.activities || []);
+        const backendActivities: Activity[] = Array.isArray(data.activities) ? data.activities : [];
+        if (backendActivities.length > 0) {
+          setActivities((current) => {
+            const currentIds = new Set(current.map((activity) => activity.id));
+            return [...current, ...backendActivities.filter((activity) => !currentIds.has(activity.id))].slice(0, 10);
+          });
+        }
         setUsers(data.users);
       }
     } catch (err) {

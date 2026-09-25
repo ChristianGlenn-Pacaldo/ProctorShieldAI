@@ -11,9 +11,9 @@ const compiled = ts.transpileModule(fs.readFileSync(componentPath, "utf8"), {
 }).outputText;
 
 type ElementNode = { type: string; props: Record<string, unknown> };
-type Activity = { icon: string; title: string; sub: string; type: string };
+type Activity = { id: string; icon: string; title: string; sub: string; type: string };
 
-function fixture() {
+function fixture(backendActivities: Activity[] = []) {
   const states: unknown[] = [];
   let stateIndex = 0;
   let effectStarted = false;
@@ -55,12 +55,11 @@ function fixture() {
     },
     fetch: async () => {
       dashboardFetches++;
-      if (dashboardFetches > 1) return new Promise(() => {});
       return {
         ok: true,
         json: async () => ({
-          stats: { totalUsers: 0, totalQuizzes: 0, totalViolations: 0, aiVerdictsToday: 0 },
-          platformBars: [], activityBars: [], activities: [], users: [],
+          stats: { totalUsers: dashboardFetches, totalQuizzes: 0, totalViolations: 0, aiVerdictsToday: 0 },
+          platformBars: [], activityBars: [], activities: backendActivities, users: [],
         }),
       };
     },
@@ -76,6 +75,7 @@ function fixture() {
     render,
     emit: (payload: unknown) => { assert.ok(onActivity); onActivity(payload); },
     activities: () => states[3] as Activity[],
+    totalUsers: () => (states[0] as { totalUsers: number }).totalUsers,
     dashboardFetches: () => dashboardFetches,
   };
 }
@@ -93,6 +93,43 @@ test("valid user_update renders its committed suspend activity", async () => {
   assert.equal(setup.dashboardFetches(), 2);
 });
 
+test("realtime activity survives empty dashboard data and repeated statistics refreshes", async () => {
+  const setup = fixture();
+  setup.render();
+  await new Promise(setImmediate);
+  setup.emit({ type: "user_update", fullName: "QA Teacher", role: "teacher", activity: "Admin suspended user: QA Teacher" });
+  await new Promise(setImmediate);
+
+  assert.doesNotThrow(() => setup.render());
+  assert.equal(setup.activities().length, 1);
+  assert.equal(setup.activities()[0].title, "Admin suspended user: QA Teacher");
+  assert.equal(setup.totalUsers(), 2);
+
+  setup.emit(null);
+  setup.emit(null);
+  await new Promise(setImmediate);
+
+  assert.equal(setup.dashboardFetches(), 4);
+  assert.equal(setup.totalUsers(), 4);
+  assert.equal(setup.activities().length, 1);
+  assert.equal(setup.activities()[0].title, "Admin suspended user: QA Teacher");
+});
+
+test("repeated backend refreshes do not duplicate an already displayed activity", async () => {
+  const backendActivity: Activity = { id: "activity-1", icon: "⚙️", title: "Existing activity", sub: "QA Teacher", type: "info" };
+  const setup = fixture([backendActivity]);
+  setup.render();
+  await new Promise(setImmediate);
+  setup.emit(null);
+  setup.emit(null);
+  await new Promise(setImmediate);
+
+  assert.doesNotThrow(() => setup.render());
+  assert.equal(setup.activities().length, 1);
+  assert.equal(setup.activities()[0].title, "Existing activity");
+  assert.equal(setup.totalUsers(), 3);
+});
+
 test("missing or malformed user_update display fields cannot crash the dashboard", async () => {
   const setup = fixture();
   setup.render();
@@ -108,6 +145,7 @@ test("unrelated login activity retains its existing rendering", async () => {
   setup.render();
   await new Promise(setImmediate);
   setup.emit({ type: "login", fullName: "QA Student", role: "student", activity: "Logged in as student" });
+  await new Promise(setImmediate);
 
   assert.doesNotThrow(() => setup.render());
   assert.equal(setup.activities()[0].title, "Logged in as student");
