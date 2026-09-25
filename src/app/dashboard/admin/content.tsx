@@ -155,6 +155,10 @@ export default function AdminDashboardContent() {
 
     // Listen for platform activities in real-time
     channel.bind("activity", (data: any) => {
+      if (!data || typeof data !== "object") {
+        fetchDashboardData(true);
+        return;
+      }
 
       // 1. Prepend the new activity to the local UI state
       setActivities((prev) => {
@@ -190,8 +194,8 @@ export default function AdminDashboardContent() {
         const newActivity: Activity = {
           id: Math.random().toString(),
           icon,
-          title: data.activity,
-          sub: `${data.fullName} (${data.role.toUpperCase()}) · just now`,
+          title: typeof data.activity === "string" && data.activity.trim() ? data.activity : "Platform activity",
+          sub: `${typeof data.fullName === "string" && data.fullName.trim() ? data.fullName : "Unknown user"} (${typeof data.role === "string" && data.role.trim() ? data.role.toUpperCase() : "USER"}) · just now`,
           type,
           timestamp: new Date().toISOString(),
         };

@@ -37,6 +37,7 @@ function fixture(fault: Fault = null, activePaid = false) {
   let commits = 0;
   let subscriptionWrites = 0;
   const events: Array<{ committed: boolean; status: string; type: string }> = [];
+  const eventPayloads: Array<{ type: string; userId: string; fullName: string; role: string; activity: string; timestamp: string }> = [];
 
   const clientFor = (target: State) => ({
     user: {
@@ -113,14 +114,15 @@ function fixture(fault: Fault = null, activePaid = false) {
     "@/lib/subscription-rules": { PRO_SUBSCRIPTION_DURATION_DAYS: 30 },
     "@/lib/pusher": {
       pusherServer: {
-        trigger: async (_channel: string, _event: string, payload: { type: string }) => {
+        trigger: async (_channel: string, _event: string, payload: typeof eventPayloads[number]) => {
           events.push({ committed: commits > 0, status: state.user.status, type: payload.type });
+          eventPayloads.push(payload);
         },
       },
     },
   };
 
-  return { dependencies, events, getState: () => state, getCommits: () => commits, getSubscriptionWrites: () => subscriptionWrites };
+  return { dependencies, events, eventPayloads, getState: () => state, getCommits: () => commits, getSubscriptionWrites: () => subscriptionWrites };
 }
 
 async function invoke(routeFile: string, setup: ReturnType<typeof fixture>, body: Record<string, string>) {
@@ -194,6 +196,11 @@ test("Admin status-only update commits its audit record before realtime", async 
   assert.equal(setup.getState().user.status, "suspended");
   assert.match(setup.getState().logs[0].activity, /suspended user/);
   assert.deepEqual(setup.events, [{ committed: true, status: "suspended", type: "user_update" }]);
+  assert.equal(setup.eventPayloads[0].userId, "teacher-1");
+  assert.equal(setup.eventPayloads[0].fullName, "Teacher Name");
+  assert.equal(setup.eventPayloads[0].role, "teacher");
+  assert.equal(setup.eventPayloads[0].activity, "Admin suspended user: Teacher Name");
+  assert.ok(Number.isFinite(Date.parse(setup.eventPayloads[0].timestamp)));
   assert.equal(setup.getCommits(), 1);
 });
 
@@ -207,6 +214,7 @@ test("Admin compound grant commits status, subscription, and logs before realtim
   assert.deepEqual(setup.getState().subscriptions.map((subscription) => [subscription.planId, subscription.subscriptionStatus]), [[1, "cancelled"], [2, "active"]]);
   assert.equal(setup.getState().logs.length, 2);
   assert.deepEqual(setup.events, [{ committed: true, status: "suspended", type: "user_update" }]);
+  assert.equal(setup.eventPayloads[0].activity, "Admin suspended user: Teacher Name");
   assert.equal(setup.getCommits(), 1);
 });
 
@@ -218,6 +226,19 @@ test("Admin revoke commits the subscription and audit record before realtime", a
   assert.equal(setup.getState().subscriptions[0].subscriptionStatus, "expired");
   assert.match(setup.getState().logs[0].activity, /revoked Pro subscription/);
   assert.deepEqual(setup.events, [{ committed: true, status: "active", type: "user_update" }]);
+  assert.equal(setup.eventPayloads[0].activity, "Admin manually revoked Pro subscription for: Teacher Name");
+});
+
+test("Admin restore broadcasts its committed activity with user display fields", async () => {
+  const setup = fixture();
+  const response = await invoke(adminRoute, setup, { status: "active" });
+
+  assert.equal(response.status, 200);
+  assert.equal(setup.eventPayloads[0].activity, "Admin restored user: Teacher Name");
+  assert.equal(setup.eventPayloads[0].fullName, "Teacher Name");
+  assert.equal(setup.eventPayloads[0].role, "teacher");
+  assert.equal(setup.eventPayloads[0].userId, "teacher-1");
+  assert.equal(setup.getState().logs[0].activity, setup.eventPayloads[0].activity);
 });
 
 test("Dashboard user update rolls back status and cancellation when Premium upsert fails", async () => {

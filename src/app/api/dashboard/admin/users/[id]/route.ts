@@ -27,7 +27,8 @@ export async function PUT(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    const activity = await prisma.$transaction(async (tx) => {
+      let activity: string | null = null;
       // 2. Update basic status if provided
       if (status && ["active", "suspended"].includes(status)) {
         await tx.user.update({
@@ -35,11 +36,12 @@ export async function PUT(
           data: { status },
         });
 
+        activity = `Admin ${status === "suspended" ? "suspended" : "restored"} user: ${user.fullName}`;
         // Log the activity
         await tx.activityLog.create({
           data: {
             userId: session.userId,
-            activity: `Admin ${status === "suspended" ? "suspended" : "restored"} user: ${user.fullName}`,
+            activity,
             ipAddress: req.headers.get("x-forwarded-for") || "unknown",
           }
         });
@@ -89,13 +91,15 @@ export async function PUT(
               },
             });
 
+            const subscriptionActivity = `Admin manually granted Pro subscription to: ${user.fullName}`;
             await tx.activityLog.create({
               data: {
                 userId: session.userId,
-                activity: `Admin manually granted Pro subscription to: ${user.fullName}`,
+                activity: subscriptionActivity,
                 ipAddress: req.headers.get("x-forwarded-for") || "unknown",
               }
             });
+            activity ??= subscriptionActivity;
           }
         } else if (subscriptionStatus === "expired" && activeSubscription) {
           // Expire all subscriptions for this user
@@ -104,15 +108,18 @@ export async function PUT(
             data: { subscriptionStatus: "expired" }
           });
 
+          const subscriptionActivity = `Admin manually revoked Pro subscription for: ${user.fullName}`;
           await tx.activityLog.create({
             data: {
               userId: session.userId,
-              activity: `Admin manually revoked Pro subscription for: ${user.fullName}`,
+              activity: subscriptionActivity,
               ipAddress: req.headers.get("x-forwarded-for") || "unknown",
             }
           });
+          activity ??= subscriptionActivity;
         }
       }
+      return activity;
     });
 
     // 4. Notify admin dashboard clients via Pusher
@@ -121,6 +128,9 @@ export async function PUT(
       await pusherServer.trigger("private-admin-dashboard", "activity", {
         type: "user_update",
         userId: id,
+        fullName: user.fullName,
+        role: user.role.roleName,
+        activity: activity ?? `Admin refreshed user: ${user.fullName}`,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
