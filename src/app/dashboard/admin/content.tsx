@@ -51,53 +51,68 @@ export default function AdminDashboardContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   const handleToggleStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === "Suspended" ? "active" : "suspended";
-    
-    // Optimistic UI update
-    setUsers(users.map(u => {
-      if (u.id === userId) {
-        return {
-          ...u,
-          status: newStatus.charAt(0).toUpperCase() + newStatus.slice(1),
-          statusClass: newStatus === "suspended" 
-            ? "bg-red-500/10 text-red-500" 
-            : "bg-emerald-500/10 text-emerald-600"
-        };
-      }
-      return u;
-    }));
-
+    setStatusError(null);
+    setUpdatingUserId(userId);
     try {
-      await fetch(`/api/users/${userId}`, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (!response.ok) {
+        setStatusError("Could not update user status. Changes were not saved.");
+        await fetchDashboardData(true);
+        return;
+      }
+      setUsers((previous) => previous.map((user) => user.id === userId ? {
+        ...user,
+        status: newStatus.charAt(0).toUpperCase() + newStatus.slice(1),
+        statusClass: newStatus === "suspended"
+          ? "bg-red-500/10 text-red-500"
+          : "bg-emerald-500/10 text-emerald-600",
+      } : user));
+      await fetchDashboardData(true);
     } catch (e) {
       console.error("Failed to toggle status", e);
+      setStatusError("Could not update user status. Changes were not saved.");
+      await fetchDashboardData(true);
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
   const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    
+    setPlanError(null);
     setIsSaving(true);
-    
     try {
-      await fetch(`/api/users/${editingUser.id}`, {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: editingUser.plan }),
       });
-      
-      // Local update
-      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+      if (!response.ok) {
+        setPlanError("Could not save subscription. Changes were not saved.");
+        await fetchDashboardData(true);
+        return;
+      }
+      setUsers((previous) => previous.map((user) => user.id === editingUser.id ? {
+        ...user,
+        plan: editingUser.plan,
+      } : user));
       setEditingUser(null);
+      await fetchDashboardData(true);
     } catch (e) {
       console.error("Failed to update plan", e);
+      setPlanError("Could not save subscription. Changes were not saved.");
+      await fetchDashboardData(true);
     } finally {
       setIsSaving(false);
     }
@@ -346,6 +361,7 @@ export default function AdminDashboardContent() {
             {users.length} registered
           </span>
         </div>
+        {statusError && <p role="alert" className="px-5 py-3 text-xs font-semibold text-rose-500">{statusError}</p>}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -391,16 +407,16 @@ export default function AdminDashboardContent() {
                     <td className="px-5 py-3 flex gap-2">
                       {u.role === "Teacher" && (
                         <button 
-                          onClick={() => setEditingUser(u)}
+                          onClick={() => { setPlanError(null); setEditingUser(u); }}
                           className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer"
                         >
                           Edit
                         </button>
                       )}
                       {u.status === "Suspended" ? (
-                        <button onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer">Restore</button>
+                        <button disabled={updatingUserId === u.id} onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer disabled:opacity-50">Restore</button>
                       ) : (
-                        <button onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer">Suspend</button>
+                        <button disabled={updatingUserId === u.id} onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer disabled:opacity-50">Suspend</button>
                       )}
                     </td>
                   </tr>
@@ -417,20 +433,7 @@ export default function AdminDashboardContent() {
             <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
             <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
             
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (!editingUser) return;
-              setIsSaving(true);
-              fetch(`/api/users/${editingUser.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ plan: editingUser.plan }),
-              }).then(() => {
-                setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
-                setEditingUser(null);
-                setIsSaving(false);
-              }).catch(() => setIsSaving(false));
-            }}>
+            <form onSubmit={handleSavePlan}>
               <div className="mb-4">
                 <label className="text-xs font-semibold text-[var(--muted)] block mb-1.5">Subscription Plan</label>
                 <select 
@@ -442,6 +445,7 @@ export default function AdminDashboardContent() {
                   <option value="Free Tier">Free Tier</option>
                 </select>
               </div>
+              {planError && <p role="alert" className="text-xs font-semibold text-rose-500">{planError}</p>}
               
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button 
