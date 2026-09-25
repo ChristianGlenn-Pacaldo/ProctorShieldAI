@@ -3,12 +3,9 @@
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import PusherClient from "pusher-js";
 import ResultModal from "@/components/student/ResultModal";
 
-export default function QuizzesContent({ userId }: { userId: string }) {
-  const router = useRouter();
+export default function QuizzesContent() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -31,33 +28,6 @@ export default function QuizzesContent({ userId }: { userId: string }) {
     };
     fetchQuizzes();
   }, []);
-
-  useEffect(() => {
-    if (!userId) return;
-    
-    const pusher = new PusherClient(
-      process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
-    );
-    const channel = pusher.subscribe(`private-student-${userId}`);
-    
-    channel.bind("retake-decision", (data: any) => {
-      if (data.action === "accept") {
-        // Teacher accepted! Instantly redirect into the quiz or arena according to mode.
-        const target = data.quizMode === "arena" ? `/arena/${data.quizId}` : `/quiz/${data.quizId}`;
-        router.push(target);
-      } else {
-        // Teacher rejected. Refresh the page to show updated status.
-        window.location.reload();
-      }
-    });
-
-    return () => {
-      channel.unbind("retake-decision");
-      pusher.unsubscribe(`private-student-${userId}`);
-      pusher.disconnect();
-    };
-  }, [userId, router]);
 
   const filtered = (quizzes || []).filter((e) => 
     (e?.quiz?.title || "").toLowerCase().includes(search.toLowerCase())

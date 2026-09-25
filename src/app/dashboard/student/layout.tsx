@@ -2,6 +2,7 @@ import DashboardShell from "@/components/dashboard-shell";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import NameEnforcer from "@/components/name-enforcer";
+import RetakeRedirect from "./retake-redirect";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -26,6 +27,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
       identityColor="from-indigo-600 to-violet-600"
     >
       <NameEnforcer initialName={name} />
+      <RetakeRedirect userId={session.userId} />
       {children}
     </DashboardShell>
   );

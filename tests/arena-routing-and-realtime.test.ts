@@ -17,6 +17,10 @@ const studentQuizzesSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/dashboard/student/quizzes/content.tsx"),
   "utf-8"
 );
+const retakeRedirectSrc = fs.readFileSync(
+  path.resolve(process.cwd(), "src/app/dashboard/student/retake-redirect.tsx"),
+  "utf-8"
+);
 const teacherQuizzesSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/dashboard/teacher/quizzes/content.tsx"),
   "utf-8"
@@ -101,10 +105,10 @@ test("Test D & E: Student dashboard cards and enrolled list link Arena to /arena
     /se\.quiz\.quizMode\s*===\s*["']arena["']\s*\?\s*`\/arena\/\${se\.quiz\.id}`\s*:\s*`\/quiz\/\${se\.quiz\.id}`/
   );
 
-  // Student quizzes page retake redirect by quizMode
+  // Student dashboard retake redirect by quizMode
   assert.match(
-    studentQuizzesSrc,
-    /data\.quizMode\s*===\s*["']arena["']\s*\?\s*`\/arena\/\${data\.quizId}`\s*:\s*`\/quiz\/\${data\.quizId}`/
+    retakeRedirectSrc,
+    /getQuizJoinDestination\(data\.quizId, data\.quizMode === "arena" \? "arena" : "proctored"\)/
   );
 
   // Student quizzes table row links by quizMode

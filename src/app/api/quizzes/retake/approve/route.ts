@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
       const { pusherServer } = await import("@/lib/pusher");
       await pusherServer.trigger(`private-student-${studentQuiz.studentId}`, "retake-decision", {
         quizId: studentQuiz.quizId,
+        quizMode: studentQuiz.attemptMode,
         action: action,
       });
 
