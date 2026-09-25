@@ -7,10 +7,12 @@ import {
   getAudioAnomalyThreshold,
   getAudioSignalLevel,
   getUnauthorizedDeviceConfidence,
+  isActionableDeviceDetection,
   isScreenshotShortcut,
 } from "@/lib/proctoring-detection";
 import { allQuestionsAnswered, remainingExamSeconds, isCurrentTeacherEnd, canSubmitProctored, resumeProctoredMedia } from "@/lib/proctored-runtime";
 import { COCO_MODEL_BROWSER_URL } from "@/lib/coco-model";
+import { advanceMobileHeadPoseCalibration, advanceMobileNoFaceRecovery, classifyHeadPose, confirmMobileFaceMissing, detectMobileFacesWithFallback, getHeadPoseRadarPosition, getMobileInferenceDimensions, isTransientMobileFaceLoss, MOBILE_NO_FACE_RECOVERY_FRAMES, type HeadPoseBaseline } from "@/lib/head-pose";
 import {
   getBrowserDeviceCapabilities,
   getBrowserProctoringPerformanceProfile,
@@ -127,6 +129,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const isStartupGracePeriodRef = useRef(true);
   const lastViolationAtRef = useRef(0);
   const pendingIncidentIdsRef = useRef(new Map<string, string>());
+  const mobileNoFaceIncidentRecordedRef = useRef(false);
   const fullscreenMonitoringRef = useRef(false);
 
   // Security Incident Refs (Component-level to avoid stale closures)
@@ -143,6 +146,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const [warningModal, setWarningModal] = useState({ show: false, message: "", isFinal: false });
   const [teacherWarningModal, setTeacherWarningModal] = useState({ show: false, message: "" });
   const [preWarning, setPreWarning] = useState<string | null>(null);
+  const [faceTrackingWarning, setFaceTrackingWarning] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioStatus, setAudioStatus] = useState("Starting...");
   const [isMobile, setIsMobile] = useState(false);
@@ -771,6 +775,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   useEffect(() => {
     answersStateRef.current = answersState;
     questionsRef.current = questions;
+    if (studentQuizIdRef.current !== studentQuizId) mobileNoFaceIncidentRecordedRef.current = false;
     studentQuizIdRef.current = studentQuizId;
     violationCountStateRef.current = violationCount;
     isSubmittingRef.current = isSubmitting;
@@ -1488,13 +1493,32 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           let phoneViolationRecorded = false;
           let tickCounter = 0;
           let detectionBusy = false;
+          let mobileHeadPoseSamples: HeadPoseBaseline[] = [];
+          let mobileHeadPoseBaseline: HeadPoseBaseline | null = null;
+          let mobileLastFaceSeenAt: number | null = null;
+          let mobileMissingSince: number | null = null;
+          let mobileFaceRecoveryFrames = 0;
+          let mobileNoFaceRecoveryFrames = 0;
+          let trackingGeneration = 0;
           resetDetectorIncidents = () => {
+            trackingGeneration++;
             // Clear pending frame evidence across suspension, keeping already
             // penalized incidents latched until a clear frame is observed.
             noFaceFrames = 0; multipleFacesFrames = 0; lookingAwayFrames = 0;
             phoneDetectedFrames = 0; phoneAbsentFrames = 0;
+            if (isMobile && !document.hidden) {
+              mobileHeadPoseSamples = [];
+              mobileHeadPoseBaseline = null;
+              mobileLastFaceSeenAt = performance.now();
+              mobileMissingSince = null;
+              mobileFaceRecoveryFrames = 0;
+              mobileNoFaceRecoveryFrames = 0;
+              setFaceTrackingWarning(null);
+              setGazeStatus("Calibrating · face the screen");
+            }
           };
           document.addEventListener("visibilitychange", resetDetectorIncidents);
+          if (isMobile) window.addEventListener("orientationchange", resetDetectorIncidents);
 
           objectModelSlowTimer = setTimeout(() => {
             if (!cancelled && !loadedCocoModel) setDeviceStatus("Still loading device AI...");
@@ -1528,6 +1552,22 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           inferenceCanvas.height = performanceProfile.inferenceHeight;
           const inferenceContext = inferenceCanvas.getContext("2d", { alpha: false });
           if (!inferenceContext) throw new Error("Unable to initialize the AI frame buffer.");
+          const drawInferenceFrame = (video: HTMLVideoElement) => {
+            if (isMobile) {
+              const dimensions = getMobileInferenceDimensions(
+                video.videoWidth,
+                video.videoHeight,
+                performanceProfile.inferenceWidth,
+                performanceProfile.inferenceHeight,
+              );
+              if (inferenceCanvas.width !== dimensions.width || inferenceCanvas.height !== dimensions.height) {
+                inferenceCanvas.width = dimensions.width;
+                inferenceCanvas.height = dimensions.height;
+                resetDetectorIncidents?.();
+              }
+            }
+            inferenceContext.drawImage(video, 0, 0, inferenceCanvas.width, inferenceCanvas.height);
+          };
 
           faceDetectionInterval = setInterval(async () => {
             if (
@@ -1541,7 +1581,19 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             ) return;
 
             const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
-            if (activeVideo?.paused && mediaStreamRef.current?.active) { void activeVideo.play().catch(() => {}); return; }
+            if (activeVideo?.paused && mediaStreamRef.current?.active) {
+              if (isMobile) {
+                mobileHeadPoseSamples = [];
+                mobileHeadPoseBaseline = null;
+                lookingAwayFrames = 0;
+                mobileLastFaceSeenAt = performance.now();
+                mobileMissingSince = null;
+                mobileNoFaceRecoveryFrames = 0;
+                setFaceTrackingWarning(null);
+              }
+              void activeVideo.play().catch(() => {});
+              return;
+            }
             if (!activeVideo || activeVideo.readyState < 2 || activeVideo.videoWidth === 0 || activeVideo.videoHeight === 0) {
               if (activeVideo && activeVideo.paused && mediaStreamRef.current?.active) {
                 activeVideo.play().catch(() => {});
@@ -1551,13 +1603,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             detectionBusy = true;
 
             try {
-              inferenceContext.drawImage(
-                activeVideo,
-                0,
-                0,
-                performanceProfile.inferenceWidth,
-                performanceProfile.inferenceHeight,
-              );
+              drawInferenceFrame(activeVideo);
             } catch {
               detectionBusy = false;
               return;
@@ -1566,41 +1612,90 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             // Alternate scan: device AI on even ticks, face AI on odd ticks
             if (tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
-                const detections = await faceapi.detectAllFaces(
-                  inferenceCanvas,
-                  new faceapi.TinyFaceDetectorOptions({
-                    inputSize: performanceProfile.faceInputSize,
-                    scoreThreshold: 0.5,
-                  })
-                ).withFaceLandmarks(performanceProfile.useTinyLandmarks);
+                const detectionGeneration = trackingGeneration;
+                const detections = await detectMobileFacesWithFallback<{ landmarks: any }>(
+                  isMobile,
+                  performanceProfile.faceInputSize,
+                  (inputSize, scoreThreshold) => faceapi.detectAllFaces(
+                    inferenceCanvas,
+                    new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold }),
+                  ).withFaceLandmarks(performanceProfile.useTinyLandmarks),
+                );
 
-                if (cancelled || document.hidden) { detectionBusy = false; return; }
+                if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) { detectionBusy = false; return; }
                 if (detections.length === 0) {
+                  if (isMobile && !mobileHeadPoseBaseline) mobileHeadPoseSamples = [];
                   multipleFacesFrames = 0; multipleFacesViolationRecorded = false;
-                  lookingAwayFrames = 0; lookingAwayViolationRecorded = false;
-                  noFaceFrames++;
-                  if (noFaceFrames === 2) {
-                    setPreWarning("⚠️ Warning: No face detected. Please face your camera.");
+                  lookingAwayFrames = 0;
+                  mobileFaceRecoveryFrames = 0;
+                  mobileNoFaceRecoveryFrames = 0;
+                  if (isMobile && mobileMissingSince === null) mobileMissingSince = performance.now();
+                  const reacquiringFace = isMobile && mobileMissingSince !== null
+                    && isTransientMobileFaceLoss(mobileLastFaceSeenAt, mobileMissingSince, performance.now());
+                  if (reacquiringFace) {
+                    noFaceFrames = 0;
+                    setFaceStatus("Reacquiring…");
+                    setGazeStatus("Reacquiring…");
+                    setFaceTrackingWarning(null);
+                  } else {
+                    noFaceFrames++;
+                    setFaceTrackingWarning(noFaceFrames >= 2
+                      ? "⚠️ Warning: No face detected. Please face your camera."
+                      : null);
+                    let faceRecoveredOnConfirmation = false;
+                    if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5)
+                      && !(isMobile ? mobileNoFaceIncidentRecordedRef.current : noFaceViolationRecorded)) {
+                      if (isMobile) {
+                        faceRecoveredOnConfirmation = !(await confirmMobileFaceMissing(async (inputSize, scoreThreshold) => {
+                          drawInferenceFrame(activeVideo);
+                          return (await faceapi.detectAllFaces(inferenceCanvas, new faceapi.TinyFaceDetectorOptions({
+                            inputSize,
+                            scoreThreshold,
+                          }))).length;
+                        }));
+                      }
+                      if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) {
+                        detectionBusy = false;
+                        return;
+                      }
+                      if (faceRecoveredOnConfirmation) {
+                        noFaceFrames = 0;
+                        mobileLastFaceSeenAt = performance.now();
+                        mobileMissingSince = null;
+                        setFaceTrackingWarning(null);
+                      } else {
+                        const recorded = await reportViolationRef.current("no_face", 100);
+                        if (isMobile) mobileNoFaceIncidentRecordedRef.current = recorded;
+                        else noFaceViolationRecorded = recorded;
+                      }
+                    }
+                    setFaceStatus(faceRecoveredOnConfirmation ? "Reacquiring…" : "Not Detected ✗");
+                    setGazeStatus(faceRecoveredOnConfirmation ? "Reacquiring…" : "Face not detected");
                   }
-                  if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5) && !noFaceViolationRecorded) {
-                    noFaceViolationRecorded = await reportViolationRef.current("no_face", 100);
-                  }
-                  setFaceStatus("Not Detected ✗");
                 } else if (detections.length > 1) {
+                  if (isMobile && !mobileHeadPoseBaseline) mobileHeadPoseSamples = [];
                   noFaceFrames = 0; noFaceViolationRecorded = false;
-                  lookingAwayFrames = 0; lookingAwayViolationRecorded = false;
+                  lookingAwayFrames = 0;
+                  mobileMissingSince = null;
+                  mobileFaceRecoveryFrames = 0;
+                  mobileNoFaceRecoveryFrames = 0;
                   multipleFacesFrames++;
-                  if (multipleFacesFrames === 2) {
-                    setPreWarning("⚠️ Warning: Multiple faces detected in frame.");
-                  }
+                  setFaceTrackingWarning(multipleFacesFrames >= 2
+                    ? "⚠️ Warning: Multiple faces detected in frame."
+                    : null);
                   if (multipleFacesFrames >= (isMobile ? 3 : 4) && !multipleFacesViolationRecorded) {
                     multipleFacesViolationRecorded = await reportViolationRef.current("multiple_faces", 100);
                   }
                   setFaceStatus("Multiple ✗");
+                  setGazeStatus("Multiple faces detected");
                 } else {
-                  // Exactly 1 face detected -> reset no_face & multiple_faces incident states
-                  noFaceFrames = 0;
-                  noFaceViolationRecorded = false;
+                  mobileFaceRecoveryFrames++;
+                  if (!isMobile || mobileMissingSince === null || mobileFaceRecoveryFrames >= 2) {
+                    noFaceFrames = 0;
+                    mobileLastFaceSeenAt = performance.now();
+                    mobileMissingSince = null;
+                    if (!isMobile) noFaceViolationRecorded = false;
+                  }
                   multipleFacesFrames = 0;
                   multipleFacesViolationRecorded = false;
                   setFaceStatus("Detected ✓");
@@ -1624,42 +1719,48 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   const yawOffset = (noseBottom.x - eyeCenterX) / eyeDistance;
                   const pitchRatio = (noseBottom.y - eyeCenterY) / eyeDistance;
 
-                  let direction = "Focused ✓";
-                  let violationReason = "";
-
-                  if (yawOffset < -0.38) {
-                    direction = "Looking Right ✗";
-                    violationReason = "looking_right";
-                  } else if (yawOffset > 0.38) {
-                    direction = "Looking Left ✗";
-                    violationReason = "looking_left";
-                  } else if (pitchRatio < 0.15) {
-                    direction = "Looking Up ✗";
-                    violationReason = "looking_up";
-                  } else if (pitchRatio > 1.10) {
-                    direction = "Looking Down ✗";
-                    violationReason = "looking_down";
+                  if (isMobile && !mobileHeadPoseBaseline) {
+                    const calibration = advanceMobileHeadPoseCalibration(mobileHeadPoseSamples, yawOffset, pitchRatio);
+                    mobileHeadPoseSamples = calibration.samples;
+                    mobileHeadPoseBaseline = calibration.baseline;
                   }
 
-                  setGazeStatus(direction);
+                  const pose = classifyHeadPose(yawOffset, pitchRatio, {
+                    mobile: isMobile,
+                    baseline: mobileHeadPoseBaseline || undefined,
+                  });
+                  const direction = pose.direction;
+                  const violationReason = pose.violationReason;
 
-                  let radarX = 50 - (yawOffset * 100);
-                  radarX = Math.max(15, Math.min(85, radarX));
-                  let radarY = 50 + ((pitchRatio - 0.55) * 80);
-                  radarY = Math.max(15, Math.min(85, radarY));
-                  setHeadPos({ x: radarX, y: radarY });
-
-                  if (direction !== "Focused ✓") {
-                    lookingAwayFrames++;
-                    if (lookingAwayFrames === 2) {
-                      setPreWarning(`Please look directly at the screen. (${direction.replace(' ✗', '')})`);
+                  if (isMobile && mobileNoFaceIncidentRecordedRef.current) {
+                    mobileNoFaceRecoveryFrames = advanceMobileNoFaceRecovery(
+                      mobileNoFaceRecoveryFrames,
+                      pose.calibrated && direction === "Focused ✓",
+                    );
+                    if (mobileNoFaceRecoveryFrames >= MOBILE_NO_FACE_RECOVERY_FRAMES) {
+                      mobileNoFaceIncidentRecordedRef.current = false;
                     }
+                  }
+
+                  setGazeStatus(pose.calibrated ? direction : "Calibrating · face the screen");
+
+                  setHeadPos(getHeadPoseRadarPosition(pose, isMobile));
+
+                  if (!pose.calibrated) {
+                    lookingAwayFrames = 0;
+                    setFaceTrackingWarning(null);
+                  } else if (direction !== "Focused ✓") {
+                    lookingAwayFrames++;
+                    setFaceTrackingWarning(lookingAwayFrames >= 2
+                      ? `Please look directly at the screen. (${direction.replace(' ✗', '')})`
+                      : null);
                     if (lookingAwayFrames >= (isMobile ? 3 : 5) && !lookingAwayViolationRecorded) {
                       lookingAwayViolationRecorded = await reportViolationRef.current(violationReason, 90);
                     }
                   } else {
                     lookingAwayFrames = 0;
                     lookingAwayViolationRecorded = false;
+                    setFaceTrackingWarning(null);
                   }
                 }
               } catch (faceErr) {
@@ -1671,7 +1772,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                 if (cancelled || document.hidden) { detectionBusy = false; return; }
                 const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
 
-                if (deviceConfidence > 0) {
+                const mobileFaceMissing = isMobile && (mobileMissingSince !== null || mobileNoFaceIncidentRecordedRef.current);
+                if (isActionableDeviceDetection(deviceConfidence, mobileFaceMissing, isMobile)) {
                   phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
                   phoneAbsentFrames = 0;
                   setDeviceStatus(
@@ -1726,7 +1828,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     return () => {
       cancelled = true;
       if (joinedTimer) clearTimeout(joinedTimer);
-      if (resetDetectorIncidents) document.removeEventListener("visibilitychange", resetDetectorIncidents);
+      if (resetDetectorIncidents) {
+        document.removeEventListener("visibilitychange", resetDetectorIncidents);
+        window.removeEventListener("orientationchange", resetDetectorIncidents);
+      }
       if (snapshotInterval) clearInterval(snapshotInterval);
       if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
       if (faceDetectionInterval) clearInterval(faceDetectionInterval);
@@ -2108,8 +2213,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="bg-[#1b2038] border border-[#2e375e] p-3.5 rounded-2xl">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Exam Score</div>
-              <div className="text-xl font-black text-amber-400 mt-1 flex items-center justify-center gap-1">
-                <Award className="w-4 h-4 text-amber-400" /> {quizSubmittedResult.score !== null ? `${quizSubmittedResult.score}%` : "Recorded"}
+              <div className={`text-xl font-black mt-1 flex items-center justify-center gap-1 ${resultInvalidated ? "text-rose-400" : "text-amber-400"}`}>
+                {resultInvalidated ? <AlertTriangle className="w-4 h-4" /> : <Award className="w-4 h-4" />}
+                {resultInvalidated ? "Not recorded" : quizSubmittedResult.score !== null ? `${quizSubmittedResult.score}%` : "Unavailable"}
               </div>
             </div>
 
@@ -2443,10 +2549,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       )}
 
       {/* Pre-Warning Banner */}
-      {preWarning && (
+      {(preWarning || faceTrackingWarning) && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 text-center text-xs font-black tracking-wide shrink-0 animate-pulse flex items-center justify-center gap-2 shadow-md">
           <AlertTriangle className="w-4 h-4" />
-          <span>{preWarning}</span>
+          <span>{preWarning || faceTrackingWarning}</span>
         </div>
       )}
 
@@ -2545,7 +2651,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-semibold">Gaze:</span>
                 <span className={`font-bold ${gazeStatus.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>
-                  {gazeStatus.includes("✓") ? "Focused ✓" : "Away ✗"}
+                  {gazeStatus}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">

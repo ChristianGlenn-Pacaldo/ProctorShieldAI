@@ -79,6 +79,12 @@ export function getUnauthorizedDeviceConfidence(predictions: ObjectPrediction[])
   return confidence;
 }
 
+export function isActionableDeviceDetection(confidence: number, mobileFaceMissing: boolean, mobile = false): boolean {
+  if (confidence <= 0) return false;
+  if (mobileFaceMissing) return confidence >= 0.65;
+  return !mobile || confidence >= 0.5;
+}
+
 export function getAudioSignalLevel(samples: ArrayLike<number>): number {
   if (samples.length === 0) return 0;
 

@@ -332,6 +332,12 @@ test("18. invalid submit trigger awards no EXP", () => {
   assert.match(submitRouteSrc, /awardStudentExp\(session\.userId, EXP_REWARDS\.PROCTORED_COMPLETION/);
 });
 
+test("18A. invalidated exam result never claims its academic score was recorded", () => {
+  assert.match(submitRouteSrc, /recordedScore = integrityInvalidated \? null : score/);
+  assert.match(quizPageSrc, /resultInvalidated \? "Not recorded" : quizSubmittedResult\.score !== null/);
+  assert.doesNotMatch(quizPageSrc, /: "Recorded"\}/);
+});
+
 test("19. Power Arena unaffected", () => {
   assert.equal(isArenaQuiz({ quizMode: "arena" }), true);
   assert.equal(isProctoredQuiz({ quizMode: "arena" }), false);

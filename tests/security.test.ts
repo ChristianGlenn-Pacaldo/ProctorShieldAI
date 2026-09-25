@@ -9,6 +9,7 @@ import {
   getAudioSignalLevel,
   getViolationLabel,
   getUnauthorizedDeviceConfidence,
+  isActionableDeviceDetection,
   isScreenshotShortcut,
   VALID_VIOLATION_TYPES,
 } from "../src/lib/proctoring-detection.ts";
@@ -95,6 +96,21 @@ test("device detection rejects weak and stationary-screen false positives", () =
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "tv", score: 0.92 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.48 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "laptop", score: 0.76 }]), 0.76);
+});
+
+test("mobile face loss rejects weak hand-occlusion device matches without disabling strong detections", () => {
+  assert.equal(isActionableDeviceDetection(0.39, true), false);
+  assert.equal(isActionableDeviceDetection(0.39, false), true);
+  assert.equal(isActionableDeviceDetection(0.23, false, true), false);
+  assert.equal(isActionableDeviceDetection(0.45, false, true), false);
+  assert.equal(isActionableDeviceDetection(0.5, false, true), true);
+  assert.equal(isActionableDeviceDetection(0.61, false, true), true);
+  assert.equal(isActionableDeviceDetection(0.64, true), false);
+  assert.equal(isActionableDeviceDetection(0.64, true, true), false);
+  assert.equal(isActionableDeviceDetection(0.65, true), true);
+  assert.equal(isActionableDeviceDetection(0.65, true, true), true);
+  assert.equal(isActionableDeviceDetection(0.75, true), true);
+  assert.equal(isActionableDeviceDetection(0, false), false);
 });
 
 test("audio monitoring converts PCM samples into a bounded adaptive signal", () => {

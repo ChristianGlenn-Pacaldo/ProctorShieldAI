@@ -83,11 +83,67 @@ test("15 & 16: Face-missing and multiple-faces continuous frames produce max one
 test("17: Phone / object detection continuous frames produce max one incident violation", () => {
   assert.match(quizPageSrc, /phoneViolationRecorded/);
   assert.match(quizPageSrc, /reportViolationRef\.current\(\s*["']device_detected["']/);
+  assert.match(quizPageSrc, /mobileFaceMissing = isMobile && \(mobileMissingSince !== null \|\| mobileNoFaceIncidentRecordedRef\.current\)/);
+  assert.match(quizPageSrc, /isActionableDeviceDetection\(deviceConfidence, mobileFaceMissing, isMobile\)/);
 });
 
 test("18: Mobile/portrait dimensions use normalized geometric ratios for head pose", () => {
   assert.match(quizPageSrc, /yawOffset\s*=\s*\(noseBottom\.x\s*-\s*eyeCenterX\)\s*\/\s*eyeDistance/);
   assert.match(quizPageSrc, /pitchRatio\s*=\s*\(noseBottom\.y\s*-\s*eyeCenterY\)\s*\/\s*eyeDistance/);
+  assert.match(quizPageSrc, /mobileHeadPoseBaseline/);
+  assert.match(quizPageSrc, /classifyHeadPose\(yawOffset, pitchRatio/);
+  assert.match(quizPageSrc, /advanceMobileHeadPoseCalibration\(mobileHeadPoseSamples, yawOffset, pitchRatio\)/);
+  assert.match(quizPageSrc, /if \(!pose\.calibrated\)\s*\{\s*lookingAwayFrames = 0/);
+  const missingFaceHeadPose = quizPageSrc.match(/if \(detections\.length === 0\) \{[\s\S]*?lookingAwayFrames = 0;[\s\S]*?noFaceFrames\+\+/)?.[0];
+  const multipleFacesHeadPose = quizPageSrc.match(/else if \(detections\.length > 1\) \{[\s\S]*?lookingAwayFrames = 0;[\s\S]*?multipleFacesFrames\+\+/)?.[0];
+  const calibratingHeadPose = quizPageSrc.match(/if \(!pose\.calibrated\) \{[\s\S]*?\} else if \(direction !== "Focused ✓"\)/)?.[0];
+  for (const segment of [missingFaceHeadPose, multipleFacesHeadPose, calibratingHeadPose]) {
+    assert.ok(segment);
+    assert.doesNotMatch(segment, /lookingAwayViolationRecorded = false/);
+  }
+  assert.match(quizPageSrc, /else \{\s*lookingAwayFrames = 0;\s*lookingAwayViolationRecorded = false;\s*setFaceTrackingWarning\(null\);\s*\}/);
+  assert.match(quizPageSrc, /window\.addEventListener\("orientationchange", resetDetectorIncidents\)/);
+  assert.match(quizPageSrc, /activeVideo\?\.paused[\s\S]*mobileHeadPoseBaseline = null/);
+  assert.match(quizPageSrc, /lookingAwayFrames >= \(isMobile \? 3 : 5\)[\s\S]*reportViolationRef\.current\(violationReason, 90\)/);
+});
+
+test("18A: Mobile reacquisition suppresses brief no-face evidence but sustained absence retains the strike path", () => {
+  assert.match(quizPageSrc, /detectMobileFacesWithFallback(?:<[^>]+>)?\(\s*isMobile,\s*performanceProfile\.faceInputSize/);
+  assert.match(quizPageSrc, /\(inputSize, scoreThreshold\) => faceapi\.detectAllFaces\([\s\S]*?\)\.withFaceLandmarks\(performanceProfile\.useTinyLandmarks\)/);
+  const missingFace = quizPageSrc.match(/if \(detections\.length === 0\) \{[\s\S]*?\} else if \(detections\.length > 1\)/)?.[0];
+  assert.ok(missingFace);
+  assert.match(missingFace, /isTransientMobileFaceLoss\(mobileLastFaceSeenAt, mobileMissingSince, performance\.now\(\)\)/);
+  assert.match(missingFace, /if \(reacquiringFace\) \{[\s\S]*?noFaceFrames = 0;[\s\S]*?\} else \{[\s\S]*?noFaceFrames\+\+/);
+  assert.match(missingFace, /noFaceFrames >= \(isMobile \? 4 : 5\)[\s\S]*reportViolationRef\.current\("no_face", 100\)/);
+  assert.match(missingFace, /confirmMobileFaceMissing\(async \(inputSize, scoreThreshold\) =>[\s\S]*?if \(faceRecoveredOnConfirmation\) \{[\s\S]*?noFaceFrames = 0;[\s\S]*?\} else \{[\s\S]*?reportViolationRef\.current\("no_face", 100\)/);
+  assert.match(missingFace, /confirmMobileFaceMissing\(async \(inputSize, scoreThreshold\) => \{\s*drawInferenceFrame\(activeVideo\)/);
+  assert.match(quizPageSrc, /getMobileInferenceDimensions\(\s*video\.videoWidth,\s*video\.videoHeight/);
+  assert.match(quizPageSrc, /inferenceContext\.drawImage\(video, 0, 0, inferenceCanvas\.width, inferenceCanvas\.height\)/);
+  assert.match(quizPageSrc, /mobileFaceRecoveryFrames >= 2\) \{[\s\S]*?noFaceFrames = 0;[\s\S]*?mobileMissingSince = null/);
+  assert.match(quizPageSrc, /const mobileNoFaceIncidentRecordedRef = useRef\(false\)/);
+  assert.match(quizPageSrc, /studentQuizIdRef\.current !== studentQuizId\) mobileNoFaceIncidentRecordedRef\.current = false/);
+  assert.match(missingFace, /mobileNoFaceRecoveryFrames = 0;[\s\S]*?mobileNoFaceIncidentRecordedRef\.current/);
+  assert.match(quizPageSrc, /pose\.calibrated && direction === "Focused ✓"[\s\S]*?mobileNoFaceIncidentRecordedRef\.current = false/);
+});
+
+test("18B: Face-tracking warnings are single-owner, clear on neutral, and reject stale detection results", () => {
+  assert.match(quizPageSrc, /const \[faceTrackingWarning, setFaceTrackingWarning\] = useState<string \| null>\(null\)/);
+  assert.match(quizPageSrc, /trackingGeneration\+\+;[\s\S]*?setFaceTrackingWarning\(null\)/);
+  assert.match(quizPageSrc, /const detectionGeneration = trackingGeneration;[\s\S]*?detectionGeneration !== trackingGeneration/);
+  const faceScan = quizPageSrc.match(/faceDetectionInterval = setInterval\(async \(\) => \{[\s\S]*?\}, performanceProfile\.detectionIntervalMs\)/)?.[0];
+  assert.ok(faceScan);
+  assert.doesNotMatch(faceScan, /setTimeout\([\s\S]*setFaceTrackingWarning/);
+  assert.match(quizPageSrc, /else \{\s*lookingAwayFrames = 0;\s*lookingAwayViolationRecorded = false;\s*setFaceTrackingWarning\(null\)/);
+  assert.match(quizPageSrc, /setFaceTrackingWarning\(lookingAwayFrames >= 2[\s\S]*?: null\)/);
+  assert.match(quizPageSrc, /setFaceTrackingWarning\(noFaceFrames >= 2[\s\S]*?: null\)/);
+  assert.doesNotMatch(quizPageSrc, /setPreWarning\(`Please look directly at the screen/);
+  assert.match(quizPageSrc, /\{preWarning \|\| faceTrackingWarning\}/);
+});
+
+test("18C: Three confirmed violations still trigger one guarded auto-submit", () => {
+  assert.match(quizPageSrc, /if \(!hasStarted \|\| violationCount < 3 \|\| isAlertingRef\.current \|\| isSubmitting\) return/);
+  assert.match(quizPageSrc, /if \(currentCount >= 3\) \{\s*isAlertingRef\.current = true/);
+  assert.match(quizPageSrc, /submitQuizRef\.current\("violation_limit"\)/);
 });
 
 test("19: Power Arena never records proctoring violations", () => {
