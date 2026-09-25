@@ -47,7 +47,17 @@ export async function PUT(
 
       // 3. Update subscription status if provided and user is a teacher
       if (subscriptionStatus && user.role.roleName === "teacher") {
-        if (subscriptionStatus === "active") {
+        const activeSubscription = await tx.userSubscription.findFirst({
+          where: {
+            userId: id,
+            subscriptionStatus: "active",
+            endDate: { gt: new Date() },
+            plan: { yearlyPrice: { gt: 0 } },
+          },
+          select: { id: true },
+        });
+
+        if (subscriptionStatus === "active" && !activeSubscription) {
           // Find the premium plan
           const premiumPlan = await tx.subscriptionPlan.findFirst({
             where: { planName: { in: ["Premium Monthly", "Premium Yearly"] } },
@@ -87,7 +97,7 @@ export async function PUT(
               }
             });
           }
-        } else if (subscriptionStatus === "expired") {
+        } else if (subscriptionStatus === "expired" && activeSubscription) {
           // Expire all subscriptions for this user
           await tx.userSubscription.updateMany({
             where: { userId: id },

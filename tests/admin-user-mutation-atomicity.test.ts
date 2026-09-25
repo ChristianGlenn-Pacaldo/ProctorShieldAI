@@ -11,6 +11,8 @@ const dashboardRoute = "src/app/api/users/[id]/route.ts";
 type Subscription = {
   userId: string;
   planId: number;
+  startDate: Date;
+  endDate: Date;
   subscriptionStatus: string;
   paymentStatus: string;
 };
@@ -23,13 +25,17 @@ type State = {
 
 type Fault = "activityLog" | "updateMany" | "upsert" | null;
 
-function fixture(fault: Fault = null) {
+function fixture(fault: Fault = null, activePaid = false) {
   let state: State = {
     user: { id: "teacher-1", fullName: "Teacher Name", status: "active" },
-    subscriptions: [{ userId: "teacher-1", planId: 1, subscriptionStatus: "active", paymentStatus: "paid" }],
+    subscriptions: [{
+      userId: "teacher-1", planId: 1, subscriptionStatus: "active", paymentStatus: "paid",
+      startDate: new Date("2025-01-01"), endDate: new Date(activePaid ? "2099-01-01" : "2025-02-01"),
+    }],
     logs: [],
   };
   let commits = 0;
+  let subscriptionWrites = 0;
   const events: Array<{ committed: boolean; status: string; type: string }> = [];
 
   const clientFor = (target: State) => ({
@@ -42,11 +48,18 @@ function fixture(fault: Fault = null) {
     },
     subscriptionPlan: { findFirst: async () => ({ id: 2, planName: "Premium Monthly" }) },
     userSubscription: {
+      findFirst: async ({ where }: {
+        where: { userId: string; subscriptionStatus: string; endDate: { gt: Date } };
+      }) => target.subscriptions.find((subscription) =>
+        subscription.userId === where.userId
+        && subscription.subscriptionStatus === where.subscriptionStatus
+        && subscription.endDate > where.endDate.gt) ?? null,
       updateMany: async ({ where, data }: {
         where: { userId: string; planId?: { not: number }; subscriptionStatus?: string };
         data: { subscriptionStatus: string };
       }) => {
         if (fault === "updateMany") throw new Error("subscription update failed");
+        subscriptionWrites++;
         const matching = target.subscriptions.filter((subscription) =>
           subscription.userId === where.userId
           && (!where.planId || subscription.planId !== where.planId.not)
@@ -60,6 +73,7 @@ function fixture(fault: Fault = null) {
         create: Subscription;
       }) => {
         if (fault === "upsert") throw new Error("subscription upsert failed");
+        subscriptionWrites++;
         const existing = target.subscriptions.find((subscription) =>
           subscription.userId === where.userId_planId.userId
           && subscription.planId === where.userId_planId.planId);
@@ -106,7 +120,7 @@ function fixture(fault: Fault = null) {
     },
   };
 
-  return { dependencies, events, getState: () => state, getCommits: () => commits };
+  return { dependencies, events, getState: () => state, getCommits: () => commits, getSubscriptionWrites: () => subscriptionWrites };
 }
 
 async function invoke(routeFile: string, setup: ReturnType<typeof fixture>, body: Record<string, string>) {
@@ -151,7 +165,7 @@ test("Admin grant rolls back status and prior-plan cancellation when upsert fail
 });
 
 test("Admin revoke rolls back when its activity log fails", async () => {
-  const setup = fixture("activityLog");
+  const setup = fixture("activityLog", true);
   const response = await invoke(adminRoute, setup, { subscriptionStatus: "expired" });
 
   assert.equal(response.status, 500);
@@ -197,7 +211,7 @@ test("Admin compound grant commits status, subscription, and logs before realtim
 });
 
 test("Admin revoke commits the subscription and audit record before realtime", async () => {
-  const setup = fixture();
+  const setup = fixture(null, true);
   const response = await invoke(adminRoute, setup, { subscriptionStatus: "expired" });
 
   assert.equal(response.status, 200);
@@ -217,7 +231,7 @@ test("Dashboard user update rolls back status and cancellation when Premium upse
 });
 
 test("Dashboard user update rolls back status when Free Tier cancellation fails", async () => {
-  const setup = fixture("updateMany");
+  const setup = fixture("updateMany", true);
   const response = await invoke(dashboardRoute, setup, { status: "suspended", plan: "Free Tier" });
 
   assert.equal(response.status, 500);
@@ -240,7 +254,7 @@ test("Dashboard user update commits status and plan without changing its respons
 });
 
 test("Dashboard Free Tier cancellation commits and returns success", async () => {
-  const setup = fixture();
+  const setup = fixture(null, true);
   const response = await invoke(dashboardRoute, setup, { plan: "Free Tier" });
 
   assert.equal(response.status, 200);
@@ -248,3 +262,38 @@ test("Dashboard Free Tier cancellation commits and returns success", async () =>
   assert.equal(setup.getState().subscriptions[0].subscriptionStatus, "cancelled");
   assert.equal(setup.getCommits(), 1);
 });
+
+for (const [routeFile, body] of [
+  [adminRoute, { subscriptionStatus: "active" }],
+  [dashboardRoute, { plan: "Premium" }],
+] as const) {
+  test(`${routeFile} unchanged paid Premium preserves long-duration entitlement`, async () => {
+    const setup = fixture(null, true);
+    const original = structuredClone(setup.getState().subscriptions);
+    const response = await invoke(routeFile, setup, body);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { success: true });
+    assert.deepEqual(setup.getState().subscriptions, original);
+    assert.equal(setup.getState().subscriptions[0].endDate.toISOString(), "2099-01-01T00:00:00.000Z");
+    assert.equal(setup.getSubscriptionWrites(), 0);
+    assert.equal(setup.getState().logs.length, 0);
+  });
+}
+
+for (const [routeFile, body] of [
+  [adminRoute, { subscriptionStatus: "expired" }],
+  [dashboardRoute, { plan: "Free Tier" }],
+] as const) {
+  test(`${routeFile} unchanged Free state makes no subscription write`, async () => {
+    const setup = fixture();
+    setup.getState().subscriptions[0].subscriptionStatus = "expired";
+    const original = structuredClone(setup.getState().subscriptions);
+    const response = await invoke(routeFile, setup, body);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(setup.getState().subscriptions, original);
+    assert.equal(setup.getSubscriptionWrites(), 0);
+    assert.equal(setup.getState().logs.length, 0);
+  });
+}

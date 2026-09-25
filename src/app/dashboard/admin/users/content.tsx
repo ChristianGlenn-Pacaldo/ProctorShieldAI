@@ -243,6 +243,11 @@ export default function UsersContent() {
               <button
                 disabled={isSaving}
                 onClick={async () => {
+                  const wasSubscribed = editUser.subscription?.includes("PRO") || false;
+                  if (editSubStatus === wasSubscribed) {
+                    setEditUser(null);
+                    return;
+                  }
                   setIsSaving(true);
                   try {
                     const res = await fetch(`/api/dashboard/admin/users/${editUser.id}`, {

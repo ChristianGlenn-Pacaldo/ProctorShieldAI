@@ -34,7 +34,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       // Handle Plan Update (Premium / Free Tier) - Only applies to teachers
       if (plan && user.role.roleName === "teacher") {
-        if (plan === "Premium") {
+        const activeSubscription = await tx.userSubscription.findFirst({
+          where: {
+            userId: id,
+            subscriptionStatus: "active",
+            endDate: { gt: new Date() },
+            plan: { yearlyPrice: { gt: 0 } },
+          },
+          select: { id: true },
+        });
+
+        if (plan === "Premium" && !activeSubscription) {
           const premiumPlan = await tx.subscriptionPlan.findFirst({
             where: { planName: { contains: "Premium" } }
           });
@@ -66,7 +76,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
               }
             });
           }
-        } else if (plan === "Free Tier") {
+        } else if (plan === "Free Tier" && activeSubscription) {
           // Just cancel the active subscription
           await tx.userSubscription.updateMany({
             where: { userId: id, subscriptionStatus: "active" },
