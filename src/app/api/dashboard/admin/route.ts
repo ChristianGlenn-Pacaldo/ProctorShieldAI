@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
     }
 
     // 1. Fetch counts for stats (Active Sessions, Active Quizzes, Active Violations, AI Flags)
-    const presenceCutoff = new Date(Date.now() - 45_000);
+    const now = new Date();
+    const presenceCutoff = new Date(now.getTime() - 45_000);
+    const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const tomorrowUtc = new Date(todayUtc.getTime() + 86_400_000);
     const activeSessions = await prisma.user.count({
       where: { status: "active", lastSeenAt: { gte: presenceCutoff } },
     });
@@ -28,10 +31,10 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // AI Flags (Lifetime)
     const aiFlags = await prisma.aiAnalysis.count({
       where: {
         finalVerdict: { in: ["suspicious", "cheated"] },
+        analyzedAt: { gte: todayUtc, lt: tomorrowUtc },
       },
     });
 
@@ -56,6 +59,11 @@ export async function GET(req: NextRequest) {
       include: { 
         role: true,
         userSubscriptions: {
+          where: {
+            subscriptionStatus: "active",
+            endDate: { gt: now },
+            plan: { yearlyPrice: { gt: 0 } },
+          },
           include: { plan: true }
         }
       },
@@ -80,9 +88,7 @@ export async function GET(req: NextRequest) {
       let subClass = "bg-white/5 text-[var(--muted)]";
 
       if (u.role.roleName === "teacher") {
-        const activeSub = u.userSubscriptions?.find(
-          sub => sub.subscriptionStatus === "active" && sub.endDate > new Date(),
-        );
+        const activeSub = u.userSubscriptions?.[0];
         if (activeSub) {
           plan = activeSub.plan?.planName?.includes("Premium") ? "Premium" : "PRO (Active)";
           subscription = "PRO (Active)";

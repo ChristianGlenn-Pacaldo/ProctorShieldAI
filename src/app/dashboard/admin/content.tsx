@@ -249,7 +249,7 @@ export default function AdminDashboardContent() {
       icon: <Brain className="w-5 h-5" />,
       color: "bg-violet-600/10 text-violet-600 dark:text-violet-400 border border-violet-500/20",
       badge: "GEMINI",
-      sub: "Forensic Risk Analyses",
+      sub: "Forensic Risk Analyses · UTC",
     },
   ];
 

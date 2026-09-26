@@ -76,7 +76,7 @@ export default function AnalyticsContent() {
           icon={<BookOpen className="w-5 h-5 text-violet-600" />}
           label="Total Quizzes"
           value={data.quizStats.totalQuizzes}
-          sub={`${data.quizStats.completedQuizzes} completed`}
+          sub={`${data.quizStats.completedQuizzes} completed quizzes`}
           color="bg-violet-500/10"
         />
         <StatCard
@@ -162,13 +162,13 @@ export default function AnalyticsContent() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-extrabold text-[var(--ink)]">{data.quizStats.completedQuizzes}</div>
-                <div className="text-[10px] text-[var(--muted)] mt-0.5">Completed</div>
+                <div className="text-[10px] text-[var(--muted)] mt-0.5">Completed Quizzes</div>
               </div>
             </div>
             <Bar
               label="Completion Rate"
-              value={`${data.quizStats.totalAttempts > 0 ? Math.round((data.quizStats.completedQuizzes / data.quizStats.totalAttempts) * 100) : 0}%`}
-              pct={data.quizStats.totalAttempts > 0 ? Math.round((data.quizStats.completedQuizzes / data.quizStats.totalAttempts) * 100) : 0}
+              value={`${data.quizStats.totalQuizzes > 0 ? Math.round((data.quizStats.completedQuizzes / data.quizStats.totalQuizzes) * 100) : 0}%`}
+              pct={data.quizStats.totalQuizzes > 0 ? Math.round((data.quizStats.completedQuizzes / data.quizStats.totalQuizzes) * 100) : 0}
               color="bg-blue-500"
             />
           </div>

@@ -16,11 +16,17 @@ export async function GET(req: NextRequest) {
     const totalUsers    = totalStudents + totalTeachers + totalAdmins;
 
     // ── Subscription stats
-    const proTeachers = await prisma.userSubscription.count({
+    const now = new Date();
+    const proTeachers = await prisma.user.count({
       where: {
-        subscriptionStatus: "active",
-        endDate: { gt: new Date() },
-        user: { role: { roleName: "teacher" } },
+        role: { roleName: "teacher" },
+        userSubscriptions: {
+          some: {
+            subscriptionStatus: "active",
+            endDate: { gt: now },
+            plan: { yearlyPrice: { gt: 0 } },
+          },
+        },
       },
     });
     const freeTeachers = Math.max(0, totalTeachers - proTeachers);
@@ -28,7 +34,7 @@ export async function GET(req: NextRequest) {
 
     // ── Quiz stats
     const totalQuizzes    = await prisma.quiz.count();
-    const completedQuizzes = await prisma.studentQuiz.count({ where: { quizStatus: "completed" } });
+    const completedQuizzes = await prisma.quiz.count({ where: { quizStatus: { in: ["ended", "completed"] } } });
     const totalAttempts   = await prisma.studentQuiz.count();
 
     // ── AI verdict distribution
