@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
 class LastActiveAdminError extends Error {}
+class MissingPremiumPlanError extends Error {}
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let suspendingAdmin = false;
@@ -14,8 +15,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const { id } = await params;
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid user update request" }, { status: 400 });
+    }
+    const fields = Object.keys(body);
+    if (fields.length === 0 || fields.some((field) => !["status", "plan"].includes(field))) {
+      return NextResponse.json({ error: "Unsupported user update fields" }, { status: 400 });
+    }
     const { status, plan } = body;
+    if (("status" in body && !["active", "suspended"].includes(status))
+      || ("plan" in body && !["Premium", "Free Tier"].includes(plan))) {
+      return NextResponse.json({ error: "Invalid user status or subscription plan" }, { status: 400 });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -24,6 +36,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    if (plan && user.role.roleName !== "teacher") {
+      return NextResponse.json({ error: "Subscriptions can only be changed for Teachers" }, { status: 400 });
     }
 
     suspendingAdmin = status === "suspended" && user.role.roleName === "admin";
@@ -36,6 +51,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         const activeAdmins = await tx.user.count({ where: { roleId: user.roleId, status: "active" } });
         if (activeAdmins <= 1) throw new LastActiveAdminError("Cannot suspend the last active Admin account");
       }
+      const activeSubscription = plan ? await tx.userSubscription.findFirst({
+        where: {
+          userId: id,
+          subscriptionStatus: "active",
+          endDate: { gt: new Date() },
+          plan: { yearlyPrice: { gt: 0 } },
+        },
+        select: { id: true },
+      }) : null;
+      const premiumPlan = plan === "Premium" && !activeSubscription
+        ? await tx.subscriptionPlan.findFirst({
+          where: { planName: { contains: "Premium" }, yearlyPrice: { gt: 0 } }
+        })
+        : null;
+      if (plan === "Premium" && !activeSubscription && !premiumPlan) {
+        throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+      }
       // Handle Status Toggle (Suspend/Restore)
       if (status && (status === "active" || status === "suspended")) {
         await tx.user.update({
@@ -46,48 +78,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       // Handle Plan Update (Premium / Free Tier) - Only applies to teachers
       if (plan && user.role.roleName === "teacher") {
-        const activeSubscription = await tx.userSubscription.findFirst({
-          where: {
-            userId: id,
-            subscriptionStatus: "active",
-            endDate: { gt: new Date() },
-            plan: { yearlyPrice: { gt: 0 } },
-          },
-          select: { id: true },
-        });
-
         if (plan === "Premium" && !activeSubscription) {
-          const premiumPlan = await tx.subscriptionPlan.findFirst({
-            where: { planName: { contains: "Premium" } }
+          if (!premiumPlan) throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+          // Deactivate any other active plan before granting Premium.
+          await tx.userSubscription.updateMany({
+            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
+            data: { subscriptionStatus: "cancelled" }
           });
 
-          if (premiumPlan) {
-            // Deactivate any other active plan before granting Premium.
-            await tx.userSubscription.updateMany({
-              where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
-              data: { subscriptionStatus: "cancelled" }
-            });
-
-            const startDate = new Date();
-            const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
-            await tx.userSubscription.upsert({
-              where: { userId_planId: { userId: id, planId: premiumPlan.id } },
-              update: {
-                startDate,
-                endDate,
-                paymentStatus: "paid_manual",
-                subscriptionStatus: "active",
-              },
-              create: {
-                userId: id,
-                planId: premiumPlan.id,
-                startDate,
-                endDate,
-                paymentStatus: "paid_manual",
-                subscriptionStatus: "active",
-              }
-            });
-          }
+          const startDate = new Date();
+          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
+          await tx.userSubscription.upsert({
+            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
+            update: {
+              startDate,
+              endDate,
+              paymentStatus: "paid_manual",
+              subscriptionStatus: "active",
+            },
+            create: {
+              userId: id,
+              planId: premiumPlan.id,
+              startDate,
+              endDate,
+              paymentStatus: "paid_manual",
+              subscriptionStatus: "active",
+            }
+          });
         } else if (plan === "Free Tier" && activeSubscription) {
           // Just cancel the active subscription
           await tx.userSubscription.updateMany({
@@ -102,6 +119,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     if (error instanceof LastActiveAdminError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof MissingPremiumPlanError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
     }
     const conflict = error as { code?: string; cause?: { originalCode?: string } };
     if (suspendingAdmin && (conflict?.code === "P2034" || conflict?.cause?.originalCode === "40001")) {

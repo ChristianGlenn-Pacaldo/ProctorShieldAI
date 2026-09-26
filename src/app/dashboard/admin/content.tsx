@@ -92,6 +92,7 @@ export default function AdminDashboardContent() {
   const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    if (users.some((user) => user.id === editingUser.id && user.plan === editingUser.plan)) return;
     setPlanError(null);
     setIsSaving(true);
     try {
@@ -494,7 +495,7 @@ export default function AdminDashboardContent() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={isSaving}
+                  disabled={isSaving || users.some((user) => user.id === editingUser.id && user.plan === editingUser.plan)}
                   className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 sm:w-auto"
                 >
                   {isSaving ? "Saving..." : "Save Changes"}

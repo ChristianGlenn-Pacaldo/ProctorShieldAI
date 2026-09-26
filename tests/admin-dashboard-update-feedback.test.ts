@@ -141,3 +141,15 @@ for (const succeeds of [false, true]) {
     else assert.match(textOf(setup.error(view)), /Changes were not saved/);
   });
 }
+
+test("unchanged Dashboard subscription Save is disabled and sends no request", async () => {
+  const setup = fixture("Active", "Premium", true);
+  setup.button(setup.render(), "Edit").props.onClick();
+  const view = setup.render();
+  const save = setup.button(view, "Save Changes");
+  assert.equal(save.props.disabled, true);
+  const form = findElement(view, (element) => element.type === "form")!;
+  await form.props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(setup.getRequests(), []);
+  assert.equal(setup.getDashboardFetches(), 0);
+});

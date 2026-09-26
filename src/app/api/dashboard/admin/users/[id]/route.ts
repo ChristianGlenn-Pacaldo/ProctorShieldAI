@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
 class LastActiveAdminError extends Error {}
+class MissingPremiumPlanError extends Error {}
 
 export async function PUT(
   req: NextRequest,
@@ -17,8 +18,19 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid user update request" }, { status: 400 });
+    }
+    const fields = Object.keys(body);
+    if (fields.length === 0 || fields.some((field) => !["status", "subscriptionStatus"].includes(field))) {
+      return NextResponse.json({ error: "Unsupported user update fields" }, { status: 400 });
+    }
     const { status, subscriptionStatus } = body;
+    if (("status" in body && !["active", "suspended"].includes(status))
+      || ("subscriptionStatus" in body && !["active", "expired"].includes(subscriptionStatus))) {
+      return NextResponse.json({ error: "Invalid user status or subscription status" }, { status: 400 });
+    }
 
     // 1. Fetch the user to verify existence and role
     const user = await prisma.user.findUnique({
@@ -28,6 +40,9 @@ export async function PUT(
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    if (subscriptionStatus && user.role.roleName !== "teacher") {
+      return NextResponse.json({ error: "Subscriptions can only be changed for Teachers" }, { status: 400 });
     }
 
     suspendingAdmin = status === "suspended" && user.role.roleName === "admin";
@@ -40,6 +55,23 @@ export async function PUT(
       if (suspendingAdmin) {
         const activeAdmins = await tx.user.count({ where: { roleId: user.roleId, status: "active" } });
         if (activeAdmins <= 1) throw new LastActiveAdminError("Cannot suspend the last active Admin account");
+      }
+      const activeSubscription = subscriptionStatus ? await tx.userSubscription.findFirst({
+        where: {
+          userId: id,
+          subscriptionStatus: "active",
+          endDate: { gt: new Date() },
+          plan: { yearlyPrice: { gt: 0 } },
+        },
+        select: { id: true },
+      }) : null;
+      const premiumPlan = subscriptionStatus === "active" && !activeSubscription
+        ? await tx.subscriptionPlan.findFirst({
+          where: { planName: { in: ["Premium Monthly", "Premium Yearly"] }, yearlyPrice: { gt: 0 } },
+        })
+        : null;
+      if (subscriptionStatus === "active" && !activeSubscription && !premiumPlan) {
+        throw new MissingPremiumPlanError("No valid paid Premium plan is available");
       }
       // 2. Update basic status if provided
       if (status && ["active", "suspended"].includes(status)) {
@@ -61,58 +93,42 @@ export async function PUT(
 
       // 3. Update subscription status if provided and user is a teacher
       if (subscriptionStatus && user.role.roleName === "teacher") {
-        const activeSubscription = await tx.userSubscription.findFirst({
-          where: {
-            userId: id,
-            subscriptionStatus: "active",
-            endDate: { gt: new Date() },
-            plan: { yearlyPrice: { gt: 0 } },
-          },
-          select: { id: true },
-        });
-
         if (subscriptionStatus === "active" && !activeSubscription) {
-          // Find the premium plan
-          const premiumPlan = await tx.subscriptionPlan.findFirst({
-            where: { planName: { in: ["Premium Monthly", "Premium Yearly"] } },
+          if (!premiumPlan) throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+          const startDate = new Date();
+          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
+
+          await tx.userSubscription.updateMany({
+            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
+            data: { subscriptionStatus: "cancelled" },
+          });
+          await tx.userSubscription.upsert({
+            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
+            update: {
+              subscriptionStatus: "active",
+              paymentStatus: "paid_manual",
+              startDate,
+              endDate,
+            },
+            create: {
+              userId: id,
+              planId: premiumPlan.id,
+              startDate,
+              endDate,
+              subscriptionStatus: "active",
+              paymentStatus: "paid_manual",
+            },
           });
 
-          if (premiumPlan) {
-            const startDate = new Date();
-            const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
-
-            await tx.userSubscription.updateMany({
-              where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
-              data: { subscriptionStatus: "cancelled" },
-            });
-            await tx.userSubscription.upsert({
-              where: { userId_planId: { userId: id, planId: premiumPlan.id } },
-              update: {
-                subscriptionStatus: "active",
-                paymentStatus: "paid_manual",
-                startDate,
-                endDate,
-              },
-              create: {
-                userId: id,
-                planId: premiumPlan.id,
-                startDate,
-                endDate,
-                subscriptionStatus: "active",
-                paymentStatus: "paid_manual",
-              },
-            });
-
-            const subscriptionActivity = `Admin manually granted Pro subscription to: ${user.fullName}`;
-            await tx.activityLog.create({
-              data: {
-                userId: session.userId,
-                activity: subscriptionActivity,
-                ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-              }
-            });
-            activity ??= subscriptionActivity;
-          }
+          const subscriptionActivity = `Admin manually granted Pro subscription to: ${user.fullName}`;
+          await tx.activityLog.create({
+            data: {
+              userId: session.userId,
+              activity: subscriptionActivity,
+              ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+            }
+          });
+          activity ??= subscriptionActivity;
         } else if (subscriptionStatus === "expired" && activeSubscription) {
           // Expire all subscriptions for this user
           await tx.userSubscription.updateMany({
@@ -153,6 +169,9 @@ export async function PUT(
   } catch (error: unknown) {
     if (error instanceof LastActiveAdminError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof MissingPremiumPlanError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
     }
     const conflict = error as { code?: string; cause?: { originalCode?: string } };
     if (suspendingAdmin && (conflict?.code === "P2034" || conflict?.cause?.originalCode === "40001")) {
