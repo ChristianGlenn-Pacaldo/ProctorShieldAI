@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Download } from "lucide-react";
+import { createAiLogsCsv } from "./csv";
 
 interface LogEntry {
   id: string;
@@ -45,12 +46,7 @@ export default function LogsContent() {
 
   const handleExportCSV = () => {
     if (logs.length === 0) return;
-    const headers = ["Timestamp", "Event Type", "Severity", "Confidence", "Student", "Quiz"];
-    const rows = logs.map((l) => [l.timestamp, l.event, l.severity, l.confidence, l.student, l.quiz]);
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${cell}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([createAiLogsCsv(logs)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;

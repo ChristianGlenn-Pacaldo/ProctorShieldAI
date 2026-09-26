@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { createAiLogsCsv } from "../src/app/dashboard/admin/logs/csv.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 type Reply = { ok: boolean; status?: number; body?: Record<string, unknown> } | Error;
@@ -61,6 +62,7 @@ function fixture(relativePath: string, replies: Reply[]) {
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
+      if (name === "./csv") return { createAiLogsCsv };
       if (name === "next/link") return "link";
       if (name === "pusher-js") return { __esModule: true, default: class {
         subscribe() {
