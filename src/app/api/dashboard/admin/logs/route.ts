@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+const PAGE_SIZE = 25;
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
@@ -9,9 +11,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const requestedPage = Number(new URL(req.url).searchParams.get("page") ?? "1");
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
+      return NextResponse.json({ error: "Invalid page" }, { status: 400 });
+    }
+
+    const total = await prisma.violation.count();
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(requestedPage, pageCount);
     const violations = await prisma.violation.findMany({
-      orderBy: { timestamp: "desc" },
-      take: 100,
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: {
         studentQuiz: {
           include: {
@@ -58,7 +69,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ success: true, logs: formatted, total: formatted.length });
+    return NextResponse.json({ success: true, logs: formatted, total, page, pageSize: PAGE_SIZE });
   } catch (error: unknown) {
     console.error("Admin logs error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

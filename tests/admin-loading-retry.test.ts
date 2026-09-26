@@ -118,7 +118,7 @@ const cases = [
   { name: "Dashboard", path: dashboardPath, empty: dashboardBody(0), populated: dashboardBody(1), visible: "Active Sessions", error: "Could not load Admin Dashboard data" },
   { name: "Users", path: usersPath, empty: { users: [] }, populated: { users: [user] }, visible: "Test Teacher", error: "Could not load Admin Users" },
   { name: "All Quizzes", path: quizzesPath, empty: { quizzes: [] }, populated: { quizzes: [quiz] }, visible: "Test Quiz", error: "Could not load Admin Quizzes" },
-  { name: "AI Logs", path: logsPath, empty: { success: true, logs: [], total: 0 }, populated: { success: true, logs: [log], total: 1 }, visible: "Test Event", error: "Could not load Admin AI Logs" },
+  { name: "AI Logs", path: logsPath, empty: { success: true, logs: [], total: 0, page: 1, pageSize: 25 }, populated: { success: true, logs: [log], total: 1, page: 1, pageSize: 25 }, visible: "Test Event", error: "Could not load Admin AI Logs" },
 ];
 
 for (const entry of cases) {

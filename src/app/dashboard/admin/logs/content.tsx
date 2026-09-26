@@ -20,17 +20,21 @@ export default function LogsContent() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (requestedPage = page) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/dashboard/admin/logs");
+      const response = await fetch(`/api/dashboard/admin/logs?page=${requestedPage}`);
       if (!response.ok) throw new Error(`Logs request failed: ${response.status}`);
       const data = await response.json();
       if (!data.success) throw new Error("Logs response was unsuccessful");
       setLogs(data.logs || []);
       setTotal(data.total || 0);
+      setPage(data.page);
+      setPageSize(data.pageSize);
       setLoadError(null);
     } catch (error) {
       console.error("Failed to load logs:", error);
@@ -41,7 +45,7 @@ export default function LogsContent() {
   };
 
   useEffect(() => {
-    fetchLogs();
+    fetchLogs(1);
   }, []);
 
   const handleExportCSV = () => {
@@ -50,7 +54,7 @@ export default function LogsContent() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `ai-violation-logs-${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `ai-violation-logs-page-${page}-${new Date().toISOString().split("T")[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -65,17 +69,17 @@ export default function LogsContent() {
           </div>
           <button
             onClick={handleExportCSV}
-            disabled={logs.length === 0}
+            disabled={isLoading || logs.length === 0}
             className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-40"
           >
             <Download className="w-3.5 h-3.5" />
-            Export CSV
+            Export This Page CSV
           </button>
         </div>
         {loadError && (
           <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-xs text-rose-600 dark:text-rose-400">
             <span>{loadError}</span>
-            <button type="button" disabled={isLoading} onClick={fetchLogs} className="font-semibold underline disabled:opacity-50">
+            <button type="button" disabled={isLoading} onClick={() => fetchLogs()} className="font-semibold underline disabled:opacity-50">
               {isLoading ? "Retrying..." : "Retry"}
             </button>
           </div>
@@ -120,6 +124,16 @@ export default function LogsContent() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--muted)]">
+          <span>
+            Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}–{(page - 1) * pageSize + logs.length} of {total}
+          </span>
+          <div className="flex items-center gap-3">
+            <button type="button" disabled={isLoading || page <= 1} onClick={() => fetchLogs(page - 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Previous</button>
+            <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+            <button type="button" disabled={isLoading || page >= Math.ceil(total / pageSize)} onClick={() => fetchLogs(page + 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Next</button>
+          </div>
         </div>
       </div>
     </div>
