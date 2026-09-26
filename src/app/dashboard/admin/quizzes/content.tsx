@@ -74,9 +74,9 @@ export default function QuizzesContent() {
 
     const channel = pusher.subscribe("private-admin-dashboard");
 
-    // Re-fetch quizzes when new quizzes are created or completed
+    // Re-fetch quizzes when their list or status changes
     channel.bind("activity", (data: any) => {
-      if (data.type === "quiz-created" || data.type === "quiz-submit" || data.type === "quiz-join") {
+      if (["quiz-created", "quiz-deleted", "quiz-submit", "quiz-join"].includes(data.type)) {
         fetchQuizzes(true);
       }
     });

@@ -212,7 +212,12 @@ export default function AdminDashboardContent() {
       fetchDashboardData(true);
     });
 
+    const presenceRefresh = setInterval(() => {
+      fetchDashboardData(true);
+    }, 30_000);
+
     return () => {
+      clearInterval(presenceRefresh);
       pusher.unsubscribe("private-admin-dashboard");
       pusher.disconnect();
     };

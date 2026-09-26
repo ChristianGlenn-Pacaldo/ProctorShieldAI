@@ -65,6 +65,8 @@ function fixture(backendActivities: Activity[] = []) {
     },
     process: { env: {} },
     console: { error() {} },
+    setInterval: () => 1,
+    clearInterval: () => {},
   }, { filename: componentPath });
 
   const render = () => {

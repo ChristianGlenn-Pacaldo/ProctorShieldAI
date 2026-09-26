@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const tomorrowUtc = new Date(todayUtc.getTime() + 86_400_000);
     const activeSessions = await prisma.user.count({
-      where: { status: "active", lastSeenAt: { gte: presenceCutoff } },
+      where: { status: "active", isOnline: true, lastSeenAt: { gte: presenceCutoff } },
     });
 
     const activeQuizzes = await prisma.quiz.count({
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
         id: u.id,
         name: u.fullName,
         email: u.email,
-        isOnline: u.status === "active" && Boolean(u.lastSeenAt && u.lastSeenAt >= presenceCutoff),
+        isOnline: u.status === "active" && u.isOnline && Boolean(u.lastSeenAt && u.lastSeenAt >= presenceCutoff),
         role: u.role.roleName.charAt(0).toUpperCase() + u.role.roleName.slice(1),
         roleClass,
         plan,

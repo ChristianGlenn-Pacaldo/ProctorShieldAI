@@ -57,7 +57,7 @@ export default function UsersContent() {
     const pusher = new PusherClient(pusherKey, { cluster: pusherCluster, authEndpoint: "/api/pusher/auth" });
     const channel = pusher.subscribe("private-admin-dashboard");
     channel.bind("activity", (data: any) => {
-      if (["login", "logout", "user_update"].includes(data.type)) {
+      if (["register", "login", "logout", "user_update"].includes(data.type)) {
         fetchUsers(true);
       }
     });
