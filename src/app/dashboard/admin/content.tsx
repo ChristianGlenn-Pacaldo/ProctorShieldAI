@@ -54,6 +54,8 @@ export default function AdminDashboardContent() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const handleToggleStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === "Suspended" ? "active" : "suspended";
@@ -123,22 +125,24 @@ export default function AdminDashboardContent() {
     if (!silent) setIsLoading(true);
     try {
       const res = await fetch("/api/dashboard/admin");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data.stats);
-        setPlatformBars(data.platformBars);
-        setActivityBars(data.activityBars);
-        const backendActivities: Activity[] = Array.isArray(data.activities) ? data.activities : [];
-        if (backendActivities.length > 0) {
-          setActivities((current) => {
-            const currentIds = new Set(current.map((activity) => activity.id));
-            return [...current, ...backendActivities.filter((activity) => !currentIds.has(activity.id))].slice(0, 10);
-          });
-        }
-        setUsers(data.users);
+      if (!res.ok) throw new Error(`Dashboard request failed: ${res.status}`);
+      const data = await res.json();
+      setStats(data.stats);
+      setPlatformBars(data.platformBars);
+      setActivityBars(data.activityBars);
+      const backendActivities: Activity[] = Array.isArray(data.activities) ? data.activities : [];
+      if (backendActivities.length > 0) {
+        setActivities((current) => {
+          const currentIds = new Set(current.map((activity) => activity.id));
+          return [...current, ...backendActivities.filter((activity) => !currentIds.has(activity.id))].slice(0, 10);
+        });
       }
+      setUsers(data.users);
+      setHasLoaded(true);
+      setLoadError(null);
     } catch (err) {
       console.error("Failed to load admin dashboard data:", err);
+      setLoadError("Could not load Admin Dashboard data. Existing data may be out of date.");
     } finally {
       setIsLoading(false);
     }
@@ -223,6 +227,17 @@ export default function AdminDashboardContent() {
     };
   }, []);
 
+  if (!hasLoaded && loadError) {
+    return (
+      <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-600 dark:text-rose-400">
+        <p>{loadError}</p>
+        <button type="button" disabled={isLoading} onClick={() => fetchDashboardData()} className="mt-3 font-semibold underline disabled:opacity-50">
+          {isLoading ? "Retrying..." : "Retry"}
+        </button>
+      </div>
+    );
+  }
+
   const statCards = [
     {
       label: "Active Sessions",
@@ -260,6 +275,14 @@ export default function AdminDashboardContent() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
+          <span>{loadError}</span>
+          <button type="button" disabled={isLoading} onClick={() => fetchDashboardData()} className="font-semibold underline disabled:opacity-50">
+            {isLoading ? "Retrying..." : "Retry"}
+          </button>
+        </div>
+      )}
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (

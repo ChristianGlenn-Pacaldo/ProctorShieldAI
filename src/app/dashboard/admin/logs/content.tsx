@@ -19,18 +19,28 @@ export default function LogsContent() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchLogs = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/dashboard/admin/logs");
+      if (!response.ok) throw new Error(`Logs request failed: ${response.status}`);
+      const data = await response.json();
+      if (!data.success) throw new Error("Logs response was unsuccessful");
+      setLogs(data.logs || []);
+      setTotal(data.total || 0);
+      setLoadError(null);
+    } catch (error) {
+      console.error("Failed to load logs:", error);
+      setLoadError("Could not load Admin AI Logs. Existing data may be out of date.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/dashboard/admin/logs")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setLogs(json.logs || []);
-          setTotal(json.total || 0);
-        }
-      })
-      .catch((err) => console.error("Failed to load logs:", err))
-      .finally(() => setIsLoading(false));
+    fetchLogs();
   }, []);
 
   const handleExportCSV = () => {
@@ -66,6 +76,14 @@ export default function LogsContent() {
             Export CSV
           </button>
         </div>
+        {loadError && (
+          <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-xs text-rose-600 dark:text-rose-400">
+            <span>{loadError}</span>
+            <button type="button" disabled={isLoading} onClick={fetchLogs} className="font-semibold underline disabled:opacity-50">
+              {isLoading ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -76,12 +94,14 @@ export default function LogsContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {isLoading ? (
+              {isLoading && logs.length === 0 && !loadError ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
+              ) : loadError && logs.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-10 text-sm text-[var(--muted)]">AI Logs are unavailable. Use Retry above.</td></tr>
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10 text-sm text-[var(--muted)]">

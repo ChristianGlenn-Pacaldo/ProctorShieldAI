@@ -25,36 +25,38 @@ export default function QuizzesContent() {
   const [search, setSearch] = useState("");
   const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Fetch all quizzes from backend API
   const fetchQuizzes = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
       const res = await fetch("/api/quizzes");
-      if (res.ok) {
-        const data = await res.json();
-        const formatted = (data.quizzes || []).map((e: any) => {
-          const display = quizStatusDisplay[e.quizStatus] ?? {
-            status: "Unknown",
-            statusClass: "bg-[var(--surface2)] text-[var(--muted)]",
-          };
+      if (!res.ok) throw new Error(`Quizzes request failed: ${res.status}`);
+      const data = await res.json();
+      const formatted = (data.quizzes || []).map((e: any) => {
+        const display = quizStatusDisplay[e.quizStatus] ?? {
+          status: "Unknown",
+          statusClass: "bg-[var(--surface2)] text-[var(--muted)]",
+        };
 
-          return {
-            id: e.id,
-            title: e.title,
-            instructor: e.teacher?.fullName || "System",
-            date: new Date(e.createdAt).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }),
-            ...display,
-          };
-        });
-        setQuizzes(formatted);
-      }
+        return {
+          id: e.id,
+          title: e.title,
+          instructor: e.teacher?.fullName || "System",
+          date: new Date(e.createdAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+          ...display,
+        };
+      });
+      setQuizzes(formatted);
+      setLoadError(null);
     } catch (err) {
       console.error("Failed to load quizzes:", err);
+      setLoadError("Could not load Admin Quizzes. Existing data may be out of date.");
     } finally {
       setIsLoading(false);
     }
@@ -108,6 +110,14 @@ export default function QuizzesContent() {
             className="w-48 px-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
           />
         </div>
+        {loadError && (
+          <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-xs text-rose-600 dark:text-rose-400">
+            <span>{loadError}</span>
+            <button type="button" disabled={isLoading} onClick={() => fetchQuizzes()} className="font-semibold underline disabled:opacity-50">
+              {isLoading ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -118,12 +128,14 @@ export default function QuizzesContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {isLoading && quizzes.length === 0 ? (
+              {isLoading && quizzes.length === 0 && !loadError ? (
                 <tr>
                   <td colSpan={4} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
+              ) : loadError && quizzes.length === 0 ? (
+                <tr><td colSpan={4} className="text-center py-8 text-xs text-[var(--muted)]">Quiz data is unavailable. Use Retry above.</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="text-center py-8 text-xs text-[var(--muted)]">

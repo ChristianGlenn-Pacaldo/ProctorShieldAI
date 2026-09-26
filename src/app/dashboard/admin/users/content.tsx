@@ -28,6 +28,7 @@ export default function UsersContent() {
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editSubStatus, setEditSubStatus] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -38,12 +39,13 @@ export default function UsersContent() {
     if (!silent) setIsLoading(true);
     try {
       const res = await fetch("/api/dashboard/admin");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-      }
+      if (!res.ok) throw new Error(`Users request failed: ${res.status}`);
+      const data = await res.json();
+      setUsers(data.users || []);
+      setLoadError(null);
     } catch (err) {
       console.error("Failed to load users:", err);
+      setLoadError("Could not load Admin Users. Existing data may be out of date.");
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +130,14 @@ export default function UsersContent() {
             />
           </div>
         </div>
+        {loadError && (
+          <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-xs text-rose-600 dark:text-rose-400">
+            <span>{loadError}</span>
+            <button type="button" disabled={isLoading} onClick={() => fetchUsers()} className="font-semibold underline disabled:opacity-50">
+              {isLoading ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -138,12 +148,14 @@ export default function UsersContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {isLoading && users.length === 0 ? (
+              {isLoading && users.length === 0 && !loadError ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
+              ) : loadError && users.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">User data is unavailable. Use Retry above.</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">
