@@ -33,6 +33,13 @@ interface TeacherQuizzesPageProps {
   teacherName?: string;
 }
 
+interface PendingApproval {
+  studentQuizId: string;
+  studentName: string;
+  quizTitle: string;
+  quizId: number;
+}
+
 export default function TeacherQuizzesPage({
   isSubscribed: initialIsSubscribed = false,
   initialManualQuizCount = 0,
@@ -78,6 +85,9 @@ export default function TeacherQuizzesPage({
 
   // Pending Retake Requests State
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [approvalInProgressId, setApprovalInProgressId] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   // Check subscription status on mount
   useEffect(() => {
@@ -159,17 +169,20 @@ export default function TeacherQuizzesPage({
         const data = await res.json();
         setQuizzes(data.quizzes || []);
         setPendingRetakes(data.pendingRetakes || []);
+        setPendingApprovals(data.pendingApprovals || []);
         if (data.entitlements) {
           setIsSubscribed(data.entitlements.isSubscribed);
           setManualQuizCount(data.entitlements.manualQuizCount ?? 0);
           setManualQuizLimit(data.entitlements.manualQuizLimit ?? initialManualQuizLimit);
         }
+        return true;
       }
     } catch (error) {
       console.error("Failed to fetch quizzes", error);
     } finally {
       setIsLoading(false);
     }
+    return false;
   };
 
   useEffect(() => {
@@ -289,6 +302,30 @@ export default function TeacherQuizzesPage({
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handlePendingApproval = async (studentQuizId: string, action: "accept" | "reject") => {
+    if (approvalInProgressId) return;
+    setApprovalInProgressId(studentQuizId);
+    setApprovalError(null);
+    try {
+      const response = await fetch("/api/quizzes/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentQuizId, action }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Unable to update the late-join request.");
+      }
+      if (!await fetchQuizzes()) {
+        throw new Error("Decision saved, but the request list could not be refreshed. Please reload My Quizzes.");
+      }
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : "Unable to update the late-join request.");
+    } finally {
+      setApprovalInProgressId(null);
     }
   };
 
@@ -544,6 +581,43 @@ export default function TeacherQuizzesPage({
           setShowBillingModal(true);
         }}
       />
+
+      {pendingApprovals.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 shadow-xs">
+          <h3 className="text-sm font-bold text-amber-500 mb-3 font-[family-name:var(--font-display)]">
+            Pending Late-Join Requests ({pendingApprovals.length})
+          </h3>
+          {approvalError && <p role="alert" className="text-xs font-semibold text-red-500 mb-3">{approvalError}</p>}
+          <div className="space-y-2">
+            {pendingApprovals.map((request) => (
+              <div key={request.studentQuizId} className="flex items-center justify-between gap-3 bg-[var(--surface)] p-3.5 rounded-xl border border-[var(--border)]">
+                <div>
+                  <div className="text-sm font-bold text-[var(--ink)]">{request.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">Requested late entry for &quot;{request.quizTitle}&quot;</div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={approvalInProgressId !== null}
+                    onClick={() => handlePendingApproval(request.studentQuizId, "reject")}
+                    className="px-3.5 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg border border-red-500/20 disabled:opacity-50"
+                  >
+                    {approvalInProgressId === request.studentQuizId ? "Working..." : "Reject"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={approvalInProgressId !== null}
+                    onClick={() => handlePendingApproval(request.studentQuizId, "accept")}
+                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg disabled:opacity-50"
+                  >
+                    {approvalInProgressId === request.studentQuizId ? "Working..." : "Approve"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
           2. PENDING RETAKE REQUESTS BANNER
