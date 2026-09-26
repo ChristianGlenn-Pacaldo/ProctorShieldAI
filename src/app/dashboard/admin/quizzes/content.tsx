@@ -12,6 +12,15 @@ interface QuizItem {
   statusClass: string;
 }
 
+const quizStatusDisplay: Record<string, Pick<QuizItem, "status" | "statusClass">> = {
+  draft: { status: "Draft", statusClass: "bg-[var(--surface2)] text-[var(--muted)]" },
+  waiting: { status: "Waiting", statusClass: "bg-amber-500/15 text-amber-600" },
+  active: { status: "Open", statusClass: "bg-amber-500/15 text-amber-600" },
+  in_progress: { status: "In Progress", statusClass: "bg-blue-500/15 text-blue-600" },
+  ended: { status: "Ended", statusClass: "bg-emerald-500/15 text-emerald-600" },
+  completed: { status: "Completed", statusClass: "bg-emerald-500/15 text-emerald-600" },
+};
+
 export default function QuizzesContent() {
   const [search, setSearch] = useState("");
   const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
@@ -25,16 +34,10 @@ export default function QuizzesContent() {
       if (res.ok) {
         const data = await res.json();
         const formatted = (data.quizzes || []).map((e: any) => {
-          let status = "Draft";
-          let statusClass = "bg-white/5 text-white/50";
-          
-          if (e.quizStatus === "active") {
-            status = "Live";
-            statusClass = "bg-amber-500/15 text-amber-600";
-          } else if (e.quizStatus === "completed") {
-            status = "Completed";
-            statusClass = "bg-emerald-500/15 text-emerald-600";
-          }
+          const display = quizStatusDisplay[e.quizStatus] ?? {
+            status: "Unknown",
+            statusClass: "bg-[var(--surface2)] text-[var(--muted)]",
+          };
 
           return {
             id: e.id,
@@ -45,8 +48,7 @@ export default function QuizzesContent() {
               day: "numeric",
               year: "numeric",
             }),
-            status,
-            statusClass,
+            ...display,
           };
         });
         setQuizzes(formatted);
@@ -110,7 +112,7 @@ export default function QuizzesContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["Quiz Title", "Instructor", "Date", "Status", "Actions"].map((h) => (
+                {["Quiz Title", "Instructor", "Date", "Status"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -118,13 +120,13 @@ export default function QuizzesContent() {
             <tbody className="divide-y divide-[var(--border)]">
               {isLoading && quizzes.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-12">
+                  <td colSpan={4} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-xs text-[var(--muted)]">
+                  <td colSpan={4} className="text-center py-8 text-xs text-[var(--muted)]">
                     No quizzes found in the system.
                   </td>
                 </tr>
@@ -135,7 +137,6 @@ export default function QuizzesContent() {
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.instructor}</td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.date}</td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${e.statusClass}`}>{e.status}</span></td>
-                    <td className="px-5 py-3"><button className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer">View Details</button></td>
                   </tr>
                 ))
               )}
