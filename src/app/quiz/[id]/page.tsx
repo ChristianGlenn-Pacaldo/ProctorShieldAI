@@ -618,9 +618,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
         if (data.quizId === parseInt(quizId)) {
           setStudentQuizStatus(data.status);
           setCanEnterQuiz(false);
-          if (data.status === "rejected") {
-            setQuizError("Your request to join late was rejected by the teacher.");
-          }
         }
       });
       studentChannel.bind("teacher-warning", receiveTeacherWarning);
