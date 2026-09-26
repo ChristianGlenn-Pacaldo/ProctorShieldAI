@@ -295,7 +295,7 @@ export default function DashboardShell({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: role }),
     });
-    window.location.href = "/login";
+    window.location.href = role === "admin" ? "/admin/login" : "/login";
   };
 
   const handleNotificationClick = (notification: Notification) => {

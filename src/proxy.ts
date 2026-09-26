@@ -127,7 +127,7 @@ export function proxy(request: NextRequest) {
     }
 
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
+    loginUrl.pathname = targetRole === "admin" ? "/admin/login" : "/login";
     const response = NextResponse.redirect(loginUrl);
     if (tokenName) response.cookies.delete(tokenName);
     return addSecurityHeaders(response);
