@@ -3,7 +3,10 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
+class LastActiveAdminError extends Error {}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let suspendingAdmin = false;
   try {
     const session = await getSession();
     if (!session || session.role !== "admin") {
@@ -23,7 +26,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    suspendingAdmin = status === "suspended" && user.role.roleName === "admin";
+    if (suspendingAdmin && id === session.userId) {
+      return NextResponse.json({ error: "You cannot suspend your own Admin account" }, { status: 400 });
+    }
+
     await prisma.$transaction(async (tx) => {
+      if (suspendingAdmin) {
+        const activeAdmins = await tx.user.count({ where: { roleId: user.roleId, status: "active" } });
+        if (activeAdmins <= 1) throw new LastActiveAdminError("Cannot suspend the last active Admin account");
+      }
       // Handle Status Toggle (Suspend/Restore)
       if (status && (status === "active" || status === "suspended")) {
         await tx.user.update({
@@ -84,10 +96,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           });
         }
       }
-    });
+    }, suspendingAdmin ? { isolationLevel: "Serializable" } : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof LastActiveAdminError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    const conflict = error as { code?: string; cause?: { originalCode?: string } };
+    if (suspendingAdmin && (conflict?.code === "P2034" || conflict?.cause?.originalCode === "40001")) {
+      return NextResponse.json({ error: "Concurrent Admin status change; suspension was not applied. At least one Admin must remain active." }, { status: 409 });
+    }
     console.error("User update error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
