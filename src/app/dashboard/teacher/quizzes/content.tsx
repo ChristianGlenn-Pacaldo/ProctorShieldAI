@@ -70,6 +70,7 @@ export default function TeacherQuizzesPage({
   // AI Modal State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<"text" | "upload" | "webcam">("text");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -450,7 +451,7 @@ export default function TeacherQuizzesPage({
     setIsAiGenerating(true);
 
     try {
-      const body: any = { type: activeTab, questionCount: 5 };
+      const body: any = { type: activeTab };
 
       if (activeTab === "text") {
         if (!aiTopic.trim()) {
@@ -458,7 +459,13 @@ export default function TeacherQuizzesPage({
           setIsAiGenerating(false);
           return;
         }
-        body.textPrompt = aiTopic.trim();
+        if (!Number.isInteger(aiQuestionCount) || aiQuestionCount < 1 || aiQuestionCount > 50) {
+          alert("Choose between 1 and 50 questions.");
+          setIsAiGenerating(false);
+          return;
+        }
+        body.topic = aiTopic.trim();
+        body.numQuestions = aiQuestionCount;
       } else if (activeTab === "upload") {
         if (!uploadedImage) {
           alert("Please upload an image.");
@@ -466,6 +473,7 @@ export default function TeacherQuizzesPage({
           return;
         }
         const { mime, raw } = splitBase64(uploadedImage);
+        body.questionCount = 5;
         body.imageBase64 = raw;
         body.mimeType = mime;
       } else if (activeTab === "webcam") {
@@ -475,6 +483,7 @@ export default function TeacherQuizzesPage({
           return;
         }
         const { mime, raw } = splitBase64(capturedImage);
+        body.questionCount = 5;
         body.imageBase64 = raw;
         body.mimeType = mime;
       }
@@ -538,6 +547,7 @@ export default function TeacherQuizzesPage({
 
       // Reset inputs
       setAiTopic("");
+      setAiQuestionCount(5);
       setUploadedImage(null);
       setCapturedImage(null);
       setActiveTab("text");
@@ -1203,6 +1213,20 @@ export default function TeacherQuizzesPage({
                     onChange={(e) => setAiTopic(e.target.value)}
                     className="w-full px-3 py-2 bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-sm text-[var(--ink)] focus:outline-none focus:border-purple-500 min-h-[100px]"
                     placeholder="e.g. Advanced Data Structures, Binary Trees, and Big-O Notation..."
+                  />
+                  <label className="block text-xs font-semibold text-[var(--ink)]" htmlFor="ai-question-count">
+                    Number of Questions (1–50)
+                  </label>
+                  <input
+                    id="ai-question-count"
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
+                    required
+                    value={aiQuestionCount}
+                    onChange={(e) => setAiQuestionCount(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-sm text-[var(--ink)] focus:outline-none focus:border-purple-500"
                   />
                 </div>
               )}
