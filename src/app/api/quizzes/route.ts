@@ -6,6 +6,7 @@ import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { getQuizCreationDecision } from "@/lib/subscription-rules";
 import { parseQuizMode, InvalidQuizModeError } from "@/lib/quiz-mode";
 import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
+import { verifyAiQuizReceipt } from "@/lib/ai-quiz-provenance";
 
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" };
 
@@ -151,9 +152,16 @@ export async function POST(req: NextRequest) {
       allowRetake,
       isGamified,
       isAiGenerated,
+      aiGenerationReceipt,
       quizMode: rawQuizMode,
     } = await req.json();
-    const isAiQuiz = isAiGenerated === true;
+    if (aiGenerationReceipt !== undefined && !verifyAiQuizReceipt(aiGenerationReceipt, session.userId, questions)) {
+      return NextResponse.json({ error: "AI generation could not be verified for these questions. Generate them again before saving." }, { status: 400 });
+    }
+    if (aiGenerationReceipt === undefined && isAiGenerated === true) {
+      return NextResponse.json({ error: "AI generation proof is required to save this as an AI quiz." }, { status: 400 });
+    }
+    const isAiQuiz = aiGenerationReceipt !== undefined;
 
     let parsedQuizMode: "proctored" | "arena";
     try {

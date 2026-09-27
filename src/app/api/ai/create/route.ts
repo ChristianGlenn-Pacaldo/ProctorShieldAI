@@ -4,6 +4,7 @@ import { expireSubscriptions } from "@/lib/maintenance";
 import { getSession } from "@/lib/auth";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
+import { createAiQuizReceipt } from "@/lib/ai-quiz-provenance";
 
 const AI_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -131,6 +132,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       questions: generatedQuestions,
+      aiGenerationReceipt: createAiQuizReceipt(session.userId, generatedQuestions),
       detectedTitle,
       detectedSubject,
       detectedDescription

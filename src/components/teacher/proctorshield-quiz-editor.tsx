@@ -52,6 +52,7 @@ export interface QuestionItem {
 
 export interface QuizFormData {
   id?: number;
+  aiGenerationReceipt?: string;
   title: string;
   subjectName: string;
   description: string;
@@ -156,6 +157,7 @@ export default function ProctorShieldQuizEditor({
   const initialMode = initialQuiz?.quizMode || (initialQuiz?.isGamified ? "arena" : "proctored");
   const [quizForm, setQuizForm] = useState<QuizFormData>({
     id: initialQuiz?.id,
+    aiGenerationReceipt: initialQuiz?.aiGenerationReceipt,
     title: initialQuiz?.title || (initialMode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
     subjectName: initialQuiz?.subjectName || "Computer Science",
     description: initialQuiz?.description || "",
@@ -198,6 +200,7 @@ export default function ProctorShieldQuizEditor({
       const mode = initialQuiz.quizMode || (initialQuiz.isGamified ? "arena" : "proctored");
       setQuizForm({
         id: initialQuiz.id,
+        aiGenerationReceipt: initialQuiz.aiGenerationReceipt,
         title: initialQuiz.title || (mode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
         subjectName: initialQuiz.subjectName || "Computer Science",
         description: initialQuiz.description || "",
@@ -443,6 +446,7 @@ export default function ProctorShieldQuizEditor({
 
       const payload = {
         title: quizForm.title.trim(),
+        ...(!isEditingExisting && quizForm.aiGenerationReceipt ? { aiGenerationReceipt: quizForm.aiGenerationReceipt } : {}),
         description: quizForm.description.trim(),
         ...(!isDurationLocked ? { duration: quizForm.duration } : {}),
         passingScore: quizForm.passingScore,

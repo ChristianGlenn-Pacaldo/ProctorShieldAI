@@ -76,7 +76,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
         status: options.failure ? 400 : 200,
         json: async () => options.failure
           ? { error: options.failure }
-          : { success: true, questions: [{ questionText: "Generated", choices: [] }] },
+          : { success: true, aiGenerationReceipt: "signed-receipt", questions: [{ questionText: "Generated", choices: [] }] },
       };
     },
     alert: (message: string) => alerts.push(message),
@@ -120,6 +120,8 @@ test("Prompt/Text sends trimmed topic and selected numQuestions, not legacy fiel
   assert.deepEqual({ ...setup.requests[0].body }, { type: "text", topic: "Data structures", numQuestions: 7 });
   assert.equal("textPrompt" in setup.requests[0].body, false);
   assert.equal("questionCount" in setup.requests[0].body, false);
+  const editor = setup.node((entry) => entry.type === "editor");
+  assert.equal((editor.props.initialQuiz as Record<string, unknown>).aiGenerationReceipt, "signed-receipt");
 });
 
 test("Prompt/Text defaults to five questions and rejects counts outside the API limit", async () => {

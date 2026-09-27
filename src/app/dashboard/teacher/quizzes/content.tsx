@@ -510,6 +510,9 @@ export default function TeacherQuizzesPage({
       if (!res.ok || !data.success) {
         throw new Error(data.error || data.message || "AI generation failed");
       }
+      if (typeof data.aiGenerationReceipt !== "string" || !data.aiGenerationReceipt) {
+        throw new Error("AI generation verification is unavailable. Please try again.");
+      }
 
       const displayTopic =
         activeTab === "text"
@@ -519,6 +522,7 @@ export default function TeacherQuizzesPage({
           : "Captured Document";
 
       setEditingQuizData({
+        aiGenerationReceipt: data.aiGenerationReceipt,
         title: data.detectedTitle || `AI Assessment - ${displayTopic.slice(0, 30)}`,
         subjectName: data.detectedSubject || (activeTab === "text" ? aiTopic.slice(0, 30) : "General"),
         description:

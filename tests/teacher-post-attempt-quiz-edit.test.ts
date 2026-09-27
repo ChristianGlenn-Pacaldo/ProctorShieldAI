@@ -251,6 +251,7 @@ function creationFixture() {
       if (name === "@/lib/subscription-rules") return { getQuizCreationDecision: () => ({ allowed: true }) };
       if (name === "@/lib/quiz-mode") return { parseQuizMode: () => "proctored", InvalidQuizModeError: class extends Error {} };
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: [] };
+      if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt: () => false };
       if (name === "node:crypto") return crypto;
       throw new Error(`Unexpected import: ${name}`);
     },
