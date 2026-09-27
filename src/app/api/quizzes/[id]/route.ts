@@ -205,6 +205,64 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 
+function validateEditedQuestions(rawQuestions: unknown) {
+  if (!Array.isArray(rawQuestions) || rawQuestions.length === 0 || rawQuestions.length > 100) {
+    return { error: "Add between 1 and 100 complete questions" };
+  }
+
+  const questions: Array<{
+    questionText: string;
+    questionType: string;
+    points: number;
+    choices: { create: Array<{ choiceText: string; isCorrect: boolean }> };
+  }> = [];
+
+  for (const rawQuestion of rawQuestions) {
+    if (!rawQuestion || typeof rawQuestion !== "object" || Array.isArray(rawQuestion)) {
+      return { error: "Every question needs complete text of at most 2000 characters" };
+    }
+    const question = rawQuestion as Record<string, unknown>;
+    if (typeof question.questionText !== "string" || !question.questionText.trim() || question.questionText.length > 2_000) {
+      return { error: "Every question needs complete text of at most 2000 characters" };
+    }
+
+    const points = question.points === undefined ? 1 : question.points;
+    if (typeof points !== "number" || !Number.isInteger(points) || points < 1 || points > 100) {
+      return { error: "Question points must be whole numbers between 1 and 100" };
+    }
+
+    if (!Array.isArray(question.choices) || question.choices.length > 10) {
+      return { error: "Every question needs complete answers (at most 10 choices)" };
+    }
+    const choices: Array<{ choiceText: string; isCorrect: boolean }> = [];
+    for (const rawChoice of question.choices) {
+      if (!rawChoice || typeof rawChoice !== "object" || Array.isArray(rawChoice)) {
+        return { error: "Every answer needs text of at most 1000 characters" };
+      }
+      const choice = rawChoice as Record<string, unknown>;
+      if (typeof choice.choiceText !== "string" || !choice.choiceText.trim() || choice.choiceText.length > 1_000) {
+        return { error: "Every answer needs text of at most 1000 characters" };
+      }
+      choices.push({ choiceText: choice.choiceText.trim(), isCorrect: Boolean(choice.isCorrect) });
+    }
+
+    const questionType = typeof question.questionType === "string" ? question.questionType.slice(0, 50) : "multiple_choice";
+    const correctCount = choices.filter((choice) => choice.isCorrect).length;
+    if (questionType === "fill_in_blank" ? choices.length < 1 || correctCount < 1 : choices.length < 2 || correctCount !== 1) {
+      return { error: "Every question must have complete answers and a correct answer marked" };
+    }
+
+    questions.push({
+      questionText: question.questionText.trim(),
+      questionType,
+      points,
+      choices: { create: choices },
+    });
+  }
+
+  return { questions };
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
@@ -263,9 +321,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.allowRetake !== undefined && typeof body.allowRetake !== "boolean") {
       return NextResponse.json({ error: "allowRetake must be a boolean" }, { status: 400 });
     }
-    if (body.questions !== undefined && (!Array.isArray(body.questions) || body.questions.length === 0)) {
-      return NextResponse.json({ error: "A quiz must have at least one question" }, { status: 400 });
-    }
     const subjectName = typeof body.subjectName === "string" ? body.subjectName.trim() : undefined;
     if (body.subjectName !== undefined && (!subjectName || subjectName.length > 150)) {
       return NextResponse.json({ error: "Subject name is required and must be at most 150 characters" }, { status: 400 });
@@ -316,19 +371,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const studentQuizCount = await tx.studentQuiz.count({ where: { quizId } });
       if (studentQuizCount > 0) {
         if (body.questions !== undefined || (body.totalQuestions !== undefined && body.totalQuestions !== existingQuiz.totalQuestions)) {
-          return { error: "Questions cannot be changed after students have joined or attempted this quiz." };
+          return { error: "Questions cannot be changed after students have joined or attempted this quiz.", code: "QUIZ_CONTENT_LOCKED", status: 409 };
         }
         if (subjectName !== undefined) {
           const currentSubject = await tx.subject.findUnique({ where: { id: existingQuiz.subjectId } });
           if (currentSubject?.subjectName.toLowerCase() !== subjectName.toLowerCase()) {
-            return { error: "Subject cannot be changed after students have joined or attempted this quiz." };
+            return { error: "Subject cannot be changed after students have joined or attempted this quiz.", code: "QUIZ_CONTENT_LOCKED", status: 409 };
           }
         }
       }
 
+      const editedQuestions = body.questions === undefined ? null : validateEditedQuestions(body.questions);
+      if (editedQuestions?.error) {
+        return { error: editedQuestions.error, code: "INVALID_QUIZ_QUESTIONS", status: 400 };
+      }
+
       let totalQCount = existingQuiz.totalQuestions;
-      if (Array.isArray(body.questions)) {
-        let createdCount = 0;
+      if (editedQuestions?.questions) {
         // Delete existing choices & questions
         await tx.choice.deleteMany({
           where: { question: { quizId } },
@@ -338,26 +397,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         });
 
         // Re-create new questions & choices
-        for (const question of body.questions) {
-          if (question && typeof question.questionText === "string" && question.questionText.trim()) {
-            await tx.question.create({
-              data: {
-                quizId,
-                questionText: question.questionText.trim(),
-                points: typeof question.points === "number" ? question.points : 1,
-                questionType: question.questionType || "multiple_choice",
-                choices: {
-                  create: (Array.isArray(question.choices) ? question.choices : []).map((choice: any) => ({
-                    choiceText: String(choice.choiceText || "").trim(),
-                    isCorrect: Boolean(choice.isCorrect),
-                  })),
-                },
-              },
-            });
-            createdCount++;
-          }
+        for (const question of editedQuestions.questions) {
+          await tx.question.create({
+            data: { quizId, ...question },
+          });
         }
-        totalQCount = createdCount;
+        totalQCount = editedQuestions.questions.length;
       }
 
       let subjectId = existingQuiz.subjectId;
@@ -405,7 +450,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (update.error) {
-      return NextResponse.json({ error: update.error, code: "QUIZ_CONTENT_LOCKED" }, { status: 409 });
+      return NextResponse.json({ error: update.error, code: update.code }, { status: update.status });
     }
     const updatedQuiz = update.quiz;
 

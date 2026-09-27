@@ -7,8 +7,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const routePath = path.resolve(process.cwd(), "src/app/api/quizzes/[id]/route.ts");
+const creationPath = path.resolve(process.cwd(), "src/app/api/quizzes/route.ts");
 const editorPath = path.resolve(process.cwd(), "src/components/teacher/proctorshield-quiz-editor.tsx");
 const routeSource = fs.readFileSync(routePath, "utf8");
+const creationSource = fs.readFileSync(creationPath, "utf8");
 const editorSource = fs.readFileSync(editorPath, "utf8");
 
 function transpile(source: string) {
@@ -153,12 +155,130 @@ test("pre-attempt question and subject edits persist and count created rows", as
   assert.equal(fixture.currentSubject().subjectName, "Mathematics");
 });
 
-test("pre-attempt skipped invalid questions cannot inflate totalQuestions", async () => {
+test("pre-attempt invalid questions cannot replace existing rows or totalQuestions", async () => {
   const fixture = routeFixture(0);
   const response = await fixture.update({ questions: [...replacementQuestions.slice(0, 1), { questionText: "" }] });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, "INVALID_QUIZ_QUESTIONS");
+  assert.deepEqual(fixture.writes, []);
+  assert.equal(fixture.currentQuestions().length, 1);
+  assert.equal(fixture.quiz.totalQuestions, 1);
+});
+
+const validQuestion = replacementQuestions[0];
+const invalidQuestionCases = [
+  { name: "empty question set", questions: [] },
+  { name: "too many questions", questions: Array.from({ length: 101 }, () => validQuestion) },
+  { name: "blank question text", questions: [validQuestion, { ...validQuestion, questionText: "  " }] },
+  { name: "oversized question text", questions: [{ ...validQuestion, questionText: "x".repeat(2_001) }] },
+  { name: "missing choices", questions: [{ ...validQuestion, choices: undefined }] },
+  { name: "one multiple-choice answer", questions: [{ ...validQuestion, choices: validQuestion.choices.slice(0, 1) }] },
+  { name: "blank answer text", questions: [{ ...validQuestion, choices: [{ ...validQuestion.choices[0], choiceText: "  " }, validQuestion.choices[1]] }] },
+  { name: "oversized answer text", questions: [{ ...validQuestion, choices: [{ ...validQuestion.choices[0], choiceText: "x".repeat(1_001) }, validQuestion.choices[1]] }] },
+  { name: "no correct answer", questions: [{ ...validQuestion, choices: validQuestion.choices.map((choice) => ({ ...choice, isCorrect: false })) }] },
+  { name: "multiple correct answers", questions: [{ ...validQuestion, choices: validQuestion.choices.map((choice) => ({ ...choice, isCorrect: true })) }] },
+  { name: "true-false with one answer", questions: [{ ...validQuestion, questionType: "true_false", choices: validQuestion.choices.slice(0, 1) }] },
+  { name: "fill-in-blank without a correct answer", questions: [{ ...validQuestion, questionType: "fill_in_blank", choices: [{ choiceText: "answer", isCorrect: false }] }] },
+  { name: "zero points", questions: [{ ...validQuestion, points: 0 }] },
+  { name: "points above 100", questions: [{ ...validQuestion, points: 101 }] },
+  { name: "fractional points", questions: [{ ...validQuestion, points: 1.5 }] },
+  { name: "nonnumeric points", questions: [{ ...validQuestion, points: "five" }] },
+];
+
+for (const { name, questions } of invalidQuestionCases) {
+  test(`invalid edited questions: ${name} returns 400 before any write`, async () => {
+    const fixture = routeFixture(0);
+    const storedQuestions = JSON.stringify(fixture.currentQuestions());
+    const response = await fixture.update({ title: "Should not save", subjectName: "Mathematics", questions });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "INVALID_QUIZ_QUESTIONS");
+    assert.match(String(response.body.error), /question|answer|points/i);
+    assert.deepEqual(fixture.writes, []);
+    assert.equal(JSON.stringify(fixture.currentQuestions()), storedQuestions);
+    assert.equal(fixture.quiz.totalQuestions, 1);
+    assert.equal(fixture.quiz.title, "Original");
+    assert.equal(fixture.quiz.subjectId, 2);
+  });
+}
+
+test("valid fill-in-blank replacement keeps its single correct answer", async () => {
+  const fixture = routeFixture(0);
+  const response = await fixture.update({ questions: [{
+    questionText: "Capital of France?", questionType: "fill_in_blank", points: 2,
+    choices: [{ choiceText: "Paris", isCorrect: true }],
+  }] });
   assert.equal(response.status, 200);
   assert.equal(fixture.currentQuestions().length, 1);
   assert.equal(fixture.quiz.totalQuestions, 1);
+  assert.deepEqual(fixture.writes, ["choice.deleteMany", "question.deleteMany", "question.create", "quiz.update"]);
+});
+
+test("post-attempt content lock still takes precedence over invalid edited questions", async () => {
+  const fixture = routeFixture(1);
+  const response = await fixture.update({ questions: [{ questionText: "" }] });
+  assert.equal(response.status, 409);
+  assert.equal(response.body.code, "QUIZ_CONTENT_LOCKED");
+  assert.deepEqual(fixture.writes, []);
+});
+
+function creationFixture() {
+  let createdQuestions: unknown[] | undefined;
+  const entitlements = { manualQuizCount: 0, manualQuizLimit: 5 };
+  const transaction = {
+    $executeRaw: async () => {},
+    subject: { findFirst: async () => ({ id: 2 }) },
+    quiz: {
+      findUnique: async () => null,
+      create: async ({ data }: { data: { questions: { create: unknown[] } } }) => {
+        createdQuestions = data.questions.create;
+        return { id: 7 };
+      },
+    },
+    activityLog: { create: async () => {} },
+  };
+  const prisma = {
+    user: { findUnique: async () => ({ id: "teacher-1" }) },
+    $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction),
+  };
+  const exports: { POST?: (request: unknown) => Promise<{ status: number; body: Record<string, unknown> }> } = {};
+  vm.runInNewContext(transpile(creationSource), {
+    exports,
+    require: (name: string) => {
+      if (name === "next/server") return { after: () => {}, NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
+      if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
+      if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
+      if (name === "@/lib/teacher-entitlements") return { getTeacherEntitlements: async () => entitlements };
+      if (name === "@/lib/subscription-rules") return { getQuizCreationDecision: () => ({ allowed: true }) };
+      if (name === "@/lib/quiz-mode") return { parseQuizMode: () => "proctored", InvalidQuizModeError: class extends Error {} };
+      if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: [] };
+      if (name === "node:crypto") return crypto;
+      throw new Error(`Unexpected import: ${name}`);
+    },
+    console: { error() {} },
+  });
+  assert.ok(exports.POST);
+  const create = (questions: unknown[]) => exports.POST!({
+    json: async () => ({ subjectName: "Computer Science", title: "Creation contract", questions }),
+    headers: { get: () => null },
+  });
+  return { create, getCreatedQuestions: () => createdQuestions };
+}
+
+test("quiz creation still accepts fill-in-blank and normalizes points as before", async () => {
+  const fixture = creationFixture();
+  const response = await fixture.create([{
+    questionText: "Capital of France?", questionType: "fill_in_blank", points: 0,
+    choices: [{ choiceText: "Paris", isCorrect: true }],
+  }]);
+  assert.equal(response.status, 201);
+  assert.equal((fixture.getCreatedQuestions() as Array<{ points: number }>)[0].points, 1);
+});
+
+test("quiz creation still rejects incomplete correct answers", async () => {
+  const fixture = creationFixture();
+  const response = await fixture.create([{ ...validQuestion, choices: validQuestion.choices.map((choice) => ({ ...choice, isCorrect: false })) }]);
+  assert.equal(response.status, 400);
+  assert.equal(fixture.getCreatedQuestions(), undefined);
 });
 
 function editorSaveCallback() {
