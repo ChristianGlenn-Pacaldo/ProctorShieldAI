@@ -68,9 +68,9 @@ test("9. Connection status interval returns current reference when no status cha
   assert.match(teacherMonitorSrc, /return changed \? next : current;/);
 });
 
-test("10. Violation event triggers targeted student alert without triggering full refetch storm", () => {
+test("10. Violation event triggers targeted student alert without incrementing authoritative counters", () => {
   assert.match(teacherMonitorSrc, /teacherChannel\.bind\("new-violation"/);
-  assert.match(teacherMonitorSrc, /setTotalViolations\(\(prev\) => prev \+ 1\)/);
+  assert.doesNotMatch(teacherMonitorSrc, /setTotalViolations\(\(prev\) => prev \+ 1\)/);
   assert.match(teacherMonitorSrc, /violationFeed: Feed/);
 });
 

@@ -21,6 +21,16 @@ interface Feed {
   connectionStatus?: "online" | "offline";
 }
 
+function deriveMonitorCounters(snapshots: Pick<Feed, "violationCount" | "connectionStatus">[]) {
+  return snapshots.reduce(
+    (counters, snapshot) => ({
+      activeStudents: counters.activeStudents + (snapshot.connectionStatus === "online" ? 1 : 0),
+      totalViolations: counters.totalViolations + (Number.isFinite(snapshot.violationCount) ? Math.max(0, snapshot.violationCount) : 0),
+    }),
+    { activeStudents: 0, totalViolations: 0 },
+  );
+}
+
 const StudentVideoFeed = React.memo(
   function StudentVideoFeed({ feed, onClick }: { feed: Feed; onClick?: () => void }) {
     const [imgError, setImgError] = useState(false);
@@ -120,7 +130,7 @@ export default function LiveMonitorContent({
   initialIsSubscribed?: boolean;
 }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [totalViolations, setTotalViolations] = useState(0);
+  const [monitorCounters, setMonitorCounters] = useState({ activeStudents: 0, totalViolations: 0 });
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -344,7 +354,6 @@ export default function LiveMonitorContent({
     });
 
     teacherChannel.bind("new-violation", (data: any) => {
-      setTotalViolations((prev) => prev + 1);
       const studentId = data.studentId ? String(data.studentId) : String(data.studentName);
       const studentNameLower = String(data.studentName || "").toLowerCase().trim();
 
@@ -461,6 +470,9 @@ export default function LiveMonitorContent({
         const snapshots: any[] = data.snapshots || [];
 
         if (isMounted) {
+          const nextCounters = deriveMonitorCounters(snapshots);
+          setMonitorCounters((current) => current.activeStudents === nextCounters.activeStudents
+            && current.totalViolations === nextCounters.totalViolations ? current : nextCounters);
           setFeeds((prev) => {
             const updated = prev.filter((feed) => snapshots.some((snap) => String(snap.studentId) === feed.id));
             let hasChanges = updated.length !== prev.length;
@@ -649,11 +661,11 @@ export default function LiveMonitorContent({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Active Students</div>
-          <div className="text-2xl font-extrabold text-emerald-500 font-[family-name:var(--font-display)]">{feeds.length}</div>
+          <div className="text-2xl font-extrabold text-emerald-500 font-[family-name:var(--font-display)]">{monitorCounters.activeStudents}</div>
         </div>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Total Violations</div>
-          <div className="text-2xl font-extrabold text-red-500 font-[family-name:var(--font-display)]">{totalViolations}</div>
+          <div className="text-2xl font-extrabold text-red-500 font-[family-name:var(--font-display)]">{monitorCounters.totalViolations}</div>
         </div>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] px-5 py-4 shadow-xs">
           <div className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest mb-1">Surveillance Mode</div>
