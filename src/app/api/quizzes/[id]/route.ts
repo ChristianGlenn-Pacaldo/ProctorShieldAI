@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
@@ -262,6 +263,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.allowRetake !== undefined && typeof body.allowRetake !== "boolean") {
       return NextResponse.json({ error: "allowRetake must be a boolean" }, { status: 400 });
     }
+    if (body.questions !== undefined && (!Array.isArray(body.questions) || body.questions.length === 0)) {
+      return NextResponse.json({ error: "A quiz must have at least one question" }, { status: 400 });
+    }
+    const subjectName = typeof body.subjectName === "string" ? body.subjectName.trim() : undefined;
+    if (body.subjectName !== undefined && (!subjectName || subjectName.length > 150)) {
+      return NextResponse.json({ error: "Subject name is required and must be at most 150 characters" }, { status: 400 });
+    }
 
     const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
     const description = typeof body.description === "string" ? body.description.trim() : undefined;
@@ -304,42 +312,66 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Transactional update for quiz and optional questions
-    const updatedQuiz = await prisma.$transaction(async (tx) => {
-      // If questions array is passed and quiz is in draft or has no student submissions
-      if (Array.isArray(body.questions) && body.questions.length > 0) {
-        const studentQuizCount = await tx.studentQuiz.count({ where: { quizId } });
-        if (studentQuizCount === 0) {
-          // Delete existing choices & questions
-          await tx.choice.deleteMany({
-            where: { question: { quizId } },
-          });
-          await tx.question.deleteMany({
-            where: { quizId },
-          });
-
-          // Re-create new questions & choices
-          for (const q of body.questions) {
-            if (q && typeof q.questionText === "string" && q.questionText.trim()) {
-              await tx.question.create({
-                data: {
-                  quizId,
-                  questionText: q.questionText.trim(),
-                  points: typeof q.points === "number" ? q.points : 1,
-                  questionType: q.questionType || "multiple_choice",
-                  choices: {
-                    create: (Array.isArray(q.choices) ? q.choices : []).map((c: any) => ({
-                      choiceText: String(c.choiceText || "").trim(),
-                      isCorrect: Boolean(c.isCorrect),
-                    })),
-                  },
-                },
-              });
-            }
+    const update = await prisma.$transaction(async (tx) => {
+      const studentQuizCount = await tx.studentQuiz.count({ where: { quizId } });
+      if (studentQuizCount > 0) {
+        if (body.questions !== undefined || (body.totalQuestions !== undefined && body.totalQuestions !== existingQuiz.totalQuestions)) {
+          return { error: "Questions cannot be changed after students have joined or attempted this quiz." };
+        }
+        if (subjectName !== undefined) {
+          const currentSubject = await tx.subject.findUnique({ where: { id: existingQuiz.subjectId } });
+          if (currentSubject?.subjectName.toLowerCase() !== subjectName.toLowerCase()) {
+            return { error: "Subject cannot be changed after students have joined or attempted this quiz." };
           }
         }
       }
 
-      const totalQCount = Array.isArray(body.questions) ? body.questions.length : undefined;
+      let totalQCount = existingQuiz.totalQuestions;
+      if (Array.isArray(body.questions)) {
+        let createdCount = 0;
+        // Delete existing choices & questions
+        await tx.choice.deleteMany({
+          where: { question: { quizId } },
+        });
+        await tx.question.deleteMany({
+          where: { quizId },
+        });
+
+        // Re-create new questions & choices
+        for (const question of body.questions) {
+          if (question && typeof question.questionText === "string" && question.questionText.trim()) {
+            await tx.question.create({
+              data: {
+                quizId,
+                questionText: question.questionText.trim(),
+                points: typeof question.points === "number" ? question.points : 1,
+                questionType: question.questionType || "multiple_choice",
+                choices: {
+                  create: (Array.isArray(question.choices) ? question.choices : []).map((choice: any) => ({
+                    choiceText: String(choice.choiceText || "").trim(),
+                    isCorrect: Boolean(choice.isCorrect),
+                  })),
+                },
+              },
+            });
+            createdCount++;
+          }
+        }
+        totalQCount = createdCount;
+      }
+
+      let subjectId = existingQuiz.subjectId;
+      if (subjectName !== undefined && studentQuizCount === 0) {
+        let subject = await tx.subject.findFirst({
+          where: { teacherId: session.userId, subjectName: { equals: subjectName, mode: "insensitive" } },
+        });
+        if (!subject) {
+          subject = await tx.subject.create({
+            data: { teacherId: session.userId, subjectName, subjectCode: `SUB-${crypto.randomBytes(5).toString("hex").toUpperCase()}` },
+          });
+        }
+        subjectId = subject.id;
+      }
 
       if (requestedStatus === "ended" && existingQuiz.quizMode !== "arena") {
         const endedAt = new Date().toISOString();
@@ -347,7 +379,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           create: { settingKey: `proctored:quiz-ended:${quizId}`, settingValue: endedAt },
           update: { settingValue: endedAt } });
       }
-      return tx.quiz.update({
+      const quiz = await tx.quiz.update({
         where: { id: quizId },
         data: {
           title: title ?? existingQuiz.title,
@@ -359,7 +391,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           allowRetake: body.allowRetake ?? existingQuiz.allowRetake,
           isGamified: isGamified ?? existingQuiz.isGamified,
           quizMode: parsedQuizMode ?? existingQuiz.quizMode,
-          totalQuestions: totalQCount ?? existingQuiz.totalQuestions,
+          subjectId,
+          totalQuestions: totalQCount,
         },
         include: {
           subject: true,
@@ -368,7 +401,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           },
         },
       });
+      return { quiz };
     });
+
+    if (update.error) {
+      return NextResponse.json({ error: update.error, code: "QUIZ_CONTENT_LOCKED" }, { status: 409 });
+    }
+    const updatedQuiz = update.quiz;
 
     // Broadcast quiz status update to all waiting students in lobby
     if (requestedStatus) {

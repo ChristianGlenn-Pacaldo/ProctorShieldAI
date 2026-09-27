@@ -237,6 +237,8 @@ export default function ProctorShieldQuizEditor({
       (quizForm.participantCount ?? 0) > 0 ||
       (quizForm.quizStatus && quizForm.quizStatus !== "draft"))
   );
+  const isContentLocked = Boolean(quizForm.id && quizForm.hasAttempts);
+  const isDurationLocked = Boolean(quizForm.id && ["in_progress", "ended"].includes(quizForm.quizStatus || ""));
 
   const handleToggleMode = (targetMode: "proctored" | "arena") => {
     if (quizForm.quizMode === targetMode) return;
@@ -281,6 +283,7 @@ export default function ProctorShieldQuizEditor({
 
   // Open question editor
   const handleOpenQuestionEditor = (index: number) => {
+    if (isContentLocked) return;
     const targetQ = quizForm.questions[index];
     if (targetQ) {
       setDraftQuestion({
@@ -302,6 +305,7 @@ export default function ProctorShieldQuizEditor({
 
   // Create brand new question
   const handleAddNewQuestion = () => {
+    if (isContentLocked) return;
     const newQ: QuestionItem = {
       questionText: "",
       questionType: "multiple_choice",
@@ -356,6 +360,7 @@ export default function ProctorShieldQuizEditor({
 
   // Save current question back to quizForm
   const handleSaveQuestionDraft = () => {
+    if (isContentLocked) return;
     if (!draftQuestion.questionText.trim()) {
       alert("Please enter question text before saving.");
       return;
@@ -390,6 +395,7 @@ export default function ProctorShieldQuizEditor({
 
   // Duplicate question
   const handleDuplicateQuestion = (index: number) => {
+    if (isContentLocked) return;
     setQuizForm((prev) => {
       const target = prev.questions[index];
       const copy: QuestionItem = {
@@ -405,6 +411,7 @@ export default function ProctorShieldQuizEditor({
 
   // Delete question
   const handleDeleteQuestion = (index: number) => {
+    if (isContentLocked) return;
     if (quizForm.questions.length <= 1) {
       alert("A quiz must have at least one question.");
       return;
@@ -436,39 +443,41 @@ export default function ProctorShieldQuizEditor({
 
       const payload = {
         title: quizForm.title.trim(),
-        subjectName: quizForm.subjectName.trim(),
         description: quizForm.description.trim(),
-        duration: quizForm.duration,
+        ...(!isDurationLocked ? { duration: quizForm.duration } : {}),
         passingScore: quizForm.passingScore,
         shuffleQuestions: quizForm.shuffleQuestions,
         allowRetake: quizForm.quizMode === "arena" ? false : quizForm.allowRetake,
         isGamified: quizForm.quizMode === "arena" ? true : quizForm.isGamified,
         quizMode: quizForm.quizMode,
-        totalQuestions: quizForm.questions.length,
-        questions: quizForm.questions.map((q) => {
-          let choices = q.choices
-            .filter((c) => c.choiceText.trim())
-            .map((c) => ({
-              choiceText: c.choiceText.trim(),
-              isCorrect: Boolean(c.isCorrect),
-            }));
+        ...(!isContentLocked ? {
+          subjectName: quizForm.subjectName.trim(),
+          totalQuestions: quizForm.questions.length,
+          questions: quizForm.questions.map((q) => {
+            let choices = q.choices
+              .filter((c) => c.choiceText.trim())
+              .map((c) => ({
+                choiceText: c.choiceText.trim(),
+                isCorrect: Boolean(c.isCorrect),
+              }));
 
-          if (q.questionType === "fill_in_blank") {
-            // All teacher-entered answers for fill in the blank are accepted (isCorrect: true)
-            choices = choices.map((c) => ({ ...c, isCorrect: true }));
-            // Add fallback choice to ensure backend question validator compatibility
-            if (choices.length === 1) {
-              choices.push({ choiceText: "[Other]", isCorrect: false });
+            if (q.questionType === "fill_in_blank") {
+              // All teacher-entered answers for fill in the blank are accepted (isCorrect: true)
+              choices = choices.map((c) => ({ ...c, isCorrect: true }));
+              // Add fallback choice to ensure backend question validator compatibility
+              if (choices.length === 1) {
+                choices.push({ choiceText: "[Other]", isCorrect: false });
+              }
             }
-          }
 
-          return {
-            questionText: q.questionText.trim(),
-            points: q.points,
-            questionType: q.questionType || "multiple_choice",
-            choices,
-          };
-        }),
+            return {
+              questionText: q.questionText.trim(),
+              points: q.points,
+              questionType: q.questionType || "multiple_choice",
+              choices,
+            };
+          }),
+        } : {}),
       };
 
       const res = await fetch(url, {
@@ -479,7 +488,7 @@ export default function ProctorShieldQuizEditor({
 
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === "QUIZ_MODE_CHANGE_NOT_ALLOWED" || res.status === 409) {
+        if (data.code === "QUIZ_MODE_CHANGE_NOT_ALLOWED") {
           throw new Error("Quiz mode cannot be changed after students have joined or attempted this quiz.");
         }
         throw new Error(data.error || data.message || "Failed to save quiz");
@@ -782,13 +791,16 @@ export default function ProctorShieldQuizEditor({
                     Questions ({quizForm.questions.length})
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Create questions or click on any question card to edit in the studio.
+                    {isContentLocked
+                      ? "Questions and subject are read-only after students have joined or attempted this quiz. Other settings can still be saved."
+                      : "Create questions or click on any question card to edit in the studio."}
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleAddNewQuestion}
+                  disabled={isContentLocked}
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black text-xs shadow-md shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
@@ -803,8 +815,8 @@ export default function ProctorShieldQuizEditor({
                   return (
                     <div
                       key={idx}
-                      onClick={() => handleOpenQuestionEditor(qIndex)}
-                      className="group p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 shadow-md transition-all cursor-pointer space-y-3"
+                      onClick={() => { if (!isContentLocked) handleOpenQuestionEditor(qIndex); }}
+                      className={`group p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md transition-all space-y-3 ${isContentLocked ? "cursor-default" : "hover:bg-slate-900 hover:border-indigo-500/50 cursor-pointer"}`}
                     >
                       {/* Question Card Topbar */}
                       <div className="flex items-center justify-between text-xs">
@@ -829,6 +841,7 @@ export default function ProctorShieldQuizEditor({
                           <button
                             type="button"
                             onClick={() => handleOpenQuestionEditor(qIndex)}
+                            disabled={isContentLocked}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                             title="Edit"
                           >
@@ -837,6 +850,7 @@ export default function ProctorShieldQuizEditor({
                           <button
                             type="button"
                             onClick={() => handleDuplicateQuestion(qIndex)}
+                            disabled={isContentLocked}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                             title="Duplicate"
                           >
@@ -845,6 +859,7 @@ export default function ProctorShieldQuizEditor({
                           <button
                             type="button"
                             onClick={() => handleDeleteQuestion(qIndex)}
+                            disabled={isContentLocked}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10"
                             title="Delete"
                           >
@@ -893,6 +908,7 @@ export default function ProctorShieldQuizEditor({
                 <button
                   type="button"
                   onClick={handleAddNewQuestion}
+                  disabled={isContentLocked}
                   className="w-full p-8 rounded-3xl border-2 border-dashed border-slate-800 hover:border-pink-500/50 bg-slate-900/40 hover:bg-slate-900/80 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-white transition-all cursor-pointer group"
                 >
                   <div className="w-12 h-12 rounded-2xl bg-pink-500/10 group-hover:bg-pink-500/20 text-pink-400 flex items-center justify-center text-xl transition-all shadow-sm">
@@ -1363,6 +1379,7 @@ export default function ProctorShieldQuizEditor({
                   type="text"
                   value={quizForm.subjectName}
                   onChange={(e) => setQuizForm({ ...quizForm, subjectName: e.target.value })}
+                  disabled={isContentLocked}
                   className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
                 />
               </div>
@@ -1378,6 +1395,7 @@ export default function ProctorShieldQuizEditor({
                         min={5}
                         max={480}
                         value={quizForm.duration}
+                        disabled={isDurationLocked}
                         onChange={(e) =>
                           setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 30 })
                         }
@@ -1453,6 +1471,7 @@ export default function ProctorShieldQuizEditor({
                       min={1}
                       max={120}
                       value={quizForm.duration}
+                      disabled={isDurationLocked}
                       onChange={(e) =>
                         setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 15 })
                       }
