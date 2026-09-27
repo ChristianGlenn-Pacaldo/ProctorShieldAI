@@ -11,7 +11,6 @@ import {
   Crown,
   Eye,
   Flame,
-  HelpCircle,
   Image as ImageIcon,
   Layers,
   LayoutGrid,
@@ -27,7 +26,6 @@ import {
   Smartphone,
   Sparkles,
   Swords,
-  Timer,
   Trash,
   Trash2,
   X,
@@ -76,16 +74,6 @@ export interface ProctorShieldQuizEditorProps {
   onSaveSuccess: (quiz: any) => void;
   onOpenAiGenerator?: () => void;
 }
-
-const TIME_OPTIONS = [
-  { label: "10 seconds", value: 10 },
-  { label: "20 seconds", value: 20 },
-  { label: "30 seconds", value: 30 },
-  { label: "45 seconds", value: 45 },
-  { label: "60 seconds", value: 60 },
-  { label: "2 minutes", value: 120 },
-  { label: "5 minutes", value: 300 },
-];
 
 const POINT_OPTIONS = [
   { label: "1 point", value: 1 },
@@ -833,8 +821,6 @@ export default function ProctorShieldQuizEditor({
                           </span>
                           <span className="text-slate-600">•</span>
                           <span className="text-amber-400 font-semibold">{q.points} pt</span>
-                          <span className="text-slate-600">•</span>
-                          <span className="text-slate-400">{q.timeLimitSeconds || 30}s</span>
                         </div>
 
                         {/* Actions */}
@@ -961,27 +947,6 @@ export default function ProctorShieldQuizEditor({
               </div>
 
               <div className="flex items-center gap-2.5">
-                {/* Time Limit Selector */}
-                <div className="flex items-center gap-1 text-xs">
-                  <Timer className="w-3.5 h-3.5 text-slate-400" />
-                  <select
-                    value={draftQuestion.timeLimitSeconds || 30}
-                    onChange={(e) =>
-                      setDraftQuestion({
-                        ...draftQuestion,
-                        timeLimitSeconds: parseInt(e.target.value, 10),
-                      })
-                    }
-                    className="bg-slate-950 border border-slate-800 text-xs font-bold text-white py-1.5 px-2.5 rounded-xl focus:border-indigo-500 outline-hidden cursor-pointer"
-                  >
-                    {TIME_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 {/* Points Selector */}
                 <div className="flex items-center gap-1 text-xs">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
@@ -1208,23 +1173,6 @@ export default function ProctorShieldQuizEditor({
                 </div>
               </div>
             )}
-
-            {/* Answer Explanation Box */}
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <label className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                <HelpCircle className="w-4 h-4 text-purple-400" />
-                Explanation (Optional)
-              </label>
-              <textarea
-                value={draftQuestion.explanation || ""}
-                onChange={(e) =>
-                  setDraftQuestion({ ...draftQuestion, explanation: e.target.value })
-                }
-                placeholder="Explain why this answer is correct (shown to students during result review)..."
-                rows={2}
-                className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder:text-slate-600 outline-hidden resize-none"
-              />
-            </div>
           </div>
 
           {/* Right Panel: Live Student Mobile / Screen Preview */}
@@ -1242,11 +1190,8 @@ export default function ProctorShieldQuizEditor({
               <div className="rounded-3xl border-4 border-slate-800 bg-slate-950 p-4 shadow-2xl space-y-4 min-h-[460px] flex flex-col justify-between">
                 {/* Phone Header */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-400">
                     <span>Q{activeQuestionIndex + 1} of {quizForm.questions.length || 1}</span>
-                    <span className="font-mono text-amber-400 font-bold">
-                      ⏱️ {draftQuestion.timeLimitSeconds || 30}s
-                    </span>
                   </div>
                   <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                     <div className="w-3/4 h-full bg-indigo-500" />
