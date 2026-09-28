@@ -7,18 +7,23 @@ import ResultModal from "@/components/student/ResultModal";
 export default function ResultsContent() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
 
   const fetchResults = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/dashboard/student/results");
+      const res = await fetch("/api/dashboard/student/results", { cache: "no-store" });
+      if (!res.ok) throw new Error("Could not load your results.");
       const data = await res.json();
-      if (data.success) {
-        setResults(data.results);
-      }
+      if (data.success !== true || !Array.isArray(data.results)) throw new Error("Could not load your results.");
+      setResults(data.results);
+      setHasLoaded(true);
+      setLoadError("");
     } catch (error) {
       console.error("Failed to fetch results", error);
+      setLoadError("Could not load your results.");
     } finally {
       setLoading(false);
     }
@@ -40,20 +45,25 @@ export default function ResultsContent() {
 
   return (
     <div className="space-y-4">
+      {loadError && (
+        <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">
+          {loadError} <button type="button" onClick={() => void fetchResults()} className="font-bold underline">Retry</button>
+        </div>
+      )}
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
             <CheckCircle2 className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold text-[var(--ink)]">{results.length}</div>
+          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? results.length : "—"}</div>
           <div className="text-xs text-[var(--muted)]">Completed Attempts</div>
         </div>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold text-[var(--ink)]">{calculateAverage()}%</div>
+          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? `${calculateAverage()}%` : "—"}</div>
           <div className="text-xs text-[var(--muted)]">Average Exam Score</div>
         </div>
       </div>
@@ -73,11 +83,11 @@ export default function ResultsContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {loading ? (
+              {loading && !hasLoaded ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-[var(--muted)]">Loading results...</td>
                 </tr>
-              ) : results.length === 0 ? (
+              ) : !hasLoaded ? null : results.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-[var(--muted)]">No quiz history found.</td>
                 </tr>

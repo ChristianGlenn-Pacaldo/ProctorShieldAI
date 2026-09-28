@@ -54,6 +54,8 @@ export default function StudentDashboardContent() {
   const router = useRouter();
   const [studentQuizzes, setStudentQuizzes] = useState<StudentQuiz[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [hasLoadedQuizzes, setHasLoadedQuizzes] = useState(false);
+  const [quizLoadError, setQuizLoadError] = useState("");
   const [quickCode, setQuickCode] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
@@ -65,56 +67,58 @@ export default function StudentDashboardContent() {
     expToNextLevel: number;
     progressPercent: number;
     title: string;
-  }>({
-    totalExp: 0,
-    level: 1,
-    currentLevelExp: 0,
-    expToNextLevel: 500,
-    progressPercent: 0,
-    title: "Novice Cadet",
-  });
+  } | null>(null);
+  const [progressionLoading, setProgressionLoading] = useState(true);
+  const [progressionError, setProgressionError] = useState("");
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
-    setSoundActive(isSoundEnabled());
-
-    async function loadProgression() {
-      try {
-        const res = await fetch("/api/student/progression");
-        if (res.ok) {
-          const data = await res.json();
-          if (typeof data.totalExp === "number") {
-            setProgression({
-              totalExp: data.totalExp,
-              level: data.level,
-              currentLevelExp: data.currentLevelExp,
-              expToNextLevel: data.expToNextLevel,
-              progressPercent: data.progressPercent,
-              title: data.title,
-            });
-          }
-        }
-      } catch {}
+  const loadProgression = async () => {
+    setProgressionLoading(true);
+    try {
+      const res = await fetch("/api/student/progression");
+      if (!res.ok) throw new Error("Could not load your progression.");
+      const data = await res.json();
+      if (data.success !== true || typeof data.totalExp !== "number" || typeof data.level !== "number") {
+        throw new Error("Could not load your progression.");
+      }
+      setProgression({
+        totalExp: data.totalExp,
+        level: data.level,
+        currentLevelExp: data.currentLevelExp,
+        expToNextLevel: data.expToNextLevel,
+        progressPercent: data.progressPercent,
+        title: data.title,
+      });
+      setProgressionError("");
+    } catch {
+      setProgressionError("Could not load your progression.");
+    } finally {
+      setProgressionLoading(false);
     }
-    loadProgression();
-  }, []);
+  };
 
   const fetchQuizzes = async () => {
+    setIsFetching(true);
     try {
       const res = await fetch("/api/quizzes", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setStudentQuizzes(data.quizzes || []);
-      }
+      if (!res.ok) throw new Error("Could not load your quizzes.");
+      const data = await res.json();
+      if (data.success !== true || !Array.isArray(data.quizzes)) throw new Error("Could not load your quizzes.");
+      setStudentQuizzes(data.quizzes);
+      setHasLoadedQuizzes(true);
+      setQuizLoadError("");
     } catch (error) {
       console.error("Failed to fetch quizzes:", error);
+      setQuizLoadError("Could not load your quizzes.");
     } finally {
       setIsFetching(false);
     }
   };
 
   useEffect(() => {
-    fetchQuizzes();
+    setSoundActive(isSoundEnabled());
+    void loadProgression();
+    void fetchQuizzes();
   }, []);
 
   const handleQuickJoin = async (e: React.FormEvent) => {
@@ -204,15 +208,18 @@ export default function StudentDashboardContent() {
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-yellow-300" />
-                  Level {progression.level} • {progression.title}
-                </span>
-
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                  <Flame className="w-3 h-3 text-orange-400 animate-pulse" />
-                  {progression.totalExp.toLocaleString()} Total EXP
-                </span>
+                {progression && (
+                  <>
+                    <span className="text-xs uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-yellow-300" />
+                      Level {progression.level} • {progression.title}
+                    </span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                      <Flame className="w-3 h-3 text-orange-400 animate-pulse" />
+                      {progression.totalExp.toLocaleString()} Total EXP
+                    </span>
+                  </>
+                )}
 
               </div>
 
@@ -220,8 +227,7 @@ export default function StudentDashboardContent() {
                 Student Arena Dashboard
               </h1>
 
-              {/* XP Progress Bar */}
-              <div className="w-60 sm:w-80 mt-2">
+              {progression ? <div className="w-60 sm:w-80 mt-2">
                 <div className="flex justify-between text-[11px] font-bold text-white/70 mb-1">
                   <span>{progression.totalExp.toLocaleString()} EXP</span>
                   <span>
@@ -234,7 +240,12 @@ export default function StudentDashboardContent() {
                     style={{ width: `${progression.progressPercent}%` }}
                   />
                 </div>
-              </div>
+              </div> : <p className="mt-2 text-xs text-white/70">{progressionLoading ? "Loading progression..." : "Progression unavailable"}</p>}
+              {progressionError && (
+                <p role="alert" className="mt-2 text-xs text-rose-300">
+                  {progressionError} <button type="button" onClick={() => void loadProgression()} className="font-bold underline">Retry</button>
+                </p>
+              )}
             </div>
           </div>
 
@@ -292,6 +303,12 @@ export default function StudentDashboardContent() {
         </div>
       </div>
 
+      {quizLoadError && (
+        <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+          {quizLoadError} <button type="button" onClick={() => void fetchQuizzes()} className="font-bold underline">Retry</button>
+        </div>
+      )}
+
       {/* ── VIBRANT GAMIFIED METRIC TILES ─────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border-2 border-indigo-500/20 p-5 shadow-xs hover:border-indigo-500/40 transition-all group">
@@ -304,7 +321,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {upcomingCount}
+            {hasLoadedQuizzes ? upcomingCount : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Active Challenges
@@ -321,7 +338,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {completedCount}
+            {hasLoadedQuizzes ? completedCount : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Quizzes Conquered
@@ -338,7 +355,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {completedCount > 0 ? `${avgScore}%` : "0%"}
+            {hasLoadedQuizzes ? (completedCount > 0 ? `${avgScore}%` : "0%") : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Average Score
@@ -355,7 +372,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {completedCount > 0 ? `${avgTrust}%` : "100%"}
+            {hasLoadedQuizzes ? (completedCount > 0 ? `${avgTrust}%` : "100%") : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Proctor Trust Index
@@ -380,11 +397,11 @@ export default function StudentDashboardContent() {
           </Link>
         </div>
 
-        {isFetching ? (
+        {isFetching && !hasLoadedQuizzes ? (
           <div className="py-8 text-center text-sm text-[var(--muted)] animate-pulse">
             Scanning for active missions...
           </div>
-        ) : upcoming.length === 0 ? (
+        ) : !hasLoadedQuizzes ? null : upcoming.length === 0 ? (
           <div className="py-8 text-center">
             <div className="text-3xl mb-2">🎉</div>
             <p className="text-sm font-bold text-[var(--ink)]">All caught up!</p>
@@ -471,12 +488,12 @@ export default function StudentDashboardContent() {
                   Student Progression
                 </h2>
               </div>
-              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+              {progression && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                 Level {progression.level} • {progression.title}
-              </span>
+              </span>}
             </div>
 
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-transparent border border-indigo-500/20 mb-4">
+            {progression ? <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-transparent border border-indigo-500/20 mb-4">
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-1 shadow-md flex items-center justify-center">
                   <UserRound className="w-7 h-7 text-white" aria-hidden="true" />
@@ -509,7 +526,12 @@ export default function StudentDashboardContent() {
                   <span>{progression.progressPercent}% Complete</span>
                 </div>
               </div>
-            </div>
+            </div> : <p className="mb-4 text-sm text-[var(--muted)]">{progressionLoading ? "Loading progression..." : "Progression unavailable"}</p>}
+            {progressionError && (
+              <p role="alert" className="mb-4 text-sm text-rose-500">
+                {progressionError} <button type="button" onClick={() => void loadProgression()} className="font-bold underline">Retry</button>
+              </p>
+            )}
 
             <div className="p-3.5 rounded-xl bg-[var(--surface2)]/40 border border-[var(--border)] text-xs text-[var(--muted)] flex items-center gap-2.5">
               <Flame className="w-4 h-4 text-amber-500 shrink-0" />
@@ -536,11 +558,11 @@ export default function StudentDashboardContent() {
               </Link>
             </div>
 
-            {isFetching ? (
+            {isFetching && !hasLoadedQuizzes ? (
               <p className="py-6 text-xs text-[var(--muted)] animate-pulse text-center">
                 Loading exam results...
               </p>
-            ) : completed.length === 0 ? (
+            ) : !hasLoadedQuizzes ? null : completed.length === 0 ? (
               <p className="py-6 text-xs text-[var(--muted)] italic text-center">
                 No completed exams yet. Take your first quiz or enter an arena match!
               </p>

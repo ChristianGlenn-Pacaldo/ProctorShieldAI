@@ -9,24 +9,30 @@ export default function QuizzesContent() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
 
+  const fetchQuizzes = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/quizzes", { cache: "no-store" });
+      if (!res.ok) throw new Error("Could not load My Quizzes.");
+      const data = await res.json();
+      if (data.success !== true || !Array.isArray(data.quizzes)) throw new Error("Could not load My Quizzes.");
+      setQuizzes(data.quizzes);
+      setHasLoaded(true);
+      setLoadError("");
+    } catch (error) {
+      console.error("Failed to fetch quizzes", error);
+      setLoadError("Could not load My Quizzes.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchQuizzes = async () => {
-      try {
-        const res = await fetch("/api/quizzes", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          // The API returns studentQuizzes which wraps the actual quiz
-          setQuizzes(data.quizzes);
-        }
-      } catch (error) {
-        console.error("Failed to fetch quizzes", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchQuizzes();
+    void fetchQuizzes();
   }, []);
 
   const filtered = (quizzes || []).filter((e) => 
@@ -50,13 +56,19 @@ export default function QuizzesContent() {
             />
           </div>
         </div>
+
+        {loadError && (
+          <div role="alert" className="mx-5 mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">
+            {loadError} <button type="button" onClick={() => void fetchQuizzes()} className="font-bold underline">Retry</button>
+          </div>
+        )}
         
         <div className="overflow-x-auto min-h-[300px]">
-          {isLoading ? (
+          {isLoading && !hasLoaded ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : !hasLoaded ? null : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-[var(--muted)]">
               <span className="text-2xl mb-2">📄</span>
               <p className="text-sm font-semibold">No enrolled quizzes found</p>
