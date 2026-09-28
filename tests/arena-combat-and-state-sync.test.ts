@@ -354,10 +354,9 @@ test("Requirement 38: Power score penalties are configured and deterministic", (
 });
 
 test("Test A: Student opening /arena/[id] before teacher start sees waiting lobby", () => {
-  // Default phase state in student component is strictly "lobby"
   assert.match(
     studentArenaContentSrc,
-    /const\s*\[phase,\s*setPhase\]\s*=\s*useState<["']lobby["']\s*\|\s*["']in_wave["']\s*\|\s*["']podium["']>\(\s*["']lobby["']\s*\)/
+    /const\s*\[phase,\s*setPhase\]\s*=\s*useState<["']lobby["']\s*\|\s*["']in_wave["']\s*\|\s*["']finalizing["']\s*\|\s*["']podium["']>[\s\S]*?isAlreadyEnded \? "finalizing" : "lobby"/
   );
   // Lobby UI renders waiting indicator
   assert.match(studentArenaContentSrc, /Waiting for teacher to start Power Arena/);

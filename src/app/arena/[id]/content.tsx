@@ -112,14 +112,16 @@ export function ArenaContent({
 }: ArenaContentProps) {
   const router = useRouter();
 
-  // ── Match Phase: Strictly lobby until teacher starts, or podium if completed ──
   const isAlreadyEnded = initialQuizStatus === "ended" || initialStudentStatus === "completed";
-  const [phase, setPhase] = useState<"lobby" | "in_wave" | "podium">("lobby");
-  useEffect(() => {
-    if (isAlreadyEnded) {
-      setPhase("podium");
-    }
-  }, [isAlreadyEnded]);
+  const [phase, setPhase] = useState<"lobby" | "in_wave" | "finalizing" | "podium">(
+    isAlreadyEnded ? "finalizing" : "lobby"
+  );
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizationError, setFinalizationError] = useState<string | null>(null);
+  const finalizationAttemptedRef = useRef(false);
+  const finalizationInFlightRef = useRef(false);
+  const finalizationConfirmedRef = useRef(false);
+  const finalizationGenerationRef = useRef(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // ── Automatic Question Progression ────────────────────────────
@@ -336,11 +338,17 @@ export function ArenaContent({
   );
 
   // ── Conclude Match & Finalize Results ─────────────────────────
-  const finalizeMatch = useCallback(async () => {
+  const finalizeMatch = useCallback(async (retry = false) => {
+    if (finalizationConfirmedRef.current || finalizationInFlightRef.current || (finalizationAttemptedRef.current && !retry)) return;
+    finalizationAttemptedRef.current = true;
+    finalizationInFlightRef.current = true;
+    const generation = finalizationGenerationRef.current;
+    setIsFinalizing(true);
+    setFinalizationError(null);
     setIncomingAttack(null);
     setTargetPickerPower(null);
     setIsLaunchingPower(null);
-    setPhase("podium");
+    setPhase("finalizing");
 
     try {
       const answerPayload: Record<number, number> = {};
@@ -356,18 +364,31 @@ export function ArenaContent({
           answers: answerPayload,
         }),
       });
-      const submitData = await submitRes.json();
-      if (submitData?.success) {
-        if (typeof submitData.expEarned === "number") {
-          setExpEarned(submitData.expEarned);
-        } else if (typeof submitData.result?.expEarned === "number") {
-          setExpEarned(submitData.result.expEarned);
-        }
-        if (typeof submitData.rank === "number") {
-          setStudentRank(submitData.rank);
-        }
+      const submitData = await submitRes.json().catch(() => null);
+      if (generation !== finalizationGenerationRef.current) return;
+      if (!submitRes.ok || submitData?.success !== true) {
+        throw new Error(submitData?.error || "Could not finalize your Arena result.");
       }
-    } catch {}
+      if (typeof submitData.expEarned === "number") {
+        setExpEarned(submitData.expEarned);
+      } else if (typeof submitData.result?.expEarned === "number") {
+        setExpEarned(submitData.result.expEarned);
+      }
+      if (typeof submitData.rank === "number") {
+        setStudentRank(submitData.rank);
+      }
+      finalizationConfirmedRef.current = true;
+      setPhase("podium");
+    } catch (error) {
+      if (generation !== finalizationGenerationRef.current) return;
+      setFinalizationError(error instanceof Error ? error.message : "Network error finalizing your Arena result.");
+      return;
+    } finally {
+      if (generation === finalizationGenerationRef.current) {
+        finalizationInFlightRef.current = false;
+        setIsFinalizing(false);
+      }
+    }
 
     try {
       const arenaRes = await fetch(`/api/arena/${quizId}`);
@@ -380,6 +401,15 @@ export function ArenaContent({
     } catch {}
   }, [quizId, lockedAnswers, updateRankingsFromParticipants]);
 
+  useEffect(() => {
+    if (isAlreadyEnded) void finalizeMatch();
+  }, [isAlreadyEnded, finalizeMatch]);
+
+  const finalizeMatchRef = useRef(finalizeMatch);
+  useEffect(() => {
+    finalizeMatchRef.current = finalizeMatch;
+  }, [finalizeMatch]);
+
   // ── Explicit Arena Join on Mount ──────────────────────────────
   useEffect(() => {
     let isMounted = true;
@@ -390,9 +420,17 @@ export function ArenaContent({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "join" }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => null);
+          if (!isMounted) return;
+          if (res.status === 409 && errorData?.code === "ARENA_QUIZ_ALREADY_COMPLETED") {
+            void finalizeMatchRef.current();
+          }
+          return;
+        }
         const data = await res.json();
         if (!isMounted) return;
+        if (finalizationAttemptedRef.current) return;
 
         const sessId = data?.sessionId || data?.arena?.sessionId;
         if (sessId) {
@@ -410,7 +448,7 @@ export function ArenaContent({
             }
           }
         } else if (currentStatus === "ended" || data?.quizStatus === "ended") {
-          setPhase("podium");
+          void finalizeMatchRef.current();
         } else {
           setPhase("lobby");
         }
@@ -436,6 +474,7 @@ export function ArenaContent({
       const res = await fetch(`/api/arena/${quizId}`);
       if (!res.ok) return;
       const data = await res.json();
+      if (finalizationAttemptedRef.current) return;
       const responseReceivedAt = Date.now();
       if (typeof data?.serverTime === "number") {
         serverTimeOffsetRef.current = data.serverTime - ((requestStartedAt + responseReceivedAt) / 2);
@@ -450,7 +489,6 @@ export function ArenaContent({
       const currentStatus = data?.status || data?.arena?.status;
       if (currentStatus === "ended" || data?.quizStatus === "ended") {
         setIncomingAttack(null);
-        setPhase("podium");
         void finalizeMatch();
         return;
       }
@@ -523,7 +561,7 @@ export function ArenaContent({
 
   // Periodic background state reconciliation
   useEffect(() => {
-    if (phase === "podium") return;
+    if (phase === "podium" || phase === "finalizing") return;
     void refreshArenaState();
     const interval = setInterval(() => {
       void refreshArenaState();
@@ -563,6 +601,7 @@ export function ArenaContent({
         matchDuration?: number;
         participants?: ArenaParticipant[];
       }) => {
+        if (finalizationAttemptedRef.current) return;
         setPhase("in_wave");
         if (data?.sessionId || data?.arena?.sessionId) {
           setCurrentSessionId(data.sessionId || data?.arena?.sessionId || null);
@@ -585,8 +624,14 @@ export function ArenaContent({
 
       // ── Dedicated Session Reset / Fresh Session Event ─────────────
       const handleSessionCreated = (data?: { sessionId?: string }) => {
+        finalizationGenerationRef.current++;
+        finalizationInFlightRef.current = false;
+        setIsFinalizing(false);
         setIncomingAttack(null);
         setPhase("lobby");
+        finalizationAttemptedRef.current = false;
+        finalizationConfirmedRef.current = false;
+        setFinalizationError(null);
         if (data?.sessionId) {
           setCurrentSessionId(data.sessionId);
         }
@@ -604,7 +649,6 @@ export function ArenaContent({
       // ── Match Ended by Teacher / Server ──────────────────────────
       arenaChannel.bind("arena-end", () => {
         setIncomingAttack(null);
-        setPhase("podium");
         void finalizeMatch();
       });
 
@@ -1092,6 +1136,22 @@ export function ArenaContent({
           highestStreak={highestStreak}
           onExit={() => router.push("/dashboard/student")}
         />
+      </div>
+    );
+  }
+
+  if (phase === "finalizing") {
+    return (
+      <div className="min-h-screen bg-[#070a14] text-white flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <Trophy className="w-12 h-12 text-amber-400" />
+        <h1 className="text-2xl font-bold">Match Ended</h1>
+        <p className="text-slate-300">{isFinalizing ? "Submitting your Arena result..." : "Your Arena result is not confirmed yet."}</p>
+        {finalizationError && <p role="alert" className="text-rose-400">{finalizationError}</p>}
+        {!isFinalizing && finalizationError && (
+          <button type="button" onClick={() => void finalizeMatch(true)} className="rounded-xl bg-indigo-600 px-6 py-3 font-bold hover:bg-indigo-500">
+            Retry Submission
+          </button>
+        )}
       </div>
     );
   }

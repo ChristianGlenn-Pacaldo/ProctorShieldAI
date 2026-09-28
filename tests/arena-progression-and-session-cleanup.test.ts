@@ -106,7 +106,7 @@ test("Dedicated Reset Event: Session creation triggers arena-session-created and
   assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-reset["']/);
 
   // arena-end is strictly reserved for actual match conclusion
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?setPhase\(["']podium["']\)/);
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?void finalizeMatch\(\)/);
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -132,8 +132,8 @@ test("K: Spectator lobby shows current score, rank, full leaderboard, countdown 
   assert.match(studentArenaContentSrc, /formatTimer\(matchTimeLeft\)/);
 });
 
-test("L: arena-end immediately moves spectator to final results/podium", () => {
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?setPhase\(["']podium["']\)/);
+test("L: arena-end starts finalization without showing an unconfirmed podium", () => {
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?void finalizeMatch\(\)/);
 });
 
 // ─────────────────────────────────────────────────────────────

@@ -56,6 +56,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This quiz is not accepting submissions" }, { status: 409 });
     }
     if (studentQuiz.quizStatus === "completed" || studentQuiz.endTime) {
+      if (studentQuiz.attemptMode === "arena" && studentQuiz.quiz.quizMode === "arena"
+        && studentQuiz.quizStatus === "completed" && studentQuiz.endTime) {
+        return NextResponse.json({
+          success: true,
+          studentQuiz: {
+            id: studentQuiz.id,
+            quizId: studentQuiz.quizId,
+            studentId: studentQuiz.studentId,
+            quizStatus: studentQuiz.quizStatus,
+            endTime: studentQuiz.endTime,
+            score: studentQuiz.score,
+            attemptMode: studentQuiz.attemptMode,
+          },
+          result: {
+            score: studentQuiz.score,
+            violationCount: 0,
+            integrityInvalidated: false,
+            aiVerdict: null,
+            cheatingProbability: null,
+            expEarned: 0,
+            attemptMode: "arena",
+          },
+        });
+      }
       return NextResponse.json({ error: "This quiz has already been submitted" }, { status: 409 });
     }
     if (["pending_approval", "rejected"].includes(studentQuiz.quizStatus || "")) {
