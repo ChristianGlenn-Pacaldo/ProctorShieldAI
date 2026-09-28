@@ -40,6 +40,11 @@ interface PendingApproval {
   quizId: number;
 }
 
+async function actionErrorMessage(response: Response, fallback: string) {
+  const data = await response.json().catch(() => ({}));
+  return data.error || fallback;
+}
+
 export default function TeacherQuizzesPage({
   isSubscribed: initialIsSubscribed = false,
   initialManualQuizCount = 0,
@@ -90,6 +95,7 @@ export default function TeacherQuizzesPage({
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalInProgressId, setApprovalInProgressId] = useState<string | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Check subscription status on mount
   useEffect(() => {
@@ -293,18 +299,29 @@ export default function TeacherQuizzesPage({
   };
 
   const handleRetakeApprove = async (studentQuizId: number, action: "accept" | "reject") => {
+    setActionError(null);
     try {
       const res = await fetch("/api/quizzes/retake/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentQuizId, action }),
       });
-      if (res.ok) {
-        setPendingRetakes((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
-        fetchQuizzes();
-      }
+      if (!res.ok) throw new Error(await actionErrorMessage(res, "Unable to update the retake request."));
+      if (!await fetchQuizzes()) throw new Error("Decision saved, but the request list could not be refreshed. Please reload My Quizzes.");
     } catch (e) {
-      console.error(e);
+      setActionError(e instanceof Error ? e.message : "Unable to update the retake request.");
+    }
+  };
+
+  const startQuiz = async (quiz: any) => {
+    if (!confirm(`Are you sure you want to start "${quiz.title}"? Students in the lobby will immediately enter the quiz.`)) return;
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/quizzes/${quiz.id}/start`, { method: "POST" });
+      if (!response.ok) throw new Error(await actionErrorMessage(response, "Unable to start the quiz."));
+      await fetchQuizzes();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to start the quiz.");
     }
   };
 
@@ -334,6 +351,7 @@ export default function TeacherQuizzesPage({
 
   const toggleQuizStatus = async (quiz: any) => {
     setIsUpdatingStatus(true);
+    setActionError(null);
     const newStatus = quiz.quizStatus === "active" ? "draft" : "active";
     try {
       const res = await fetch(`/api/quizzes/${quiz.id}`, {
@@ -341,12 +359,12 @@ export default function TeacherQuizzesPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizStatus: newStatus }),
       });
-      if (res.ok) {
-        setManageQuiz({ ...quiz, quizStatus: newStatus });
-        fetchQuizzes();
-      }
+      if (!res.ok) throw new Error(await actionErrorMessage(res, "Unable to update quiz status."));
+      const data = await res.json();
+      setManageQuiz({ ...quiz, quizStatus: data.quiz.quizStatus });
+      void fetchQuizzes();
     } catch (err) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : "Unable to update quiz status.");
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -355,18 +373,19 @@ export default function TeacherQuizzesPage({
   const endQuiz = async (quiz: any) => {
     if (!confirm("Are you sure you want to end this quiz? Students will no longer be able to join.")) return;
     setIsUpdatingStatus(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizStatus: "ended" }),
       });
-      if (res.ok) {
-        setManageQuiz({ ...quiz, quizStatus: "ended" });
-        fetchQuizzes();
-      }
+      if (!res.ok) throw new Error(await actionErrorMessage(res, "Unable to end the quiz."));
+      const data = await res.json();
+      setManageQuiz({ ...quiz, quizStatus: data.quiz.quizStatus });
+      void fetchQuizzes();
     } catch (err) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : "Unable to end the quiz.");
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -597,6 +616,8 @@ export default function TeacherQuizzesPage({
           setShowBillingModal(true);
         }}
       />
+
+      {actionError && !manageQuiz && <div role="alert" className="fixed bottom-4 right-4 z-[100] max-w-sm rounded-xl border border-rose-500/30 bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-rose-600 shadow-xl dark:text-rose-400">{actionError}</div>}
 
       {pendingApprovals.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 shadow-xs">
@@ -858,20 +879,7 @@ export default function TeacherQuizzesPage({
 
                         {e.quizStatus === "active" && e.quizMode !== "arena" && (
                           <button
-                            onClick={async () => {
-                              if (
-                                !confirm(
-                                  `Are you sure you want to start "${e.title}"? Students in the lobby will immediately enter the quiz.`
-                                )
-                              )
-                                return;
-                              try {
-                                const res = await fetch(`/api/quizzes/${e.id}/start`, { method: "POST" });
-                                if (res.ok) fetchQuizzes();
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
+                            onClick={() => startQuiz(e)}
                             className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
                           >
                             Start
@@ -943,6 +951,7 @@ export default function TeacherQuizzesPage({
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {actionError && <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-600 dark:text-rose-400">{actionError}</div>}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="border border-[var(--border)] rounded-xl p-3">
                   <div className="text-[10px] font-bold text-[var(--muted)] uppercase">Questions</div>
@@ -1107,14 +1116,19 @@ export default function TeacherQuizzesPage({
                   checked={manageQuiz.allowRetake === true}
                   onChange={async (event) => {
                     const allowRetake = event.target.checked;
-                    const response = await fetch(`/api/quizzes/${manageQuiz.id}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ allowRetake }),
-                    });
-                    if (response.ok) {
-                      setManageQuiz({ ...manageQuiz, allowRetake });
+                    setActionError(null);
+                    try {
+                      const response = await fetch(`/api/quizzes/${manageQuiz.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ allowRetake }),
+                      });
+                      if (!response.ok) throw new Error(await actionErrorMessage(response, "Unable to update retake settings."));
+                      const data = await response.json();
+                      setManageQuiz({ ...manageQuiz, allowRetake: data.quiz.allowRetake });
                       void fetchQuizzes();
+                    } catch (error) {
+                      setActionError(error instanceof Error ? error.message : "Unable to update retake settings.");
                     }
                   }}
                   className="h-4 w-4"

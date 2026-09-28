@@ -25,18 +25,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (studentQuiz.quizStatus !== "pending_approval") {
-      return NextResponse.json({ error: "Student is not pending approval" }, { status: 400 });
+      return NextResponse.json({ error: "This late-join request is no longer pending" }, { status: 409 });
     }
 
     const newStatus = action === "accept" ? (studentQuiz.quiz.quizMode === "arena" ? "in_progress" : "enrolled") : "rejected";
 
-    await prisma.studentQuiz.update({
-      where: { id: studentQuizId },
+    const claimed = await prisma.studentQuiz.updateMany({
+      where: { id: studentQuizId, quizStatus: "pending_approval" },
       data: {
         quizStatus: newStatus,
         startTime: action === "accept" && studentQuiz.quiz.quizMode === "arena" ? new Date() : studentQuiz.startTime,
       },
     });
+    if (claimed.count !== 1) {
+      return NextResponse.json({ error: "This late-join request is no longer pending" }, { status: 409 });
+    }
 
     // Notify the specific student
     try {

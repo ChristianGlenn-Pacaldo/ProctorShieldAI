@@ -133,6 +133,7 @@ export default function LiveMonitorContent({
   const [monitorCounters, setMonitorCounters] = useState({ activeStudents: 0, totalViolations: 0 });
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingRetakes, setPendingRetakes] = useState<any[]>([]);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [warningSendState, setWarningSendState] = useState<"idle" | "sending" | "sent" | "queued" | "error">("idle");
   const [warningSendMessage, setWarningSendMessage] = useState("");
@@ -190,32 +191,38 @@ export default function LiveMonitorContent({
   };
 
   const handleApprove = async (studentQuizId: number, action: "accept" | "reject") => {
+    setDecisionError(null);
     try {
       const res = await fetch("/api/quizzes/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentQuizId, action }),
       });
-      if (res.ok) {
-        setPendingApprovals((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Unable to update the late-join request.");
       }
+      setPendingApprovals((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
     } catch (e) {
-      console.error(e);
+      setDecisionError(e instanceof Error ? e.message : "Unable to update the late-join request.");
     }
   };
 
   const handleRetakeApprove = async (studentQuizId: number, action: "accept" | "reject") => {
+    setDecisionError(null);
     try {
       const res = await fetch("/api/quizzes/retake/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentQuizId, action }),
       });
-      if (res.ok) {
-        setPendingRetakes((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Unable to update the retake request.");
       }
+      setPendingRetakes((prev) => prev.filter((p) => p.studentQuizId !== studentQuizId));
     } catch (e) {
-      console.error(e);
+      setDecisionError(e instanceof Error ? e.message : "Unable to update the retake request.");
     }
   };
 
@@ -609,6 +616,7 @@ export default function LiveMonitorContent({
 
   return (
     <div className="space-y-5">
+      {decisionError && <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-600 dark:text-rose-400">{decisionError}</div>}
       {/* Pending Approvals */}
       {pendingApprovals.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
