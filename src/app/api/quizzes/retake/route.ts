@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getRetakeRequestError } from "@/lib/retake-eligibility";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,17 +30,9 @@ export async function POST(req: NextRequest) {
       orderBy: { attemptNumber: "desc" },
       select: { id: true },
     });
-    if (latestAttempt?.id !== studentQuiz.id) {
-      return NextResponse.json({ error: "Only the latest attempt can be retaken" }, { status: 409 });
-    }
-    if (!studentQuiz.quiz.allowRetake) {
-      return NextResponse.json({ error: "Retakes are not enabled for this quiz" }, { status: 403 });
-    }
-    if (studentQuiz.quizStatus === "pending_retake") {
-      return NextResponse.json({ error: "Retake already requested" }, { status: 400 });
-    }
-    if (studentQuiz.quizStatus !== "completed" || !studentQuiz.endTime) {
-      return NextResponse.json({ error: "Only a completed attempt can be retaken" }, { status: 409 });
+    const eligibilityError = getRetakeRequestError(studentQuiz, latestAttempt?.id);
+    if (eligibilityError) {
+      return NextResponse.json({ error: eligibilityError.error }, { status: eligibilityError.status });
     }
 
     // Update status to pending_retake

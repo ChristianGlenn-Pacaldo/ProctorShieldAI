@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
 
 type StudentQuizResponse = {
   quizzes: Array<{
@@ -73,6 +74,7 @@ test("Student quiz list serializes only the teacher name", async () => {
     },
   };
   const dependencies: Record<string, unknown> = {
+    "@/lib/retake-eligibility": retakeEligibility,
     "next/server": {
       NextResponse: {
         json: (body: unknown, options: { status?: number; headers?: HeadersInit } = {}) =>

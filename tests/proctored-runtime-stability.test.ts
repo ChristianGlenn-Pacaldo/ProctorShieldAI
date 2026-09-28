@@ -3,6 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
 import * as runtime from "../src/lib/proctored-runtime.ts";
 import * as grading from "../src/lib/quiz-submission.ts";
 import * as devices from "../src/lib/device-capabilities.ts";
@@ -109,6 +110,7 @@ function fixture() {
     "@/lib/evidence-storage": { uploadEvidence: async () => null },
     "@/lib/proctoring-detection": detection,
     "@/lib/quiz-availability": quizAvailability,
+    "@/lib/retake-eligibility": retakeEligibility,
     "@/lib/teacher-entitlements": { hasActiveProSubscription: async () => true },
     "@/lib/snapshot-store": { saveSnapshot: async () => {}, getSnapshotsForTeacher: async () => [] },
   };

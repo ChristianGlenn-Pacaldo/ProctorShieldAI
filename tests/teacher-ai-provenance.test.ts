@@ -6,6 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import jwt from "jsonwebtoken";
 import ts from "typescript";
+import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
 import { createAiQuizReceipt, verifyAiQuizReceipt } from "../src/lib/ai-quiz-provenance.ts";
 import { getQuizCreationDecision } from "../src/lib/subscription-rules.ts";
 
@@ -81,6 +82,7 @@ function creationFixture(subscribed: boolean) {
       if (name === "@/lib/subscription-rules") return { getQuizCreationDecision };
       if (name === "@/lib/quiz-mode") return { parseQuizMode: () => "proctored", InvalidQuizModeError: class extends Error {} };
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: [] };
+      if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt };
       if (name === "node:crypto") return crypto;
       throw new Error(`Unexpected import: ${name}`);

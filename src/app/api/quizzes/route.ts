@@ -7,6 +7,7 @@ import { getQuizCreationDecision } from "@/lib/subscription-rules";
 import { parseQuizMode, InvalidQuizModeError } from "@/lib/quiz-mode";
 import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
 import { verifyAiQuizReceipt } from "@/lib/ai-quiz-provenance";
+import { withRetakeEligibility } from "@/lib/retake-eligibility";
 
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" };
 
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, quizzes: studentQuizzes }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ success: true, quizzes: withRetakeEligibility(studentQuizzes) }, { headers: NO_STORE_HEADERS });
     } else if (session.role === "admin") {
       // Admins get all quizzes
       const quizzes = await prisma.quiz.findMany({

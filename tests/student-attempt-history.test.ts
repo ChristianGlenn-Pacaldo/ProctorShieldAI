@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 
@@ -52,6 +53,7 @@ async function loadResultsApi(role: string | null = "student") {
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: { studentQuiz: { findMany: async () => { queried = true; return attempts; } } } };
       if (name === "@/lib/auth") return { getSession: async () => role ? { role, userId: "student-1" } : null };
+      if (name === "@/lib/retake-eligibility") return retakeEligibility;
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,

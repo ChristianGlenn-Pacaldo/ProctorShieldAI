@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { withRetakeEligibility } from "@/lib/retake-eligibility";
 
 export async function GET() {
   try {
@@ -23,7 +24,7 @@ export async function GET() {
       },
     });
 
-    const normalizedResults = results.map((result) => {
+    const normalizedResults = withRetakeEligibility(results).map((result) => {
       // Historical classification: StudentQuiz.attemptMode is authoritative
       const effectiveMode = result.attemptMode === "arena" ? "arena" : "proctored";
       const isArena = effectiveMode === "arena";

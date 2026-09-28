@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
 
 const routePath = path.resolve(process.cwd(), "src/app/api/quizzes/[id]/route.ts");
 const creationPath = path.resolve(process.cwd(), "src/app/api/quizzes/route.ts");
@@ -251,6 +252,7 @@ function creationFixture() {
       if (name === "@/lib/subscription-rules") return { getQuizCreationDecision: () => ({ allowed: true }) };
       if (name === "@/lib/quiz-mode") return { parseQuizMode: () => "proctored", InvalidQuizModeError: class extends Error {} };
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: [] };
+      if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt: () => false };
       if (name === "node:crypto") return crypto;
       throw new Error(`Unexpected import: ${name}`);

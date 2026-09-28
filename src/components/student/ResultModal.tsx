@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { X, ShieldAlert, CheckCircle, Brain, Swords, Trophy, Clock } from "lucide-react";
 
 interface ResultModalProps {
@@ -9,6 +9,12 @@ interface ResultModalProps {
 
 export default function ResultModal({ isOpen, onClose, result }: ResultModalProps) {
   if (!isOpen || !result) return null;
+  return <OpenResultModal key={result.id} onClose={onClose} result={result} />;
+}
+
+function OpenResultModal({ onClose, result }: Pick<ResultModalProps, "onClose" | "result">) {
+  const [retakeState, setRetakeState] = useState<"idle" | "requesting" | "requested">("idle");
+  const [retakeError, setRetakeError] = useState("");
 
   const isArena = result.attemptMode === "arena" || result.effectiveMode === "arena";
   const verdict = String(result.aiVerdict || "").toLowerCase();
@@ -146,14 +152,15 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
 
         </div>
         
+        {retakeError && <p role="alert" className="px-4 py-3 text-sm text-rose-600 dark:text-rose-400 sm:px-6">{retakeError}</p>}
         {/* Footer */}
         <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:py-4">
-          {!isArena && result.quiz?.allowRetake && result.quizStatus !== "pending_retake" ? (
+          {!isArena && result.canRequestRetake === true ? (
             <button 
-              onClick={async (e) => {
-                const btn = e.currentTarget;
-                btn.disabled = true;
-                btn.innerText = "Requesting...";
+              disabled={retakeState !== "idle"}
+              onClick={async () => {
+                setRetakeState("requesting");
+                setRetakeError("");
                 try {
                   const res = await fetch("/api/quizzes/retake", {
                     method: "POST",
@@ -161,23 +168,21 @@ export default function ResultModal({ isOpen, onClose, result }: ResultModalProp
                     body: JSON.stringify({ studentQuizId: result.id })
                   });
                   if (res.ok) {
-                    btn.innerText = "Requested ✓";
+                    setRetakeState("requested");
                     setTimeout(() => window.location.reload(), 1500);
                   } else {
-                    btn.innerText = "Failed";
-                    setTimeout(() => {
-                      btn.disabled = false;
-                      btn.innerText = "Request Retake";
-                    }, 2000);
+                    const data = await res.json().catch(() => null);
+                    setRetakeError(typeof data?.error === "string" && data.error.trim() ? data.error : "Could not request a retake. Please try again.");
+                    setRetakeState("idle");
                   }
                 } catch {
-                  btn.disabled = false;
-                  btn.innerText = "Request Retake";
+                  setRetakeError("Could not request a retake. Check your connection and try again.");
+                  setRetakeState("idle");
                 }
               }}
               className="w-full px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-lg transition-colors sm:w-auto"
             >
-              Request Retake
+              {retakeState === "requesting" ? "Requesting..." : retakeState === "requested" ? "Requested ✓" : "Request Retake"}
             </button>
           ) : !isArena && result.quizStatus === "pending_retake" ? (
             <button disabled className="w-full px-4 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg opacity-80 cursor-not-allowed sm:w-auto">
