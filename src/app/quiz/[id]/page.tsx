@@ -168,6 +168,9 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [quizError, setQuizError] = useState("");
+  const [isRetryingQuiz, setIsRetryingQuiz] = useState(false);
+  const loadQuizRef = useRef<(() => Promise<void>) | null>(null);
+  const hasAuthorizedQuizRef = useRef(false);
   const [lobbyError, setLobbyError] = useState("");
   const [canEnterQuiz, setCanEnterQuiz] = useState(false);
   const [isEnteringQuiz, setIsEnteringQuiz] = useState(false);
@@ -513,13 +516,14 @@ function QuizAttempt({ quizId }: { quizId: string }) {
         const res = await fetch(`/api/quizzes/${quizId}`);
         const data = await res.json();
         if (cancelled) return;
-        if (res.ok && data.success) {
+        if (res.ok && data.success && data.quiz) {
           // ARENA ROUTE GUARD: If quiz is an arena quiz, redirect immediately
           if (data.quiz?.quizMode === "arena") {
             router.replace(`/arena/${quizId}`);
             return;
           }
           if (data.studentQuizStatus === "completed" || data.endTime) { router.replace("/dashboard/student/results"); return; }
+          hasAuthorizedQuizRef.current = true;
           setQuiz(data.quiz);
           setQuestions(data.questions || []);
           setStudentQuizStatus(data.studentQuizStatus || "");
@@ -533,28 +537,32 @@ function QuizAttempt({ quizId }: { quizId: string }) {
           }
           if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
           else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
-        } else {
+          setQuizError("");
+        } else if (!hasAuthorizedQuizRef.current) {
           setQuizError(data.error || "Failed to load quiz");
         }
       } catch (err) {
-        setQuizError("Network error loading quiz");
+        if (!cancelled && !hasAuthorizedQuizRef.current) setQuizError("Network error loading quiz");
       } finally {
-        setLoadingQuiz(false);
+        if (!cancelled) setLoadingQuiz(false);
       }
     };
-    loadQuiz();
+    loadQuizRef.current = loadQuiz;
+    void loadQuiz();
 
     // Auto-poll every 3s if quiz is in draft/waiting mode
     const pollInterval = setInterval(() => {
       if (!hasStarted) {
         fetch(`/api/quizzes/${quizId}`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (!cancelled && data.success && data.quiz) {
+          .then(async (res) => ({ ok: res.ok, data: await res.json() }))
+          .then(({ ok, data }) => {
+            if (!cancelled && ok && data.success && data.quiz) {
               if (data.quiz.quizMode === "arena") {
                 router.replace(`/arena/${quizId}`);
                 return;
               }
+              if (data.studentQuizStatus === "completed" || data.endTime) { router.replace("/dashboard/student/results"); return; }
+              hasAuthorizedQuizRef.current = true;
               setQuiz(data.quiz);
               setQuestions(data.questions || []);
               setStudentQuizStatus(data.studentQuizStatus || "");
@@ -563,14 +571,22 @@ function QuizAttempt({ quizId }: { quizId: string }) {
               restoreSavedAnswers(data);
               if (Number.isInteger(data.remainingSeconds)) setTimeLeft(data.remainingSeconds);
               else if (data.quiz.duration) setTimeLeft(data.quiz.duration * 60);
+              setQuizError("");
             }
           })
           .catch(() => {});
       }
     }, 3000);
 
-    return () => { cancelled = true; clearInterval(pollInterval); };
+    return () => { cancelled = true; loadQuizRef.current = null; clearInterval(pollInterval); };
   }, [quizId, hasStarted, quizSubmittedResult, restoreSavedAnswers, router]);
+
+  const retryQuizLoad = () => {
+    const loadQuiz = loadQuizRef.current;
+    if (!loadQuiz || isRetryingQuiz) return;
+    setIsRetryingQuiz(true);
+    void loadQuiz().finally(() => setIsRetryingQuiz(false));
+  };
 
   // Handle pusher lobby real-time updates
   useEffect(() => {
@@ -597,9 +613,10 @@ function QuizAttempt({ quizId }: { quizId: string }) {
         }
         // Teacher started quiz! Fetch full quiz data immediately
         fetch(`/api/quizzes/${quizId}`)
-          .then((res) => res.json())
-          .then((freshData) => {
-            if (!cancelled && !submissionInFlightRef.current && freshData.success) {
+          .then(async (res) => ({ ok: res.ok, data: await res.json() }))
+          .then(({ ok, data: freshData }) => {
+            if (!cancelled && !submissionInFlightRef.current && ok && freshData.success && freshData.quiz) {
+              hasAuthorizedQuizRef.current = true;
               setQuiz(freshData.quiz);
               setQuestions(freshData.questions || []);
               setStudentQuizStatus(freshData.studentQuizStatus || "");
@@ -608,6 +625,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
               restoreSavedAnswers(freshData);
               if (Number.isInteger(freshData.remainingSeconds)) setTimeLeft(freshData.remainingSeconds);
               else if (freshData.quiz.duration) setTimeLeft(freshData.quiz.duration * 60);
+              setQuizError("");
             }
           })
           .catch(() => {});
@@ -2369,6 +2387,14 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               <AlertTriangle className="w-12 h-12 text-red-500 mx-auto" />
               <p className="font-bold text-lg">Failed to Load Quiz</p>
               <p className="text-sm">{quizError}</p>
+              <button
+                type="button"
+                onClick={retryQuizLoad}
+                disabled={isRetryingQuiz}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold rounded-xl transition-all"
+              >
+                {isRetryingQuiz ? "Retrying..." : "Retry"}
+              </button>
               <button
                 onClick={() => router.push("/dashboard/student")}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all"

@@ -72,7 +72,7 @@ test("realtime rejection selects the rejected banner without turning it into a l
 test("reloading a persisted rejection still selects the rejected state", async () => {
   const state = { status: "", canEnter: true, error: "" };
   const callback = runCallback(loadQuizCallback(), {
-    quizId: "46", cancelled: false,
+    quizId: "46", cancelled: false, hasAuthorizedQuizRef: { current: false },
     fetch: async () => ({ ok: true, json: async () => ({
       success: true, quiz: { quizMode: "proctored", duration: 30 },
       studentQuizStatus: "rejected", canEnterQuiz: false,
@@ -108,7 +108,7 @@ test("realtime rejection does not clear an unrelated existing quiz error", () =>
 test("unrelated quiz-loading errors still use the generic error view", async () => {
   const errors: string[] = [];
   const callback = runCallback(loadQuizCallback(), {
-    quizId: "46", cancelled: false,
+    quizId: "46", cancelled: false, hasAuthorizedQuizRef: { current: false },
     fetch: async () => ({ ok: false, json: async () => ({ error: "Quiz unavailable" }) }),
     setQuizError: (error: string) => { errors.push(error); },
     setLoadingQuiz() {},
