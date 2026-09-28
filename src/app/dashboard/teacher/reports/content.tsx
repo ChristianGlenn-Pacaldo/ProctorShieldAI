@@ -57,7 +57,7 @@ export default function ReportsContent() {
             ))
           )}
           <p className="mt-5 text-xs text-[var(--muted)] leading-relaxed border-t border-[var(--border)] pt-4">
-            The AI Proctoring system automatically tags students based on the frequency and severity of flagged incidents. Review High Risk students in the Evidence Replay tab.
+            Completed proctored attempts are grouped by recorded violations: 0 clean, 1–2 suspicious, and 3 or more high risk. Review violations in Evidence Replay.
           </p>
         </div>
       </div>

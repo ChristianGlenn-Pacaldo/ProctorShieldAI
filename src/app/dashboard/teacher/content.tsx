@@ -114,15 +114,10 @@ export default function TeacherDashboardContent({
 
     // Student Joined Event
     channel.bind("student-joined", (data: any) => {
+      fetchDashboardData();
       setLiveStudents((prev) => {
         const exists = prev.some((s) => s.name === data.studentName);
         if (exists) return prev;
-
-        // Increment stats for dynamic display
-        setStats((curr) => ({
-          ...curr,
-          studentsMonitored: curr.studentsMonitored + 1,
-        }));
 
         return [
           ...prev,
@@ -206,14 +201,6 @@ export default function TeacherDashboardContent({
                 ? "bg-amber-500/15 text-amber-600"
                 : "bg-red-500/15 text-red-500";
 
-            // If trust dips below 50, increment flagged students count once
-            if (newTrust <= 50 && student.trust > 50) {
-              setStats((curr) => ({
-                ...curr,
-                flaggedStudents: curr.flaggedStudents + 1,
-              }));
-            }
-
             return {
               ...student,
               status: statusText,
@@ -256,12 +243,12 @@ export default function TeacherDashboardContent({
       badge: "ACTIVE",
     },
     {
-      label: "Students Monitored",
+      label: "Unique Quiz Students",
       value: stats.studentsMonitored,
       icon: <Users className="w-5 h-5" />,
       color: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
-      sub: "Live Proctored Sessions",
-      badge: "TELEMETRY",
+      sub: "All-time across your quizzes",
+      badge: "ALL-TIME",
     },
     {
       label: "Total Violations",
@@ -277,7 +264,7 @@ export default function TeacherDashboardContent({
       icon: <Brain className="w-5 h-5" />,
       color: "bg-amber-600/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
       sub: "Gemini Forensic Alerts",
-      badge: "HIGH RISK",
+      badge: "AI FLAGS",
     },
   ];
 

@@ -49,14 +49,14 @@ export async function GET(req: NextRequest) {
 
     const totalViolations = studentQuizzes.reduce((sum, se) => sum + se.violations.length, 0);
 
-    const flaggedStudentsCount = studentQuizzes.filter((se) => {
+    const flaggedStudentIds = new Set(studentQuizzes.filter((se) => {
       const prob = se.cheatingProbability ? Number(se.cheatingProbability) : 0;
       return (
         se.aiVerdict === "cheated" ||
         se.aiVerdict === "suspicious" ||
         prob > 50
       );
-    }).length;
+    }).map((se) => se.studentId));
 
     // 4. Compute violations breakdown
     const violationCounts: Record<string, number> = {
@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
         totalQuizzes,
         studentsMonitored,
         totalViolations,
-        flaggedStudents: flaggedStudentsCount,
+        flaggedStudents: flaggedStudentIds.size,
       },
       violationsBreakdown,
       recentVerdicts,

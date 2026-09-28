@@ -55,19 +55,19 @@ export async function GET(req: NextRequest) {
 
     const data = [
       {
-        label: "✓ Clean (Trust > 90%)",
+        label: "✓ Clean (0 violations)",
         value: clean,
         pct: total > 0 ? Math.round((clean / total) * 100) : 0,
         color: "bg-emerald-500",
       },
       {
-        label: "⚠ Suspicious (70-90%)",
+        label: "⚠ Suspicious (1–2 violations)",
         value: suspicious,
         pct: total > 0 ? Math.round((suspicious / total) * 100) : 0,
         color: "bg-amber-500",
       },
       {
-        label: "🚫 High Risk (< 70%)",
+        label: "🚫 High Risk (3+ violations)",
         value: highRisk,
         pct: total > 0 ? Math.round((highRisk / total) * 100) : 0,
         color: "bg-red-500",
