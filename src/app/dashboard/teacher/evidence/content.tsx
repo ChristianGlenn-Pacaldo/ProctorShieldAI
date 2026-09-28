@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Camera, AlertCircle, PlayCircle, Download, Trash2 } from "lucide-react";
 
@@ -30,6 +30,13 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const currentPageRef = useRef(1);
+  const retryPageRef = useRef(1);
+  const requestIdRef = useRef(0);
+  const foregroundRequestRef = useRef(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [mediaStatus, setMediaStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -71,6 +78,16 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
       if (data.success) {
         setEvidenceList([]);
         setSelectedEvidence(null);
+        setTotal(0);
+        setPage(1);
+        currentPageRef.current = 1;
+        retryPageRef.current = 1;
+        const url = new URL(window.location.href);
+        url.searchParams.delete("page");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+        requestIdRef.current += 1;
+        foregroundRequestRef.current = false;
+        setIsLoading(false);
         alert(data.message || "Evidence storage successfully cleared from database!");
       } else {
         alert("Failed to clear evidence storage: " + (data.error || "Unknown error"));
@@ -83,13 +100,36 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     }
   };
 
-  const fetchEvidence = useCallback(async (background = false) => {
+  const fetchEvidence = useCallback(async (requestedPage = currentPageRef.current, background = false) => {
+    if (background && foregroundRequestRef.current) return;
+    const requestId = ++requestIdRef.current;
+    if (!background) {
+      foregroundRequestRef.current = true;
+      retryPageRef.current = requestedPage;
+    }
     try {
-      const res = await fetch("/api/dashboard/teacher/evidence");
+      const res = await fetch(`/api/dashboard/teacher/evidence?page=${requestedPage}`);
       if (!res.ok) throw new Error(`Evidence request failed (${res.status})`);
       const data = await res.json();
-      const nextEvidence: EvidenceItem[] = data.evidence || [];
+      if (!data.success || !Array.isArray(data.evidence) || !Number.isSafeInteger(data.total)
+        || data.total < 0 || !Number.isSafeInteger(data.page) || data.page < 1
+        || !Number.isSafeInteger(data.pageSize) || data.pageSize < 1) {
+        throw new Error("Invalid evidence response");
+      }
+      if (requestId !== requestIdRef.current) return;
+      const nextEvidence: EvidenceItem[] = data.evidence;
       setEvidenceList(nextEvidence);
+      setTotal(data.total);
+      setPage(data.page);
+      setPageSize(data.pageSize);
+      currentPageRef.current = data.page;
+      retryPageRef.current = data.page;
+      if (!background) {
+        const url = new URL(window.location.href);
+        if (data.page === 1) url.searchParams.delete("page");
+        else url.searchParams.set("page", String(data.page));
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
       setSelectedEvidence((current) => {
         if (current) return nextEvidence.find((item) => item.id === current.id) || nextEvidence[0] || null;
         return nextEvidence[0] || null;
@@ -97,18 +137,27 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
       setLoadError(null);
     } catch (err) {
       console.error("Failed to fetch evidence logs:", err);
-      setLoadError("Could not load Evidence Logs. Please try again.");
+      if (requestId === requestIdRef.current) setLoadError("Could not load Evidence Logs. Please try again.");
     } finally {
-      if (!background) setIsLoading(false);
+      if (!background && requestId === requestIdRef.current) {
+        foregroundRequestRef.current = false;
+        setIsLoading(false);
+      }
     }
   }, []);
 
+  const loadPage = (requestedPage: number) => {
+    setIsLoading(true);
+    void fetchEvidence(requestedPage);
+  };
+
   useEffect(() => {
     if (teacherId && teacherId !== "unknown") {
-      void fetchEvidence();
+      const requestedPage = Number(new URL(window.location.href).searchParams.get("page") ?? "1");
+      void fetchEvidence(Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1);
       // A clip takes four seconds to record. Refresh in the background so a
       // snapshot already visible to the teacher is replaced by its video.
-      const refreshTimer = window.setInterval(() => void fetchEvidence(true), 5_000);
+      const refreshTimer = window.setInterval(() => void fetchEvidence(currentPageRef.current, true), 5_000);
       return () => window.clearInterval(refreshTimer);
     }
   }, [teacherId, fetchEvidence]);
@@ -151,10 +200,10 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
           {loadError && (
             <div role="alert" className="flex items-center justify-between gap-4 bg-rose-500/10 px-5 py-3 text-sm text-rose-600 dark:text-rose-400">
               <span>{loadError}</span>
-              <button type="button" onClick={() => void fetchEvidence()} className="font-bold underline">Retry</button>
+              <button type="button" disabled={isLoading} onClick={() => loadPage(retryPageRef.current)} className="font-bold underline disabled:opacity-50">Retry</button>
             </div>
           )}
-          {isLoading ? (
+          {isLoading && evidenceList.length === 0 ? (
             <div className="flex items-center justify-center h-48">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
@@ -194,6 +243,14 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               </div>
             ))
           )}
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--muted)]">
+          <span>Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}–{(page - 1) * pageSize + evidenceList.length} of {total}</span>
+          <div className="flex items-center gap-3">
+            <button type="button" disabled={isLoading || page <= 1} onClick={() => loadPage(page - 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Previous</button>
+            <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+            <button type="button" disabled={isLoading || page >= Math.ceil(total / pageSize)} onClick={() => loadPage(page + 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Next</button>
+          </div>
         </div>
       </div>
 

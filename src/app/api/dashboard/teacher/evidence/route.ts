@@ -5,6 +5,8 @@ import { expireSubscriptions } from "@/lib/maintenance";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { getViolationLabel } from "@/lib/proctoring-detection";
 
+const PAGE_SIZE = 25;
+
 async function requireEvidenceAccess(userId: string) {
   await expireSubscriptions(userId);
   return hasActiveProSubscription(userId);
@@ -23,16 +25,23 @@ export async function GET(req: NextRequest) {
       );
     }
     const teacherId = session.userId;
+    const requestedPage = Number(new URL(req.url).searchParams.get("page") ?? "1");
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
+      return NextResponse.json({ error: "Invalid page" }, { status: 400 });
+    }
 
-    // Fetch violations for quizzes created by this teacher
-    const violations = await prisma.violation.findMany({
-      where: {
-        studentQuiz: {
-          quiz: {
-            teacherId: teacherId,
-          },
+    const where = {
+      studentQuiz: {
+        quiz: {
+          teacherId,
         },
       },
+    };
+    const total = await prisma.violation.count({ where });
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(requestedPage, pageCount);
+    const violations = await prisma.violation.findMany({
+      where,
       include: {
         evidenceFiles: { orderBy: { uploadedAt: "desc" }, take: 1 },
         studentQuiz: {
@@ -50,10 +59,9 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      orderBy: {
-        timestamp: "desc",
-      },
-      take: 200,
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     });
 
     const formattedEvidence = violations.map((v) => {
@@ -102,7 +110,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ success: true, evidence: formattedEvidence });
+    return NextResponse.json({ success: true, evidence: formattedEvidence, total, page, pageSize: PAGE_SIZE });
   } catch (error) {
     console.error("Fetch evidence logs error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
