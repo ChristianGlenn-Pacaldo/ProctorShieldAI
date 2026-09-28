@@ -29,6 +29,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [mediaStatus, setMediaStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -85,17 +86,18 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const fetchEvidence = useCallback(async (background = false) => {
     try {
       const res = await fetch("/api/dashboard/teacher/evidence");
-      if (res.ok) {
-        const data = await res.json();
-        const nextEvidence: EvidenceItem[] = data.evidence || [];
-        setEvidenceList(nextEvidence);
-        setSelectedEvidence((current) => {
-          if (current) return nextEvidence.find((item) => item.id === current.id) || nextEvidence[0] || null;
-          return nextEvidence[0] || null;
-        });
-      }
+      if (!res.ok) throw new Error(`Evidence request failed (${res.status})`);
+      const data = await res.json();
+      const nextEvidence: EvidenceItem[] = data.evidence || [];
+      setEvidenceList(nextEvidence);
+      setSelectedEvidence((current) => {
+        if (current) return nextEvidence.find((item) => item.id === current.id) || nextEvidence[0] || null;
+        return nextEvidence[0] || null;
+      });
+      setLoadError(null);
     } catch (err) {
       console.error("Failed to fetch evidence logs:", err);
+      setLoadError("Could not load Evidence Logs. Please try again.");
     } finally {
       if (!background) setIsLoading(false);
     }
@@ -146,11 +148,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
         </div>
         
         <div className="divide-y divide-[var(--border)] min-h-[300px]">
+          {loadError && (
+            <div role="alert" className="flex items-center justify-between gap-4 bg-rose-500/10 px-5 py-3 text-sm text-rose-600 dark:text-rose-400">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => void fetchEvidence()} className="font-bold underline">Retry</button>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center h-48">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : evidenceList.length === 0 ? (
+          ) : loadError && evidenceList.length === 0 ? null : evidenceList.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center h-[300px] text-[var(--muted)]">
               <AlertCircle className="w-10 h-10 mb-3 text-[var(--muted2)]" />
               <p className="text-sm font-semibold">No proctoring violations recorded</p>

@@ -51,6 +51,8 @@ const premiumFeatures = [
 
 export default function BillingContent() {
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedBilling, setHasLoadedBilling] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -62,16 +64,18 @@ export default function BillingContent() {
   const fetchBilling = useCallback(async () => {
     try {
       const res = await fetch("/api/billing");
-      if (res.ok) {
-        const data = await res.json();
-        setIsSubscribed(data.isSubscribed);
-        setSubscription(data.subscription);
-        setPayments(data.payments || []);
-        setPaymentMode(data.paymentMode === "live" ? "live" : "test");
-        return Boolean(data.isSubscribed);
-      }
+      if (!res.ok) throw new Error(`Billing request failed (${res.status})`);
+      const data = await res.json();
+      setIsSubscribed(data.isSubscribed);
+      setSubscription(data.subscription);
+      setPayments(data.payments || []);
+      setPaymentMode(data.paymentMode === "live" ? "live" : "test");
+      setHasLoadedBilling(true);
+      setLoadError(null);
+      return Boolean(data.isSubscribed);
     } catch (err) {
       console.error("Failed to load billing:", err);
+      setLoadError("Could not load Billing. Your current plan is unavailable. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -139,8 +143,18 @@ export default function BillingContent() {
     );
   }
 
+  const loadFailure = loadError && (
+    <div role="alert" className="flex items-center justify-between gap-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
+      <span>{loadError}</span>
+      <button type="button" onClick={() => void fetchBilling()} className="font-bold underline">Retry</button>
+    </div>
+  );
+
+  if (!hasLoadedBilling) return <div className="mx-auto max-w-4xl">{loadFailure}</div>;
+
   return (
     <div className="animate-fade-in space-y-6 max-w-4xl mx-auto">
+      {loadFailure}
       {/* Payment environment banner */}
       <div className={`flex items-center justify-between p-3.5 rounded-xl text-xs ${
         paymentMode === "live"

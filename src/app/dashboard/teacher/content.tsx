@@ -72,6 +72,8 @@ export default function TeacherDashboardContent({
   const [recentVerdicts, setRecentVerdicts] = useState<RecentVerdict[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedDashboard, setHasLoadedDashboard] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Keep refs in sync for websocket handlers
   const liveStudentsRef = useRef<LiveStudent[]>([]);
@@ -82,16 +84,18 @@ export default function TeacherDashboardContent({
   const fetchDashboardData = async () => {
     try {
       const res = await fetch("/api/dashboard/teacher");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data.stats);
-        setRecentVerdicts(data.recentVerdicts);
-        if (data.violationsBreakdown && data.violationsBreakdown.length > 0) {
-          setViolationsBreakdown(data.violationsBreakdown);
-        }
+      if (!res.ok) throw new Error(`Dashboard request failed (${res.status})`);
+      const data = await res.json();
+      setStats(data.stats);
+      setRecentVerdicts(data.recentVerdicts);
+      if (data.violationsBreakdown && data.violationsBreakdown.length > 0) {
+        setViolationsBreakdown(data.violationsBreakdown);
       }
+      setHasLoadedDashboard(true);
+      setLoadError(null);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
+      setLoadError("Could not load the Teacher Dashboard. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -274,8 +278,22 @@ export default function TeacherDashboardContent({
       v.quiz.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const loadFailure = loadError && (
+    <div role="alert" className="flex items-center justify-between gap-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
+      <span>{loadError}</span>
+      <button type="button" onClick={() => void fetchDashboardData()} className="font-bold underline">Retry</button>
+    </div>
+  );
+
+  if (isLoading && !hasLoadedDashboard) {
+    return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /></div>;
+  }
+
+  if (!hasLoadedDashboard) return loadFailure;
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {loadFailure}
       {/* ProctorShield Activity Creation Hub */}
       <ProctorShieldCreateHub
         teacherName={teacherName}

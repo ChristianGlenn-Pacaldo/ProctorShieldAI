@@ -12,24 +12,26 @@ interface BarData {
 export default function ReportsContent() {
   const [bars, setBars] = useState<BarData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch("/api/dashboard/teacher/reports");
+      if (!res.ok) throw new Error(`Reports request failed (${res.status})`);
+      const json = await res.json();
+      if (!json.success || !Array.isArray(json.data)) throw new Error("Invalid reports response");
+      setBars(json.data);
+      setLoadError(null);
+    } catch (err) {
+      console.error("Failed to load reports data:", err);
+      setLoadError("Could not load Teacher Reports. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch("/api/dashboard/teacher/reports");
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            setBars(json.data);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load reports data:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
+    void fetchData();
   }, []);
 
   return (
@@ -39,11 +41,17 @@ export default function ReportsContent() {
           <h3 className="text-sm font-bold text-[var(--ink)]">🧠 Class Integrity Overview</h3>
         </div>
         <div className="p-5 space-y-4 min-h-[150px]">
+          {loadError && (
+            <div role="alert" className="flex items-center justify-between gap-4 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => void fetchData()} className="font-bold underline">Retry</button>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex justify-center items-center h-20">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
-          ) : bars.length === 0 ? (
+          ) : loadError && bars.length === 0 ? null : bars.length === 0 ? (
              <div className="text-center text-[var(--muted)] text-sm py-4">No quiz data available yet.</div>
           ) : (
             bars.map((b) => (

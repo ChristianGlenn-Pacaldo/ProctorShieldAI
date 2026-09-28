@@ -54,6 +54,7 @@ export default function TeacherQuizzesPage({
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // ProctorShield Studio State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -166,20 +167,21 @@ export default function TeacherQuizzesPage({
   const fetchQuizzes = async () => {
     try {
       const res = await fetch("/api/quizzes");
-      if (res.ok) {
-        const data = await res.json();
-        setQuizzes(data.quizzes || []);
-        setPendingRetakes(data.pendingRetakes || []);
-        setPendingApprovals(data.pendingApprovals || []);
-        if (data.entitlements) {
-          setIsSubscribed(data.entitlements.isSubscribed);
-          setManualQuizCount(data.entitlements.manualQuizCount ?? 0);
-          setManualQuizLimit(data.entitlements.manualQuizLimit ?? initialManualQuizLimit);
-        }
-        return true;
+      if (!res.ok) throw new Error(`Quizzes request failed (${res.status})`);
+      const data = await res.json();
+      setQuizzes(data.quizzes || []);
+      setPendingRetakes(data.pendingRetakes || []);
+      setPendingApprovals(data.pendingApprovals || []);
+      if (data.entitlements) {
+        setIsSubscribed(data.entitlements.isSubscribed);
+        setManualQuizCount(data.entitlements.manualQuizCount ?? 0);
+        setManualQuizLimit(data.entitlements.manualQuizLimit ?? initialManualQuizLimit);
       }
+      setLoadError(null);
+      return true;
     } catch (error) {
       console.error("Failed to fetch quizzes", error);
+      setLoadError("Could not load My Quizzes. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -724,11 +726,17 @@ export default function TeacherQuizzesPage({
         </div>
 
         <div className="overflow-x-auto min-h-[300px]">
+          {loadError && (
+            <div role="alert" className="flex items-center justify-between gap-4 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-sm text-rose-600 dark:text-rose-400">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => void fetchQuizzes()} className="font-bold underline">Retry</button>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : loadError && quizzes.length === 0 ? null : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-[var(--muted)]">
               <span className="text-2xl mb-2">📄</span>
               <p className="text-sm font-semibold">No quizzes found</p>
