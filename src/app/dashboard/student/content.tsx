@@ -35,9 +35,13 @@ interface StudentQuiz {
   aiVerdict: string | null;
   createdAt: string;
   attemptMode?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  attemptNumber?: number;
   quiz?: {
     id: number;
     title: string;
+    quizStatus: string;
     duration: number | null;
     accessCode: string | null;
     quizMode?: string | null;
@@ -48,6 +52,32 @@ interface StudentQuiz {
       fullName: string;
     } | null;
   } | null;
+}
+
+function getMissionState(enrollment: StudentQuiz) {
+  const status = enrollment.quizStatus;
+  const quizStatus = enrollment.quiz?.quizStatus;
+  const isArena = enrollment.quiz?.quizMode === "arena";
+
+  if (status === "pending_approval") return { label: "Awaiting Approval", actionable: false };
+  if (status === "rejected") return { label: "Entry Rejected", actionable: false };
+  if (status === "pending_retake") return { label: "Retake Pending", actionable: false };
+  if (status === "submitting") return { label: "Submitting", actionable: false };
+  if (status === "ended" || quizStatus === "ended" && status !== "in_progress" && !(status === "enrolled" && !isArena && (enrollment.attemptNumber ?? 1) > 1)) {
+    return { label: "Quiz Ended", actionable: false };
+  }
+  if (status === "enrolled" && !enrollment.endTime) {
+    if (quizStatus === "active" || quizStatus === "waiting") {
+      return { label: "Waiting for Teacher", actionable: true, actionLabel: isArena ? "Enter Arena" : "Open Lobby" };
+    }
+    if (quizStatus === "in_progress" || quizStatus === "ended" && !isArena && (enrollment.attemptNumber ?? 1) > 1) {
+      return { label: "Room Open", actionable: true, actionLabel: isArena ? "Enter Arena" : "Take Quiz" };
+    }
+  }
+  if (status === "in_progress" && enrollment.startTime && !enrollment.endTime && (quizStatus === "in_progress" || quizStatus === "ended")) {
+    return { label: "In Progress", actionable: true, actionLabel: isArena ? "Resume Arena" : "Resume Quiz" };
+  }
+  return { label: "Unavailable", actionable: false };
 }
 
 export default function StudentDashboardContent() {
@@ -171,7 +201,7 @@ export default function StudentDashboardContent() {
   const upcoming = validQuizzes.filter((se) => se.quizStatus !== "completed");
 
   const completedCount = completed.length;
-  const upcomingCount = upcoming.length;
+  const upcomingCount = upcoming.filter((se) => getMissionState(se).actionable).length;
 
   let avgScore = 0;
   const recordedResults = completed.filter(
@@ -413,6 +443,7 @@ export default function StudentDashboardContent() {
           <div className="grid md:grid-cols-2 gap-4">
             {upcoming.map((se) => {
               if (!se.quiz) return null;
+              const missionState = getMissionState(se);
               return (
                 <div
                   key={se.id}
@@ -432,9 +463,9 @@ export default function StudentDashboardContent() {
                           {se.quiz.subject?.subjectName || "General Exam"}
                         </span>
                       </div>
-                      <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                        Room Open
+                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 ${missionState.actionable ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-slate-500/15 text-slate-600 dark:text-slate-400"}`}>
+                        {missionState.actionable && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                        {missionState.label}
                       </span>
                     </div>
 
@@ -460,14 +491,16 @@ export default function StudentDashboardContent() {
                       </span>
                     )}
 
-                    <Link
-                      href={se.quiz.quizMode === "arena" ? `/arena/${se.quiz.id}` : `/quiz/${se.quiz.id}`}
-                      onClick={() => playSuccessFanfare()}
-                      className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-[0_3px_0_#312e81] active:translate-y-0.5 active:shadow-none transition-all"
-                    >
-                      <span>{se.quiz.quizMode === "arena" ? "Enter Arena" : "Take Quiz"}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+                    {missionState.actionable && (
+                      <Link
+                        href={se.quiz.quizMode === "arena" ? `/arena/${se.quiz.id}` : `/quiz/${se.quiz.id}`}
+                        onClick={() => playSuccessFanfare()}
+                        className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-[0_3px_0_#312e81] active:translate-y-0.5 active:shadow-none transition-all"
+                      >
+                        <span>{missionState.actionLabel}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    )}
                   </div>
                 </div>
               );
