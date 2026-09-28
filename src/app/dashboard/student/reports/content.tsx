@@ -5,6 +5,8 @@ import { AlertTriangle, CheckCircle2, FileText, Info, ShieldAlert } from "lucide
 
 type IntegrityResult = {
   id: string;
+  isCompleted: boolean;
+  effectiveMode: "arena" | "proctored";
   createdAt: string;
   score: number | string | null;
   aiVerdict: string | null;
@@ -65,7 +67,11 @@ export default function ReportsContent() {
         const response = await fetch("/api/dashboard/student/results", { cache: "no-store" });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.message || "Unable to load integrity reports");
-        if (!cancelled) setReports(Array.isArray(data.results) ? data.results : []);
+        if (!cancelled) {
+          setReports(Array.isArray(data.results)
+            ? data.results.filter((result: IntegrityResult) => result.isCompleted && result.effectiveMode === "proctored")
+            : []);
+        }
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to load integrity reports");
       } finally {
@@ -122,7 +128,7 @@ export default function ReportsContent() {
                   <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold text-indigo-600">
                     Violations: {violations}
                   </span>
-                  {Number.isFinite(probability) && (
+                  {report.cheatingProbability != null && Number.isFinite(probability) && (
                     <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold text-violet-600">
                       Cheating risk: {Math.max(0, Math.min(100, probability))}%
                     </span>

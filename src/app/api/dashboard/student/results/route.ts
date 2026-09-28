@@ -27,10 +27,13 @@ export async function GET() {
       // Historical classification: StudentQuiz.attemptMode is authoritative
       const effectiveMode = result.attemptMode === "arena" ? "arena" : "proctored";
       const isArena = effectiveMode === "arena";
+      const isCompleted = result.endTime != null
+        && ["completed", "pending_retake"].includes(result.quizStatus || "");
 
       if (isArena) {
         return {
           ...result,
+          isCompleted,
           effectiveMode: "arena" as const,
           modeLabel: "Power Arena",
           aiVerdict: null,
@@ -43,6 +46,7 @@ export async function GET() {
       const isInvalidated = result._count.violations >= 3;
       return {
         ...result,
+        isCompleted,
         effectiveMode: "proctored" as const,
         modeLabel: "Live Monitored Exam",
         score: isInvalidated ? null : result.score,

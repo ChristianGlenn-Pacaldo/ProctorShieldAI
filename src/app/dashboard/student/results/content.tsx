@@ -36,7 +36,7 @@ export default function ResultsContent() {
   const calculateAverage = () => {
     const recordedResults = results.filter((result) => {
       const isArena = result.attemptMode === "arena" || result.effectiveMode === "arena";
-      return !isArena && result.score != null && !result.integrityInvalidated;
+      return result.isCompleted && !isArena && result.score != null && !result.integrityInvalidated;
     });
     if (recordedResults.length === 0) return 0;
     const total = recordedResults.reduce((sum, result) => sum + Number(result.score), 0);
@@ -56,7 +56,7 @@ export default function ResultsContent() {
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
             <CheckCircle2 className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? results.length : "—"}</div>
+          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? results.filter((result) => result.isCompleted).length : "—"}</div>
           <div className="text-xs text-[var(--muted)]">Completed Attempts</div>
         </div>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
@@ -71,13 +71,13 @@ export default function ResultsContent() {
       {/* Results Table */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
-          <h3 className="text-sm font-bold text-[var(--ink)]">📈 Complete Results History</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)]">📈 Quiz Attempt History</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["Quiz", "Mode", "Date Taken", "Score", "Status / Verdict", "Details"].map((h) => (
+                {["Quiz", "Mode", "Record Date", "Score", "Status / Verdict", "Details"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -94,6 +94,13 @@ export default function ResultsContent() {
               ) : (
                 results.map((r) => {
                   const isArena = r.attemptMode === "arena" || r.effectiveMode === "arena";
+                  const isCompleted = r.isCompleted === true;
+                  const pendingStatus = r.quizStatus === "in_progress" ? "In Progress"
+                    : r.quizStatus === "enrolled" ? "Waiting to Start"
+                    : r.quizStatus === "pending_approval" ? "Approval Pending"
+                    : r.quizStatus === "rejected" ? "Entry Rejected"
+                    : r.quizStatus === "submitting" ? "Submitting"
+                    : "Not Completed";
                   const verdict = String(r.aiVerdict || "").toLowerCase();
                   const isClean = verdict === "clean";
                   const isSuspicious = verdict === "suspicious";
@@ -117,12 +124,16 @@ export default function ResultsContent() {
                       </td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{new Date(r.createdAt).toLocaleDateString()}</td>
                       <td className={`px-5 py-3 text-sm font-bold ${!isArena && isInvalidated ? "text-rose-500" : "text-[var(--ink)]"}`}>
-                        {isArena
+                        {!isCompleted ? "Pending" : isArena
                           ? (r.score != null ? `${r.score} pts` : "Completed")
                           : (isInvalidated ? "Invalidated" : r.score != null ? `${r.score}%` : "Pending")}
                       </td>
                       <td className="px-5 py-3">
-                        {isArena ? (
+                        {!isCompleted ? (
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-400">
+                            {pendingStatus}
+                          </span>
+                        ) : isArena ? (
                           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                             Match Completed
                           </span>
@@ -133,12 +144,12 @@ export default function ResultsContent() {
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        <button 
+                        {isCompleted ? <button
                           onClick={() => setSelectedResult(r)}
                           className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors"
                         >
                           Review
-                        </button>
+                        </button> : <span className="text-xs text-[var(--muted)]">Not available</span>}
                       </td>
                     </tr>
                   );
