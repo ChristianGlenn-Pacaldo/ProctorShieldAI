@@ -2,6 +2,8 @@ node_modules
 .next
 .next-frontend
 .next-backend
+.data
+docs
 .git
 .gitignore
 .env*

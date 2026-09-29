@@ -25,7 +25,21 @@ COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Railway service variables need ARG declarations in the build stage for Next.js to inline them.
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ARG NEXT_PUBLIC_PUSHER_KEY
+ARG NEXT_PUBLIC_PUSHER_CLUSTER
+ARG NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID} \
+    NEXT_PUBLIC_PUSHER_KEY=${NEXT_PUBLIC_PUSHER_KEY} \
+    NEXT_PUBLIC_PUSHER_CLUSTER=${NEXT_PUBLIC_PUSHER_CLUSTER} \
+    NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+
 # Build Next.js in standalone mode
+RUN : "${NEXT_PUBLIC_GOOGLE_CLIENT_ID:?NEXT_PUBLIC_GOOGLE_CLIENT_ID is required at build time}" \
+    "${NEXT_PUBLIC_PUSHER_KEY:?NEXT_PUBLIC_PUSHER_KEY is required at build time}" \
+    "${NEXT_PUBLIC_PUSHER_CLUSTER:?NEXT_PUBLIC_PUSHER_CLUSTER is required at build time}" \
+    "${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required at build time}"
 RUN npm run build
 
 # ── STAGE 3: Production Runner ────────────────────────

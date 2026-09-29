@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:?Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env}
+        NEXT_PUBLIC_PUSHER_KEY: ${NEXT_PUBLIC_PUSHER_KEY:?Set NEXT_PUBLIC_PUSHER_KEY in .env}
+        NEXT_PUBLIC_PUSHER_CLUSTER: ${NEXT_PUBLIC_PUSHER_CLUSTER:?Set NEXT_PUBLIC_PUSHER_CLUSTER in .env}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?Set NEXT_PUBLIC_APP_URL in .env}
     container_name: proctorshieldai
     restart: unless-stopped
     ports:

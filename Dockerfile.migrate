@@ -1,0 +1,16 @@
+FROM node:24-alpine
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+RUN npm ci
+RUN npx prisma generate
+COPY prisma.config.ts ./
+COPY src/lib/prisma.ts ./src/lib/prisma.ts
+COPY scripts/bootstrap.ts ./scripts/bootstrap.ts
+COPY scripts/railway-staging-migrate.mjs ./scripts/railway-staging-migrate.mjs
+
+# Keep the private service available for an explicit Railway SSH migration run.
+# Deploying this image alone never changes the database schema.
+CMD ["sleep", "infinity"]
