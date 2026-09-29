@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getPayMongoMode, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
-import { parsePaidCheckout, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
+import { getPayMongoMode, getPayMongoSecretKey, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
+import { parsePaidCheckout, parsePaidCheckoutFromCurrentSession, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
 import { activatePaidCheckout } from "@/lib/paymongo-subscription";
 import { Prisma } from "@prisma/client";
 
@@ -36,8 +36,30 @@ export async function POST(req: NextRequest) {
     }
 
     if (event.type === "checkout_session.payment.paid") {
-      const paid = parsePaidCheckout(event.resource);
-      if (!paid) return NextResponse.json({ success: true, message: "Ignored invalid payment data" });
+      let paid = parsePaidCheckout(event.resource);
+      if (!paid || paid.paymentStatus !== "paid") {
+        const checkoutId = event.resource.id;
+        if (typeof checkoutId !== "string" || !checkoutId.startsWith("cs_")) {
+          return NextResponse.json({ error: "Invalid checkout session" }, { status: 422 });
+        }
+        const response = await fetch(
+          `https://api.paymongo.com/v1/checkout_sessions/${encodeURIComponent(checkoutId)}`,
+          {
+            headers: {
+              Authorization: "Basic " + Buffer.from(getPayMongoSecretKey() + ":").toString("base64"),
+              Accept: "application/json",
+            },
+            cache: "no-store",
+          },
+        );
+        if (!response.ok) return NextResponse.json({ error: "Checkout verification unavailable" }, { status: 503 });
+        const body = await response.json() as { data?: Record<string, unknown> };
+        paid = body.data
+          ? parsePaidCheckoutFromCurrentSession(event.resource, body.data, event.livemode)
+          : null;
+        // A premature 2xx acknowledgement would prevent PayMongo from retrying a stale snapshot.
+        if (!paid) return NextResponse.json({ error: "Checkout payment not yet verified" }, { status: 503 });
+      }
       const activation = await activatePaidCheckout(paid, {
         id: event.id,
         type: event.type,

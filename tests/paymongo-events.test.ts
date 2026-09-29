@@ -2,12 +2,41 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parsePaidCheckout,
+  parsePaidCheckoutFromCurrentSession,
   parsePaymongoEventEnvelope,
   parseRefundedPayment,
 } from "../src/lib/paymongo-events.ts";
 
 test("PayMongo event parsing rejects missing envelope fields", () => {
   assert.equal(parsePaymongoEventEnvelope({ data: { id: "evt_1" } }), null);
+});
+
+test("stale paid webhook snapshot resolves only against the same now-paid checkout", () => {
+  const event = {
+    id: "cs_1", type: "checkout_session",
+    attributes: { metadata: { userId: "user-1", planId: "2" }, payments: [] },
+  };
+  const current = {
+    id: "cs_1", type: "checkout_session",
+    attributes: {
+      livemode: false,
+      metadata: { userId: "user-1", planId: "2" },
+      payments: [{ id: "pay_1", attributes: { amount: 50000, currency: "PHP", status: "paid" } }],
+    },
+  };
+  assert.equal(parsePaidCheckout(event), null);
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, current, false)?.providerPaymentId, "pay_1");
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, { ...current, id: "cs_other" }, false), null);
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, {
+    ...current, attributes: { ...current.attributes, metadata: { userId: "user-2", planId: "2" } },
+  }, false), null);
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, current, true), null);
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, {
+    ...current, attributes: { ...current.attributes, payments: [] },
+  }, false), null);
+  assert.equal(parsePaidCheckoutFromCurrentSession(event, {
+    ...current, attributes: { ...current.attributes, payments: [{ id: "pay_1", attributes: { amount: 50000, currency: "USD", status: "paid" } }] },
+  }, false), null);
 });
 
 test("paid checkout parsing preserves provider payment identity and amount", () => {
@@ -18,7 +47,7 @@ test("paid checkout parsing preserves provider payment identity and amount", () 
       metadata: { userId: "user-1", planId: "2" },
       payments: [{
         id: "pay_1",
-        attributes: { amount: 50000, status: "paid", source: { type: "gcash" } },
+        attributes: { amount: 50000, currency: "PHP", status: "paid", source: { type: "gcash" } },
       }],
     },
   });
@@ -39,8 +68,8 @@ test("paid checkout parsing selects the successful payment attempt", () => {
     attributes: {
       metadata: { userId: "user-1", planId: "2" },
       payments: [
-        { id: "pay_failed", attributes: { amount: 50000, status: "failed" } },
-        { id: "pay_paid", attributes: { amount: 50000, status: "paid", source: { type: "card" } } },
+        { id: "pay_failed", attributes: { amount: 50000, currency: "PHP", status: "failed" } },
+        { id: "pay_paid", attributes: { amount: 50000, currency: "PHP", status: "paid", source: { type: "card" } } },
       ],
     },
   });

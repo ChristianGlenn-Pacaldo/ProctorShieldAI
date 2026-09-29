@@ -49,6 +49,7 @@ export function parsePaidCheckout(resource: Record<string, unknown>): PaidChecko
     typeof metadata?.userId !== "string"
     || !Number.isInteger(planId)
     || typeof payment?.id !== "string"
+    || paymentAttributes?.currency !== "PHP"
     || !Number.isSafeInteger(amountCentavos)
     || amountCentavos <= 0
   ) return null;
@@ -61,6 +62,34 @@ export function parsePaidCheckout(resource: Record<string, unknown>): PaidChecko
     paymentMethod: typeof source?.type === "string" ? source.type : "paymongo",
     paymentStatus: typeof paymentAttributes?.status === "string" ? paymentAttributes.status : "unknown",
   };
+}
+
+// A paid webhook can carry a checkout snapshot taken before PayMongo attaches its payment.
+// Only use a fresh provider lookup when it matches the signed event's checkout and metadata.
+export function parsePaidCheckoutFromCurrentSession(
+  eventResource: Record<string, unknown>,
+  currentResource: Record<string, unknown>,
+  eventIsLive: boolean,
+): PaidCheckout | null {
+  const eventAttributes = asRecord(eventResource.attributes);
+  const eventMetadata = asRecord(eventAttributes?.metadata);
+  const currentAttributes = asRecord(currentResource.attributes);
+  const currentMetadata = asRecord(currentAttributes?.metadata);
+  if (
+    typeof eventResource.id !== "string"
+    || !eventResource.id.startsWith("cs_")
+    || eventResource.type !== "checkout_session"
+    || currentResource.id !== eventResource.id
+    || currentResource.type !== "checkout_session"
+    || currentAttributes?.livemode !== eventIsLive
+    || typeof eventMetadata?.userId !== "string"
+    || !Number.isInteger(Number(eventMetadata.planId))
+    || currentMetadata?.userId !== eventMetadata.userId
+    || Number(currentMetadata?.planId) !== Number(eventMetadata.planId)
+  ) return null;
+
+  const paid = parsePaidCheckout(currentResource);
+  return paid?.paymentStatus === "paid" ? paid : null;
 }
 
 export type RefundedPayment = { providerPaymentId: string; refundedCentavos: number };
