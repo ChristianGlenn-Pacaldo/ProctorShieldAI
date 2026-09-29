@@ -203,14 +203,17 @@ model Violation {
 }
 
 model EvidenceFile {
-  id          BigInt   @id @default(autoincrement())
-  violationId BigInt   @map("violation_id")
-  fileType    String?  @map("file_type")
-  filePath    String   @map("file_path")
-  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+  id                  BigInt    @id @default(autoincrement())
+  violationId         BigInt    @map("violation_id")
+  fileType            String?   @map("file_type")
+  filePath            String    @map("file_path")
+  uploadedAt          DateTime  @default(now()) @map("uploaded_at")
+  deletionRequestedAt DateTime? @map("deletion_requested_at")
+  deletedAt           DateTime? @map("deleted_at")
 
   violation Violation @relation(fields: [violationId], references: [id], onDelete: Cascade)
 
+  @@index([deletionRequestedAt, deletedAt, uploadedAt])
   @@map("evidence_files")
 }
 

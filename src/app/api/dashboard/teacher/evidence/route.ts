@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { expireSubscriptions } from "@/lib/maintenance";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { getViolationLabel } from "@/lib/proctoring-detection";
+import { EvidenceWithinRetentionError, requestTeacherEvidencePurge } from "@/lib/evidence-retention";
 
 const PAGE_SIZE = 25;
 
@@ -43,7 +44,11 @@ export async function GET(req: NextRequest) {
     const violations = await prisma.violation.findMany({
       where,
       include: {
-        evidenceFiles: { orderBy: { uploadedAt: "desc" }, take: 1 },
+        evidenceFiles: {
+          where: { deletionRequestedAt: null, deletedAt: null },
+          orderBy: { uploadedAt: "desc" },
+          take: 1,
+        },
         studentQuiz: {
           include: {
             student: {
@@ -117,57 +122,26 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE() {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const teacherId = session.userId;
-
-    // Find all violation IDs for quizzes created by this teacher
-    const violations = await prisma.violation.findMany({
-      where: {
-        studentQuiz: {
-          quiz: {
-            teacherId: teacherId,
-          },
-        },
-      },
-      select: { id: true, evidenceFiles: { select: { filePath: true } } },
-    });
-
-    const violationIds = violations.map((v) => v.id);
-    const evidenceKeys = violations.flatMap((violation) => violation.evidenceFiles.map((file) => file.filePath));
-
-    if (violationIds.length > 0) {
-      const { deleteEvidence } = await import("@/lib/evidence-storage");
-      await deleteEvidence(evidenceKeys);
-      // First delete associated EvidenceFile records if any
-      await prisma.evidenceFile.deleteMany({
-        where: {
-          violationId: {
-            in: violationIds,
-          },
-        },
-      });
-
-      // Delete all Violation records for this teacher's quizzes
-      await prisma.violation.deleteMany({
-        where: {
-          id: {
-            in: violationIds,
-          },
-        },
-      });
-    }
-
+    const result = await requestTeacherEvidencePurge(session.userId);
     return NextResponse.json({
       success: true,
-      message: `Successfully purged ${violationIds.length} evidence records and freed database storage on Neon DB.`,
-    });
+      ...result,
+      message: `${result.queuedEvidenceFiles} expired evidence files queued for storage deletion; violation history is retained.`,
+    }, { status: 202 });
   } catch (error) {
+    if (error instanceof EvidenceWithinRetentionError) {
+      return NextResponse.json(
+        { error: error.message, code: "EVIDENCE_RETENTION_ACTIVE", retentionDays: error.retentionDays },
+        { status: 409 },
+      );
+    }
     console.error("Clear evidence logs error:", error);
-    return NextResponse.json({ error: "Failed to clear evidence storage" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to queue evidence deletion" }, { status: 500 });
   }
 }

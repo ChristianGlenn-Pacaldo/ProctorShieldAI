@@ -64,7 +64,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const violation = await prisma.violation.findUnique({
     where: { id: BigInt(id) },
     include: {
-      evidenceFiles: { orderBy: { uploadedAt: "desc" }, take: 1 },
+      evidenceFiles: {
+        where: { deletionRequestedAt: null, deletedAt: null },
+        orderBy: { uploadedAt: "desc" },
+        take: 1,
+      },
       studentQuiz: { select: { quiz: { select: { teacherId: true } } } },
     },
   });

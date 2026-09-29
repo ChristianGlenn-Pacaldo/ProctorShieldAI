@@ -69,28 +69,17 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   }, [isFullscreen]);
 
   const handleClearCache = async () => {
-    if (!confirm("Are you sure you want to purge all evidence logs and video clips from the database? This will free up storage space on Neon DB.")) return;
+    if (!confirm("Queue evidence media older than the retention period for deletion? Violation logs and audit metadata will remain. The request is rejected if any of your evidence is still within retention.")) return;
 
     try {
       setIsClearing(true);
       const res = await fetch("/api/dashboard/teacher/evidence", { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        setEvidenceList([]);
-        setSelectedEvidence(null);
-        setTotal(0);
-        setPage(1);
-        currentPageRef.current = 1;
-        retryPageRef.current = 1;
-        const url = new URL(window.location.href);
-        url.searchParams.delete("page");
-        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-        requestIdRef.current += 1;
-        foregroundRequestRef.current = false;
-        setIsLoading(false);
-        alert(data.message || "Evidence storage successfully cleared from database!");
+        alert(data.message || "Expired evidence media queued for deletion.");
+        window.location.reload();
       } else {
-        alert("Failed to clear evidence storage: " + (data.error || "Unknown error"));
+        alert(data.error || "Failed to queue evidence deletion");
       }
     } catch (err) {
       console.error("Clear evidence cache failed:", err);
@@ -191,7 +180,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               disabled={isClearing}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs transition-all border border-rose-500/20 disabled:opacity-50"
             >
-              <Trash2 className="w-3.5 h-3.5" /> {isClearing ? "Clearing DB..." : "Clear Storage & DB Cache"}
+              <Trash2 className="w-3.5 h-3.5" /> {isClearing ? "Queuing..." : "Delete Expired Media"}
             </button>
           )}
         </div>

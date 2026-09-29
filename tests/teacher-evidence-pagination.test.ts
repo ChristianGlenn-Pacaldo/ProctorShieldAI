@@ -74,6 +74,7 @@ function apiFixture(teacherCount: number) {
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-a" }) };
       if (name === "@/lib/maintenance") return { expireSubscriptions: async () => {} };
+      if (name === "@/lib/evidence-retention") return { EvidenceWithinRetentionError: class extends Error {}, requestTeacherEvidencePurge: async () => ({}) };
       if (name === "@/lib/teacher-entitlements") return { hasActiveProSubscription: async () => true };
       if (name === "@/lib/proctoring-detection") return { getViolationLabel: () => "Tab switch" };
       throw new Error(`Unexpected dependency: ${name}`);

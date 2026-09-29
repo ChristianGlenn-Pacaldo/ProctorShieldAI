@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   DeleteObjectCommand,
-  DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -234,13 +233,20 @@ export async function deleteEvidence(keys: string[]) {
       localEvidence.fileName,
     ), { force: true });
   }
+  if (remoteKeys.length === 0) return;
   const config = getStorageConfig();
-  if (!config) return;
-  for (let index = 0; index < remoteKeys.length; index += 1_000) {
-    await sendStorageCommand((abortSignal) => config.client.send(new DeleteObjectsCommand({
-      Bucket: config.bucket,
-      Delete: { Objects: remoteKeys.slice(index, index + 1_000).map((Key) => ({ Key })), Quiet: true },
-    }), { abortSignal }));
+  if (!config) throw new Error("S3 evidence storage is not configured for deletion");
+  for (const key of remoteKeys) {
+    try {
+      await sendStorageCommand((abortSignal) => config.client.send(new DeleteObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+      }), { abortSignal }));
+    } catch (error) {
+      if (error && typeof error === "object" && "name" in error
+        && ["NoSuchKey", "NotFound"].includes(String(error.name))) continue;
+      throw error;
+    }
   }
 }
 
