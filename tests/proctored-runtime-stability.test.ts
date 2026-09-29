@@ -118,7 +118,7 @@ function fixture() {
   };
   const load = (path: string) => route(`src/app/api/${path}/route.ts`, deps);
   const submit = (reason: string, extra = {}) => load("quizzes/submit").POST(request({ quizId: 7, studentQuizId: "attempt-1", reason, answers: [], ...extra }));
-  const strikes = (count: number) => { state.violations = Array.from({ length: count }, () => ({ violationType: "tab_switch", confidenceScore: 100, timestamp: new Date() })); };
+  const strikes = (count: number) => { state.violations = Array.from({ length: count }, (_, index) => ({ id: BigInt(index + 1), violationType: "tab_switch", confidenceScore: 100, timestamp: new Date() })); };
   return { get state() { return state; }, db, deps, load, submit, strikes, questions, setFailReward: (value: boolean) => { failReward = value; } };
 }
 
@@ -230,6 +230,36 @@ test("lost successful response replays the persisted Proctored result without du
   assert.equal(retry.status, 200); assert.equal(retry.body.result.score, first.body.result.score);
   assert.equal(retry.body.result.answeredCount, 1);
   assert.equal(f.state.attempt.endTime.getTime(), completedAt);
+  assert.equal(f.state.answers.length, 1); assert.equal(f.state.exp, 100); assert.equal(f.state.notifications, 1);
+});
+
+test("completed Proctored replay serializes a recorded violation without changing persisted state", async () => {
+  const f = fixture();
+  f.state.violations = [{ id: BigInt(1), studentQuizId: "attempt-1", violationType: "tab_switch",
+    confidenceScore: 100, timestamp: new Date(), durationSeconds: null, screenshotPath: null, createdAt: new Date() }];
+  const first = await f.submit("manual", { answers: [{ questionId: 1, choiceId: 10 }] });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.result.violationCount, 1);
+  const completedAt = f.state.attempt.endTime.getTime();
+  const score = first.body.result.score;
+  const expEarned = first.body.result.expEarned;
+  // Match NextResponse.json: an unserializable BigInt throws and the handler
+  // would otherwise return HTTP 500 from its catch block.
+  f.deps["next/server"].NextResponse.json = (body: any, options: any = {}) => ({
+    status: options.status || 200, body: JSON.parse(JSON.stringify(body)),
+  });
+  const replay = await f.submit("manual", { answers: [{ questionId: 2, choiceId: 20 }] });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.studentQuiz.endTime, new Date(completedAt).toISOString());
+  assert.equal(replay.body.result.score, score);
+  assert.equal(replay.body.result.expEarned, expEarned);
+  assert.equal(replay.body.result.violationCount, 1);
+  assert.equal(replay.body.studentQuiz.violations.length, 1);
+  assert.equal(replay.body.studentQuiz.violations[0].id, "1");
+  assert.equal(replay.body.studentQuiz.violations[0].violationType, "tab_switch");
+  assert.equal(f.state.attempt.endTime.getTime(), completedAt);
+  assert.equal(f.state.attempt.score, score);
+  assert.equal(f.state.violations[0].id, BigInt(1));
   assert.equal(f.state.answers.length, 1); assert.equal(f.state.exp, 100); assert.equal(f.state.notifications, 1);
 });
 test("Proctored submission uses a bounded transaction budget above the observed Neon latency", async () => {

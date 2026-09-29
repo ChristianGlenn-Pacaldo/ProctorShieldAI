@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
       const integrityInvalidated = isIntegrityInvalidated(studentQuiz.violations.length);
       return NextResponse.json({
         success: true,
-        studentQuiz,
+        studentQuiz: {
+          ...studentQuiz,
+          violations: studentQuiz.violations.map((violation) => ({
+            ...violation,
+            id: violation.id.toString(),
+          })),
+        },
         result: {
           score: studentQuiz.score === null ? null : Number(studentQuiz.score),
           answeredCount,
