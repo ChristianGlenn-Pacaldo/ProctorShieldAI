@@ -124,39 +124,41 @@ export function verifyPendingPayMongoCheckoutToken(
   }
 }
 
-type PublicOriginInput = {
-  originHeader?: string | null;
-  forwardedHost?: string | null;
-  host?: string | null;
-  forwardedProto?: string | null;
-  requestUrl: string;
-  nodeEnv?: string;
-};
-
-function firstForwardedValue(value: string | null | undefined) {
-  return value?.split(",")[0]?.trim() || "";
-}
-
-export function resolvePayMongoReturnOrigin(input: PublicOriginInput) {
-  const requestUrl = new URL(input.requestUrl);
-  const host = firstForwardedValue(input.forwardedHost)
-    || firstForwardedValue(input.host)
-    || requestUrl.host;
-  const protocol = firstForwardedValue(input.forwardedProto)
-    || requestUrl.protocol.replace(":", "");
-  const headerOrigin = input.originHeader ? new URL(input.originHeader) : null;
-
-  let origin: URL;
-  if (headerOrigin && headerOrigin.host === host) {
-    origin = headerOrigin;
-  } else {
-    origin = new URL(`${protocol}://${host}`);
+export function resolvePayMongoReturnOrigin(env: PayMongoEnvironment = process.env): string {
+  const configured = env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!configured || !/^https?:\/\/[^/?#\\]+\/?$/i.test(configured) || /[\u0000-\u001f\u007f]/.test(configured)) {
+    throw new Error("NEXT_PUBLIC_APP_URL must be a valid application origin");
   }
 
-  const isLocalhost = origin.hostname === "localhost" || origin.hostname === "127.0.0.1";
-  if (origin.protocol !== "https:" && !(input.nodeEnv !== "production" && isLocalhost)) {
+  let origin: URL;
+  try {
+    origin = new URL(configured);
+  } catch {
+    throw new Error("NEXT_PUBLIC_APP_URL must be a valid application origin");
+  }
+  if (
+    !origin.hostname
+    || origin.username
+    || origin.password
+    || origin.pathname !== "/"
+    || configured.includes("?")
+    || configured.includes("#")
+  ) {
+    throw new Error("NEXT_PUBLIC_APP_URL must contain only an application origin");
+  }
+
+  const isLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+  if (origin.protocol !== "https:" && !(env.NODE_ENV !== "production" && isLocalhost)) {
     throw new Error("Payment return URLs require a secure HTTPS origin");
   }
 
   return origin.origin;
+}
+
+export function createPayMongoReturnUrls(env: PayMongoEnvironment = process.env) {
+  const origin = resolvePayMongoReturnOrigin(env);
+  return {
+    successUrl: new URL("/dashboard/teacher/billing?payment=success", origin).toString(),
+    cancelUrl: new URL("/dashboard/teacher/billing?payment=cancelled", origin).toString(),
+  };
 }

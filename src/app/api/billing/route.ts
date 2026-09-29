@@ -4,11 +4,11 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { expireSubscriptions } from "@/lib/maintenance";
 import {
+  createPayMongoReturnUrls,
   createPendingPayMongoCheckoutToken,
   getPayMongoMode,
   getPayMongoSecretKey,
   isPayMongoEventModeAllowed,
-  resolvePayMongoReturnOrigin,
   verifyPendingPayMongoCheckoutToken,
 } from "@/lib/paymongo";
 import { parsePaidCheckout } from "@/lib/paymongo-events";
@@ -158,19 +158,12 @@ export async function POST(req: NextRequest) {
     }
     await expireSubscriptions(session.userId);
 
-    let appUrl: URL;
+    let returnUrls: ReturnType<typeof createPayMongoReturnUrls>;
     try {
-      appUrl = new URL(resolvePayMongoReturnOrigin({
-        originHeader: req.headers.get("origin"),
-        forwardedHost: req.headers.get("x-forwarded-host"),
-        host: req.headers.get("host"),
-        forwardedProto: req.headers.get("x-forwarded-proto"),
-        requestUrl: req.url,
-        nodeEnv: process.env.NODE_ENV,
-      }));
+      returnUrls = createPayMongoReturnUrls();
     } catch (error) {
       console.error("PayMongo return URL error:", error);
-      return NextResponse.json({ error: "Checkout must be opened from the secure application URL." }, { status: 400 });
+      return NextResponse.json({ error: "Checkout return URL is not configured correctly." }, { status: 500 });
     }
 
     // Check if already subscribed
@@ -245,8 +238,8 @@ export async function POST(req: NextRequest) {
               },
             ],
             payment_method_types: ["gcash", "card"],
-            success_url: new URL("/dashboard/teacher/billing?payment=success", appUrl).toString(),
-            cancel_url: new URL("/dashboard/teacher/billing?payment=cancelled", appUrl).toString(),
+            success_url: returnUrls.successUrl,
+            cancel_url: returnUrls.cancelUrl,
             reference_number: `PS-${session.userId.slice(0, 8)}-${Date.now()}`,
             metadata: {
               userId: session.userId,
