@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 
-// Configure the transporter
+// Keep SMTP as the default for local development. Railway staging uses the
+// HTTPS provider because outbound Gmail SMTP is unavailable there.
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -8,6 +9,46 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASSWORD,
   },
 });
+
+type MailMessage = { to: string; subject: string; html: string };
+
+async function deliverEmail(message: MailMessage): Promise<string> {
+  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || 'smtp';
+  if (provider === 'resend') {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    const from = process.env.EMAIL_FROM?.trim();
+    if (!apiKey || !from) {
+      throw new Error('Resend email requires RESEND_API_KEY and EMAIL_FROM');
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, ...message }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Resend email API returned HTTP ${response.status}`);
+    }
+    const result: unknown = await response.json();
+    if (!result || typeof result !== 'object' || !('id' in result) || typeof result.id !== 'string' || !result.id) {
+      throw new Error('Resend email API returned no message ID');
+    }
+    return result.id;
+  }
+
+  if (provider !== 'smtp') {
+    throw new Error(`Unsupported email provider: ${provider}`);
+  }
+  const info = await transporter.sendMail({
+    from: `"ProctorShield AI" <${process.env.SMTP_EMAIL}>`,
+    ...message,
+  });
+  return info.messageId;
+}
 
 /**
  * Sends a 6-digit OTP code to the provided email address.
@@ -18,7 +59,6 @@ const transporter = nodemailer.createTransport({
 export async function sendOtpEmail(toEmail: string, otpCode: string): Promise<boolean> {
   try {
     const mailOptions = {
-      from: `"ProctorShield AI" <${process.env.SMTP_EMAIL}>`,
       to: toEmail,
       subject: 'Your ProctorShield AI Verification Code',
       html: `
@@ -36,8 +76,8 @@ export async function sendOtpEmail(toEmail: string, otpCode: string): Promise<bo
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('OTP Email sent: %s', info.messageId);
+    const messageId = await deliverEmail(mailOptions);
+    console.log('OTP Email sent: %s', messageId);
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
@@ -56,7 +96,6 @@ export async function sendWelcomeEmail(toEmail: string, fullName: string, role: 
   try {
     const roleCapitalized = role.charAt(0).toUpperCase() + role.slice(1);
     const mailOptions = {
-      from: `"ProctorShield AI" <${process.env.SMTP_EMAIL}>`,
       to: toEmail,
       subject: `Welcome to ProctorShield AI, ${fullName}!`,
       html: `
@@ -76,8 +115,8 @@ export async function sendWelcomeEmail(toEmail: string, fullName: string, role: 
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Welcome email sent: %s', info.messageId);
+    const messageId = await deliverEmail(mailOptions);
+    console.log('Welcome email sent: %s', messageId);
     return true;
   } catch (error) {
     console.error('Error sending Welcome email:', error);
@@ -108,7 +147,6 @@ export async function sendVerdictEmail(
     const verdictColor = verdict === 'clean' ? '#16a34a' : verdict === 'suspicious' ? '#d97706' : '#dc2626';
 
     const mailOptions = {
-      from: `"ProctorShield AI" <${process.env.SMTP_EMAIL}>`,
       to: toEmail,
       subject: `Quiz Result & AI Analysis: ${quizTitle}`,
       html: `
@@ -143,8 +181,8 @@ export async function sendVerdictEmail(
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Verdict email sent: %s', info.messageId);
+    const messageId = await deliverEmail(mailOptions);
+    console.log('Verdict email sent: %s', messageId);
     return true;
   } catch (error) {
     console.error('Error sending Verdict email:', error);

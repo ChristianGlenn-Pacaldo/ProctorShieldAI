@@ -37,9 +37,13 @@ export async function POST(req: NextRequest) {
           expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         },
       });
-      await sendOtpEmail(user.email, code).catch((error: unknown) =>
-        console.error("Failed to send password reset email:", error)
-      );
+      const sent = await sendOtpEmail(user.email, code);
+      if (!sent) {
+        await prisma.otpCode.deleteMany({ where: { userId: user.id } });
+        // Keep the public response generic so delivery failures cannot reveal
+        // whether an address has an account.
+        console.error("Password reset email delivery failed");
+      }
     }
 
     return NextResponse.json({

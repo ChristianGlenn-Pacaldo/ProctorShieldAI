@@ -27,11 +27,11 @@ Set the following **runtime variables** on the web service. Use Railway referenc
 | Database/cache/session | `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET` |
 | Private evidence | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
 | Google/Pusher | `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`, `PUSHER_APP_ID`, `PUSHER_SECRET` |
-| AI/email | `GEMINI_API_KEY`, `SMTP_EMAIL`, `SMTP_PASSWORD` |
+| AI/email | `GEMINI_API_KEY`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` (verified staging sender) |
 | Sandbox billing/maintenance | `PAYMONGO_MODE=test`, `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`, `CRON_SECRET` |
 | Public origin | `NEXT_PUBLIC_APP_URL` (the final staging HTTPS origin) |
 
-Optional web variables: `GEMINI_MODEL`, `S3_REGION`, `S3_FORCE_PATH_STYLE`, `S3_SERVER_SIDE_ENCRYPTION`. Railway supplies `PORT`; Docker sets `HOSTNAME=0.0.0.0` and `NODE_ENV=production`. Leave `FRONTEND_ONLY` and `EVIDENCE_LOCAL_FALLBACK` unset. Do not put `PUSHER_SECRET`, database credentials, SMTP credentials, billing keys, JWT secret, or S3 credentials in any `NEXT_PUBLIC_*` value or Docker build argument. `NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY` is present in the example environment but is not used by current application code.
+Optional web variables: `GEMINI_MODEL`, `S3_REGION`, `S3_FORCE_PATH_STYLE`, `S3_SERVER_SIDE_ENCRYPTION`. Railway supplies `PORT`; Docker sets `HOSTNAME=0.0.0.0` and `NODE_ENV=production`. Leave `FRONTEND_ONLY` and `EVIDENCE_LOCAL_FALLBACK` unset. Do not put `PUSHER_SECRET`, database credentials, email API keys, billing keys, JWT secret, or S3 credentials in any `NEXT_PUBLIC_*` value or Docker build argument. `NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY` is present in the example environment but is not used by current application code.
 
 Set only these variables on the migration service: the **same staging** `DATABASE_URL`, `STAGING_RAILWAY_ENVIRONMENT_ID` (the exact staging environment ID), `STAGING_DATABASE_HOST`, and `STAGING_DATABASE_NAME`. Railway supplies `RAILWAY_ENVIRONMENT_ID`; the guard compares it and the parsed database host/name before any migration command. For a brand-new empty database only, temporarily add `ADMIN_EMAIL` and `ADMIN_PASSWORD` to that private service for the explicit bootstrap step, then remove them. Do not expose or print variable values.
 
@@ -40,7 +40,7 @@ Set only these variables on the migration service: the **same staging** `DATABAS
 1. **Google:** authorize the final staging HTTPS origin for the public Google client ID. The browser obtains an ID token and posts it to `/api/auth/google`; there is no separate server OAuth callback URL in this code path. Verify login for the intended Teacher and Student roles.
 2. **Pusher:** use a staging Pusher app. Its public key and cluster must be identical in the web build and runtime; `PUSHER_APP_ID` and `PUSHER_SECRET` belong only in runtime variables. Confirm a browser subscription and a server-triggered event.
 3. **PayMongo:** use only `PAYMONGO_MODE=test` with matching sandbox secret and webhook signing secret. Configure the public HTTPS webhook URL `https://<staging-host>/api/billing/webhook` for `checkout_session.payment.paid`, `payment.refunded`, and `payment.refund.updated` where available. Checkout success/cancel URLs are derived from the request Origin/forwarded host and protocol, and production rejects HTTP. In a sandbox checkout, inspect the created session's return URLs in PayMongo and confirm they use the intended staging origin. Also send an authenticated sandbox-only checkout request with a deliberately different `X-Forwarded-Host`; if the resulting return URL can be redirected away from staging, stop billing rollout and fix trusted-origin handling. Never send live payment traffic to staging.
-4. **SMTP/Gemini:** configure isolated staging credentials and verify one OTP email and one Gemini-backed request without logging credentials or sensitive content.
+4. **Email/Gemini:** verify a staging sending domain with Resend, set `EMAIL_PROVIDER=resend`, a staging-only `RESEND_API_KEY`, and `EMAIL_FROM` on that domain. Email is sent through Resend's HTTPS API; missing credentials or provider errors fail visibly in application logs without falling back to SMTP. Local development still defaults to Gmail SMTP through `SMTP_EMAIL`/`SMTP_PASSWORD`. Verify one OTP email and one Gemini-backed request without logging credentials or sensitive content.
 
 ## Controlled deployment sequence
 
@@ -84,7 +84,7 @@ Keep web autodeploy disabled until this migration-before-web gate is enforced in
 - Google sign-in works from the authorized staging origin.
 - Create and read a quiz and confirm PostgreSQL writes/reads; have a Student join it. Exercise a Redis-backed live/session or rate-limit path and confirm the staging Redis connection is used.
 - Trigger and receive a Pusher event in a separate browser session. Upload an evidence clip/image and read it through the authorized evidence endpoint; confirm it resides in the private staging bucket.
-- Invoke one Gemini-backed feature and one SMTP OTP email using staging credentials.
+- Invoke one Gemini-backed feature and one HTTPS-provider OTP email using staging credentials.
 - Complete a PayMongo **sandbox** checkout; verify the webhook reaches `/api/billing/webhook`, signature/mode acceptance, idempotent subscription activation, and correct HTTPS return URLs. Do not use a live key or real charge.
 - Safe monitored quiz flow: Teacher creates a Proctored quiz → Student joins → Teacher starts → Student saves an answer → one controlled violation/evidence event → Student submits → Student result and Teacher report agree. Confirm no stuck attempt or duplicate completion.
 - Recheck `/api/health`, application logs for unexpected 500s, and absence of unexpected writes to normal/demo resources.
