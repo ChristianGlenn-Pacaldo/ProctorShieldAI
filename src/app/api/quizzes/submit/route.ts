@@ -52,6 +52,32 @@ export async function POST(req: NextRequest) {
     if (studentQuiz.attemptMode !== "arena" && requestedAttemptId !== studentQuiz.id) {
       return NextResponse.json({ error: "Stale attempt" }, { status: 409 });
     }
+    // A completed Proctored submission may have committed even if its HTTP
+    // response was lost. Replay the persisted result without finalizing or
+    // awarding EXP a second time.
+    if (studentQuiz.attemptMode !== "arena" && studentQuiz.quizStatus === "completed" && studentQuiz.endTime) {
+      const [answeredCount, totalQuestions] = await Promise.all([
+        prisma.answer.count({ where: { studentQuizId: studentQuiz.id } }),
+        prisma.question.count({ where: { quizId: studentQuiz.quizId } }),
+      ]);
+      const integrityInvalidated = isIntegrityInvalidated(studentQuiz.violations.length);
+      return NextResponse.json({
+        success: true,
+        studentQuiz,
+        result: {
+          score: studentQuiz.score === null ? null : Number(studentQuiz.score),
+          answeredCount,
+          totalQuestions,
+          violationCount: studentQuiz.violations.length,
+          integrityInvalidated,
+          deadlineExpired: studentQuiz.remarks === "Quiz submitted automatically after the time limit expired.",
+          aiVerdict: studentQuiz.aiVerdict,
+          cheatingProbability: studentQuiz.cheatingProbability === null ? null : Number(studentQuiz.cheatingProbability),
+          expEarned: integrityInvalidated ? 0 : EXP_REWARDS.PROCTORED_COMPLETION,
+          attemptMode: "proctored",
+        },
+      });
+    }
     if (!["in_progress", "ended"].includes(studentQuiz.quiz.quizStatus)) {
       return NextResponse.json({ error: "This quiz is not accepting submissions" }, { status: 409 });
     }
@@ -298,11 +324,13 @@ Return ONLY the valid JSON object.`;
         grading = gradeSubmission(dbQuestions, mergeLockedAnswers(submittedAnswers, persisted));
         score = grading.score;
         recordedScore = integrityInvalidated ? null : score;
-        const currentQuiz = await tx.quiz.findUnique({ where: { id: studentQuiz.quizId } });
-        const teacherEnd = reason === "teacher_ended"
-          ? await tx.setting.findUnique({ where: { settingKey: `proctored:quiz-ended:${studentQuiz.quizId}` } }) : null;
-        const validTeacherEnd = currentQuiz?.quizStatus === "ended" && (teacherEnd?.settingValue
-          ? Date.parse(teacherEnd.settingValue) >= studentQuiz.startTime!.getTime() : studentQuiz.attemptNumber === 1);
+        let validTeacherEnd = false;
+        if (reason === "teacher_ended") {
+          const currentQuiz = await tx.quiz.findUnique({ where: { id: studentQuiz.quizId } });
+          const teacherEnd = await tx.setting.findUnique({ where: { settingKey: `proctored:quiz-ended:${studentQuiz.quizId}` } });
+          validTeacherEnd = currentQuiz?.quizStatus === "ended" && (teacherEnd?.settingValue
+            ? Date.parse(teacherEnd.settingValue) >= studentQuiz.startTime!.getTime() : studentQuiz.attemptNumber === 1);
+        }
         if (!canSubmitProctored({ reason, active: Boolean(studentQuiz.startTime),
           questionCount: dbQuestions.length, answeredCount: grading.records.length,
           remainingSeconds: Math.ceil((studentQuiz.startTime!.getTime() + durationMinutes * 60_000 - Date.now()) / 1000),
@@ -312,11 +340,12 @@ Return ONLY the valid JSON object.`;
         // Initialize/award before completion so the history bootstrap cannot
         // include this same attempt, and commit the reward with the result.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${session.userId}`}))`;
-        await getStudentProgression(session.userId, tx);
         let expEarned = 0;
         if (!integrityInvalidated) {
           const reward = await awardStudentExp(session.userId, EXP_REWARDS.PROCTORED_COMPLETION, "Exam Completion", tx);
           expEarned = reward.expAwarded;
+        } else {
+          await getStudentProgression(session.userId, tx);
         }
 
         await tx.answer.deleteMany({ where: { studentQuizId: studentQuiz.id } });
@@ -367,7 +396,9 @@ Return ONLY the valid JSON object.`;
           ],
         });
         return { completed, expEarned };
-      });
+      // Neon round trips can exceed Prisma's 5-second default even after
+      // removing redundant reads; keep a bounded budget for atomic writes.
+      }, { maxWait: 10_000, timeout: 20_000 });
     } catch (error) {
       if (error instanceof InvalidSubmissionError) return NextResponse.json({ error: "Submission reason preconditions not met" }, { status: 409 });
       if (error instanceof SubmissionConflictError) {

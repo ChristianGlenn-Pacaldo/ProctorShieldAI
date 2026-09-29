@@ -60,10 +60,12 @@ function fixture() {
       update: async ({ data }: any) => { Object.assign(state.attempt, data); return copy(state.attempt); },
     },
     quiz: { findUnique: async () => copy(state.attempt.quiz) },
-    question: { findMany: async () => copy(questions), findFirst: async () => ({ id: 1, points: 1, choices: [{ id: 10, isCorrect: true, choiceText: "Paris" }] }) },
+    question: { findMany: async () => copy(questions), count: async () => questions.length,
+      findFirst: async () => ({ id: 1, points: 1, choices: [{ id: 10, isCorrect: true, choiceText: "Paris" }] }) },
     choice: { findFirst: async () => ({ id: 10, isCorrect: true, question: { points: 1 } }) },
     answer: {
       findMany: async () => copy(state.answers),
+      count: async () => state.answers.length,
       findUnique: async ({ where }: any) => copy(state.answers.find((a: any) => a.questionId === where.studentQuizId_questionId.questionId) || null),
       deleteMany: async () => { state.answers = []; },
       createMany: async ({ data }: any) => { state.answers.push(...copy(data)); },
@@ -176,6 +178,8 @@ test("stale attempt request cannot submit a new retake", async () => {
 test("final locked answer allows intended all-questions completion", async () => {
   const f = fixture(); f.state.answers = f.questions.map((q) => ({ questionId: q.id, answerText: String(q.id * 10), isCorrect: true }));
   const result = await f.submit("all_questions_completed"); assert.equal(result.status, 200); assert.equal(result.body.result.answeredCount, 3); assert.equal(result.body.result.score, 100);
+  assert.equal(f.state.attempt.quizStatus, "completed"); assert.ok(f.state.attempt.endTime);
+  assert.equal(f.state.exp, 100); assert.equal(f.state.notifications, 1);
 });
 for (const reasons of [["timer_expired", "timer_expired"], ["manual", "timer_expired"], ["violation_limit", "timer_expired"], ["teacher_ended", "manual"]]) {
   test(`${reasons.join(" + ")} collision completes once and rewards at most once`, async () => {
@@ -184,7 +188,9 @@ for (const reasons of [["timer_expired", "timer_expired"], ["manual", "timer_exp
     const responses = await Promise.all(reasons.map((reason) => f.submit(reason)));
     assert.equal(responses.filter((r) => r.status === 200).length, 1);
     assert.equal(f.state.notifications, 1); assert.equal(f.state.exp, invalidated ? 0 : 100);
-    assert.equal((await f.submit(reasons[0])).status, 409); assert.equal(f.state.exp, invalidated ? 0 : 100);
+    const retry = await f.submit(reasons[0]);
+    assert.equal(retry.status, 200); assert.equal(retry.body.result.integrityInvalidated, invalidated);
+    assert.equal(f.state.notifications, 1); assert.equal(f.state.exp, invalidated ? 0 : 100);
   });
 }
 for (const count of [1, 2, 3]) test(`${count}/3 authoritative strikes ${count < 3 ? "do not" : "do"} permit violation submission`, async () => {
@@ -207,8 +213,37 @@ test("server ignores a teacher end predating a retake, and accepts an end during
 });
 test("failed EXP write rolls back completion and retry awards once", async () => {
   const f = fixture(); f.setFailReward(true); assert.equal((await f.submit("manual")).status, 500);
-  assert.equal(f.state.attempt.quizStatus, "in_progress"); assert.equal(f.state.exp, 0);
-  f.setFailReward(false); assert.equal((await f.submit("manual")).status, 200); assert.equal(f.state.exp, 100);
+  assert.equal(f.state.attempt.quizStatus, "in_progress"); assert.equal(f.state.attempt.endTime, null);
+  assert.equal(f.state.exp, 0); assert.equal(f.state.notifications, 0);
+  f.setFailReward(false); assert.equal((await f.submit("manual")).status, 200);
+  assert.equal(f.state.exp, 100); assert.equal(f.state.notifications, 1);
+});
+test("lost successful response replays the persisted Proctored result without duplicate finalization or reward", async () => {
+  const f = fixture();
+  const first = await f.submit("manual", { answers: [{ questionId: 1, choiceId: 10 }] });
+  assert.equal(first.status, 200);
+  const completedAt = f.state.attempt.endTime.getTime();
+  // Prisma Decimal fields arrive as string-like values on a fresh request.
+  f.state.attempt.score = String(f.state.attempt.score);
+  f.state.attempt.cheatingProbability = String(f.state.attempt.cheatingProbability);
+  const retry = await f.submit("manual", { answers: [{ questionId: 2, choiceId: 20 }] });
+  assert.equal(retry.status, 200); assert.equal(retry.body.result.score, first.body.result.score);
+  assert.equal(retry.body.result.answeredCount, 1);
+  assert.equal(f.state.attempt.endTime.getTime(), completedAt);
+  assert.equal(f.state.answers.length, 1); assert.equal(f.state.exp, 100); assert.equal(f.state.notifications, 1);
+});
+test("Proctored submission uses a bounded transaction budget above the observed Neon latency", async () => {
+  const f = fixture(); const transaction = f.db.$transaction;
+  let budget: { timeout: number; maxWait: number } | undefined;
+  f.db.$transaction = async (fn: (client: typeof f.db) => Promise<unknown>, options: { timeout: number; maxWait: number }) => {
+    budget = options;
+    return transaction(fn);
+  };
+  assert.equal((await f.submit("manual")).status, 200);
+  assert.ok(budget);
+  assert.ok(budget.timeout > 5_481);
+  assert.ok(budget.timeout <= 20_000);
+  assert.ok(budget.maxWait > 0 && budget.maxWait <= 10_000);
 });
 test("completed attempt cannot record an answer, including a request that read active state before completion", async () => {
   const f = fixture();
