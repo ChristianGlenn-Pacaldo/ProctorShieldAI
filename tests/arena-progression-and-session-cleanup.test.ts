@@ -218,7 +218,8 @@ test("X, Y, Z: Arena final EXP is awarded only once per sessionId/student and gu
   const arenaSubmitIndex = submitRouteSrc.indexOf("if (isArena) {");
   const proctoredSubmitIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
   const arenaSubmitBlock = submitRouteSrc.substring(arenaSubmitIndex, proctoredSubmitIndex);
-  assert.match(arenaSubmitBlock, /expEarned:\s*0/);
+  assert.match(arenaSubmitBlock, /expEarned,/);
+  assert.equal(arenaSubmitBlock.includes("awardArenaExpOnce"), false);
 
   // Key format for arena idempotency marker
   const key = arenaExpRewardedKey("session-abc", "student-xyz");

@@ -232,6 +232,27 @@ export function arenaExpRewardedKey(sessionId: string, studentId: string): strin
   return `arena:exp_rewarded:${sessionId}:${studentId}`;
 }
 
+/** Read the exact Arena award committed with progression; never infer it from total EXP. */
+export async function getArenaExpAwarded(
+  sessionId: string,
+  studentId: string,
+  client: DbClient = prisma,
+): Promise<number> {
+  const marker = await client.setting.findUnique({
+    where: { settingKey: arenaExpRewardedKey(sessionId, studentId) },
+  });
+  if (!marker) return 0; // The match has not awarded this student yet.
+
+  const award = JSON.parse(marker.settingValue || "null") as {
+    sessionId?: unknown; studentId?: unknown; expAwarded?: unknown;
+  } | null;
+  if (award?.sessionId !== sessionId || award.studentId !== studentId
+    || !Number.isSafeInteger(award.expAwarded) || (award.expAwarded as number) < 0) {
+    throw new Error("Invalid persisted Arena EXP award");
+  }
+  return award.expAwarded as number;
+}
+
 export async function isArenaExpAlreadyAwarded(
   sessionId: string,
   studentId: string,

@@ -9,6 +9,7 @@ import {
 import {
   awardArenaExpOnce,
   arenaExpRewardedKey,
+  getArenaExpAwarded,
 } from "../src/lib/student-progression.ts";
 
 function transactionalStore(initial: Record<string, string> = {}) {
@@ -109,8 +110,25 @@ test("simultaneous Arena finalization awards EXP once and reload remains idempot
   const progression = JSON.parse(store.get("student:progression:student-1")!.settingValue);
   assert.equal(progression.totalExp, 100);
   assert.ok(store.get(arenaExpRewardedKey("session-1", "student-1")));
+  assert.equal(await getArenaExpAwarded("session-1", "student-1", store.client), 100);
   assert.equal((await finalize()).awarded, false);
   assert.equal(JSON.parse(store.get("student:progression:student-1")!.settingValue).totalExp, 100);
+  assert.equal(await getArenaExpAwarded("session-1", "student-1", store.client), 100);
+});
+
+test("Arena replay reads each student's exact persisted award rather than total EXP", async () => {
+  const store = transactionalStore({
+    "student:progression:winner": JSON.stringify({ studentId: "winner", totalExp: 100 }),
+  });
+  await awardArenaExpOnce("session-3", "winner", 200, "Arena Match Completion", store.client);
+  await awardArenaExpOnce("session-3", "runner-up", 160, "Arena Match Completion", store.client);
+
+  assert.equal(JSON.parse(store.get("student:progression:winner")!.settingValue).totalExp, 300);
+  assert.equal(await getArenaExpAwarded("session-3", "winner", store.client), 200);
+  assert.equal(await getArenaExpAwarded("session-3", "runner-up", store.client), 160);
+  assert.equal(await getArenaExpAwarded("session-3", "unawarded", store.client), 0);
+  assert.equal((await awardArenaExpOnce("session-3", "winner", 200, "Arena Match Completion", store.client)).awarded, false);
+  assert.equal(JSON.parse(store.get("student:progression:winner")!.settingValue).totalExp, 300);
 });
 
 test("failed Arena EXP transaction leaves no marker or partial reward and retry succeeds once", async () => {

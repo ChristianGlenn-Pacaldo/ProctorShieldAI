@@ -13,12 +13,19 @@ import {
   parseVerdict,
 } from "@/lib/quiz-submission";
 
-import { awardStudentExp, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
+import { awardStudentExp, getArenaExpAwarded, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
+import { getArenaState } from "@/lib/arena";
 
 import { canSubmitProctored } from "@/lib/proctored-runtime";
 
 class InvalidSubmissionError extends Error {}
 class SubmissionConflictError extends Error {}
+
+async function persistedArenaExp(quizId: number, studentId: string): Promise<number> {
+  const arena = await getArenaState(quizId);
+  if (!arena || arena.quizId !== quizId || !arena.participants?.[studentId]) return 0;
+  return getArenaExpAwarded(arena.sessionId, studentId);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,6 +91,7 @@ export async function POST(req: NextRequest) {
     if (studentQuiz.quizStatus === "completed" || studentQuiz.endTime) {
       if (studentQuiz.attemptMode === "arena" && studentQuiz.quiz.quizMode === "arena"
         && studentQuiz.quizStatus === "completed" && studentQuiz.endTime) {
+        const expEarned = await persistedArenaExp(studentQuiz.quizId, session.userId);
         return NextResponse.json({
           success: true,
           studentQuiz: {
@@ -101,7 +109,7 @@ export async function POST(req: NextRequest) {
             integrityInvalidated: false,
             aiVerdict: null,
             cheatingProbability: null,
-            expEarned: 0,
+            expEarned,
             attemptMode: "arena",
           },
         });
@@ -234,7 +242,8 @@ export async function POST(req: NextRequest) {
         console.error("Pusher arena submit broadcast error:", pusherErr);
       }
 
-      // Power Arena EXP is awarded authoritatively once at match conclusion upon finalization
+      // Power Arena EXP is awarded by Teacher End, never by submission.
+      const expEarned = await persistedArenaExp(studentQuiz.quizId, session.userId);
       return NextResponse.json({
         success: true,
         studentQuiz: updatedStudentQuiz,
@@ -245,7 +254,7 @@ export async function POST(req: NextRequest) {
           deadlineExpired,
           aiVerdict: null,
           cheatingProbability: null,
-          expEarned: 0,
+          expEarned,
           attemptMode: "arena",
         },
       });

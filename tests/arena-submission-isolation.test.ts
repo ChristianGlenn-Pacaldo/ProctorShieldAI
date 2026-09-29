@@ -71,7 +71,9 @@ test("Test F: Arena scoring remains independent from retired coin rewards", () =
   const proctoredSectionIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
   const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
   assert.match(arenaSubstring, /const recordedScore = score;/);
-  assert.match(arenaSubstring, /expEarned:\s*0/);
+  assert.match(arenaSubstring, /expEarned,/);
+  assert.equal(arenaSubstring.includes("awardArenaExpOnce"), false);
+  assert.equal(arenaSubstring.includes("awardStudentExp"), false);
   assert.equal(arenaSubstring.includes("studentCoinLedger"), false);
   assert.equal(arenaSubstring.includes("integrityInvalidated: true"), false);
 });
