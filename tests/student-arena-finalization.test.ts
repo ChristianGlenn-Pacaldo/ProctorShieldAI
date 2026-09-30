@@ -140,6 +140,7 @@ test("completed Arena attempt is reconciled idempotently without database writes
   vm.runInNewContext(routeCode, {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
@@ -203,6 +204,7 @@ test("normal Arena completion returns a previously persisted award without grant
   vm.runInNewContext(routeCode, {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };

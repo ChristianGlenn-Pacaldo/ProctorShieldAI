@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -7,7 +8,7 @@ import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 import { enforceIntegrityPolicy, fallbackVerdict, isIntegrityInvalidated, parseVerdict } from "@/lib/quiz-submission";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || (session.role !== "teacher" && session.role !== "admin")) {
@@ -192,3 +193,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

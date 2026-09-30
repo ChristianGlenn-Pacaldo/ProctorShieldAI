@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { pusherServer } from "@/lib/pusher";
 import { getSession } from "@/lib/auth";
@@ -13,7 +14,7 @@ const SIGNAL_TYPES = new Set([
   "ice-candidate",
 ]);
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,3 +71,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to relay signal" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

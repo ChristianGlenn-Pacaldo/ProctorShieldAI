@@ -107,7 +107,7 @@ async function invoke(routeFile: string, setup: ReturnType<typeof fixture>, targ
   const route: { PUT?: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> } = {};
   vm.runInNewContext(code, {
     exports: route,
-    require: (name: string) => setup.dependencies[name],
+    require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : setup.dependencies[name],
     console: { error() {} },
   }, { filename: absolutePath });
   return route.PUT!(new Request(`http://localhost/api/users/${targetId}`, {

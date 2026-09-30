@@ -64,6 +64,7 @@ function listFixture(relativePath: string, responseKey: "users" | "quizzes", ini
         disconnect() {}
       } };
       if (name === "lucide-react") return {};
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async () => {
@@ -163,6 +164,7 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
         disconnect() {}
       } };
       if (name === "next/link") return "link";
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async () => {
@@ -241,6 +243,7 @@ test("Admin presence requires active status, online flag, and a recent heartbeat
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "admin", userId: "admin" }) };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console: { error() {} },

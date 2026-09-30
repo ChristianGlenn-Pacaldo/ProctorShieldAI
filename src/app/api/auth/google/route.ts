@@ -1,3 +1,4 @@
+import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import prisma from "@/lib/prisma";
@@ -8,7 +9,7 @@ import { hasVerifiedGoogleEmail } from "@/lib/google-identity";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const { credential, role } = await req.json();
 
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
       const createdUser = user;
       const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
-      after(async () => {
+      await scheduleTrackedBackupWork(after, async () => {
         const results = await Promise.allSettled([
           prisma.activityLog.create({
             data: {
@@ -191,3 +192,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

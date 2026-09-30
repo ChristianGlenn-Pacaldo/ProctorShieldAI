@@ -1,10 +1,11 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
 class RetakeConflictError extends Error {}
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -105,3 +106,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

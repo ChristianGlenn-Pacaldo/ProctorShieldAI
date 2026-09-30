@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -5,7 +6,7 @@ import { pusherServer } from "@/lib/pusher";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -63,3 +64,5 @@ export async function POST(req: NextRequest) {
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   return NextResponse.json(pusherServer.authorizeChannel(socketId, channelName));
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

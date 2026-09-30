@@ -23,6 +23,7 @@ function loadRoute(relativePath: string, dependencies: Record<string, unknown>, 
     console: { info: (...args: unknown[]) => logs.push(JSON.stringify(args)), error: (...args: unknown[]) => logs.push(JSON.stringify(args)) },
     require: (name: string) => {
       if (name in dependencies) return dependencies[name];
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
   }, { filename });

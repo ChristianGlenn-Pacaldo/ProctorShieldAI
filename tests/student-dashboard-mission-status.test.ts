@@ -62,6 +62,7 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
       if (name === "next/navigation") return { useRouter: () => ({ push() {} }) };
       if (name === "@/lib/student-gamify") return { playBloop() {}, playSuccessFanfare() {}, playErrorBuzz() {}, isSoundEnabled: () => true, toggleSoundEnabled: () => false };
       if (name === "@/lib/quiz-access-code") return { normalizeQuizAccessCode: (value: string) => value, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH: 20 };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string) => ({ ok: true, json: async () => url === "/api/quizzes" ? { success: true, quizzes } : { success: true, totalExp: 0, level: 1, currentLevelExp: 0, expToNextLevel: 500, progressPercent: 0, title: "Rookie" } }),

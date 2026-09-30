@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 }
 
 // PUT /api/notifications — Mark all as read for current user
-export async function PUT(req: NextRequest) {
+async function PUTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session) {
@@ -79,3 +80,5 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const PUT = withBackupWriteGate(PUTImpl);

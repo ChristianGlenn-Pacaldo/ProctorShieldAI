@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { expireSubscriptions } from "@/lib/maintenance";
@@ -8,7 +9,7 @@ import { createAiQuizReceipt } from "@/lib/ai-quiz-provenance";
 
 const AI_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -143,3 +144,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to generate questions. Please try again." }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

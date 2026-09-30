@@ -1,9 +1,10 @@
+import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp, hashOtp } from "@/lib/security";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const { userId, otpCode } = await req.json();
 
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     });
 
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
-    after(async () => {
+    await scheduleTrackedBackupWork(after, async () => {
       const results = await Promise.allSettled([
         prisma.activityLog.create({
           data: {
@@ -146,3 +147,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

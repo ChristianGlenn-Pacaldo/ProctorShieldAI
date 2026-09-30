@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -20,7 +21,7 @@ function hasExpectedVideoSignature(bytes: Uint8Array, contentType: string): bool
     && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
 }
 
-export async function POST(
+async function POSTImpl(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -106,3 +107,5 @@ export async function POST(
     return NextResponse.json({ error: "Failed to store evidence video" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

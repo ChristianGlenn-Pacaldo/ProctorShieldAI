@@ -1,19 +1,20 @@
 import prisma from "./prisma";
 import { deletePendingEvidence, evidenceRetentionCutoff, evidenceRetentionDays } from "./evidence-retention";
+import { runBackupWriteOrReject, runIncidentalBackupWrite } from "./backup-write-gate";
 
 const LAST_MAINTENANCE_SUCCESS_KEY = "maintenance_last_success_at";
 const MAINTENANCE_STALE_MS = 2 * 60 * 60_000;
 const EVIDENCE_BACKLOG_ALERT_COUNT = 100;
 
 export async function expireSubscriptions(userId?: string) {
-  return prisma.userSubscription.updateMany({
+  return runIncidentalBackupWrite(() => prisma.userSubscription.updateMany({
     where: {
       ...(userId ? { userId } : {}),
       subscriptionStatus: "active",
       endDate: { lt: new Date() },
     },
     data: { subscriptionStatus: "expired" },
-  });
+  }), { count: 0 });
 }
 
 function boundedDays(value: string | null | undefined, fallback: number) {
@@ -22,6 +23,10 @@ function boundedDays(value: string | null | undefined, fallback: number) {
 }
 
 export async function runMaintenance(now = new Date()) {
+  return runBackupWriteOrReject(() => runMaintenanceImpl(now));
+}
+
+async function runMaintenanceImpl(now: Date) {
   const retentionSettings = await prisma.setting.findMany({
     where: { settingKey: { in: ["evidence_retention_days", "webhook_retention_days"] } },
   });

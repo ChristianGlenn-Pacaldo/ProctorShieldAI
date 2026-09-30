@@ -87,6 +87,7 @@ function fixture(relativePath: string, replies: Reply[]) {
         unsubscribe() {}
         disconnect() {}
       } };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string) => {

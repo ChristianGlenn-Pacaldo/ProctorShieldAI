@@ -54,6 +54,7 @@ async function loadResultsApi(role: string | null = "student") {
       if (name === "@/lib/prisma") return { __esModule: true, default: { studentQuiz: { findMany: async () => { queried = true; return attempts; } } } };
       if (name === "@/lib/auth") return { getSession: async () => role ? { role, userId: "student-1" } : null };
       if (name === "@/lib/retake-eligibility") return retakeEligibility;
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,
@@ -86,6 +87,7 @@ function pageFixture(relativePath: string, results: Array<Record<string, unknown
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
       if (name === "@/components/student/ResultModal") return { __esModule: true, default: "result-modal" };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async () => ({ ok: true, json: async () => ({ success: true, results }) }),

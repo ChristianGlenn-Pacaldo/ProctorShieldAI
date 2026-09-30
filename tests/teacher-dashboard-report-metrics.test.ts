@@ -26,6 +26,7 @@ function loadRoute(routePath: string, prisma: object) {
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
       if (name === "@/lib/maintenance") return { expireSubscriptions: async () => {} };
       if (name === "@/lib/teacher-entitlements") return { hasActiveProSubscription: async () => true };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,

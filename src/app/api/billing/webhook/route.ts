@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getPayMongoMode, getPayMongoSecretKey, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
@@ -9,7 +10,7 @@ function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get("paymongo-signature");
@@ -127,3 +128,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

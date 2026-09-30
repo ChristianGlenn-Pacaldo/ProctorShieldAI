@@ -72,6 +72,7 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
       if (name === "@/lib/quiz-mode") return { parseQuizMode: (mode: string) => mode, InvalidQuizModeError: class extends Error {}, canChangeQuizMode: () => ({ allowed: true }) };
       if (name === "@/lib/quiz-availability") return { isQuizAvailable: () => true };
       if (name === "node:crypto") return crypto;
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected import: ${name}`);
     },
     console: { error() {} },
@@ -255,6 +256,7 @@ function creationFixture() {
       if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt: () => false };
       if (name === "node:crypto") return crypto;
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected import: ${name}`);
     },
     console: { error() {} },

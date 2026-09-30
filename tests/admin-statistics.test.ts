@@ -26,6 +26,7 @@ function loadRoute(routePath: string, prisma: object) {
       };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "admin", userId: "admin-1" }) };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,
@@ -197,6 +198,7 @@ test("Admin analytics completion rate uses quizzes rather than attempt count", (
       if (name === "react") return { useState: () => stateCalls++ === 0 ? [data, () => {}] : [false, () => {}], useEffect: () => {} };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return { Users: "Users", BookOpen: "BookOpen", Brain: "Brain", CreditCard: "CreditCard" };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
   }, { filename: componentPath });

@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -11,7 +12,7 @@ import {
   type LiveWarningRecord,
 } from "@/lib/live-warning-store";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession("teacher");
     if (!session || session.role !== "teacher") {
@@ -112,3 +113,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unable to check for warnings" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

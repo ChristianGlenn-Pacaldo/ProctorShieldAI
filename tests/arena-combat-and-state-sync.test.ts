@@ -219,8 +219,8 @@ test("Requirement 25, 26, 27, 28: Incoming attack warning, reaction window, and 
   assert.match(battleActionRouteSrc, /arena-attack-blocked/);
 
   // Auto-resolution after reaction window deducts configured score
-  assert.match(battleActionRouteSrc, /setTimeout\(async\s*\(\)\s*=>\s*\{/);
-  assert.match(battleActionRouteSrc, /await\s*applyPendingAttackHit\(quizId,\s*attackId\)/);
+  assert.match(battleActionRouteSrc, /scheduleTrackedBackupWork/);
+  assert.match(battleActionRouteSrc, /await\s+applyPendingAttackHit\(quizId,\s*attackId\)/);
 });
 
 test("Requirement 29: Score never drops below zero", () => {
@@ -496,8 +496,8 @@ test("Test 9A: arena-incoming-attack is emitted immediately after validation/pow
 });
 
 test("Test 9B: Incoming warning is not delayed by score deduction logic", () => {
-  // Score deduction happens in applyPendingAttackHit, scheduled via setTimeout after reaction window
-  assert.match(battleActionRouteSrc, /setTimeout\(async\s*\(\)\s*=>\s*\{[\s\S]*applyPendingAttackHit/);
+  // Score deduction happens in the tracked deferred work after the reaction window.
+  assert.match(battleActionRouteSrc, /scheduleTrackedBackupWork\([\s\S]*waitMs[\s\S]*applyPendingAttackHit/);
   // Auto-resolution timeout is based on the authoritative expiry plus a small grace
   assert.match(battleActionRouteSrc, /expiresAt\s*-\s*Date\.now\(\)\s*\+\s*100/);
 });

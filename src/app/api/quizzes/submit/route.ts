@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -27,7 +28,7 @@ async function persistedArenaExp(quizId: number, studentId: string): Promise<num
   return getArenaExpAwarded(arena.sessionId, studentId);
 }
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "student") {
@@ -477,3 +478,5 @@ Return ONLY the valid JSON object.`;
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

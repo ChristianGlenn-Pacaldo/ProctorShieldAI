@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   const requestId = crypto.randomUUID();
   try {
     const session = await getSession();
@@ -401,3 +402,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

@@ -71,6 +71,7 @@ function fixture(relativePath: string, responses: Record<string, Reply[]>) {
         normalizeQuizAccessCode: (value: string) => value,
         QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH: 20,
       };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string) => {

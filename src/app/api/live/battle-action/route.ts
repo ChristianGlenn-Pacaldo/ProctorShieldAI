@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getArenaState, isArenaPowerId } from "@/lib/arena";
@@ -9,7 +10,7 @@ import { consumeRateLimit } from "@/lib/security";
  * @deprecated Use `POST /api/arena/battle-action` instead.
  * Retained as a legacy compatibility wrapper during Phase 3.
  */
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession("student");
     if (!session || session.role !== "student") {
@@ -104,3 +105,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

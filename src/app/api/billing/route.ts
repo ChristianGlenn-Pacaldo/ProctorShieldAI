@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -66,7 +67,7 @@ async function reconcilePendingCheckout(req: NextRequest, userId: string) {
 }
 
 // GET: Check teacher's current subscription status
-export async function GET(req: NextRequest) {
+async function GETImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -142,7 +143,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: Create PayMongo checkout session for Premium upgrade
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -298,3 +299,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);
+export const GET = withBackupWriteGate(GETImpl);

@@ -58,6 +58,7 @@ function fixture(initialStatus = "active") {
       if (name === "@/lib/subscription-rules") return { FREE_STUDENT_LIMIT_PER_QUIZ: 5, PRO_STUDENT_LIMIT_PER_QUIZ: 100 };
       if (name.startsWith("@/components/teacher/")) return { __esModule: true, default: name };
       if (name === "lucide-react") return {};
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string, options?: { method?: string; body?: string }) => {

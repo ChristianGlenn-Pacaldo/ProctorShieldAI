@@ -29,6 +29,7 @@ function loadModule(relativePath: string, dependencies: Record<string, unknown>,
     module: sandboxModule, exports: sandboxModule.exports, console, Date, Buffer, process, AbortController, setTimeout, clearTimeout, ...globals,
     require: (name: string) => {
       if (name in dependencies) return dependencies[name];
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
   }, { filename: absolutePath });

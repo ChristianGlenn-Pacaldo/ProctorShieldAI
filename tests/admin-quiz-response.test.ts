@@ -66,7 +66,7 @@ test("Admin quiz list serializes only the teacher name", async () => {
   const route: { GET?: (request: Request) => Promise<Response> } = {};
   vm.runInNewContext(compiled, {
     exports: route,
-    require: (name: string) => dependencies[name],
+    require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : dependencies[name],
     console,
   }, { filename: routePath });
 

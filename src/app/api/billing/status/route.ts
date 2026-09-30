@@ -1,10 +1,11 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { expireSubscriptions } from "@/lib/maintenance";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 
 // GET: Lightweight subscription status check (used by gating modals)
-export async function GET() {
+async function GETImpl() {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -19,3 +20,5 @@ export async function GET() {
     return NextResponse.json({ error: "Failed to load subscription status" }, { status: 500 });
   }
 }
+
+export const GET = withBackupWriteGate(GETImpl);

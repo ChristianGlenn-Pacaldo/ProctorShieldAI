@@ -1,10 +1,11 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession, hashPassword, verifyPassword, setSessionCookie } from "@/lib/auth";
 import { isStrongPassword } from "@/lib/security";
 
 // PUT /api/auth/profile — Update full name and/or password
-export async function PUT(req: NextRequest) {
+async function PUTImpl(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session) {
@@ -100,3 +101,5 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
+
+export const PUT = withBackupWriteGate(PUTImpl);

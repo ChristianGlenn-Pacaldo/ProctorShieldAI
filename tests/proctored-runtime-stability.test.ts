@@ -22,6 +22,7 @@ function route(file: string, dependencies: Record<string, unknown>) {
   vm.runInNewContext(compiled.get(file)!, { exports, process: { env: {} }, console: { error() {}, warn() {} },
     Date, Set, Map, Promise, Number, String,
     require: (name: string) => {
+      if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (!(name in dependencies)) throw new Error(`Missing dependency ${name}`);
       return dependencies[name];
     },

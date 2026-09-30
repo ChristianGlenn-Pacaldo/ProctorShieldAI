@@ -67,6 +67,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
       if (name === "@/components/teacher/proctorshield-quiz-editor") return { __esModule: true, default: "editor" };
       if (name === "@/components/teacher/proctorshield-create-hub") return { __esModule: true, default: "hub" };
       if (name === "lucide-react") return {};
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string, request: { body: string }) => {

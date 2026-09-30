@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
@@ -12,7 +13,7 @@ import {
   UNAVAILABLE_QUIZ_STATUSES,
 } from "@/lib/quiz-availability";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const session = await getSession("student");
     if (!session || session.role !== "student") {
@@ -129,3 +130,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to update device profile" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

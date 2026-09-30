@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
@@ -86,7 +87,7 @@ async function awardArenaExp(state: ArenaState) {
   return awards;
 }
 
-export async function GET(_req: NextRequest, { params }: RouteParams) {
+async function GETImpl(_req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {
@@ -160,7 +161,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function POST(req: NextRequest, { params }: RouteParams) {
+async function POSTImpl(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {
@@ -519,3 +520,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);
+export const GET = withBackupWriteGate(GETImpl);

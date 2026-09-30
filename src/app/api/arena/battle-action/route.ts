@@ -1,3 +1,4 @@
+import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
@@ -101,7 +102,7 @@ async function applyPendingAttackHit(
 }
 
 // POST /api/arena/battle-action — authoritative realtime targeted score-based combat
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   const requestReceivedAt = Date.now();
   try {
     const session = await getSession("student");
@@ -486,13 +487,15 @@ export async function POST(req: NextRequest) {
     ]);
 
     // Schedule authoritative server-side resolution after reaction window closes
-    setTimeout(async () => {
+    await scheduleTrackedBackupWork((work) => { setTimeout(() => { void work(); }, 0); }, async () => {
       try {
+        const waitMs = Math.max(0, expiresAt - Date.now() + 100);
+        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
         await applyPendingAttackHit(quizId, attackId);
       } catch (err) {
         console.error("Scheduled attack resolution error:", err);
       }
-    }, Math.max(0, expiresAt - Date.now() + 100));
+    });
 
     await broadcastPromise;
 
@@ -505,3 +508,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import { runIncidentalBackupWrite } from "./backup-write-gate";
 
 // ── SECURITY: Fail loudly if JWT secret is not configured ────────
 function getJwtSecret(): string {
@@ -124,10 +125,10 @@ export async function getSession(roleHint?: string): Promise<TokenPayload | null
     if (currentRole !== payload.role.toLowerCase()) return null;
 
     if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 30_000) {
-      await prisma.user.update({
+      await runIncidentalBackupWrite(() => prisma.user.update({
         where: { id: payload.userId },
         data: { isOnline: true, lastSeenAt: new Date() },
-      });
+      }), null);
     }
 
     return {

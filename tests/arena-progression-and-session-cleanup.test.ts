@@ -70,10 +70,11 @@ test("A, B, C: Starting new Arena match from reused quiz generates fresh session
 // ─────────────────────────────────────────────────────────────
 // D, E, F, G: READ-ONLY GET & POST CREATE_SESSION SEPARATION
 // ─────────────────────────────────────────────────────────────
-test("D: GET /api/arena/[id] is strictly read-only and never mutates state", () => {
-  const getFnIndex = apiArenaRouteSrc.indexOf("export async function GET");
-  const postFnIndex = apiArenaRouteSrc.indexOf("export async function POST");
+test("D: GET /api/arena/[id] cannot create a fresh session and is covered by the backup gate", () => {
+  const getFnIndex = apiArenaRouteSrc.indexOf("async function GETImpl");
+  const postFnIndex = apiArenaRouteSrc.indexOf("async function POSTImpl");
   assert.ok(getFnIndex > 0 && postFnIndex > getFnIndex);
+  assert.match(apiArenaRouteSrc, /export const GET = withBackupWriteGate\(GETImpl\)/);
 
   const getBody = apiArenaRouteSrc.substring(getFnIndex, postFnIndex);
   assert.equal(getBody.includes("searchParams.get(\"fresh\")"), false);
@@ -89,8 +90,8 @@ test("E: create_session requires explicit authenticated POST", () => {
 });
 
 test("F & G: Refreshing existing lobby or active match restores same session without new sessionId", () => {
-  const getFnIndex = apiArenaRouteSrc.indexOf("export async function GET");
-  const postFnIndex = apiArenaRouteSrc.indexOf("export async function POST");
+  const getFnIndex = apiArenaRouteSrc.indexOf("async function GETImpl");
+  const postFnIndex = apiArenaRouteSrc.indexOf("async function POSTImpl");
   const getBody = apiArenaRouteSrc.substring(getFnIndex, postFnIndex);
   assert.match(getBody, /sessionId:\s*state\?\.sessionId/);
   assert.match(teacherArenaContentSrc, /loadArenaInitial/);

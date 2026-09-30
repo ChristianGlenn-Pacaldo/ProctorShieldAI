@@ -1,9 +1,10 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp, hashOtp, isStrongPassword } from "@/lib/security";
 
-export async function POST(req: NextRequest) {
+async function POSTImpl(req: NextRequest) {
   try {
     const { email, otpCode, newPassword } = await req.json();
     if (!email || !otpCode || !newPassword) {
@@ -90,3 +91,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

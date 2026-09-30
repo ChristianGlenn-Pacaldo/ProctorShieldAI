@@ -85,6 +85,7 @@ function creationFixture(subscribed: boolean) {
       if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt };
       if (name === "node:crypto") return crypto;
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected import: ${name}`);
     },
     console: { error() {} },
@@ -111,6 +112,7 @@ test("successful Gemini generation issues a teacher-bound receipt for returned q
       if (name === "@/lib/teacher-entitlements") return { getTeacherEntitlements: async () => ({ isSubscribed: true }) };
       if (name === "@/lib/security") return { consumeRateLimitGroup: async () => ({ allowed: true }), getClientIp: () => "127.0.0.1" };
       if (name === "@/lib/ai-quiz-provenance") return { createAiQuizReceipt };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected import: ${name}`);
     },
     process: { env: { GEMINI_API_KEY: "test-key" } },

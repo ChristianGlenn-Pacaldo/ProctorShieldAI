@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import prisma from "@/lib/prisma";
@@ -263,7 +264,7 @@ function validateEditedQuestions(rawQuestions: unknown) {
   return { questions };
 }
 
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -474,7 +475,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
     if (!session || (session.role !== "teacher" && session.role !== "admin")) {
@@ -553,3 +554,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const PUT = withBackupWriteGate(PUTImpl);
+
+export const DELETE = withBackupWriteGate(DELETEImpl);

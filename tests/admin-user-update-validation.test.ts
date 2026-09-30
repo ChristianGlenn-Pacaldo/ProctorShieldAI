@@ -61,7 +61,7 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
   const route: { PUT?: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> } = {};
   vm.runInNewContext(compiled, {
     exports: route,
-    require: (name: string) => dependencies[name],
+    require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : dependencies[name],
     console: { error() {} },
   }, { filename });
   return {

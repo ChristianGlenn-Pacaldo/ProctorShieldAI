@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -6,7 +7,7 @@ import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 class LastActiveAdminError extends Error {}
 class MissingPremiumPlanError extends Error {}
 
-export async function PUT(
+async function PUTImpl(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -181,3 +182,5 @@ export async function PUT(
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const PUT = withBackupWriteGate(PUTImpl);

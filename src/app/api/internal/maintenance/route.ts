@@ -1,3 +1,4 @@
+import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getMaintenanceStatus, runMaintenance } from "@/lib/maintenance";
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   const denied = authorizationError(request);
   if (denied) return denied;
 
@@ -49,3 +50,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Maintenance failed" }, { status: 500 });
   }
 }
+
+export const POST = withBackupWriteGate(POSTImpl);

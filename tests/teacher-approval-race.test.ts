@@ -43,6 +43,7 @@ function fixture(concurrent = false, owner = "teacher-1") {
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ userId: "teacher-1", role: "teacher" }) };
       if (name === "@/lib/pusher") return { pusherServer: { trigger: async (_channel: string, _event: string, payload: { status: string; quizId: number }) => { events.push(payload); } } };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console: { error() {} },

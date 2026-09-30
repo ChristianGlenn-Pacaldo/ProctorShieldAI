@@ -77,6 +77,7 @@ function apiFixture(teacherCount: number) {
       if (name === "@/lib/evidence-retention") return { EvidenceWithinRetentionError: class extends Error {}, requestTeacherEvidencePurge: async () => ({}) };
       if (name === "@/lib/teacher-entitlements") return { hasActiveProSubscription: async () => true };
       if (name === "@/lib/proctoring-detection") return { getViolationLabel: () => "Tab switch" };
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,
@@ -178,6 +179,7 @@ function uiFixture(total: number, initialUrl = "http://localhost/dashboard/teach
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "react-dom") return { createPortal: jsx };
       if (name === "lucide-react") return {};
+      if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     fetch: async (url: string) => {
