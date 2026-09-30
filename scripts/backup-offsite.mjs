@@ -5,14 +5,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
-  GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
+  DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 import { backupFreshness, validateBackupConfig, validateBackupStatusConfig } from "./backup-config.mjs";
 import { decryptFileTo, encryptToFile } from "./backup-crypto.mjs";
 
 const mode = process.argv[2];
-if (!["--backup", "--status", "--check-config"].includes(mode)) {
-  console.error("Specify --backup, --status, or --check-config");
+if (!["--backup", "--status", "--check-config", "--probe-destination"].includes(mode)) {
+  console.error("Specify --backup, --status, --check-config, or --probe-destination");
   process.exit(2);
 }
 
@@ -180,7 +180,37 @@ async function status(config) {
   if (!freshness.backupFresh || !freshness.restoreCurrent) process.exitCode = 1;
 }
 
+async function probeDestination(config) {
+  step = "offsite destination probe";
+  const key = remoteKey(config, `probes/${crypto.randomUUID()}.bin`);
+  const payload = crypto.randomBytes(32);
+  let failure;
+  try {
+    await destination.send(new PutObjectCommand({
+      Bucket: config.destination.bucket, Key: key, Body: payload,
+      ContentLength: payload.length, ContentType: "application/octet-stream",
+    }));
+    const response = await destination.send(new GetObjectCommand({ Bucket: config.destination.bucket, Key: key }));
+    if (!response.Body || !crypto.timingSafeEqual(Buffer.from(await response.Body.transformToByteArray()), payload)) {
+      throw new Error("Offsite destination probe readback mismatch");
+    }
+  } catch (error) {
+    failure = error;
+  } finally {
+    try {
+      await destination.send(new DeleteObjectCommand({ Bucket: config.destination.bucket, Key: key }));
+    } catch (error) {
+      failure ||= error;
+    }
+  }
+  if (failure) throw failure;
+  console.log(JSON.stringify({ event: "offsite_destination_probe_valid", environmentId: config.environmentId }));
+}
+
 try {
+  if (mode === "--probe-destination" && process.env.BACKUP_TARGET_ENV !== "staging-test") {
+    throw new Error("Destination probe is limited to staging-test");
+  }
   const config = mode === "--status"
     ? validateBackupStatusConfig(process.env)
     : validateBackupConfig(process.env, { requirePause: mode === "--backup" });
@@ -190,6 +220,7 @@ try {
     if (mode === "--backup") source = client(config.source);
     destination = client(config.destination);
     if (mode === "--backup") await backup(config);
+    else if (mode === "--probe-destination") await probeDestination(config);
     else await status(config);
   }
 } catch {

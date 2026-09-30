@@ -111,6 +111,24 @@ function validBackupEnvironment() {
   };
 }
 
+function validStagingBackupEnvironment() {
+  return {
+    ...validBackupEnvironment(),
+    BACKUP_TARGET_ENV: "staging-test", BACKUP_STAGING_TEST: "true",
+    RAILWAY_ENVIRONMENT_NAME: "staging",
+    RAILWAY_PROJECT_ID: "8007b266-c02c-4c99-ba85-a210b7b3f777",
+    BACKUP_APPROVED_PROJECT_ID: "8007b266-c02c-4c99-ba85-a210b7b3f777",
+    RAILWAY_ENVIRONMENT_ID: "0a5835a6-ea32-44f5-848f-63e4536da240",
+    BACKUP_APPROVED_ENVIRONMENT_ID: "0a5835a6-ea32-44f5-848f-63e4536da240",
+    RAILWAY_SERVICE_ID: "778c1833-6993-4049-ac1d-48c2e0a31495",
+    DATABASE_URL: "postgresql://backup:secret@postgres.railway.internal:5432/railway?sslmode=require",
+    BACKUP_APPROVED_DATABASE_HOST: "postgres.railway.internal", BACKUP_APPROVED_DATABASE_NAME: "railway",
+    S3_ENDPOINT: "https://t3.storageapi.dev", S3_BUCKET: "buffered-pocket-cwqdifswp",
+    BACKUP_DESTINATION_ENDPOINT: `https://${"a".repeat(32)}.r2.cloudflarestorage.com`,
+    BACKUP_DESTINATION_BUCKET: "proctorshield-backups",
+  };
+}
+
 test("offsite backup guards reject environment crossover and same-provider destinations", () => {
   const valid = validBackupEnvironment();
   assert.equal(validateBackupConfig(valid).database.hostname, "db.prod.example");
@@ -129,6 +147,51 @@ test("offsite backup guards reject environment crossover and same-provider desti
   ]) {
     assert.throws(() => validateBackupConfig({ ...valid, ...change }));
   }
+});
+
+test("staging backup tests require the exact staging Ops identity and approved source", () => {
+  const valid = validStagingBackupEnvironment();
+  assert.equal(validateBackupConfig(valid, { requirePause: false }).environmentId,
+    "0a5835a6-ea32-44f5-848f-63e4536da240");
+  assert.equal(validateBackupStatusConfig(valid).environmentId, valid.RAILWAY_ENVIRONMENT_ID);
+  for (const change of [
+    { BACKUP_STAGING_TEST: "false" },
+    { RAILWAY_ENVIRONMENT_NAME: "production" },
+    { RAILWAY_PROJECT_ID: "another-project" },
+    { RAILWAY_ENVIRONMENT_ID: "bcf56737-0978-4996-9da4-d12fc8e4307e" },
+    { RAILWAY_SERVICE_ID: "another-service" },
+    { BACKUP_APPROVED_PROJECT_ID: "another-project" },
+    { BACKUP_APPROVED_ENVIRONMENT_ID: "another-environment" },
+    { DATABASE_URL: "postgresql://backup:secret@normal-db.example:5432/normal" },
+    { DATABASE_URL: "postgresql://backup:secret@postgres.railway.internal:5432/demo" },
+    { DATABASE_URL: "postgresql://backup:secret@postgres.railway.internal:5432/e2e" },
+    { S3_ENDPOINT: "https://normal-objects.example" },
+    { S3_BUCKET: "demo-evidence" },
+    { BACKUP_DESTINATION_ENDPOINT: valid.S3_ENDPOINT },
+    { BACKUP_DESTINATION_ENDPOINT: "https://other-offsite.example" },
+    { BACKUP_DESTINATION_BUCKET: valid.S3_BUCKET },
+    { BACKUP_DESTINATION_ACCESS_KEY: valid.S3_ACCESS_KEY },
+  ]) {
+    assert.throws(() => validateBackupConfig({ ...valid, ...change }, { requirePause: false }));
+  }
+  assert.throws(() => validateBackupConfig({ ...valid, BACKUP_WRITES_PAUSED: "false" }));
+  assert.throws(() => validateBackupConfig({ ...valid, BACKUP_TARGET_ENV: "production" }, { requirePause: false }));
+});
+
+test("staging preflight does not need a pause, and destination probe refuses production", () => {
+  const env = validStagingBackupEnvironment();
+  delete (env as Partial<typeof env>).BACKUP_WRITES_PAUSED;
+  delete (env as Partial<typeof env>).BACKUP_MAINTENANCE_PAUSED;
+  const check = spawnSync(process.execPath, ["scripts/backup-offsite.mjs", "--check-config"], {
+    cwd: process.cwd(), encoding: "utf8", env: { ...env, NODE_ENV: "test" },
+  });
+  assert.equal(check.status, 0);
+  assert.match(check.stdout, /backup_configuration_valid/);
+  const forbidden = spawnSync(process.execPath, ["scripts/backup-offsite.mjs", "--probe-destination"], {
+    cwd: process.cwd(), encoding: "utf8", env: { ...env, NODE_ENV: "test", BACKUP_TARGET_ENV: "production" },
+  });
+  assert.equal(forbidden.status, 1);
+  assert.doesNotMatch(forbidden.stdout + forbidden.stderr, /secret|source-key|destination-key/);
 });
 
 test("backup freshness flags missing jobs and overdue restore drills", () => {
