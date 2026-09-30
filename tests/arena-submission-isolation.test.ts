@@ -54,7 +54,7 @@ test("Test B, C, D & E: Arena submission never invalidates score, sets null AI v
   const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
 
   // Never invalidates score
-  assert.match(arenaSubstring, /const recordedScore = score;/);
+  assert.match(arenaSubstring, /let recordedScore = score;/);
   assert.equal(arenaSubstring.includes("isIntegrityInvalidated"), false);
 
   // aiVerdict and cheatingProbability remain null
@@ -70,7 +70,7 @@ test("Test F: Arena scoring remains independent from retired coin rewards", () =
   const arenaBlockIndex = submitRouteSrc.indexOf("if (isArena) {");
   const proctoredSectionIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
   const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
-  assert.match(arenaSubstring, /const recordedScore = score;/);
+  assert.match(arenaSubstring, /let recordedScore = score;/);
   assert.match(arenaSubstring, /expEarned,/);
   assert.equal(arenaSubstring.includes("awardArenaExpOnce"), false);
   assert.equal(arenaSubstring.includes("awardStudentExp"), false);

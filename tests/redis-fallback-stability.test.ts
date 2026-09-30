@@ -104,9 +104,12 @@ test("7. Live warning store persists and retrieves warnings under memory fallbac
   assert.equal(fetched.studentId, "student-warn-1");
 });
 
-test("8. Arena operations check isRedisReady and maintain PostgreSQL and memory cache authority", () => {
+test("8. Arena mutations use PostgreSQL transactions and invalidate caches after commit", () => {
   assert.match(arenaSrc, /isRedisReady\(redis\)/);
   assert.match(arenaSrc, /client\.setting\.upsert/);
-  assert.match(arenaSrc, /persistArenaState\(prisma, state\)/);
+  assert.match(arenaSrc, /persistArenaState\(tx, mutation\.state\)/);
+  assert.match(arenaSrc, /client\.\$transaction/);
+  assert.match(arenaSrc, /invalidateArenaCaches\(quizId\)/);
+  assert.doesNotMatch(arenaSrc, /redis\.get\(|return local\.value/);
   assert.match(arenaSrc, /globalArena\.__proctorShieldArenaState/);
 });

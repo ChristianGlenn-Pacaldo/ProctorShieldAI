@@ -3,36 +3,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
-import { pusherServer } from "@/lib/pusher";
+import type { Prisma } from "@prisma/client";
+import { arenaRealtime } from "@/lib/arena-realtime";
 import {
-  clearArenaState,
   computeArenaRankings,
   createArenaState,
   ensureArenaPlayer,
-  getArenaState,
+  mutateArena,
+  reconcileArenaAttacksInState,
   isArenaAction,
   normalizeArenaConfig,
-  setArenaState,
-  type PlayerHealth,
 } from "@/lib/arena";
-import {
-  awardArenaExpOnce,
-  EXP_REWARDS,
-} from "@/lib/student-progression";
+import { awardArenaExpOnce, EXP_REWARDS } from "@/lib/student-progression";
 import type { ArenaState } from "@/lib/arena";
 import { isQuizAvailable, quizNotAvailableResponse } from "@/lib/quiz-availability";
-
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
-
 function parseQuizId(value: string) {
   const quizId = Number(value);
   return Number.isSafeInteger(quizId) && quizId > 0 ? quizId : null;
 }
-
-async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
-  const quiz = await prisma.quiz.findUnique({
+// Build JSON after commit so the body carries its committed Arena revision.
+function jsonAfterCommit(body: unknown, init?: ResponseInit) {
+  return () => NextResponse.json(body, init);
+}
+async function getAuthorizedQuiz(quizId: number, userId: string, role: string, db: Prisma.TransactionClient = prisma) {
+  const quiz = await db.quiz.findUnique({
     where: { id: quizId },
     select: {
       id: true,
@@ -43,10 +40,12 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
       _count: { select: { questions: true } },
     },
   });
-  if (!quiz) return null;
-  if (role === "teacher" && quiz.teacherId !== userId) return null;
+  if (!quiz)
+    return null;
+  if (role === "teacher" && quiz.teacherId !== userId)
+    return null;
   if (role === "student") {
-    const enrolled = await prisma.studentQuiz.findFirst({
+    const enrolled = await db.studentQuiz.findFirst({
       where: {
         quizId,
         studentId: userId,
@@ -57,36 +56,34 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string) {
       select: { id: true },
       orderBy: { attemptNumber: "desc" },
     });
-    if (!enrolled) return null;
+    if (!enrolled)
+      return null;
   }
   return quiz;
 }
-
-async function awardArenaExp(state: ArenaState) {
-  if (!state.participants) return [];
+async function awardArenaExp(state: ArenaState, tx: Prisma.TransactionClient) {
+  if (!state.participants)
+    return [];
   const ranked = computeArenaRankings(state.participants);
-  const awards: Array<{ studentId: string; rank: number; amount: number }> = [];
-
-  for (const p of ranked) {
+  const awards: Array<{
+    studentId: string;
+    rank: number;
+    amount: number;
+  }> = [];
+  // Acquire progression locks in student-id order across all Arena finalizers.
+  for (const p of [...ranked].sort((a, b) => a.studentId.localeCompare(b.studentId))) {
     let exp = EXP_REWARDS.ARENA_PARTICIPATION;
-    if (p.rank === 1) exp += EXP_REWARDS.ARENA_RANK_1;
-    else if (p.rank === 2) exp += EXP_REWARDS.ARENA_RANK_2;
-    else if (p.rank === 3) exp += EXP_REWARDS.ARENA_RANK_3;
-
-    await awardArenaExpOnce(
-      state.sessionId,
-      p.studentId,
-      exp,
-      `Arena Match Completion (Rank #${p.rank})`,
-    ).catch((err) => {
-      console.error(`Failed to award Arena EXP to ${p.studentId}:`, err);
-    });
-
+    if (p.rank === 1)
+      exp += EXP_REWARDS.ARENA_RANK_1;
+    else if (p.rank === 2)
+      exp += EXP_REWARDS.ARENA_RANK_2;
+    else if (p.rank === 3)
+      exp += EXP_REWARDS.ARENA_RANK_3;
+    await awardArenaExpOnce(state.sessionId, p.studentId, exp, `Arena Match Completion (Rank #${p.rank})`, tx);
     awards.push({ studentId: p.studentId, rank: p.rank, amount: exp });
   }
-  return awards;
+  return awards.sort((a, b) => a.rank - b.rank);
 }
-
 async function GETImpl(_req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getSession();
@@ -95,101 +92,84 @@ async function GETImpl(_req: NextRequest, { params }: RouteParams) {
     }
     const { id } = await params;
     const quizId = parseQuizId(id);
-    if (!quizId) return NextResponse.json({ error: "Invalid quiz ID" }, { status: 400 });
-
-    const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
-    if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
-    if (!isQuizAvailable(quiz.quizStatus)) {
-      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
-    }
-    if (quiz.quizMode !== "arena") {
-      return NextResponse.json(
-        {
+    if (!quizId)
+      return NextResponse.json({ error: "Invalid quiz ID" }, { status: 400 });
+    const reply = await mutateArena(quizId, async (mutation) => {
+      const prisma = mutation.tx;
+      const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role, prisma);
+      if (!quiz)
+        return jsonAfterCommit({ error: "Quiz not found or unauthorized" }, { status: 404 });
+      if (!isQuizAvailable(quiz.quizStatus)) {
+        return jsonAfterCommit(quizNotAvailableResponse(), { status: 410 });
+      }
+      if (quiz.quizMode !== "arena") {
+        return jsonAfterCommit({
           error: "This quiz is configured as a Proctored Exam. Only quizzes with quizMode 'arena' can be accessed in Power Arena.",
           code: "INVALID_QUIZ_MODE",
-        },
-        { status: 409 },
-      );
-    }
-
-    let state = await getArenaState(quizId);
-
-    // Authoritative check: If overall timer expired while active, transition to ended
-    if (state?.status === "active" && state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)) {
-      state = {
-        ...state,
-        status: "ended",
-        endedAt: state.endedAt || new Date().toISOString(),
-        pendingAttacks: {},
-      };
-      await setArenaState(state);
-      await prisma.quiz.update({
-        where: { id: quizId },
-        data: { quizStatus: "ended" },
-      }).catch(() => {});
-      await prisma.studentQuiz.updateMany({
-        where: { quizId, quizStatus: "in_progress" },
-        data: { quizStatus: "completed", endTime: new Date() },
-      }).catch(() => {});
-    }
-
-    if (quiz.quizStatus === "ended") {
-      if (state && state.status !== "ended") {
-        state = { ...state, status: "ended", endedAt: state.endedAt || new Date().toISOString() };
-        await setArenaState(state);
+        }, { status: 409 });
       }
-    }
-
-    // Only return participants who explicitly joined the current Arena session (NO ghost participants)
-    const rankedParticipants = state?.participants
-      ? computeArenaRankings(state.participants)
-      : [];
-
-    return NextResponse.json({
-      success: true,
-      serverTime: Date.now(),
-      arena: state,
-      status: state?.status || "lobby",
-      sessionId: state?.sessionId,
-      participants: rankedParticipants,
-      usedPowers: (state?.usedPowers && state.usedPowers[session.userId]) || {},
-      quizStatus: quiz.quizStatus,
-    }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
-  } catch (error) {
+      let state = mutation.state;
+      if (state)
+        reconcileArenaAttacksInState(state, mutation.now);
+      try {
+        // Authoritative check: If overall timer expired while active, transition to ended
+        if (state?.status === "active" && state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)) {
+          state = {
+            ...state,
+            status: "ended",
+            endedAt: state.endedAt || new Date().toISOString(),
+            pendingAttacks: {},
+          };
+          await prisma.quiz.update({
+            where: { id: quizId },
+            data: { quizStatus: "ended" },
+          });
+          await prisma.studentQuiz.updateMany({
+            where: { quizId, quizStatus: "in_progress" },
+            data: { quizStatus: "completed", endTime: new Date() },
+          });
+        }
+        if (quiz.quizStatus === "ended") {
+          if (state && state.status !== "ended") {
+            state = { ...state, status: "ended", endedAt: state.endedAt || new Date().toISOString() };
+          }
+        }
+        // Only return participants who explicitly joined the current Arena session (NO ghost participants)
+        const rankedParticipants = state?.participants
+          ? computeArenaRankings(state.participants)
+          : [];
+        return jsonAfterCommit({
+          success: true,
+          serverTime: Date.now(),
+          arena: state,
+          status: state?.status || "lobby",
+          sessionId: state?.sessionId,
+          participants: rankedParticipants,
+          usedPowers: (state?.usedPowers && state.usedPowers[session.userId]) || {},
+          quizStatus: quiz.quizStatus,
+        }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      }
+      finally {
+        mutation.state = state;
+      }
+    });
+    return reply();
+  }
+  catch (error) {
     console.error("Get arena state error:", error);
     return NextResponse.json({ error: "Failed to load arena state" }, { status: 500 });
   }
 }
-
 async function POSTImpl(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const { id } = await params;
     const quizId = parseQuizId(id);
-    if (!quizId) return NextResponse.json({ error: "Invalid quiz ID" }, { status: 400 });
-
-    const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role);
-    if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
-    if (!isQuizAvailable(quiz.quizStatus)) {
-      return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
-    }
-    if (quiz.quizMode !== "arena") {
-      return NextResponse.json(
-        {
-          error: "This quiz is configured as a Proctored Exam. Only quizzes with quizMode 'arena' can be launched in Power Arena.",
-          code: "INVALID_QUIZ_MODE",
-        },
-        { status: 409 },
-      );
-    }
-    if (quiz._count.questions === 0) {
-      return NextResponse.json({ error: "Add at least one question before launching an arena" }, { status: 409 });
-    }
-
+    if (!quizId)
+      return NextResponse.json({ error: "Invalid quiz ID" }, { status: 400 });
     const body: unknown = await req.json().catch(() => null);
     const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
     if (!record || !isArenaAction(record.action)) {
@@ -199,327 +179,340 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
     const payload = record.payload && typeof record.payload === "object"
       ? record.payload as Record<string, unknown>
       : {};
-
-    let state = await getArenaState(quizId);
-    let payouts: Awaited<ReturnType<typeof awardArenaExp>> = [];
-
-    // ─────────────────────────────────────────────────────────────
-    // ACTION: JOIN (Student explicitly joins current session lobby)
-    // ─────────────────────────────────────────────────────────────
-    if (action === "join") {
-      if (session.role !== "student") {
-        return NextResponse.json({ error: "Only students can join an arena session" }, { status: 403 });
+    const reply = await mutateArena(quizId, async (mutation) => {
+      const prisma = mutation.tx;
+      const realtime = arenaRealtime(mutation);
+      const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role, prisma);
+      if (!quiz)
+        return jsonAfterCommit({ error: "Quiz not found or unauthorized" }, { status: 404 });
+      if (!isQuizAvailable(quiz.quizStatus)) {
+        return jsonAfterCommit(quizNotAvailableResponse(), { status: 410 });
       }
-      if (quiz.quizStatus === "ended" || state?.status === "ended") {
-        return NextResponse.json(
-          {
+      if (quiz.quizMode !== "arena") {
+        return jsonAfterCommit({
+          error: "This quiz is configured as a Proctored Exam. Only quizzes with quizMode 'arena' can be launched in Power Arena.",
+          code: "INVALID_QUIZ_MODE",
+        }, { status: 409 });
+      }
+      if (quiz._count.questions === 0) {
+        return jsonAfterCommit({ error: "Add at least one question before launching an arena" }, { status: 409 });
+      }
+      let state = mutation.state;
+      if (state)
+        reconcileArenaAttacksInState(state, mutation.now);
+      try {
+        const actionId = typeof record.actionId === "string" ? record.actionId : undefined;
+        const actionFingerprint = JSON.stringify({ action, payload, sessionId: record.sessionId ?? null });
+        if (actionId && !/^[a-zA-Z0-9_-]{1,128}$/.test(actionId)) {
+          return jsonAfterCommit({ error: "Invalid action identity" }, { status: 400 });
+        }
+        if (state?.status === "active" && state.matchEndsAt && mutation.now >= Date.parse(state.matchEndsAt) && action !== "end") {
+          return jsonAfterCommit({ error: "Arena match has already ended", code: "ARENA_ENDED" }, { status: 409 });
+        }
+        let payouts: Awaited<ReturnType<typeof awardArenaExp>> = [];
+        // ─────────────────────────────────────────────────────────────
+        // ACTION: JOIN (Student explicitly joins current session lobby)
+        // ─────────────────────────────────────────────────────────────
+        if (action === "join") {
+          if (typeof record.sessionId === "string" && state?.sessionId !== record.sessionId) {
+            return jsonAfterCommit({ error: "Stale Arena session", code: "STALE_ARENA_SESSION" }, { status: 409 });
+          }
+          if (session.role !== "student") {
+            return jsonAfterCommit({ error: "Only students can join an arena session" }, { status: 403 });
+          }
+          if (quiz.quizStatus === "ended" || state?.status === "ended") {
+            return jsonAfterCommit({
+              error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
+              code: "ARENA_QUIZ_ALREADY_COMPLETED",
+            }, { status: 409 });
+          }
+          // Initialize lobby arena state if none exists yet
+          if (!state) {
+            state = createArenaState({
+              quizId,
+              teacherId: quiz.teacherId,
+              status: "lobby",
+              totalQuestions: quiz.questions.length,
+              config: normalizeArenaConfig(payload),
+            });
+          }
+          if (!state.participants)
+            state.participants = {};
+          if (!state.usedPowers)
+            state.usedPowers = {};
+          const alreadyJoined = Boolean(state.participants[session.userId]);
+          const participant = ensureArenaPlayer(state, {
+            studentId: session.userId,
+            studentName: session.fullName || "Student Fighter",
+          });
+          const rankedParticipants = computeArenaRankings(state.participants);
+          // Only broadcast join if student was not already in current session
+          if (!alreadyJoined) {
+            try {
+              await realtime.trigger(`private-arena-${quizId}`, "arena-student-joined", {
+                studentId: session.userId,
+                studentName: session.fullName,
+                initials: participant.initials,
+                participantsCount: Object.keys(state.participants).length,
+              });
+              await realtime.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
+                studentId: session.userId,
+                studentName: session.fullName,
+                initials: participant.initials,
+                participantsCount: Object.keys(state.participants).length,
+              });
+            }
+            catch (pusherErr) {
+              console.error("Pusher join broadcast error:", pusherErr);
+            }
+          }
+          return jsonAfterCommit({
+            success: true,
+            message: "Joined arena session",
+            sessionId: state.sessionId,
+            status: state.status,
+            participantsCount: Object.keys(state.participants).length,
+            arena: state,
+          });
+        }
+        // ─────────────────────────────────────────────────────────────
+        // TEACHER-ONLY ACTIONS (start, end, airdrop, reset, wave)
+        // ─────────────────────────────────────────────────────────────
+        if (session.role !== "teacher") {
+          return jsonAfterCommit({ error: "Unauthorized teacher action" }, { status: 403 });
+        }
+        if (!(await hasActiveProSubscription(session.userId, prisma))) {
+          return jsonAfterCommit({ error: "Pro subscription required" }, { status: 403 });
+        }
+        if (actionId && state?.actionReceipts && Object.hasOwn(state.actionReceipts, actionId)) {
+          if (state.actionReceipts[actionId] !== actionFingerprint)
+            return jsonAfterCommit({ error: "Action identity conflict" }, { status: 409 });
+          return jsonAfterCommit({ success: true, alreadyProcessed: true, action, arena: state, status: state.status, sessionId: state.sessionId });
+        }
+        if (typeof record.sessionId === "string" && state?.sessionId !== record.sessionId) {
+          return jsonAfterCommit({ error: "Stale Arena session", code: "STALE_ARENA_SESSION" }, { status: 409 });
+        }
+        // Server-Side Reuse Block: Completed Arena Quizzes cannot be re-hosted or reset
+        if (quiz.quizStatus === "ended" || (state?.status === "ended" && action !== "end")) {
+          return jsonAfterCommit({
             error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
             code: "ARENA_QUIZ_ALREADY_COMPLETED",
-          },
-          { status: 409 },
-        );
-      }
-
-      // Initialize lobby arena state if none exists yet
-      if (!state) {
-        state = createArenaState({
-          quizId,
-          teacherId: quiz.teacherId,
-          status: "lobby",
-          totalQuestions: quiz.questions.length,
-          config: normalizeArenaConfig(payload),
-        });
-      }
-
-      if (!state.participants) state.participants = {};
-      if (!state.usedPowers) state.usedPowers = {};
-
-      const alreadyJoined = Boolean(state.participants[session.userId]);
-
-      const participant = ensureArenaPlayer(state, {
-        studentId: session.userId,
-        studentName: session.fullName || "Student Fighter",
-      });
-
-      await setArenaState(state);
-      const rankedParticipants = computeArenaRankings(state.participants);
-
-      // Only broadcast join if student was not already in current session
-      if (!alreadyJoined) {
-        const joinPayload = {
-          quizId,
-          sessionId: state.sessionId,
-          studentId: session.userId,
-          studentName: session.fullName,
-          initials: participant.initials,
-          participants: rankedParticipants,
-          timestamp: new Date().toISOString(),
-        };
-        try {
-          await pusherServer.trigger(`private-arena-${quizId}`, "arena-student-joined", {
-            studentId: session.userId,
-            studentName: session.fullName,
-            initials: participant.initials,
-            participantsCount: Object.keys(state.participants).length,
-          });
-          await pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
-            studentId: session.userId,
-            studentName: session.fullName,
-            initials: participant.initials,
-            participantsCount: Object.keys(state.participants).length,
-          });
-        } catch (pusherErr) {
-          console.error("Pusher join broadcast error:", pusherErr);
+          }, { status: 409 });
         }
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: "Joined arena session",
-        sessionId: state.sessionId,
-        status: state.status,
-        participantsCount: Object.keys(state.participants).length,
-        arena: state,
-      });
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // TEACHER-ONLY ACTIONS (start, end, airdrop, reset, wave)
-    // ─────────────────────────────────────────────────────────────
-    if (session.role !== "teacher") {
-      return NextResponse.json({ error: "Unauthorized teacher action" }, { status: 403 });
-    }
-    if (!(await hasActiveProSubscription(session.userId))) {
-      return NextResponse.json({ error: "Pro subscription required" }, { status: 403 });
-    }
-
-    // Server-Side Reuse Block: Completed Arena Quizzes cannot be re-hosted or reset
-    if (quiz.quizStatus === "ended" || (state?.status === "ended" && action !== "end")) {
-      return NextResponse.json(
-        {
-          error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
-          code: "ARENA_QUIZ_ALREADY_COMPLETED",
-        },
-        { status: 409 },
-      );
-    }
-
-    if (action === "reset" || action === "create_session") {
-      const freshSessionId = crypto.randomUUID();
-      state = {
-        sessionId: freshSessionId,
-        quizId,
-        teacherId: session.userId,
-        status: "lobby",
-        mode: "score_arena",
-        matchDuration: 1800,
-        matchEndsAt: null,
-        enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
-        totalQuestions: quiz.questions.length,
-        startedAt: null,
-        endedAt: null,
-        participants: {},
-        usedPowers: {},
-        pendingAttacks: {},
-        currentWave: 0,
-        currentQuestionId: quiz.questions[0]?.id || 0,
-        waveStartedAt: null,
-        waveEndsAt: null,
-      };
-      await setArenaState(state);
-      await prisma.quiz.update({
-        where: { id: quizId },
-        data: { quizStatus: "active" },
-      }).catch(() => {});
-      try {
-        await pusherServer.trigger(`private-arena-${quizId}`, "arena-session-created", {
-          quizId,
-          status: "lobby",
-          sessionId: freshSessionId,
-          timestamp: new Date().toISOString(),
-        });
-        await pusherServer.trigger(`private-arena-${quizId}`, "arena-reset", {
-          quizId,
-          status: "lobby",
-          sessionId: freshSessionId,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Arena reset push failed:", error);
-      }
-      return NextResponse.json({
-        success: true,
-        message: "Fresh arena session created",
-        sessionId: freshSessionId,
-        status: "lobby",
-        arena: state,
-        participants: [],
-      });
-    }
-
-    if (action === "start") {
-      if (!["draft", "active", "in_progress"].includes(quiz.quizStatus)) {
-        return NextResponse.json({ error: "Quiz status cannot be started" }, { status: 409 });
-      }
-      if (state?.status === "active" && state.teacherId !== session.userId) {
-        return NextResponse.json({ error: "This quiz already has an active arena host" }, { status: 409 });
-      }
-
-      const rawDuration = payload.matchDuration ?? payload.duration;
-      const matchDuration = normalizeArenaConfig(payload).waveDuration === 0 ? 1800 : (
-        typeof rawDuration === "number" || typeof rawDuration === "string"
-          ? (Number(rawDuration) === 3600 || Number(rawDuration) === 60 ? 3600 : 1800)
-          : 1800
-      );
-
-      const startedAt = new Date();
-      await prisma.$transaction(async (tx) => {
-        await tx.quiz.updateMany({
-          where: { id: quizId, quizStatus: { in: ["draft", "active"] } },
-          data: { quizStatus: "in_progress" },
-        });
-        await tx.studentQuiz.updateMany({
-          where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
-          data: { quizStatus: "in_progress", startTime: startedAt },
-        });
-      });
-
-      // Preserve existing joined participants, reset scores and used powers for clean match start
-      const currentParticipants = state?.participants ? { ...state.participants } : {};
-      const newSessionId = state?.status === "ended" ? crypto.randomUUID() : (state?.sessionId || crypto.randomUUID());
-      const startedAtStr = new Date().toISOString();
-      const matchEndsAt = new Date(Date.now() + matchDuration * 1000).toISOString();
-
-      state = {
-        sessionId: newSessionId,
-        quizId,
-        teacherId: session.userId,
-        status: "active",
-        mode: "score_arena",
-        matchDuration,
-        matchEndsAt,
-        enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
-        totalQuestions: quiz.questions.length,
-        startedAt: startedAtStr,
-        endedAt: null,
-        participants: currentParticipants,
-        usedPowers: {},
-        pendingAttacks: {},
-        currentWave: 0,
-        currentQuestionId: quiz.questions[0]?.id || 0,
-        waveStartedAt: startedAtStr,
-        waveEndsAt: matchEndsAt,
-      };
-
-      // Reset match progress for genuine joined participants
-      for (const p of Object.values(state.participants)) {
-        p.score = 0;
-        p.questionsAnswered = 0;
-        p.isFinished = false;
-        p.hasShield = false;
-        p.totalQuestions = quiz.questions.length;
-      }
-      computeArenaRankings(state.participants);
-    } else {
-      if (!state || state.teacherId !== session.userId) {
-        return NextResponse.json({ error: "No active arena session exists for this quiz" }, { status: 409 });
-      }
-      const isEndRetry = action === "end" && state.status === "ended";
-      if (state.status !== "active" && !isEndRetry) {
-        return NextResponse.json({ error: "No active arena session exists for this quiz" }, { status: 409 });
-      }
-      if (action === "wave") {
-        const waveIndex = Number(payload.waveIndex);
-        if (Number.isInteger(waveIndex) && waveIndex >= 0 && waveIndex < quiz.questions.length) {
-          state.currentWave = waveIndex;
-          state.currentQuestionId = quiz.questions[waveIndex].id;
-        }
-      } else if (action === "end") {
-        if (state.participants) {
-          for (const p of Object.values(state.participants)) {
-            await prisma.studentQuiz.updateMany({
-              where: { quizId, studentId: p.studentId },
-              data: { score: p.score },
-            }).catch(() => {});
-          }
-        }
-        payouts = await awardArenaExp(state);
-        if (!isEndRetry) {
+        if (action === "reset" || action === "create_session") {
+          const freshSessionId = crypto.randomUUID();
           state = {
-            ...state,
-            status: "ended",
-            endedAt: new Date().toISOString(),
+            sessionId: freshSessionId,
+            quizId,
+            teacherId: session.userId,
+            status: "lobby",
+            mode: "score_arena",
+            matchDuration: 1800,
+            matchEndsAt: null,
+            enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
+            totalQuestions: quiz.questions.length,
+            startedAt: null,
+            endedAt: null,
+            participants: {},
+            usedPowers: {},
             pendingAttacks: {},
+            currentWave: 0,
+            currentQuestionId: quiz.questions[0]?.id || 0,
+            waveStartedAt: null,
+            waveEndsAt: null,
           };
           await prisma.quiz.update({
             where: { id: quizId },
-            data: { quizStatus: "ended" },
-          }).catch((err) => console.error("Failed to mark quiz ended:", err));
-          await prisma.studentQuiz.updateMany({
-            where: { quizId, quizStatus: "in_progress" },
-            data: { quizStatus: "completed", endTime: new Date() },
-          }).catch((err) => console.error("Failed to mark student quizzes completed:", err));
+            data: { quizStatus: "active" },
+          });
+          try {
+            await realtime.trigger(`private-arena-${quizId}`, "arena-session-created", {
+              quizId,
+              status: "lobby",
+              sessionId: freshSessionId,
+              timestamp: new Date().toISOString(),
+            });
+            await realtime.trigger(`private-arena-${quizId}`, "arena-reset", {
+              quizId,
+              status: "lobby",
+              sessionId: freshSessionId,
+              timestamp: new Date().toISOString(),
+            });
+          }
+          catch (error) {
+            console.error("Arena reset push failed:", error);
+          }
+          if (actionId)
+            state.actionReceipts = { [actionId]: actionFingerprint };
+          return jsonAfterCommit({
+            success: true,
+            message: "Fresh arena session created",
+            sessionId: freshSessionId,
+            status: "lobby",
+            arena: state,
+            participants: [],
+          });
         }
-      } else if (action === "airdrop") {
-        if (state.participants) {
+        if (action === "start") {
+          if (state?.status === "active") {
+            return jsonAfterCommit({ success: true, action, arena: state, status: state.status, sessionId: state.sessionId, participants: computeArenaRankings(state.participants) });
+          }
+          if (!["draft", "active", "in_progress"].includes(quiz.quizStatus)) {
+            return jsonAfterCommit({ error: "Quiz status cannot be started" }, { status: 409 });
+          }
+          const rawDuration = payload.matchDuration ?? payload.duration;
+          const matchDuration = normalizeArenaConfig(payload).waveDuration === 0 ? 1800 : (typeof rawDuration === "number" || typeof rawDuration === "string"
+            ? (Number(rawDuration) === 3600 || Number(rawDuration) === 60 ? 3600 : 1800)
+            : 1800);
+          const startedAt = new Date();
+          {
+            const tx = prisma;
+            await tx.quiz.updateMany({
+              where: { id: quizId, quizStatus: { in: ["draft", "active"] } },
+              data: { quizStatus: "in_progress" },
+            });
+            await tx.studentQuiz.updateMany({
+              where: { quizId, quizStatus: { in: ["enrolled", "pending_approval"] } },
+              data: { quizStatus: "in_progress", startTime: startedAt },
+            });
+          }
+          // Preserve existing joined participants, reset scores and used powers for clean match start
+          const currentParticipants = state?.participants ? { ...state.participants } : {};
+          const newSessionId = state?.status === "ended" ? crypto.randomUUID() : (state?.sessionId || crypto.randomUUID());
+          const startedAtStr = new Date().toISOString();
+          const matchEndsAt = new Date(Date.now() + matchDuration * 1000).toISOString();
+          state = {
+            sessionId: newSessionId,
+            quizId,
+            teacherId: session.userId,
+            status: "active",
+            mode: "score_arena",
+            matchDuration,
+            matchEndsAt,
+            enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
+            totalQuestions: quiz.questions.length,
+            startedAt: startedAtStr,
+            endedAt: null,
+            participants: currentParticipants,
+            usedPowers: {},
+            pendingAttacks: {},
+            currentWave: 0,
+            currentQuestionId: quiz.questions[0]?.id || 0,
+            waveStartedAt: startedAtStr,
+            waveEndsAt: matchEndsAt,
+          };
+          // Reset match progress for genuine joined participants
           for (const p of Object.values(state.participants)) {
-            p.hasShield = true;
-            p.score += 50;
+            p.score = 0;
+            p.questionsAnswered = 0;
+            p.isFinished = false;
+            p.hasShield = false;
+            p.totalQuestions = quiz.questions.length;
           }
           computeArenaRankings(state.participants);
         }
+        else {
+          if (!state || state.teacherId !== session.userId) {
+            return jsonAfterCommit({ error: "No active arena session exists for this quiz" }, { status: 409 });
+          }
+          const isEndRetry = action === "end" && state.status === "ended";
+          if (state.status !== "active" && !isEndRetry) {
+            return jsonAfterCommit({ error: "No active arena session exists for this quiz" }, { status: 409 });
+          }
+          if (action === "wave") {
+            const waveIndex = Number(payload.waveIndex);
+            if (Number.isInteger(waveIndex) && waveIndex >= 0 && waveIndex < quiz.questions.length) {
+              state.currentWave = waveIndex;
+              state.currentQuestionId = quiz.questions[waveIndex].id;
+            }
+          }
+          else if (action === "end") {
+            if (state.participants) {
+              for (const studentId of Object.keys(state.participants).sort()) {
+                await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${studentId}`}))`;
+              }
+              for (const p of Object.values(state.participants)) {
+                await prisma.studentQuiz.updateMany({
+                  where: { quizId, studentId: p.studentId },
+                  data: { score: p.score },
+                });
+              }
+            }
+            payouts = await awardArenaExp(state, prisma);
+            if (!isEndRetry) {
+              state = {
+                ...state,
+                status: "ended",
+                endedAt: new Date().toISOString(),
+                pendingAttacks: {},
+              };
+              await prisma.quiz.update({
+                where: { id: quizId },
+                data: { quizStatus: "ended" },
+              });
+              await prisma.studentQuiz.updateMany({
+                where: { quizId, quizStatus: "in_progress" },
+                data: { quizStatus: "completed", endTime: new Date() },
+              });
+            }
+          }
+          else if (action === "airdrop") {
+            if (state.participants) {
+              for (const p of Object.values(state.participants)) {
+                p.hasShield = true;
+                p.score += 50;
+              }
+              computeArenaRankings(state.participants);
+            }
+          }
+        }
+        if (actionId) {
+          state.actionReceipts = { ...state.actionReceipts, [actionId]: actionFingerprint };
+        }
+        const rankedParticipants = computeArenaRankings(state.participants || {});
+        const event = `arena-${action}`;
+        const eventData = {
+          quizId,
+          arena: state,
+          sessionId: state.sessionId,
+          status: state.status,
+          mode: state.mode,
+          matchDuration: state.matchDuration,
+          matchEndsAt: state.matchEndsAt,
+          waveDuration: state.matchDuration,
+          enabledPowers: state.enabledPowers,
+          totalQuestions: state.totalQuestions,
+          participants: rankedParticipants,
+          sender: session.fullName,
+          teacherId: session.userId,
+          timestamp: new Date().toISOString(),
+          payouts: payouts.map((payout) => ({
+            studentId: payout.studentId,
+            rank: payout.rank,
+            amount: payout.amount,
+          })),
+        };
+        await realtime.trigger(`private-arena-${quizId}`, event, eventData);
+        return jsonAfterCommit({
+          success: true,
+          action,
+          arena: state,
+          status: state.status,
+          sessionId: state.sessionId,
+          payouts: eventData.payouts,
+          participants: rankedParticipants,
+        });
       }
-    }
-
-    await setArenaState(state);
-    const rankedParticipants = computeArenaRankings(state.participants || {});
-    const event = `arena-${action}`;
-    const eventData = {
-      quizId,
-      arena: state,
-      sessionId: state.sessionId,
-      status: state.status,
-      mode: state.mode,
-      matchDuration: state.matchDuration,
-      matchEndsAt: state.matchEndsAt,
-      waveDuration: state.matchDuration,
-      enabledPowers: state.enabledPowers,
-      totalQuestions: state.totalQuestions,
-      participants: rankedParticipants,
-      sender: session.fullName,
-      teacherId: session.userId,
-      timestamp: new Date().toISOString(),
-      payouts: payouts.map((payout) => ({
-        studentId: payout.studentId,
-        rank: payout.rank,
-        amount: payout.amount,
-      })),
-    };
-
-    try {
-      await pusherServer.trigger(`private-arena-${quizId}`, event, eventData);
-    } catch (error) {
-      console.error("Arena realtime broadcast failed:", error);
-      return NextResponse.json(
-        { error: "Arena state was saved, but the real-time broadcast failed. Please retry." },
-        { status: 503 },
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      action,
-      arena: state,
-      status: state.status,
-      sessionId: state.sessionId,
-      payouts: eventData.payouts,
-      participants: rankedParticipants,
+      finally {
+        mutation.state = state;
+      }
     });
-  } catch (error) {
+    return reply();
+  }
+  catch (error) {
     console.error("Arena action error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export const POST = withBackupWriteGate(POSTImpl);
 export const GET = withBackupWriteGate(GETImpl);

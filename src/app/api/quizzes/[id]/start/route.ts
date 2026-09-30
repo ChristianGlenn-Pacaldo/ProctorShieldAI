@@ -1,6 +1,8 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { mutateArena } from "@/lib/arena";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 
 async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,7 +46,7 @@ async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: st
     }
 
     const startedAt = new Date();
-    const started = await prisma.$transaction(async (tx) => {
+    const startQuiz = async (tx: Prisma.TransactionClient) => {
       const claimed = await tx.quiz.updateMany({
         where: { id: quizId, teacherId: session.userId, quizStatus: "active" },
         data: { quizStatus: "in_progress" },
@@ -55,7 +57,10 @@ async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: st
         data: { quizStatus: "in_progress", startTime: startedAt },
       });
       return true;
-    });
+    };
+    const started = quiz.quizMode === "arena"
+      ? await mutateArena(quizId, ({ tx }) => startQuiz(tx))
+      : await prisma.$transaction(startQuiz);
     if (!started) {
       return NextResponse.json({ error: "Quiz was already started or changed" }, { status: 409 });
     }

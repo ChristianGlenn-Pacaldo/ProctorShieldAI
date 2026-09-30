@@ -99,8 +99,8 @@ test("F & G: Refreshing existing lobby or active match restores same session wit
 
 test("Dedicated Reset Event: Session creation triggers arena-session-created and does not overload arena-end", () => {
   // Backend triggers dedicated arena-session-created or arena-reset
-  assert.match(apiArenaRouteSrc, /pusherServer\.trigger\(`private-arena-\$\{quizId\}`, ["']arena-session-created["']/);
-  assert.match(apiArenaRouteSrc, /pusherServer\.trigger\(`private-arena-\$\{quizId\}`, ["']arena-reset["']/);
+  assert.match(apiArenaRouteSrc, /realtime\.trigger\(`private-arena-\$\{quizId\}`, ["']arena-session-created["']/);
+  assert.match(apiArenaRouteSrc, /realtime\.trigger\(`private-arena-\$\{quizId\}`, ["']arena-reset["']/);
 
   // Student listens to dedicated reset event
   assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-session-created["']/);

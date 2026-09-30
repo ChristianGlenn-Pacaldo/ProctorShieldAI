@@ -143,7 +143,7 @@ test("Test H: Arena server endpoints no longer broadcast Arena events to private
 test("Test I: Arena uses arena-start instead of quiz-started", () => {
   // /api/arena/[id] emits arena-start (via action: "start") to private-arena-${quizId}
   assert.match(arenaRouteSrc, /const event = `arena-\${action}`/);
-  assert.match(arenaRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`, event, eventData\)/);
+  assert.match(arenaRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`, event, eventData\)/);
 
   // /api/arena/[id] does not emit quiz-started
   assert.equal(arenaRouteSrc.includes('"quiz-started"'), false);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadArenaModule } from "./helpers/arena-fixture.ts";
 import test from "node:test";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -117,6 +118,12 @@ function fixture() {
     "@/lib/teacher-entitlements": { hasActiveProSubscription: async () => true },
     "@/lib/snapshot-store": { saveSnapshot: async () => {}, getSnapshotsForTeacher: async () => [] },
   };
+  deps["@/lib/arena"] = loadArenaModule("src/lib/arena.ts", {
+    "./prisma.ts": { __esModule: true, default: db },
+    "./redis.ts": { getRedis: () => null, isRedisReady: () => false },
+    "./student-identity.ts": { getStudentInitials: () => "ST" },
+  });
+  deps["@/lib/arena-realtime"] = loadArenaModule("src/lib/arena-realtime.ts", { "@/lib/pusher": deps["@/lib/pusher"] });
   const load = (path: string) => route(`src/app/api/${path}/route.ts`, deps);
   const submit = (reason: string, extra = {}) => load("quizzes/submit").POST(request({ quizId: 7, studentQuizId: "attempt-1", reason, answers: [], ...extra }));
   const strikes = (count: number) => { state.violations = Array.from({ length: count }, (_, index) => ({ id: BigInt(index + 1), violationType: "tab_switch", confidenceScore: 100, timestamp: new Date() })); };

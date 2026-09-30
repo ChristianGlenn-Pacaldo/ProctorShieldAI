@@ -1,6 +1,8 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { mutateArena } from "@/lib/arena";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
@@ -181,7 +183,7 @@ async function POSTImpl(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const enrollmentResult = await prisma.$transaction(async (tx) => {
+    const enroll = async (tx: Prisma.TransactionClient) => {
       // Serialize enrollment for this quiz so simultaneous join requests cannot
       // exceed the plan capacity.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-enrollment:${quiz.id}`}))`;
@@ -240,7 +242,11 @@ async function POSTImpl(req: NextRequest) {
           remaining: Math.max(0, capacity.remaining - 1),
         },
       };
-    });
+    };
+    // Arena comes before enrollment; Start/End/reset use the same first lock.
+    const enrollmentResult = quizMode === "arena"
+      ? await mutateArena(quiz.id, ({ tx }) => enroll(tx))
+      : await prisma.$transaction(enroll);
 
     if (enrollmentResult.kind === "closed") {
       return enrollmentResult.reason === "unavailable"

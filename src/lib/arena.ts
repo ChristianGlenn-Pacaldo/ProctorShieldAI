@@ -75,6 +75,8 @@ export interface PendingAttack {
 }
 
 export interface ArenaState {
+  revision?: number;
+  actionReceipts?: Record<string, string>;
   sessionId: string;
   quizId: number;
   teacherId: string;
@@ -137,7 +139,6 @@ export interface ArenaShieldResolution {
   resolvedHit?: boolean;
 }
 
-const ARENA_TTL_SECONDS = 6 * 60 * 60;
 const globalArena = globalThis as typeof globalThis & {
   __proctorShieldArenaState?: Map<number, { value: ArenaState; expiresAt: number }>;
 };
@@ -402,40 +403,70 @@ function arenaSettingKey(quizId: number) {
   return `arena:state:${quizId}`;
 }
 
-type ArenaDbClient = PrismaClient | Prisma.TransactionClient;
+export interface ArenaMutation {
+  tx: Prisma.TransactionClient;
+  state: ArenaState | null;
+  now: number;
+  afterCommit: (effect: () => Promise<unknown>) => void;
+}
 
-function syncArenaCaches(state: ArenaState) {
-  const jsonString = JSON.stringify(state);
-  globalArena.__proctorShieldArenaState!.set(state.quizId, {
-    value: state,
-    expiresAt: Date.now() + ARENA_TTL_SECONDS * 1000,
-  });
-
-  const redis = getRedis();
-  if (isRedisReady(redis)) {
-    void redis.set(arenaKey(state.quizId), jsonString, "EX", ARENA_TTL_SECONDS).catch((error) => {
-      console.warn("Arena Redis write failed (cache only):", error);
-    });
+async function invalidateArenaCaches(quizId: number) {
+  // Never publish snapshots here: an older transaction's delayed cache write
+  // could otherwise replace a newer commit. Readers use PostgreSQL only.
+  globalArena.__proctorShieldArenaState?.delete(quizId);
+  try {
+    const redis = getRedis();
+    if (isRedisReady(redis)) await redis.del(arenaKey(quizId));
+  } catch {
+    console.warn("Arena cache invalidation failed (PostgreSQL remains authoritative)");
   }
 }
 
-async function withArenaLock<T>(
+/**
+ * The only Arena persistence boundary. Arena quiz lock always comes first,
+ * then the answer lock (answers) or sorted progression locks (finalizers).
+ * Finalizers acquire progression locks before attempt writes; each reward
+ * acquires progression before its award marker. No provider
+ * calls belong in operation; register them with afterCommit instead.
+ * The quiz lock intentionally survives session reset/replacement.
+ */
+export async function mutateArena<T>(
   quizId: number,
-  client: ArenaDbClient,
-  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  operation: (mutation: ArenaMutation) => Promise<T>,
+  client: PrismaClient = prisma,
 ): Promise<T> {
-  if ("$transaction" in client && typeof client.$transaction === "function") {
-    return client.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
-      return operation(tx);
-    });
-  }
+  const effects: Array<() => Promise<unknown>> = [];
+  let changed = false;
+  const result = await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
+    const state = await readArenaState(tx, quizId);
+    const before = JSON.stringify(state);
+    const mutation: ArenaMutation = { tx, state, now: Date.now(), afterCommit: (effect) => effects.push(effect) };
+    const value = await operation(mutation);
+    if (mutation.state?.players) mutation.state.players = mutation.state.participants;
+    changed = JSON.stringify(mutation.state) !== before;
+    if (changed) {
+      if (mutation.state) {
+        if (mutation.state.quizId !== quizId) throw new Error("Arena quiz identity cannot change");
+        mutation.state.revision = (state?.revision ?? 0) + 1;
+        await persistArenaState(tx, mutation.state);
+      } else {
+        await tx.setting.deleteMany({ where: { settingKey: arenaSettingKey(quizId) } });
+      }
+    }
+    return value;
+  }, { isolationLevel: "ReadCommitted", maxWait: 10_000, timeout: 30_000 });
 
-  await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
-  return operation(client as Prisma.TransactionClient);
+  // Rejection/rollback never reaches this boundary. Provider failures cannot
+  // undo a commit or turn a successful mutation into a misleading retry.
+  if (changed && client === prisma) await invalidateArenaCaches(quizId);
+  for (const effect of effects) {
+    try { await effect(); } catch { console.warn("Arena post-commit delivery failed; reload authoritative state"); }
+  }
+  return result;
 }
 
-async function readArenaState(client: ArenaDbClient, quizId: number): Promise<ArenaState | null> {
+async function readArenaState(client: Prisma.TransactionClient, quizId: number): Promise<ArenaState | null> {
   const record = await client.setting.findUnique({
     where: { settingKey: arenaSettingKey(quizId) },
   });
@@ -443,7 +474,7 @@ async function readArenaState(client: ArenaDbClient, quizId: number): Promise<Ar
   return JSON.parse(record.settingValue) as ArenaState;
 }
 
-async function persistArenaState(client: ArenaDbClient, state: ArenaState): Promise<void> {
+async function persistArenaState(client: Prisma.TransactionClient, state: ArenaState): Promise<void> {
   await client.setting.upsert({
     where: { settingKey: arenaSettingKey(state.quizId) },
     update: { settingValue: JSON.stringify(state) },
@@ -459,140 +490,59 @@ export async function resolveArenaAttack(
     resolverStudentId?: string;
     expectedTargetStudentId?: string;
   } = {},
-  client: ArenaDbClient = prisma,
+  client: PrismaClient = prisma,
 ): Promise<{ state: ArenaState | null; resolution: ArenaAttackResolution }> {
-  const result = await withArenaLock(quizId, client, async (tx) => {
-    const state = await readArenaState(tx, quizId);
+  return mutateArena(quizId, async ({ state }) => {
     if (!state) return { state: null, resolution: { code: "attack_not_found" } as ArenaAttackResolution };
     const resolution = resolvePendingAttackInState(state, attackId, options);
-    if (resolution.code === "resolved") await persistArenaState(tx, state);
     return { state, resolution };
-  });
-  if (result.state && client === prisma) syncArenaCaches(result.state);
-  return result;
+  }, client);
 }
 
 export async function deflectArenaAttack(
   quizId: number,
   attackId: string,
   options: { now?: number; defenderStudentId: string },
-  client: ArenaDbClient = prisma,
+  client: PrismaClient = prisma,
 ): Promise<{ state: ArenaState | null; resolution: ArenaShieldResolution }> {
-  const result = await withArenaLock(quizId, client, async (tx) => {
-    const state = await readArenaState(tx, quizId);
+  return mutateArena(quizId, async ({ state }) => {
     if (!state) return { state: null, resolution: { code: "attack_not_found" } as ArenaShieldResolution };
     const resolution = deflectPendingAttackInState(state, attackId, options);
-    if (resolution.code === "blocked" || resolution.resolvedHit) {
-      await persistArenaState(tx, state);
-    }
     return { state, resolution };
-  });
-  if (result.state && client === prisma) syncArenaCaches(result.state);
-  return result;
+  }, client);
+}
+
+export function reconcileArenaAttacksInState(state: ArenaState, now: number): ArenaAttackResolution[] {
+  const resolved: ArenaAttackResolution[] = [];
+  for (const attack of Object.values(state.pendingAttacks || {})) {
+    if (attack.status !== "pending" || attack.expiresAt >= now) continue;
+    const resolution = resolvePendingAttackInState(state, attack.attackId, { now });
+    if (resolution.code === "resolved") resolved.push(resolution);
+  }
+  return resolved;
 }
 
 export async function reconcileExpiredArenaAttacks(
   quizId: number,
   now = Date.now(),
-  client: ArenaDbClient = prisma,
+  client: PrismaClient = prisma,
 ): Promise<{ state: ArenaState | null; resolved: ArenaAttackResolution[] }> {
-  const result = await withArenaLock(quizId, client, async (tx) => {
-    const state = await readArenaState(tx, quizId);
+  return mutateArena(quizId, async ({ state }) => {
     if (!state) return { state: null, resolved: [] as ArenaAttackResolution[] };
 
-    const resolved: ArenaAttackResolution[] = [];
-    for (const attack of Object.values(state.pendingAttacks || {})) {
-      if (attack.status !== "pending" || attack.expiresAt > now) continue;
-      const resolution = resolvePendingAttackInState(state, attack.attackId, { now });
-      if (resolution.code === "resolved") resolved.push(resolution);
-    }
-    if (resolved.length > 0) await persistArenaState(tx, state);
+    const resolved = reconcileArenaAttacksInState(state, now);
     return { state, resolved };
-  });
-  if (result.state && client === prisma) syncArenaCaches(result.state);
-  return result;
+  }, client);
 }
 
-/**
- * Persists Arena state authoritatively into PostgreSQL (Setting table).
- * Uses globalThis and Redis as speed caches only.
- */
-export async function setArenaState(state: ArenaState): Promise<void> {
-  await persistArenaState(prisma, state);
-  syncArenaCaches(state);
-}
-
-/**
- * Clears Arena state from PostgreSQL, memory cache, and Redis.
- */
 export async function clearArenaState(quizId: number): Promise<void> {
-  try {
-    await prisma.setting.deleteMany({
-      where: { settingKey: arenaSettingKey(quizId) },
-    });
-  } catch (error) {
-    console.error("Authoritative Arena DB delete failed:", error);
-  }
-
-  globalArena.__proctorShieldArenaState?.delete(quizId);
-
-  const redis = getRedis();
-  if (isRedisReady(redis)) {
-    try {
-      await redis.del(arenaKey(quizId));
-    } catch (error) {
-      console.warn("Arena Redis delete failed:", error);
-    }
-  }
+  await mutateArena(quizId, async (mutation) => { mutation.state = null; });
 }
 
-/**
- * Retrieves Arena state. PostgreSQL is the authoritative source of truth.
- * If cache and DB disagree, persisted authoritative Arena state wins.
- */
-export async function getArenaState(quizId: number): Promise<ArenaState | null> {
-  // 1. Check authoritative PostgreSQL source of truth
-  try {
-    const record = await prisma.setting.findUnique({
-      where: { settingKey: arenaSettingKey(quizId) },
-    });
-    if (record?.settingValue) {
-      try {
-        let dbState = JSON.parse(record.settingValue) as ArenaState;
-        const now = Date.now();
-        const hasExpiredAttack = dbState.status === "active" && Object.values(dbState.pendingAttacks || {}).some(
-          (attack) => attack.status === "pending" && attack.expiresAt <= now,
-        );
-        if (hasExpiredAttack) {
-          const reconciled = await reconcileExpiredArenaAttacks(quizId, now);
-          if (reconciled.state) dbState = reconciled.state;
-        } else {
-          syncArenaCaches(dbState);
-        }
-        return dbState;
-      } catch (err) {
-        console.error("Failed to parse authoritative arena state from DB:", err);
-      }
-    }
-  } catch (error) {
-    console.error("Authoritative Arena DB read failed, falling back to cache:", error);
-  }
-
-  // 2. Cache fallbacks if DB read failed
-  const local = globalArena.__proctorShieldArenaState?.get(quizId);
-  if (local && local.expiresAt > Date.now()) {
-    return local.value;
-  }
-
-  const redis = getRedis();
-  if (isRedisReady(redis)) {
-    try {
-      const val = await redis.get(arenaKey(quizId));
-      if (val) {
-        return JSON.parse(val) as ArenaState;
-      }
-    } catch {}
-  }
-
-  return null;
+/** Reads/reconciles authoritative state under the same mutation boundary. */
+export async function getArenaState(quizId: number, client: PrismaClient = prisma): Promise<ArenaState | null> {
+  return mutateArena(quizId, async ({ state, now }) => {
+    if (state) reconcileArenaAttacksInState(state, now);
+    return state;
+  }, client);
 }

@@ -2,6 +2,7 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { mutateArena } from "@/lib/arena";
 import { normalizeSubmittedAnswers } from "@/lib/quiz-submission";
 
 class AutosaveConflictError extends Error {}
@@ -53,7 +54,7 @@ async function POSTImpl(req: NextRequest) {
     const accepted = answers.filter((answer) => allowed.get(answer.questionId) === answer.choiceId);
     const savedAt = new Date();
 
-    await prisma.$transaction(async (tx) => {
+    const saveAnswers = async (tx: import("@prisma/client").Prisma.TransactionClient) => {
       const heartbeat = await tx.studentQuiz.updateMany({
         where: {
           id: studentQuiz.id,
@@ -95,7 +96,17 @@ async function POSTImpl(req: NextRequest) {
           },
         });
       }
-    });
+    };
+    if (studentQuiz.attemptMode === "arena") {
+      await mutateArena(quizId, async ({ tx, state }) => {
+        if (!state || state.status !== "active" || !state.participants[session.userId]
+          || (state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt))
+          || (typeof body.sessionId === "string" && body.sessionId !== state.sessionId)) throw new AutosaveConflictError();
+        await saveAnswers(tx);
+      });
+    } else {
+      await prisma.$transaction(saveAnswers);
+    }
 
     return NextResponse.json({ success: true, savedCount: accepted.length, savedAt });
   } catch (error) {

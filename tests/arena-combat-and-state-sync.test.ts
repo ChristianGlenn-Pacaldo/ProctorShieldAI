@@ -213,7 +213,7 @@ test("Requirement 25, 26, 27, 28: Incoming attack warning, reaction window, and 
   assert.match(battleActionRouteSrc, /REACTION_WINDOW_MS\s*=\s*2500/);
 
   // Shield within reaction window deflects attack with 0 score penalty
-  assert.match(battleActionRouteSrc, /deflectArenaAttack\(quizId,\s*defendAttackId/);
+  assert.match(battleActionRouteSrc, /deflectPendingAttackInState\(arena,\s*defendAttackId/);
   assert.match(libArenaSrc, /if\s*\(now\s*>\s*attack\.expiresAt\)/);
   assert.match(libArenaSrc, /attack\.status\s*=\s*["']deflected["']/);
   assert.match(battleActionRouteSrc, /arena-attack-blocked/);
@@ -290,8 +290,8 @@ test("Shield deflection remains terminal and causes no score deduction", () => {
 
 test("Requirement 30 & 31: Score deduction triggers ranking recalculation and broadcasts leaderboard update", () => {
   assert.match(libArenaSrc, /const participants = computeArenaRankings\(state\.participants\)/);
-  assert.match(battleActionRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*["']arena-leaderboard-updated["']/);
-  assert.match(battleActionRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*["']arena-score-updated["']/);
+  assert.match(battleActionRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-leaderboard-updated["']/);
+  assert.match(battleActionRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-score-updated["']/);
 });
 
 test("Requirement 32: Teacher sees attacker, target, power, and combat result", () => {
@@ -405,7 +405,7 @@ test("Test H: Teacher clicking 'Start Arena' transitions state to active, sets a
   assert.match(apiArenaRouteSrc, /crypto\.randomUUID\(\)/);
   assert.match(apiArenaRouteSrc, /new Date\(Date\.now\(\)\s*\+\s*matchDuration\s*\*\s*1000\)\.toISOString\(\)/);
   assert.match(apiArenaRouteSrc, /const\s+event\s*=\s*`arena-\$\{action\}`/);
-  assert.match(apiArenaRouteSrc, /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*event/);
+  assert.match(apiArenaRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*event/);
 });
 
 test("Test I: Student receives arena-start and transitions to active game view", () => {
@@ -492,7 +492,7 @@ test("Test 9A: arena-incoming-attack is emitted immediately after validation/pow
   assert.match(battleActionRouteSrc, /arena\.usedPowers\[session\.userId\]\[powerType\]\s*=\s*true/);
   assert.match(battleActionRouteSrc, /arena\.pendingAttacks\[attackId\]\s*=\s*pendingAttack/);
   // Realtime warning dispatched with highest priority
-  assert.match(battleActionRouteSrc, /pusherServer\.trigger\(\s*\[`private-arena-\${quizId}`,\s*`private-teacher-\${attempt\.quiz\.teacherId}`\],\s*["']arena-incoming-attack["']/);
+  assert.match(battleActionRouteSrc, /realtime\.trigger\(\s*\[`private-arena-\${quizId}`,\s*`private-teacher-\${attempt\.quiz\.teacherId}`\],\s*["']arena-incoming-attack["']/);
 });
 
 test("Test 9B: Incoming warning is not delayed by score deduction logic", () => {
@@ -523,7 +523,7 @@ test("Test 9E: Reaction countdown uses server expiresAt", () => {
 
 test("Test 9F: Shield still works within reaction window", () => {
   // Server checks if deflection occurred within reaction window
-  assert.match(battleActionRouteSrc, /deflectArenaAttack\(quizId,\s*defendAttackId/);
+  assert.match(battleActionRouteSrc, /deflectPendingAttackInState\(arena,\s*defendAttackId/);
   assert.match(libArenaSrc, /attack\.status\s*=\s*["']deflected["']/);
   assert.match(battleActionRouteSrc, /arena-attack-blocked/);
   assert.match(battleActionRouteSrc, /arena-attack-deflected/);

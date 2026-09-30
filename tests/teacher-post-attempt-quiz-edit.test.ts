@@ -68,6 +68,7 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
       if (name === "next/server") return { NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
+      if (name === "@/lib/arena") return { mutateArena: () => { throw new Error("Proctored edit must keep its original transaction path"); } };
       if (name === "@/lib/quiz-access") return {};
       if (name === "@/lib/quiz-mode") return { parseQuizMode: (mode: string) => mode, InvalidQuizModeError: class extends Error {}, canChangeQuizMode: () => ({ allowed: true }) };
       if (name === "@/lib/quiz-availability") return { isQuizAvailable: () => true };

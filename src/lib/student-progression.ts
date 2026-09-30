@@ -183,6 +183,7 @@ export async function awardStudentExp(
   const key = progressionKey(studentId);
 
   const runAward = async (tx: DbClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${studentId}`}))`;
     const current = await getStudentProgression(studentId, tx);
     const newTotalExp = current.totalExp + safeAmount;
 
@@ -303,6 +304,8 @@ export async function awardArenaExpOnce(
 ): Promise<{ awarded: boolean; progression: Awaited<ReturnType<typeof awardStudentExp>> | null }> {
   const key = arenaExpRewardedKey(sessionId, studentId);
   const runAward = async (tx: DbClient) => {
+    // Progression precedes the award marker for both Arena and other rewards.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${studentId}`}))`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
     const existing = await tx.setting.findUnique({ where: { settingKey: key } });
     if (existing) return { awarded: false, progression: null };

@@ -1,5 +1,7 @@
 "use client";
 
+import { acceptArenaRevision, guardArenaChannel } from "@/lib/arena-feedback";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -99,6 +101,8 @@ export default function ArenaHostContent({
   teacherId,
 }: ArenaHostContentProps) {
   // Arena Phase: 'lobby' | 'wave' | 'podium'
+  const arenaRevisionRef = useRef(0);
+  useEffect(() => { arenaRevisionRef.current = 0; }, [quiz.id]);
   const [phase, setPhase] = useState<"lobby" | "wave" | "podium">("lobby");
 
   // Overall Match Duration Config (Teacher can choose 30m or 1h in lobby)
@@ -115,6 +119,8 @@ export default function ArenaHostContent({
   const [arenaError, setArenaError] = useState("");
   const [isActionPending, setIsActionPending] = useState(false);
   const actionPendingRef = useRef(false);
+  const arenaSessionRef = useRef<string | null>(null);
+  const retryActionRef = useRef<{ action: string; payload: string; id: string; sessionId: string | null } | null>(null);
 
   // Battlers State: Starts EMPTY (0 ghost participants). Populated only when students join current session.
   const [battlers, setBattlers] = useState<Battler[]>([]);
@@ -281,17 +287,26 @@ export default function ArenaHostContent({
     actionPendingRef.current = true;
     setArenaError("");
     setIsActionPending(true);
+    const payloadKey = JSON.stringify(payload ?? {});
+    const previous = retryActionRef.current;
+    const actionId = previous?.action === action && previous.payload === payloadKey ? previous.id : crypto.randomUUID();
+    const sessionId = previous?.id === actionId ? previous.sessionId : arenaSessionRef.current;
+    retryActionRef.current = { action, payload: payloadKey, id: actionId, sessionId };
     try {
       const response = await fetch(`/api/arena/${quiz.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, payload }),
+        body: JSON.stringify({ action, payload, sessionId, actionId }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
         setArenaError(data.error || "Arena action failed. Please try again.");
         return false;
       }
+      if (acceptArenaRevision(arenaRevisionRef, data)) {
+        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
+      }
+      retryActionRef.current = null;
       return true;
     } catch {
       setArenaError("Network error. The arena action was not delivered.");
@@ -311,8 +326,8 @@ export default function ArenaHostContent({
         authEndpoint: "/api/pusher/auth",
       },
     );
-    const arenaChannel = pusher.subscribe(`private-arena-${quiz.id}`);
-    const teacherChannel = pusher.subscribe(`private-teacher-${teacherId}`);
+    const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quiz.id}`), arenaRevisionRef);
+    const teacherChannel = guardArenaChannel(pusher.subscribe(`private-teacher-${teacherId}`), arenaRevisionRef);
 
     const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; initials?: string }) => {
       addParticipant(data);
@@ -425,6 +440,7 @@ export default function ArenaHostContent({
         ...prev.slice(0, 25),
       ]);
 
+      if (!acceptArenaRevision(arenaRevisionRef, data)) return;
       if (Array.isArray(data.participants)) {
         syncRankedBattlers(data.participants);
       } else {
@@ -531,6 +547,8 @@ export default function ArenaHostContent({
         const response = await fetch(`/api/arena/${quiz.id}`);
         if (!response.ok) return;
         const data = await response.json();
+        if (!acceptArenaRevision(arenaRevisionRef, data)) return;
+        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
         if (!isMounted) return;
 
         if (data?.status === "lobby") {
@@ -572,6 +590,8 @@ export default function ArenaHostContent({
         const response = await fetch(`/api/arena/${quiz.id}`);
         if (!response.ok) return;
         const data = await response.json();
+        if (!acceptArenaRevision(arenaRevisionRef, data)) return;
+        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
 
         if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
           setPhase("podium");

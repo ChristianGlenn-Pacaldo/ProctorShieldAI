@@ -44,6 +44,7 @@ function arenaFixture(responses: SubmitResponse[]) {
     Error,
     ...refs,
     quizId: 46,
+    currentSessionId: undefined,
     lockedAnswers: new Map([[101, { choiceId: 205, isCorrect: true }]]),
     fetch: async (url: string, options?: { body: string }) => {
       if (url.startsWith("/api/arena/")) return { ok: true, json: async () => ({ participants: [] }) };
@@ -190,7 +191,7 @@ test("normal Arena completion returns a previously persisted award without grant
       updateMany: async () => ({ count: 1 }),
       update: async ({ data }: { data: Record<string, unknown> }) => { completions++; return { ...attempt, ...data }; },
     },
-    answer: { deleteMany: async () => {}, createMany: async () => {} },
+    answer: { findMany: async () => [], deleteMany: async () => {}, createMany: async () => {} },
     notification: { createMany: async () => {} },
   };
   const prisma = {
@@ -209,8 +210,7 @@ test("normal Arena completion returns a previously persisted award without grant
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ userId: "student-1", role: "student", fullName: "Winner" }) };
-      if (name === "@/lib/arena") return { getArenaState: async () => ({ quizId: 46, sessionId: "session-1",
-        participants: { "student-1": {} } }) };
+      if (name === "@/lib/arena") return { getArenaState: async () => ({ quizId: 46, sessionId: "session-1", participants: { "student-1": {} } }), mutateArena: async (_quizId: number, operation: any) => prisma.$transaction((client: unknown) => operation({ tx: client, state: { sessionId: "session-1", participants: { "student-1": {} } } })) };
       if (name === "@/lib/student-progression") return { getArenaExpAwarded: async () => 200,
         awardStudentExp: async () => { rewardWrites++; throw new Error("unexpected reward"); } };
       if (name === "@/lib/quiz-submission") return grading;

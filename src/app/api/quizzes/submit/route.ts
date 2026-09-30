@@ -15,7 +15,7 @@ import {
 } from "@/lib/quiz-submission";
 
 import { awardStudentExp, getArenaExpAwarded, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
-import { getArenaState } from "@/lib/arena";
+import { getArenaState, mutateArena } from "@/lib/arena";
 
 import { canSubmitProctored } from "@/lib/proctored-runtime";
 
@@ -35,7 +35,7 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { quizId, answers, studentQuizId: requestedAttemptId, reason } = await req.json();
+    const { quizId, answers, studentQuizId: requestedAttemptId, reason, sessionId: requestedSessionId } = await req.json();
     if (!quizId) {
       return NextResponse.json({ error: "quizId is required" }, { status: 400 });
     }
@@ -165,10 +165,23 @@ async function POSTImpl(req: NextRequest) {
     // ARENA SUBMISSION PATH (Zero Gemini / Integrity Analysis)
     // ─────────────────────────────────────────────────────────────
     if (isArena) {
-      const recordedScore = score;
+      let recordedScore = score;
       let completion;
       try {
-        completion = await prisma.$transaction(async (tx) => {
+        completion = await mutateArena(studentQuiz.quizId, async (mutation) => {
+          const tx = mutation.tx;
+          const arena = mutation.state;
+          if (typeof requestedSessionId === "string" && arena?.sessionId !== requestedSessionId) throw new SubmissionConflictError();
+          if (!arena?.participants?.[session.userId]) throw new SubmissionConflictError();
+          const freshLocked = await tx.answer.findMany({
+            where: { studentQuizId: studentQuiz.id, isCorrect: { not: null } },
+            select: { questionId: true, answerText: true },
+          });
+          grading = gradeSubmission(dbQuestions, mergeLockedAnswers(submittedAnswers, freshLocked.flatMap((answer) => {
+            const choiceId = Number(answer.answerText);
+            return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
+          })));
+          recordedScore = score = grading.score;
           const claimed = await tx.studentQuiz.updateMany({
             where: {
               id: studentQuiz.id,
@@ -214,7 +227,8 @@ async function POSTImpl(req: NextRequest) {
             ],
           });
 
-          return { completed };
+          const expEarned = await getArenaExpAwarded(arena.sessionId, session.userId, tx);
+          return { completed, expEarned };
         });
       } catch (error) {
         if (error instanceof SubmissionConflictError) {
@@ -250,7 +264,7 @@ async function POSTImpl(req: NextRequest) {
       }
 
       // Power Arena EXP is awarded by Teacher End, never by submission.
-      const expEarned = await persistedArenaExp(studentQuiz.quizId, session.userId);
+      const expEarned = completion.expEarned;
       return NextResponse.json({
         success: true,
         studentQuiz: updatedStudentQuiz,

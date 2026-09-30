@@ -1,5 +1,7 @@
 "use client";
 
+import { acceptArenaRevision, guardArenaChannel, hasTerminalArenaFeedback } from "@/lib/arena-feedback";
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import PusherClient from "pusher-js";
@@ -110,6 +112,8 @@ export function ArenaContent({
   initialStudentStatus,
   savedAnswers,
 }: ArenaContentProps) {
+  const arenaRevisionRef = useRef(0);
+  useEffect(() => { arenaRevisionRef.current = 0; }, [quizId]);
   const router = useRouter();
 
   const isAlreadyEnded = initialQuizStatus === "ended" || initialStudentStatus === "completed";
@@ -429,6 +433,7 @@ export function ArenaContent({
           return;
         }
         const data = await res.json();
+        if (!acceptArenaRevision(arenaRevisionRef, data)) return;
         if (!isMounted) return;
         if (finalizationAttemptedRef.current) return;
 
@@ -474,6 +479,7 @@ export function ArenaContent({
       const res = await fetch(`/api/arena/${quizId}`);
       if (!res.ok) return;
       const data = await res.json();
+      if (!acceptArenaRevision(arenaRevisionRef, data)) return;
       if (finalizationAttemptedRef.current) return;
       const responseReceivedAt = Date.now();
       if (typeof data?.serverTime === "number") {
@@ -582,7 +588,7 @@ export function ArenaContent({
         }
       );
 
-      const arenaChannel = pusher.subscribe(`private-arena-${quizId}`);
+      const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quizId}`), arenaRevisionRef);
 
       // ── Student Joined Event in Realtime ─────────────────────────
       arenaChannel.bind("arena-student-joined", (data?: {
@@ -664,6 +670,7 @@ export function ArenaContent({
 
       // ── Incoming Attack Warning Event ────────────────────────────
       const handleIncomingAttackEvent = (data: IncomingAttackAlert) => {
+        if (hasTerminalArenaFeedback(displayedAttackFeedbackRef.current, data.attackId)) return;
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         if (data.targetStudentId === studentId) {
           if (incomingAttackRef.current?.attackId === data.attackId) return;
@@ -706,17 +713,20 @@ export function ArenaContent({
         status?: string;
       }) => {
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
+        const applySnapshot = acceptArenaRevision(arenaRevisionRef, data);
         const penalty = data.scorePenalty || data.damage || 40;
         const isStaleForModal = Boolean(
           incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId,
         );
 
         if (data.targetStudentId === studentId) {
-          setScore(data.targetCurrentScore);
-          setStudentRank(data.targetRank);
+          if (applySnapshot) {
+            setScore(data.targetCurrentScore);
+            setStudentRank(data.targetRank);
+          }
           if (isStaleForModal) {
             claimAttackFeedback(data.attackId, "hit");
-            if (Array.isArray(data.participants)) updateRankingsFromParticipants(data.participants);
+            if (applySnapshot && Array.isArray(data.participants)) updateRankingsFromParticipants(data.participants);
             return;
           }
           clearIncomingAttack(data.attackId);
@@ -738,7 +748,7 @@ export function ArenaContent({
           }
         }
 
-        if (Array.isArray(data.participants)) {
+        if (applySnapshot && Array.isArray(data.participants)) {
           updateRankingsFromParticipants(data.participants);
         }
       };
@@ -759,16 +769,21 @@ export function ArenaContent({
         status?: string;
       }) => {
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
+        const applySnapshot = acceptArenaRevision(arenaRevisionRef, data);
         if (data.targetStudentId === studentId) {
           if (incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId) {
             claimAttackFeedback(data.attackId, "deflected");
-            setHasGuardianShield(false);
-            setUsedPowers((prev) => ({ ...prev, shield: true }));
+            if (applySnapshot) {
+              setHasGuardianShield(false);
+              setUsedPowers((prev) => ({ ...prev, shield: true }));
+            }
             return;
           }
           clearIncomingAttack(data.attackId);
-          setHasGuardianShield(false);
-          setUsedPowers((prev) => ({ ...prev, shield: true }));
+          if (applySnapshot) {
+            setHasGuardianShield(false);
+            setUsedPowers((prev) => ({ ...prev, shield: true }));
+          }
           const feedbackShown = showAttackFeedback(data.attackId, "deflected", {
             type: "deflected",
             attackerName: data.attackerName,
@@ -905,6 +920,7 @@ export function ArenaContent({
         body: JSON.stringify({
           quizId,
           questionId: currentQ.id,
+          sessionId: currentSessionId,
           choiceId,
         }),
       });

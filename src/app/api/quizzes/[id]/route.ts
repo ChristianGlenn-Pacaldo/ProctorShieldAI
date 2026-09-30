@@ -2,6 +2,8 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import prisma from "@/lib/prisma";
+import { mutateArena } from "@/lib/arena";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
 import { parseQuizMode, InvalidQuizModeError, canChangeQuizMode, type QuizMode } from "@/lib/quiz-mode";
@@ -368,8 +370,19 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
     }
 
     // Transactional update for quiz and optional questions
-    const update = await prisma.$transaction(async (tx) => {
+    const updateQuiz = async (tx: Prisma.TransactionClient) => {
+      // Reject an obsolete edit instead of writing pre-End/reset metadata.
+      if (existingQuiz.quizMode === "arena" || parsedQuizMode === "arena") {
+        const currentQuiz = await tx.quiz.findUnique({ where: { id: quizId } });
+        if (JSON.stringify(currentQuiz) !== JSON.stringify(existingQuiz)) {
+          return { error: "Quiz changed while editing. Reload and retry.", code: "QUIZ_CHANGED", status: 409 };
+        }
+      }
       const studentQuizCount = await tx.studentQuiz.count({ where: { quizId } });
+      if (parsedQuizMode && parsedQuizMode !== existingQuiz.quizMode) {
+        const transition = canChangeQuizMode({ currentMode: existingQuiz.quizMode as QuizMode, targetMode: parsedQuizMode, attemptsCount: studentQuizCount, quizStatus: existingQuiz.quizStatus });
+        if (!transition.allowed) return { error: transition.error, code: transition.code, status: 409 };
+      }
       if (studentQuizCount > 0) {
         if (body.questions !== undefined || (body.totalQuestions !== undefined && body.totalQuestions !== existingQuiz.totalQuestions)) {
           return { error: "Questions cannot be changed after students have joined or attempted this quiz.", code: "QUIZ_CONTENT_LOCKED", status: 409 };
@@ -448,7 +461,10 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
         },
       });
       return { quiz };
-    });
+    };
+    const update = existingQuiz.quizMode === "arena" || parsedQuizMode === "arena"
+      ? await mutateArena(quizId, ({ tx }) => updateQuiz(tx))
+      : await prisma.$transaction(updateQuiz);
 
     if (update.error) {
       return NextResponse.json({ error: update.error, code: update.code }, { status: update.status });
@@ -502,7 +518,7 @@ async function DELETEImpl(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const deletedAt = new Date();
-    const deleted = await prisma.$transaction(async (tx) => {
+    const deleteQuiz = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${quizId}`}))`;
       const markedDeleted = await tx.quiz.updateMany({
         where: { id: quizId, quizStatus: { not: DELETED_QUIZ_STATUS } },
@@ -518,7 +534,10 @@ async function DELETEImpl(req: NextRequest, { params }: { params: Promise<{ id: 
         data: { quizStatus: "rejected", endTime: deletedAt },
       });
       return true;
-    });
+    };
+    const deleted = existingQuiz.quizMode === "arena"
+      ? await mutateArena(quizId, ({ tx }) => deleteQuiz(tx))
+      : await prisma.$transaction(deleteQuiz);
 
     if (!deleted) {
       return NextResponse.json(quizNotAvailableResponse(), { status: 410 });

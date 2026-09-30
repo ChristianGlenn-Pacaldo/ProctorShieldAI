@@ -58,7 +58,7 @@ test("Bug 1 Test C: arena-start is broadcast on private-arena-${quizId} with sta
   // Broadcasts arena-start on private-arena-${quizId}
   assert.match(
     arenaRouteSrc,
-    /pusherServer\.trigger\(`private-arena-\${quizId}`,\s*event,\s*eventData\)/
+    /realtime\.trigger\(`private-arena-\${quizId}`,\s*event,\s*eventData\)/
   );
   assert.match(arenaRouteSrc, /const event = `arena-\${action}`/);
 
