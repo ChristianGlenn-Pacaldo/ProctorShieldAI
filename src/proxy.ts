@@ -23,6 +23,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/billing/webhook",
   "/api/health",
   "/api/internal/maintenance",
+  "/api/internal/backup-write-gate",
 ]);
 
 const PUBLIC_API_PREFIXES = ["/api/models/coco/"];

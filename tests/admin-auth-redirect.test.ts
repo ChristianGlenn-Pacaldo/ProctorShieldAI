@@ -90,6 +90,12 @@ test("Student and Teacher proxy login destinations remain unchanged", () => {
   assert.equal(proxy("/api/dashboard/admin", { role: "admin", value: "expired" }).status, 401);
 });
 
+test("proxy passes the exact backup gate path to its own bearer authorization", () => {
+  const proxy = proxyFixture();
+  assert.equal(proxy("/api/internal/backup-write-gate").status, 200);
+  assert.equal(proxy("/api/internal/backup-write-gate/other").status, 401);
+});
+
 async function layoutRedirect(relativePath: string, session: { role: string; fullName: string } | null) {
   const { filename, code } = compile(relativePath, true);
   const exports: { default?: (props: { children: null }) => Promise<ElementNode> } = {};
