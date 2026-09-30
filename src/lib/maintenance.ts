@@ -1,6 +1,10 @@
 import prisma from "./prisma";
 import { deletePendingEvidence, evidenceRetentionCutoff, evidenceRetentionDays } from "./evidence-retention";
 
+const LAST_MAINTENANCE_SUCCESS_KEY = "maintenance_last_success_at";
+const MAINTENANCE_STALE_MS = 2 * 60 * 60_000;
+const EVIDENCE_BACKLOG_ALERT_COUNT = 100;
+
 export async function expireSubscriptions(userId?: string) {
   return prisma.userSubscription.updateMany({
     where: {
@@ -60,6 +64,14 @@ export async function runMaintenance(now = new Date()) {
   // A failed object delete or final DB update leaves the queued row for retry.
   const removedEvidenceFiles = await deletePendingEvidence(evidenceCutoff, now);
 
+  // This durable marker is written only after the complete run succeeds. A
+  // failed marker write makes the scheduler retry the idempotent maintenance.
+  await prisma.setting.upsert({
+    where: { settingKey: LAST_MAINTENANCE_SUCCESS_KEY },
+    create: { settingKey: LAST_MAINTENANCE_SUCCESS_KEY, settingValue: now.toISOString() },
+    update: { settingValue: now.toISOString() },
+  });
+
   return {
     evidenceDays,
     webhookDays,
@@ -70,5 +82,27 @@ export async function runMaintenance(now = new Date()) {
     clearedSnapshots: counts.clearedSnapshots.count,
     removedWebhookEvents: counts.removedWebhookEvents.count,
     clearedPresence: counts.clearedPresence.count,
+  };
+}
+
+export async function getMaintenanceStatus(now = new Date()) {
+  const [marker, pendingEvidenceFiles] = await Promise.all([
+    prisma.setting.findUnique({
+      where: { settingKey: LAST_MAINTENANCE_SUCCESS_KEY },
+      select: { settingValue: true },
+    }),
+    prisma.evidenceFile.count({ where: { deletionRequestedAt: { not: null }, deletedAt: null } }),
+  ]);
+  const parsed = marker?.settingValue ? new Date(marker.settingValue) : null;
+  const lastSuccessAt = parsed && Number.isFinite(parsed.getTime()) ? parsed : null;
+  const ageMs = lastSuccessAt ? now.getTime() - lastSuccessAt.getTime() : Infinity;
+  const stale = ageMs < 0 || ageMs > MAINTENANCE_STALE_MS;
+  const backlogAlert = pendingEvidenceFiles >= EVIDENCE_BACKLOG_ALERT_COUNT;
+  return {
+    status: stale || backlogAlert ? "attention" : "ok",
+    lastSuccessAt: lastSuccessAt?.toISOString() ?? null,
+    pendingEvidenceFiles,
+    stale,
+    backlogAlert,
   };
 }

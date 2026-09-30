@@ -97,6 +97,8 @@ No Railway resources, variables, databases, or provider accounts are changed by 
 
 ## Backup and disaster recovery
 
+For the proposed production schedules, alert thresholds, guarded offsite backup helper, and remaining launch gates, see [Production operations readiness](production-operations-runbook.md).
+
 **Current state (2026-09-30):** this procedure is manual. The staging Postgres service has no Railway-native backup listed and PITR is disabled. A local logical dump and one disposable object restore have been tested; neither is an automated, offsite production backup. Railway [volume backups](https://docs.railway.com/volumes/backups) can be scheduled daily, weekly, and monthly, but restore into the same project/environment. Railway [Postgres PITR](https://docs.railway.com/volumes/point-in-time-recovery) is a separate option and is not enabled here. Railway [Storage Buckets](https://docs.railway.com/storage-buckets) currently have no object versioning, object lock, lifecycle policy, or native bucket backup. Do not rely on bucket deletion's short recovery window as an evidence backup.
 
 ### Recovery set, cadence, and custody

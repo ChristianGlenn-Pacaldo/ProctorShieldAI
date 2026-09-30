@@ -1,0 +1,10 @@
+FROM postgres:18-alpine3.24
+WORKDIR /app
+RUN apk add --no-cache nodejs npm
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY scripts/backup-config.mjs scripts/backup-crypto.mjs scripts/backup-offsite.mjs scripts/backup-restore.mjs scripts/maintenance-cron.mjs ./scripts/
+RUN addgroup --system --gid 1001 ops && adduser --system --uid 1001 --ingroup ops ops
+RUN mkdir -p /app/.data/ops-backups && chown -R ops:ops /app/.data
+USER ops
+CMD ["node", "scripts/backup-offsite.mjs", "--check-config"]

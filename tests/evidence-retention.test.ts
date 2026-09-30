@@ -36,7 +36,7 @@ function loadModule(relativePath: string, dependencies: Record<string, unknown>,
 }
 
 function fixture(files: FileRow[], violations: ViolationRow[], retentionValue = "90") {
-  const state = { files, violations, objects: new Set(files.map((file) => file.filePath)), deleted: [] as string[] };
+  const state = { files, violations, objects: new Set(files.map((file) => file.filePath)), deleted: [] as string[], lastMaintenanceSuccess: null as string | null };
   let failTransaction = false;
   let failFinalize = false;
   let failStorage = false;
@@ -55,7 +55,8 @@ function fixture(files: FileRow[], violations: ViolationRow[], retentionValue = 
     (where.screenshotPath?.not !== null || violation.screenshotPath !== null);
   const db = {
     setting: {
-      findUnique: async () => ({ settingValue: retentionValue }),
+      findUnique: async ({ where }: any) => ({ settingValue: where.settingKey === "maintenance_last_success_at" ? state.lastMaintenanceSuccess : retentionValue }),
+      upsert: async ({ create, update }: any) => { state.lastMaintenanceSuccess = update.settingValue ?? create.settingValue; },
       findMany: async () => [
         { settingKey: "evidence_retention_days", settingValue: retentionValue },
         { settingKey: "webhook_retention_days", settingValue: "365" },
@@ -66,6 +67,7 @@ function fixture(files: FileRow[], violations: ViolationRow[], retentionValue = 
       findMany: async ({ where, take }: any) => state.files.filter((file) => matchesFile(file, where))
         .sort((a, b) => Number(a.id - b.id)).slice(0, take)
         .map((file) => ({ id: file.id, filePath: file.filePath })),
+      count: async ({ where }: any) => state.files.filter((file) => matchesFile(file, where)).length,
       updateMany: async ({ where, data }: any) => {
         if (failFinalize && data.deletedAt) throw new Error("database finalize failed");
         const selected = state.files.filter((file) => matchesFile(file, where));
@@ -155,12 +157,33 @@ test("maintenance deletes expired media after commit and repeated runs are idemp
   assert.equal(second.queuedEvidenceFiles, 0);
   assert.equal(second.removedEvidenceFiles, 0);
   assert.deepEqual(f.state.deleted, ["evidence/quiz/1.webm"]);
+  assert.equal(f.state.lastMaintenanceSuccess, now.toISOString());
+});
+
+test("maintenance status reports stale runs and a retryable evidence backlog", async () => {
+  const files = Array.from({ length: 100 }, (_, index) => file(index + 1, "teacher-a"));
+  const f = fixture(files, []);
+  const before = await f.maintenance.getMaintenanceStatus(now);
+  assert.equal(before.status, "attention");
+  assert.equal(before.stale, true);
+  for (const item of files) item.deletionRequestedAt = now;
+  f.state.lastMaintenanceSuccess = now.toISOString();
+  const backlog = await f.maintenance.getMaintenanceStatus(now);
+  assert.equal(backlog.pendingEvidenceFiles, 100);
+  assert.equal(backlog.backlogAlert, true);
+  files[0].deletedAt = now;
+  const recovered = await f.maintenance.getMaintenanceStatus(now);
+  assert.equal(recovered.status, "ok");
+  assert.equal(recovered.pendingEvidenceFiles, 99);
+  f.state.lastMaintenanceSuccess = new Date(now.getTime() + 60_000).toISOString();
+  assert.equal((await f.maintenance.getMaintenanceStatus(now)).stale, true);
 });
 
 test("storage failure keeps a durable pending row and the next maintenance run retries", async () => {
   const f = fixture([file(1, "teacher-a")], [violation("teacher-a")]);
   f.failStorage(true);
   await assert.rejects(f.maintenance.runMaintenance(now), /S3 unavailable/);
+  assert.equal(f.state.lastMaintenanceSuccess, null);
   assert.ok(f.state.files[0].deletionRequestedAt);
   assert.equal(f.state.files[0].deletedAt, null);
   assert.ok(f.state.objects.has(f.state.files[0].filePath));
