@@ -205,10 +205,17 @@ export async function readEvidence(key: string) {
   }
   const config = getStorageConfig();
   if (!config) return null;
-  const result = await sendStorageCommand((abortSignal) => config.client.send(
-    new GetObjectCommand({ Bucket: config.bucket, Key: key }),
-    { abortSignal },
-  )) as GetObjectCommandOutput;
+  let result: GetObjectCommandOutput;
+  try {
+    result = await sendStorageCommand((abortSignal) => config.client.send(
+      new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+      { abortSignal },
+    ));
+  } catch (error) {
+    if (error && typeof error === "object" && "name" in error
+      && ["NoSuchKey", "NotFound"].includes(String(error.name))) return null;
+    throw error;
+  }
   if (!result.Body) return null;
   return {
     bytes: await result.Body.transformToByteArray(),

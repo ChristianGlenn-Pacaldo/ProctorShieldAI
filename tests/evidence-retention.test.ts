@@ -245,6 +245,57 @@ test("S3 deletion treats a missing object as success but surfaces storage failur
   assert.deepEqual(deletedKeys, ["evidence/quiz/missing.webm", "evidence/quiz/pending.webm"]);
 });
 
+test("missing evidence media returns unavailable without hiding other storage failures", async () => {
+  let failureName = "NoSuchKey";
+  class GetObjectCommand {
+    input: { Key: string };
+    constructor(input: { Key: string }) { this.input = input; }
+  }
+  class S3Client {
+    async send() {
+      const error = new Error(failureName);
+      error.name = failureName;
+      throw error;
+    }
+  }
+  const storage = loadModule("src/lib/evidence-storage.ts", {
+    "node:crypto": crypto,
+    "node:fs/promises": fs.promises,
+    "node:path": path,
+    "@aws-sdk/client-s3": { GetObjectCommand, S3Client },
+  }, {
+    process: { cwd: () => process.cwd(), env: {
+      NODE_ENV: "production", S3_ENDPOINT: "https://s3.example", S3_BUCKET: "private-evidence",
+      S3_ACCESS_KEY: "test", S3_SECRET_KEY: "test",
+    } },
+  });
+  assert.equal(await storage.readEvidence("evidence/quiz/missing.png"), null);
+  failureName = "NotFound";
+  assert.equal(await storage.readEvidence("evidence/quiz/missing.png"), null);
+  failureName = "ServiceUnavailable";
+  await assert.rejects(storage.readEvidence("evidence/quiz/missing.png"), /ServiceUnavailable/);
+});
+
+test("evidence endpoint reports missing private media without exposing its key", async () => {
+  const route = loadModule("src/app/api/evidence/[id]/route.ts", {
+    "next/server": { NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
+      new Response(JSON.stringify(body), { status: options.status ?? 200 }) } },
+    "@/lib/auth": { getSession: async () => ({ role: "admin", userId: "admin-a" }) },
+    "@/lib/prisma": { __esModule: true, default: { violation: { findUnique: async () => ({
+      evidenceFiles: [{ filePath: "evidence/private/missing.png" }],
+      studentQuiz: { quiz: { teacherId: "teacher-a" } },
+    }) } } },
+    "@/lib/evidence-storage": { readEvidence: async () => null },
+    "@/lib/maintenance": { expireSubscriptions: async () => {} },
+    "@/lib/teacher-entitlements": { hasActiveProSubscription: async () => true },
+  });
+  const response = await route.GET(new Request("https://app.example/api/evidence/1"), { params: Promise.resolve({ id: "1" }) });
+  assert.equal(response.status, 503);
+  const body = await response.text();
+  assert.equal(JSON.parse(body).error, "Evidence storage unavailable");
+  assert.doesNotMatch(body, /evidence\/private/);
+});
+
 test("Teacher endpoint requires a Teacher session and passes only the authenticated owner", async () => {
   const calls: string[] = [];
   let role = "student";
