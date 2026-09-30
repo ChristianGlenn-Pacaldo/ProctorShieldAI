@@ -20,7 +20,7 @@ function route(file: string, dependencies: Record<string, unknown>) {
   }).outputText);
   const exports: any = {};
   vm.runInNewContext(compiled.get(file)!, { exports, process: { env: {} }, console: { error() {}, warn() {} },
-    Date, Set, Map, Promise, Number, String,
+    Date, Set, Map, Promise, Number, String, Buffer,
     require: (name: string) => {
       if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (!(name in dependencies)) throw new Error(`Missing dependency ${name}`);
@@ -324,7 +324,7 @@ test("fullscreen exit is canonical, accepted, and counted authoritatively while 
 test("evidence storage outage preserves the captured snapshot on the violation", async () => {
   const f = fixture();
   f.deps["@/lib/evidence-storage"].uploadEvidence = async () => { throw Error("storage offline"); };
-  const screenshot = "data:image/jpeg;base64,YQ==";
+  const screenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=";
   const result = await f.load("live/violation").POST(request({
     quizId: 7, studentQuizId: "attempt-1", violationType: "no_face", confidenceScore: 100, screenshot,
   }));

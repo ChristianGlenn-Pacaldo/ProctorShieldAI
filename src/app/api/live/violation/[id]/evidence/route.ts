@@ -41,20 +41,41 @@ async function POSTImpl(
     }
 
     const { id } = await params;
-    if (!/^\d+$/.test(id)) {
+    // Prisma/PostgreSQL bigint identifiers must be positive and in range.
+    if (typeof id !== "string" || !/^\d{1,19}$/.test(id)
+      || BigInt(id) < BigInt(1) || BigInt(id) > BigInt("9223372036854775807")) {
       return NextResponse.json({ error: "Invalid violation" }, { status: 400 });
     }
 
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid evidence request body" }, { status: 400 });
+    }
     const evidence = formData.get("evidence");
-    const durationMs = Number(formData.get("durationMs"));
+    const duration = formData.get("durationMs");
+    const durationMs = typeof duration === "string" && /^\d+$/.test(duration) ? Number(duration) : NaN;
     if (!(evidence instanceof File) || !Number.isFinite(durationMs) || durationMs < 3_000 || durationMs > 5_500) {
       return NextResponse.json({ error: "Evidence must be a 3–5 second video" }, { status: 400 });
     }
 
     const contentType = evidence.type.split(";", 1)[0].toLowerCase();
-    if (!VIDEO_TYPES.has(contentType) || evidence.size < 1_000 || evidence.size > 6_000_000) {
-      return NextResponse.json({ error: "Invalid or oversized evidence video" }, { status: 413 });
+    if (!VIDEO_TYPES.has(contentType) || evidence.size < 1_000) {
+      return NextResponse.json({ error: "Invalid evidence video" }, { status: 400 });
+    }
+    if (evidence.size > 6_000_000) {
+      return NextResponse.json({ error: "Oversized evidence video" }, { status: 413 });
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await evidence.arrayBuffer());
+    } catch {
+      return NextResponse.json({ error: "Invalid evidence request body" }, { status: 400 });
+    }
+    if (!hasExpectedVideoSignature(bytes, contentType)) {
+      return NextResponse.json({ error: "Evidence file signature is invalid" }, { status: 400 });
     }
 
     const violation = await prisma.violation.findFirst({
@@ -67,11 +88,6 @@ async function POSTImpl(
     });
     if (!violation) {
       return NextResponse.json({ error: "Violation is not available for evidence upload" }, { status: 404 });
-    }
-
-    const bytes = new Uint8Array(await evidence.arrayBuffer());
-    if (!hasExpectedVideoSignature(bytes, contentType)) {
-      return NextResponse.json({ error: "Evidence file signature is invalid" }, { status: 400 });
     }
 
     const stored = await uploadEvidenceBytes(bytes, contentType, violation.studentQuizId);

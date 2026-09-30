@@ -10,9 +10,25 @@ import { VALID_VIOLATION_TYPES } from "@/lib/proctoring-detection";
 const validViolationTypes = new Set<string>(VALID_VIOLATION_TYPES);
 
 function isValidSnapshot(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length <= 2_800_000
-    && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);
+  if (typeof value !== "string" || value.length > 2_800_000) return false;
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  if (!match || match[2].length % 4 !== 0) return false;
+  const bytes = Buffer.from(match[2], "base64");
+  // Buffer's decoder is permissive; require canonical base64 and matching media.
+  if (bytes.length > 2_000_000 || bytes.toString("base64") !== match[2]) return false;
+  if (match[1] === "jpeg") {
+    return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
+  }
+  if (match[1] === "png") {
+    return bytes.length >= 45 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      && bytes.readUInt32BE(8) === 13 && bytes.toString("ascii", 12, 16) === "IHDR"
+      && bytes.readUInt32BE(16) > 0 && bytes.readUInt32BE(20) > 0
+      && bytes.subarray(-12).equals(Buffer.from([0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]));
+  }
+  return bytes.length >= 20 && bytes.toString("ascii", 0, 4) === "RIFF"
+    && bytes.readUInt32LE(4) === bytes.length - 8 && bytes.toString("ascii", 8, 12) === "WEBP"
+    && ["VP8 ", "VP8L", "VP8X"].includes(bytes.toString("ascii", 12, 16));
 }
 
 async function POSTImpl(req: NextRequest) {
@@ -34,17 +50,37 @@ async function POSTImpl(req: NextRequest) {
       );
     }
 
-    const { quizId, studentQuizId, incidentId, violationType, confidenceScore, screenshot, snapshot } = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid violation request body" }, { status: 400 });
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid violation request body" }, { status: 400 });
+    }
+    const { quizId, studentQuizId, incidentId, violationType, confidenceScore, screenshot, snapshot } = body as Record<string, unknown>;
     if (incidentId != null && (typeof incidentId !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(incidentId))) return NextResponse.json({ error: "Invalid incident ID" }, { status: 400 });
-    const evidence = screenshot ?? snapshot;
-    const numericQuizId = Number(quizId);
+    const numericQuizId = typeof quizId === "number" || typeof quizId === "string" ? Number(quizId) : NaN;
 
-    if (!Number.isInteger(numericQuizId) || !validViolationTypes.has(violationType)) {
+    if (!((typeof quizId === "number") || (typeof quizId === "string" && /^\d+$/.test(quizId)))
+      || !Number.isInteger(numericQuizId) || numericQuizId < 1 || numericQuizId > 2_147_483_647
+      || typeof studentQuizId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(studentQuizId)
+      || typeof violationType !== "string" || !validViolationTypes.has(violationType)
+      || (confidenceScore != null && ((typeof confidenceScore !== "number" && typeof confidenceScore !== "string")
+        || (typeof confidenceScore === "string" && !confidenceScore.trim()) || !Number.isFinite(Number(confidenceScore))))) {
       return NextResponse.json({ error: "Invalid violation event" }, { status: 400 });
     }
-    if (evidence != null && !isValidSnapshot(evidence)) {
-      return NextResponse.json({ error: "Invalid or oversized evidence image" }, { status: 413 });
+    for (const image of [screenshot, snapshot]) {
+      if (typeof image === "string" && (image.length > 2_800_000
+        || image.length - image.indexOf(",") - 1 > Math.ceil(2_000_000 / 3) * 4)) {
+        return NextResponse.json({ error: "Oversized evidence image" }, { status: 413 });
+      }
+      if (image != null && !isValidSnapshot(image)) {
+        return NextResponse.json({ error: "Invalid evidence image" }, { status: 400 });
+      }
     }
+    const evidence = (screenshot ?? snapshot) as string | null | undefined;
 
     // Get the studentQuiz record
     const studentQuiz = await prisma.studentQuiz.findFirst({

@@ -227,10 +227,12 @@ test("maintenance, evidence upload, and PayMongo webhook reject before their han
   let paymentTransactions = 0;
   for (const file of [
     "src/app/api/internal/maintenance/route.ts",
+    "src/app/api/live/violation/route.ts",
     "src/app/api/live/violation/[id]/evidence/route.ts",
     "src/app/api/billing/webhook/route.ts",
   ]) {
     const route = loadRoute(file, gate, {
+      "@/lib/proctoring-detection": { VALID_VIOLATION_TYPES: ["no_face"] },
       "@/lib/evidence-storage": { uploadEvidenceBytes: async () => { storageWrites++; } },
       "@/lib/prisma": { __esModule: true, default: { $transaction: async () => { paymentTransactions++; } } },
     });
