@@ -119,7 +119,11 @@ test("invalid base64, media signatures, and either image field are rejected befo
 });
 
 test("oversized image is 413 without evidence or violation mutation", async () => {
-  const f = fixture(); assert.equal((await f.load()(json({ ...event, screenshot: `data:image/png;base64,${"A".repeat(2_800_001)}` }))).status, 413); assertUntouched(f);
+  // The first byte over the decoded limit shares the allowed encoded length.
+  const bytes = Buffer.alloc(2_000_001); bytes.set([0xff, 0xd8, 0xff]); bytes.set([0xff, 0xd9], bytes.length - 2);
+  for (const screenshot of [`data:image/png;base64,${"A".repeat(2_800_001)}`, `data:image/jpeg;base64,${bytes.toString("base64")}`]) {
+    const f = fixture(); assert.equal((await f.load()(json({ ...event, screenshot }))).status, 413); assertUntouched(f);
+  }
 });
 
 test("unauthenticated and nonstudent requests retain 401 before parsing", async () => {

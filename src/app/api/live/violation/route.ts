@@ -72,9 +72,12 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Invalid violation event" }, { status: 400 });
     }
     for (const image of [screenshot, snapshot]) {
-      if (typeof image === "string" && (image.length > 2_800_000
-        || image.length - image.indexOf(",") - 1 > Math.ceil(2_000_000 / 3) * 4)) {
-        return NextResponse.json({ error: "Oversized evidence image" }, { status: 413 });
+      if (typeof image === "string") {
+        const encodedLength = image.length - image.indexOf(",") - 1;
+        const padding = image.endsWith("==") ? 2 : image.endsWith("=") ? 1 : 0;
+        if (image.length > 2_800_000 || encodedLength / 4 * 3 - padding > 2_000_000) {
+          return NextResponse.json({ error: "Oversized evidence image" }, { status: 413 });
+        }
       }
       if (image != null && !isValidSnapshot(image)) {
         return NextResponse.json({ error: "Invalid evidence image" }, { status: 400 });
