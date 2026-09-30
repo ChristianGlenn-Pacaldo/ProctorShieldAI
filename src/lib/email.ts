@@ -1,33 +1,18 @@
 import nodemailer from 'nodemailer';
-
-// Keep SMTP as the default for local development. Railway staging uses the
-// HTTPS provider because outbound Gmail SMTP is unavailable there.
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+import { resolveEmailConfiguration } from './email-config.ts';
 
 type MailMessage = { to: string; subject: string; html: string };
 
 async function deliverEmail(message: MailMessage): Promise<string> {
-  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || 'smtp';
-  if (provider === 'resend') {
-    const apiKey = process.env.RESEND_API_KEY?.trim();
-    const from = process.env.EMAIL_FROM?.trim();
-    if (!apiKey || !from) {
-      throw new Error('Resend email requires RESEND_API_KEY and EMAIL_FROM');
-    }
-
+  const configuration = resolveEmailConfiguration();
+  if (configuration.provider === 'resend') {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${configuration.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, ...message }),
+      body: JSON.stringify({ from: configuration.from, ...message }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
@@ -40,11 +25,12 @@ async function deliverEmail(message: MailMessage): Promise<string> {
     return result.id;
   }
 
-  if (provider !== 'smtp') {
-    throw new Error(`Unsupported email provider: ${provider}`);
-  }
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: configuration.email, pass: configuration.password },
+  });
   const info = await transporter.sendMail({
-    from: `"ProctorShield AI" <${process.env.SMTP_EMAIL}>`,
+    from: `"ProctorShield AI" <${configuration.email}>`,
     ...message,
   });
   return info.messageId;

@@ -2,6 +2,7 @@ import "dotenv/config";
 import prisma from "../src/lib/prisma.ts";
 import { getRedis } from "../src/lib/redis.ts";
 import { checkEvidenceStorage } from "../src/lib/evidence-storage.ts";
+import { resolveEmailConfiguration } from "../src/lib/email-config.ts";
 
 let redisClient: ReturnType<typeof getRedis> = null;
 
@@ -58,8 +59,8 @@ async function main() {
   requireValue("PUSHER_APP_ID");
   requireValue("NEXT_PUBLIC_PUSHER_KEY");
   requireValue("PUSHER_SECRET");
-  requireValue("SMTP_EMAIL");
-  requireValue("SMTP_PASSWORD");
+  const emailConfiguration = resolveEmailConfiguration(process.env, true);
+  console.log(`Checking ${emailConfiguration.provider} email configuration...`);
   requireValue("PAYMONGO_SECRET_KEY");
   requireValue("PAYMONGO_WEBHOOK_SECRET");
   requireValue("REDIS_URL");

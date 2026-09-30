@@ -27,7 +27,7 @@ Set the following **runtime variables** on the web service. Use Railway referenc
 | Database/cache/session | `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET` |
 | Private evidence | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
 | Google/Pusher | `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`, `PUSHER_APP_ID`, `PUSHER_SECRET` |
-| AI/email | `GEMINI_API_KEY`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` (verified staging sender) |
+| AI/email | `GEMINI_API_KEY`; staging email delivery is currently waived. Resend is optional and disabled. For a future email-enabled environment, explicitly select `EMAIL_PROVIDER=smtp` with `SMTP_EMAIL`/`SMTP_PASSWORD`, or `EMAIL_PROVIDER=resend` with `RESEND_API_KEY`/`EMAIL_FROM`. |
 | Sandbox billing/maintenance | `PAYMONGO_MODE=test`, `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`, `CRON_SECRET` |
 | Public origin | `NEXT_PUBLIC_APP_URL` (the final staging HTTPS origin) |
 
@@ -40,7 +40,7 @@ Set only these variables on the migration service: the **same staging** `DATABAS
 1. **Google:** authorize the final staging HTTPS origin for the public Google client ID. The browser obtains an ID token and posts it to `/api/auth/google`; there is no separate server OAuth callback URL in this code path. Verify login for the intended Teacher and Student roles.
 2. **Pusher:** use a staging Pusher app. Its public key and cluster must be identical in the web build and runtime; `PUSHER_APP_ID` and `PUSHER_SECRET` belong only in runtime variables. Confirm a browser subscription and a server-triggered event.
 3. **PayMongo:** use only `PAYMONGO_MODE=test` with matching sandbox secret and webhook signing secret. Configure the public HTTPS webhook URL `https://<staging-host>/api/billing/webhook` for `checkout_session.payment.paid`, `payment.refunded`, and `payment.refund.updated` where available. Checkout success/cancel URLs use only the configured `NEXT_PUBLIC_APP_URL` origin; request `Origin`, `Host`, and forwarded headers are ignored. The configured URL must be an HTTPS origin with no path, query, or fragment. In a sandbox checkout, inspect the created session's return URLs in PayMongo and confirm they use the intended staging origin, including when the checkout request carries a deliberately different `X-Forwarded-Host` or `Host`. Never send live payment traffic to staging.
-4. **Email/Gemini:** verify a staging sending domain with Resend, set `EMAIL_PROVIDER=resend`, a staging-only `RESEND_API_KEY`, and `EMAIL_FROM` on that domain. Email is sent through Resend's HTTPS API; missing credentials or provider errors fail visibly in application logs without falling back to SMTP. Local development still defaults to Gmail SMTP through `SMTP_EMAIL`/`SMTP_PASSWORD`. Verify one OTP email and one Gemini-backed request without logging credentials or sensitive content.
+4. **Email/Gemini:** staging email delivery remains waived. Do not configure or activate Resend for this staging release. Resend is optional and disabled unless `EMAIL_PROVIDER=resend` is explicitly selected. Production preflight requires an explicit provider and validates only its credentials: `smtp` needs `SMTP_EMAIL`/`SMTP_PASSWORD`; `resend` needs `RESEND_API_KEY`/`EMAIL_FROM`. Missing, invalid, or unknown provider settings fail preflight; delivery never falls back to another provider. Local development may default to Gmail SMTP when the provider is unset. Verify one Gemini-backed request without logging credentials or sensitive content. OTP delivery and Google sign-in remain unverified while the email waiver is in effect.
 
 Evidence media retention uses the `evidence_retention_days` database setting (90 days by default, valid range 1–3650). A Teacher's bulk deletion request is rejected if any owned media is still within retention. Eligible files are marked for deletion in PostgreSQL before maintenance deletes private S3 objects; violation rows and file audit metadata remain. Run the `20260929160000_evidence_retention_queue` migration before deploying the matching web code. Schedule authenticated maintenance regularly and alert on failures: a failed S3 delete or database finalization leaves the file marked for retry. Each run handles up to 20 pending files, so large backlogs need repeated runs. Back up the private evidence bucket as well as PostgreSQL before changing retention settings or performing a restore.
 
@@ -49,7 +49,7 @@ The migration is additive: existing file rows have null deletion markers, and th
 ## Controlled deployment sequence
 
 1. Provision the staging environment, database, Redis, and private evidence bucket. Confirm database isolation from normal/demo and take a recoverable snapshot before schema changes. Choose the final HTTPS web hostname before building.
-2. Set web and migration variables as above, plus external provider settings. Disable autodeploy on **both** services. Configure the web domain and `/api/health` Railway healthcheck, but do not deploy the web service yet. Use the same reviewed Git commit SHA for migration and web.
+2. Set web and migration variables as above, plus enabled external provider settings. Keep the staging email waiver in force; do not add Resend settings. Disable autodeploy on **both** services. Configure the web domain and `/api/health` Railway healthcheck, but do not deploy the web service yet. Use the same reviewed Git commit SHA for migration and web.
 3. Build/deploy the private migration service using `Dockerfile.migrate`. Its default process only waits; image creation and service deployment make **no schema changes**. Verify its commit SHA and staging environment ID in Railway before proceeding.
 4. Run the read-only target guard through Railway SSH:
 
@@ -85,10 +85,10 @@ Keep web autodeploy disabled until this migration-before-web gate is enforced in
 
 - Public `/login` loads over HTTPS; `/api/health` returns 200.
 - Admin, Teacher, and Student logins work with staging accounts; secure session cookies persist and role redirects are correct. If the database was empty, create Teacher/Student accounts through normal registration after the explicit Admin bootstrap.
-- Google sign-in works from the authorized staging origin.
+- Google sign-in remains blocked on OTP delivery under the staging email waiver; verify it after an email provider is deliberately enabled.
 - Create and read a quiz and confirm PostgreSQL writes/reads; have a Student join it. Exercise a Redis-backed live/session or rate-limit path and confirm the staging Redis connection is used.
 - Trigger and receive a Pusher event in a separate browser session. Upload an evidence clip/image and read it through the authorized evidence endpoint; confirm it resides in the private staging bucket.
-- Invoke one Gemini-backed feature and one HTTPS-provider OTP email using staging credentials.
+- Invoke one Gemini-backed feature. OTP email delivery is waived on staging until a provider is deliberately enabled and tested.
 - Complete a PayMongo **sandbox** checkout; verify the webhook reaches `/api/billing/webhook`, signature/mode acceptance, idempotent subscription activation, and correct HTTPS return URLs. Do not use a live key or real charge.
 - Safe monitored quiz flow: Teacher creates a Proctored quiz → Student joins → Teacher starts → Student saves an answer → one controlled violation/evidence event → Student submits → Student result and Teacher report agree. Confirm no stuck attempt or duplicate completion.
 - Recheck `/api/health`, application logs for unexpected 500s, and absence of unexpected writes to normal/demo resources.
