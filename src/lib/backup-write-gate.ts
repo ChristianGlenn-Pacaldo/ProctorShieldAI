@@ -33,7 +33,7 @@ async function serialized<T>(work: (tx: Prisma.TransactionClient) => Promise<T>)
   return prisma.$transaction(async (tx) => {
     // Admission and activation must share this transaction lock. A request is
     // either counted before the pause or rejected after it; there is no gap.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260930, 6)`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260930, 6)::text AS locked`;
     return work(tx);
   });
 }

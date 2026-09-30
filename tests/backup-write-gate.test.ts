@@ -46,7 +46,10 @@ function fixture(env: Record<string, string> = { ...staging }) {
       let release!: () => void;
       tail = new Promise<void>((resolve) => { release = resolve; });
       await previous;
-      try { return await callback({ setting, $queryRaw: async () => {} }); }
+      try { return await callback({ setting, $queryRaw: async (query: TemplateStringsArray) => {
+        assert.match(query.join(""), /pg_advisory_xact_lock\(20260930, 6\)::text/);
+        return [{ locked: "" }];
+      } }); }
       finally { release(); }
     },
   };
