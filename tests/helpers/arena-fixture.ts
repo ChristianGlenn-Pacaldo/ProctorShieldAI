@@ -43,6 +43,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
   let lockGate: { enter: () => void; resume: Promise<void> } | undefined;
   const timeline: string[] = [];
   const events: Array<{ event: string; data: any }> = [];
+  const scheduled: Array<() => Promise<void>> = [];
   const errors: unknown[][] = [];
   const committed = new Set<number>();
   const matches = (row: any, where: any) => Object.entries(where).every(([key, expected]: [string, any]) => {
@@ -172,11 +173,12 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
     "@/lib/quiz-submission": grading, "@/lib/proctored-runtime": {}, "@/lib/gemini": {},
     "@/lib/quiz-availability": { DELETED_QUIZ_STATUS: "deleted", isQuizAvailable: (s: string) => s !== "deleted", quizNotAvailableResponse: () => ({ error: "unavailable" }) },
     "@/lib/teacher-entitlements": { hasActiveProSubscription: async (_id: string, tx: unknown) => { assert.notEqual(tx, db); return true; } },
-    "@/lib/backup-write-gate": { withBackupWriteGate: (handler: unknown) => handler, scheduleTrackedBackupWork: async () => {} },
+    "@/lib/backup-write-gate": { withBackupWriteGate: (handler: unknown) => handler, scheduleTrackedBackupWork: async (_schedule: unknown, work: () => Promise<void>) => { scheduled.push(work); } },
   });
   const request = (body: object) => ({ json: async () => body, headers: { get: () => null } });
   return {
     arena, db, events, timeline, load, errors,
+    runScheduled: async () => { for (const work of scheduled.splice(0)) await work(); },
     restartRead: () => loadArenaModule("src/lib/arena.ts", {
       "./prisma.ts": { __esModule: true, default: db },
       "./redis.ts": { getRedis: () => null, isRedisReady: () => false },

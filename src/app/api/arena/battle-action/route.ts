@@ -56,6 +56,8 @@ async function broadcastPendingAttackHit(quizId: number, arena: ArenaState, reso
     realtime.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
     realtime.trigger(`private-arena-${quizId}`, "arena-score-updated", {
       quizId,
+      arenaRevision: arena.revision,
+      sessionId: arena.sessionId,
       studentId: attack.targetStudentId,
       score: target.score,
       rank: target.rank,
@@ -64,6 +66,8 @@ async function broadcastPendingAttackHit(quizId: number, arena: ArenaState, reso
     }),
     realtime.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
       quizId,
+      arenaRevision: arena.revision,
+      sessionId: arena.sessionId,
       participants: updatedRankings,
     }),
   ]);

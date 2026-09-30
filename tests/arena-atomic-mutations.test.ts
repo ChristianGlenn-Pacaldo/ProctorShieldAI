@@ -310,3 +310,20 @@ test("legacy start versus reset uses the Arena lock and preserves the reset sess
   assert.notEqual(f.read().sessionId, "session-1");
   assert.deepEqual(f.read().participants, {});
 });
+
+test("scheduled attack resolution versions every score and leaderboard snapshot after commit", async () => {
+  const f = arenaFixture();
+  await f.answer("c", 1);
+  await f.answer("c", 2);
+  const launch = await f.attack("a");
+  await f.runScheduled();
+  assert.equal(f.read().pendingAttacks[launch.body.attackId].status, "hit");
+  assert.equal(f.read().participants.c.score, 100);
+  const score = f.events.find((e) => e.event === "arena-score-updated" && e.data.penalty);
+  const leaderboard = f.events.filter((e) => e.event === "arena-leaderboard-updated").at(-1);
+  for (const event of [score, leaderboard]) {
+    assert.ok(event);
+    assert.equal(event.data.arenaRevision, f.read().revision);
+    assert.equal(event.data.sessionId, f.read().sessionId);
+  }
+});
