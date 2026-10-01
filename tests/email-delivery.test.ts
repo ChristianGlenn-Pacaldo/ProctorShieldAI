@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sendOtpEmail, sendWelcomeEmail, sendVerdictEmail } from "../src/lib/email.ts";
+import { loadEmail } from "./helpers/email-harness.ts";
+
+const { sendOtpEmail, sendWelcomeEmail, sendVerdictEmail } = loadEmail();
 
 const environmentNames = ["EMAIL_PROVIDER", "RESEND_API_KEY", "EMAIL_FROM"] as const;
 

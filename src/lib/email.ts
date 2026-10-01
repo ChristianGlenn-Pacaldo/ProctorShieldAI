@@ -1,10 +1,14 @@
 import nodemailer from 'nodemailer';
 import { resolveEmailConfiguration } from './email-config.ts';
+import { sendGmailApiEmail } from './gmail-api.ts';
 
 type MailMessage = { to: string; subject: string; html: string };
 
 async function deliverEmail(message: MailMessage): Promise<string> {
   const configuration = resolveEmailConfiguration();
+  if (configuration.provider === 'gmail-api') {
+    return sendGmailApiEmail(configuration, message);
+  }
   if (configuration.provider === 'resend') {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
