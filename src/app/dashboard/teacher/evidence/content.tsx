@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Camera, AlertCircle, PlayCircle, Download, Trash2 } from "lucide-react";
 
 interface EvidenceItem {
@@ -30,6 +31,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
@@ -98,6 +100,19 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     }
     try {
       const res = await fetch(`/api/dashboard/teacher/evidence?page=${requestedPage}`);
+      if (res.status === 403) {
+        const error = await res.json();
+        if (error?.code === "SUBSCRIPTION_REQUIRED") {
+          if (requestId !== requestIdRef.current) return;
+          setSubscriptionRequired(true);
+          setLoadError(null);
+          setEvidenceList([]);
+          setSelectedEvidence(null);
+          setTotal(0);
+          setIsFullscreen(false);
+          return;
+        }
+      }
       if (!res.ok) throw new Error(`Evidence request failed (${res.status})`);
       const data = await res.json();
       if (!data.success || !Array.isArray(data.evidence) || !Number.isSafeInteger(data.total)
@@ -123,10 +138,14 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
         if (current) return nextEvidence.find((item) => item.id === current.id) || nextEvidence[0] || null;
         return nextEvidence[0] || null;
       });
+      setSubscriptionRequired(false);
       setLoadError(null);
     } catch (err) {
       console.error("Failed to fetch evidence logs:", err);
-      if (requestId === requestIdRef.current) setLoadError("Could not load Evidence Logs. Please try again.");
+      if (requestId === requestIdRef.current) {
+        setSubscriptionRequired(false);
+        setLoadError("Could not load Evidence Logs. Please try again.");
+      }
     } finally {
       if (!background && requestId === requestIdRef.current) {
         foregroundRequestRef.current = false;
@@ -167,6 +186,19 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (subscriptionRequired) {
+    return (
+      <section aria-labelledby="evidence-pro-required" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+        <Camera className="mx-auto mb-3 h-10 w-10 text-indigo-500" />
+        <h3 id="evidence-pro-required" className="text-lg font-bold text-[var(--ink)]">Evidence Replay requires Pro</h3>
+        <p className="mt-2 text-sm text-[var(--muted)]">An active Pro subscription is required to view evidence logs and replay recorded incidents.</p>
+        <Link href="/dashboard/teacher/billing" className="mt-5 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500">
+          View Billing &amp; Plan
+        </Link>
+      </section>
+    );
+  }
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">

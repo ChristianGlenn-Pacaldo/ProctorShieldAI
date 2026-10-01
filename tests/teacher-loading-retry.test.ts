@@ -70,7 +70,7 @@ function fixture(relativePath: string, replies: Reply[]) {
     require: (name: string) => {
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
-      if (name === "react-dom") return { createPortal: jsx };
+      if (name === "react-dom") return { createPortal: (children: unknown) => children };
       if (name === "lucide-react") return {};
       if (name === "next/link") return "link";
       if (name === "next/navigation") return { useRouter: () => ({ push() {} }) };
@@ -241,6 +241,75 @@ test("Evidence preserves loaded rows across a failed poll and Retry does not add
   await setup.retry();
   assert.doesNotMatch(textOf(setup.render()), /Could not load Evidence Logs/);
   assert.equal(setup.intervals(), 1);
+});
+
+const subscriptionRequiredReply: Reply = {
+  ok: false,
+  status: 403,
+  body: { code: "SUBSCRIPTION_REQUIRED", error: "Evidence Replay requires an active Pro subscription" },
+};
+
+test("Free Teacher Evidence shows the Pro requirement and Billing action without Retry or an empty state", async () => {
+  const setup = fixture(cases[2].path, [subscriptionRequiredReply]);
+  await setup.mount();
+  const view = setup.render();
+  assert.match(textOf(view), /Evidence Replay requires Pro/);
+  assert.match(textOf(view), /active Pro subscription/);
+  assert.doesNotMatch(textOf(view), /Could not load Evidence Logs|Retry|No proctoring violations recorded/);
+  assert.equal(nodesOf(view, (node) => node.type === "button").length, 0);
+  const billing = nodesOf(view, (node) => node.props.href === "/dashboard/teacher/billing");
+  assert.equal(billing.length, 1);
+  assert.equal(textOf(billing[0]), "View Billing & Plan");
+});
+
+for (const reply of [
+  { ok: false, status: 403, body: { error: "Forbidden" } },
+  { ok: false, status: 500, body: { code: "SUBSCRIPTION_REQUIRED" } },
+  { ok: false, status: 403, body: {} },
+]) {
+  test(`Evidence HTTP ${reply.status} without the exact subscription response retains Retry`, async () => {
+    const setup = fixture(cases[2].path, [reply, { ok: true, body: cases[2].empty }]);
+    await setup.mount();
+    assert.match(textOf(setup.render()), /Could not load Evidence Logs.*Retry/);
+    assert.doesNotMatch(textOf(setup.render()), /Evidence Replay requires Pro/);
+    await setup.retry();
+    assert.match(textOf(setup.render()), /No proctoring violations recorded/);
+  });
+}
+
+test("Evidence loses access without retaining loaded incidents, replay controls, or pagination", async () => {
+  const setup = fixture(cases[2].path, [{ ok: true, body: cases[2].populated }, subscriptionRequiredReply]);
+  await setup.mount();
+  const viewButton = nodesOf(setup.render(), (node) => node.type === "button" && textOf(node).trim() === "View")[0];
+  assert.ok(viewButton);
+  (viewButton.props.onClick as (event: { stopPropagation(): void }) => void)({ stopPropagation() {} });
+  assert.equal(nodesOf(setup.render(), (node) => node.props.role === "dialog").length, 1);
+  await setup.poll();
+  const restricted = setup.render();
+  assert.match(textOf(restricted), /Evidence Replay requires Pro/);
+  assert.doesNotMatch(textOf(restricted), /Regression Student|Delete Expired Media|Previous|Next|Retry/);
+  assert.equal(nodesOf(restricted, (node) => node.props.role === "dialog").length, 0);
+});
+
+test("Evidence recovers populated Pro content after a successful entitlement refresh", async () => {
+  const setup = fixture(cases[2].path, [subscriptionRequiredReply, { ok: true, body: cases[2].populated }]);
+  await setup.mount();
+  await setup.poll();
+  const proView = setup.render();
+  assert.match(textOf(proView), /Regression Student/);
+  assert.doesNotMatch(textOf(proView), /Evidence Replay requires Pro|Could not load Evidence Logs/);
+  assert.equal(nodesOf(proView, (node) => node.type === "button" && textOf(node).trim() === "View").length, 1);
+});
+
+test("Evidence shows Retry for a genuine failure after the Pro-required state and recovers an empty list", async () => {
+  const setup = fixture(cases[2].path, [subscriptionRequiredReply, new Error("network failure"), { ok: true, body: cases[2].empty }]);
+  await setup.mount();
+  await setup.poll();
+  assert.match(textOf(setup.render()), /Could not load Evidence Logs.*Retry/);
+  assert.doesNotMatch(textOf(setup.render()), /Evidence Replay requires Pro/);
+  await setup.retry();
+  assert.match(textOf(setup.render()), /No proctoring violations recorded/);
+  assert.doesNotMatch(textOf(setup.render()), /Retry|Evidence Replay requires Pro/);
 });
 
 for (const entry of [cases[1], cases[3], cases[4]]) {

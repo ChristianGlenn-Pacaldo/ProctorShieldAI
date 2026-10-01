@@ -178,6 +178,7 @@ function uiFixture(total: number, initialUrl = "http://localhost/dashboard/teach
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "react-dom") return { createPortal: jsx };
+      if (name === "next/link") return "link";
       if (name === "lucide-react") return {};
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
