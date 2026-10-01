@@ -1,14 +1,8 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { getPayMongoMode, getPayMongoSecretKey, isPayMongoEventModeAllowed, verifyPayMongoSignature } from "@/lib/paymongo";
 import { parsePaidCheckout, parsePaidCheckoutFromCurrentSession, parsePaymongoEventEnvelope, parseRefundedPayment } from "@/lib/paymongo-events";
-import { activatePaidCheckout } from "@/lib/paymongo-subscription";
-import { Prisma } from "@prisma/client";
-
-function isUniqueConstraintError(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
+import { activatePaidCheckout, refundPaidCheckout } from "@/lib/paymongo-subscription";
 
 async function POSTImpl(req: NextRequest) {
   try {
@@ -79,46 +73,10 @@ async function POSTImpl(req: NextRequest) {
     if (event.type === "payment.refunded" || event.type === "payment.refund.updated") {
       const refund = parseRefundedPayment(event.resource);
       if (!refund) return NextResponse.json({ success: true, message: "Ignored invalid refund data" });
-      try {
-        await prisma.$transaction(async (tx) => {
-          await tx.webhookEvent.create({ data: { provider: "paymongo", eventId: event.id, eventType: event.type } });
-          const payment = await tx.payment.findUnique({
-            where: { providerPaymentId: refund.providerPaymentId },
-            include: { subscription: { include: { plan: true } } },
-          });
-          if (!payment) throw new Error("Refunded PayMongo payment was not found");
-          const refundedAmount = refund.refundedCentavos / 100;
-          const fullyRefunded = refundedAmount >= Number(payment.amount);
-          const wasFullyRefunded = Number(payment.refundedAmount) >= Number(payment.amount);
-          await tx.payment.update({
-            where: { id: payment.id },
-            data: {
-              refundedAmount,
-              refundedAt: new Date(),
-              paymentStatus: fullyRefunded ? "refunded" : "partially_refunded",
-            },
-          });
-          if (fullyRefunded && !wasFullyRefunded) {
-            const durationDays = payment.subscription.plan.durationDays ?? 30;
-            const now = new Date();
-            const adjustedEndDate = new Date(
-              payment.subscription.endDate.getTime() - durationDays * 86_400_000,
-            );
-            const hasRemainingAccess = adjustedEndDate > now;
-            await tx.userSubscription.update({
-              where: { id: payment.subscriptionId },
-              data: {
-                subscriptionStatus: hasRemainingAccess ? "active" : "cancelled",
-                paymentStatus: hasRemainingAccess ? "paid" : "refunded",
-                endDate: hasRemainingAccess ? adjustedEndDate : now,
-              },
-            });
-          }
-        });
-      } catch (error) {
-        if (isUniqueConstraintError(error)) return NextResponse.json({ success: true, message: "Already processed" });
-        throw error;
-      }
+      const result = await refundPaidCheckout(refund, {
+        id: event.id, type: event.type, source: "paymongo-webhook",
+      });
+      if (result === "already_processed") return NextResponse.json({ success: true, message: "Already processed" });
       return NextResponse.json({ success: true });
     }
 

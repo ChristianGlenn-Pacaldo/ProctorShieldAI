@@ -282,6 +282,8 @@ model UserSubscription {
   endDate            DateTime @map("end_date") @db.Date
   paymentStatus      String?  @map("payment_status")
   subscriptionStatus String?  @map("subscription_status")
+  grantBaselineAt    DateTime? @map("grant_baseline_at") @db.Date
+  grantBaselineEndDate DateTime? @map("grant_baseline_end_date") @db.Date
 
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan     SubscriptionPlan @relation(fields: [planId], references: [id])
@@ -333,9 +335,12 @@ model Payment {
   refundedAmount       Decimal   @default(0) @map("refunded_amount") @db.Decimal(10, 2)
   refundedAt           DateTime? @map("refunded_at")
   paidAt               DateTime? @map("paid_at")
+  grantDurationDays    Int?      @map("grant_duration_days")
+  grantRevokedOn       DateTime? @map("grant_revoked_on") @db.Date
 
   subscription UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
+  @@index([subscriptionId, paidAt])
   @@map("payments")
 }
 
