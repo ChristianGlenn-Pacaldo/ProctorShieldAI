@@ -1,6 +1,7 @@
 "use client";
 
-import { acceptArenaRevision, guardArenaChannel, hasTerminalArenaFeedback } from "@/lib/arena-feedback";
+import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel, hasTerminalArenaFeedback } from "@/lib/arena-feedback";
+import { beginArenaGameplayAction, fetchArenaSnapshot, isTerminalArenaSnapshot, startArenaReconciliation, type ArenaSnapshot } from "@/lib/arena-client-reconciliation";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -113,7 +114,6 @@ export function ArenaContent({
   savedAnswers,
 }: ArenaContentProps) {
   const arenaRevisionRef = useRef(0);
-  useEffect(() => { arenaRevisionRef.current = 0; }, [quizId]);
   const router = useRouter();
 
   const isAlreadyEnded = initialQuizStatus === "ended" || initialStudentStatus === "completed";
@@ -126,7 +126,56 @@ export function ArenaContent({
   const finalizationInFlightRef = useRef(false);
   const finalizationConfirmedRef = useRef(false);
   const finalizationGenerationRef = useRef(0);
+  const arenaCompletedRef = useRef(isAlreadyEnded);
+  const [arenaCompleted, setArenaCompleted] = useState(isAlreadyEnded);
+  const terminalResultReconciledRef = useRef(false);
+  const reconciliationRef = useRef<ReturnType<typeof startArenaReconciliation> | null>(null);
+  const snapshotSessionRef = useRef<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const gameplayTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const gameplayRequestsRef = useRef(new Map<AbortController, ReturnType<typeof setTimeout>>());
+  const clearGameplayTimers = useCallback(() => {
+    for (const timer of gameplayTimersRef.current) clearTimeout(timer);
+    gameplayTimersRef.current.clear();
+    for (const [controller, timer] of gameplayRequestsRef.current) {
+      clearTimeout(timer);
+      controller.abort();
+    }
+    gameplayRequestsRef.current.clear();
+  }, []);
+  const readGameplayResponse = useCallback(async (url: string, options: RequestInit) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    gameplayRequestsRef.current.set(controller, timer);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      const data = await response.json();
+      return { ok: response.ok, data };
+    } finally {
+      clearTimeout(timer);
+      gameplayRequestsRef.current.delete(controller);
+    }
+  }, []);
+  useEffect(() => {
+    const generation = finalizationGenerationRef;
+    arenaRevisionRef.current = 0;
+    generation.current++;
+    return () => { generation.current++; clearGameplayTimers(); };
+  }, [quizId, clearGameplayTimers]);
+  const captureGameplayAction = useCallback(() => beginArenaGameplayAction(() => ({
+    revision: arenaRevisionRef.current, sessionId: snapshotSessionRef.current,
+    generation: finalizationGenerationRef.current,
+    terminal: terminalResultReconciledRef.current || arenaCompletedRef.current,
+  })), []);
+  const readRealtimeIdentity = useCallback(() => ({ quizId, sessionId: snapshotSessionRef.current,
+    terminal: terminalResultReconciledRef.current || arenaCompletedRef.current }), [quizId]);
+  const scheduleGameplayCallback = useCallback((action: ReturnType<typeof beginArenaGameplayAction>, run: () => void, delay: number) => {
+    const timer = setTimeout(() => {
+      gameplayTimersRef.current.delete(timer);
+      if (action.isSameView()) run();
+    }, delay);
+    gameplayTimersRef.current.add(timer);
+  }, []);
 
   // ── Automatic Question Progression ────────────────────────────
   const initialUnansweredIndex = questions.findIndex(
@@ -150,13 +199,7 @@ export function ArenaContent({
   const [matchTimeLeft, setMatchTimeLeft] = useState<number>(1800); // 30 minutes default
 
   // ── Score, Ranking & Participants ─────────────────────────────
-  const [score, setScore] = useState(() => {
-    return savedAnswers.reduce((sum, ans) => {
-      if (!ans.isCorrect) return sum;
-      const q = questions.find((item) => item.id === ans.questionId);
-      return sum + (q?.points || 100);
-    }, 0);
-  });
+  const [score, setScore] = useState(0); // Reconciliation supplies authoritative Arena points.
   const [studentRank, setStudentRank] = useState<number>(1);
   const [totalParticipants, setTotalParticipants] = useState<number>(1);
   const [streak, setStreak] = useState(0);
@@ -341,6 +384,21 @@ export function ArenaContent({
     [studentId]
   );
 
+  const applyGameplayState = useCallback((data: ArenaSnapshot) => {
+    if (!captureGameplayAction().isCurrent(data) || !acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return false;
+    if (Array.isArray(data.participants)) updateRankingsFromParticipants(data.participants);
+    else {
+      if (typeof data.score === "number" && Number.isFinite(data.score)) setScore(data.score);
+      if (typeof data.rank === "number") setStudentRank(data.rank);
+    }
+    if (typeof data.totalCount === "number") setTotalParticipants(data.totalCount);
+    const me = data.participants?.find((p) => p.studentId === studentId);
+    if (me) setHasGuardianShield(Boolean(me.hasShield));
+    const powers = data.usedPowers ?? data.arena?.usedPowers?.[studentId];
+    if (powers) setUsedPowers({ ...powers });
+    return true;
+  }, [captureGameplayAction, readRealtimeIdentity, studentId, updateRankingsFromParticipants]);
+
   // ── Conclude Match & Finalize Results ─────────────────────────
   const finalizeMatch = useCallback(async (retry = false) => {
     if (finalizationConfirmedRef.current || finalizationInFlightRef.current || (finalizationAttemptedRef.current && !retry)) return;
@@ -373,16 +431,24 @@ export function ArenaContent({
       if (!submitRes.ok || submitData?.success !== true) {
         throw new Error(submitData?.error || "Could not finalize your Arena result.");
       }
-      if (typeof submitData.expEarned === "number") {
+      const accepted = acceptArenaRevision(arenaRevisionRef, submitData);
+      if (accepted && typeof submitData.result?.score === "number" && Number.isFinite(submitData.result.score)) {
+        setScore(submitData.result.score);
+      }
+      if (accepted && typeof submitData.expEarned === "number") {
         setExpEarned(submitData.expEarned);
-      } else if (typeof submitData.result?.expEarned === "number") {
+      } else if (accepted && typeof submitData.result?.expEarned === "number") {
         setExpEarned(submitData.result.expEarned);
       }
-      if (typeof submitData.rank === "number") {
+      if (accepted && typeof submitData.rank === "number") {
         setStudentRank(submitData.rank);
       }
       finalizationConfirmedRef.current = true;
-      setPhase("podium");
+      arenaCompletedRef.current = true;
+      setArenaCompleted(true);
+      // Completion and a reconciled final leaderboard are different facts.
+      // Keep reading committed results even if the first read fails.
+      void reconciliationRef.current?.refresh();
     } catch (error) {
       if (generation !== finalizationGenerationRef.current) return;
       setFinalizationError(error instanceof Error ? error.message : "Network error finalizing your Arena result.");
@@ -394,28 +460,12 @@ export function ArenaContent({
       }
     }
 
-    try {
-      const arenaRes = await fetch(`/api/arena/${quizId}`);
-      if (arenaRes.ok) {
-        const arenaData = await arenaRes.json();
-        if (Array.isArray(arenaData?.participants)) {
-          updateRankingsFromParticipants(arenaData.participants);
-        }
-      }
-    } catch {}
-  }, [quizId, lockedAnswers, updateRankingsFromParticipants]);
-
-  useEffect(() => {
-    if (isAlreadyEnded) void finalizeMatch();
-  }, [isAlreadyEnded, finalizeMatch]);
-
-  const finalizeMatchRef = useRef(finalizeMatch);
-  useEffect(() => {
-    finalizeMatchRef.current = finalizeMatch;
-  }, [finalizeMatch]);
+  }, [quizId, lockedAnswers]);
 
   // ── Explicit Arena Join on Mount ──────────────────────────────
   useEffect(() => {
+    if (isAlreadyEnded) return; // Completed reloads use only the snapshot reader.
+    const generation = finalizationGenerationRef.current;
     let isMounted = true;
     async function joinArena() {
       try {
@@ -427,18 +477,22 @@ export function ArenaContent({
         if (!res.ok) {
           const errorData = await res.json().catch(() => null);
           if (!isMounted) return;
-          if (res.status === 409 && errorData?.code === "ARENA_QUIZ_ALREADY_COMPLETED") {
-            void finalizeMatchRef.current();
+          if (res.status === 409 && ["ARENA_QUIZ_ALREADY_COMPLETED", "ARENA_ENDED"].includes(errorData?.code)) {
+            arenaCompletedRef.current = true;
+            setArenaCompleted(true);
+            void reconciliationRef.current?.refresh();
           }
           return;
         }
         const data = await res.json();
+        if (generation !== finalizationGenerationRef.current || arenaCompletedRef.current) return;
         if (!acceptArenaRevision(arenaRevisionRef, data)) return;
         if (!isMounted) return;
         if (finalizationAttemptedRef.current) return;
 
         const sessId = data?.sessionId || data?.arena?.sessionId;
         if (sessId) {
+          snapshotSessionRef.current = sessId;
           setCurrentSessionId(sessId);
         }
 
@@ -453,7 +507,9 @@ export function ArenaContent({
             }
           }
         } else if (currentStatus === "ended" || data?.quizStatus === "ended") {
-          void finalizeMatchRef.current();
+          arenaCompletedRef.current = true;
+          setArenaCompleted(true);
+          void reconciliationRef.current?.refresh();
         } else {
           setPhase("lobby");
         }
@@ -470,20 +526,47 @@ export function ArenaContent({
     return () => {
       isMounted = false;
     };
-  }, [quizId, updateRankingsFromParticipants]);
+  }, [quizId, isAlreadyEnded, updateRankingsFromParticipants]);
 
   // ── Fetch Initial / Reconciled Arena State ─────────────────────
-  const refreshArenaState = useCallback(async () => {
-    try {
-      const requestStartedAt = Date.now();
-      const res = await fetch(`/api/arena/${quizId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!acceptArenaRevision(arenaRevisionRef, data)) return;
-      if (finalizationAttemptedRef.current) return;
+  const applyArenaSnapshot = useCallback((data: ArenaSnapshot) => {
+      if ([data.quizId, data.arena?.quizId].some(id => id !== undefined && id !== quizId)) return false;
+      if (!acceptArenaRevision(arenaRevisionRef, data)) return false;
+      const snapshotSession = data.sessionId ?? data.arena?.sessionId;
+      if (snapshotSession && snapshotSessionRef.current && snapshotSession !== snapshotSessionRef.current) {
+        clearGameplayTimers();
+        finalizationGenerationRef.current++;
+        finalizationInFlightRef.current = false;
+        setIsFinalizing(false);
+        finalizationAttemptedRef.current = false; finalizationConfirmedRef.current = false;
+        arenaCompletedRef.current = false; terminalResultReconciledRef.current = false;
+        setArenaCompleted(false);
+        setFinalizationError(null);
+        setIncomingAttack(null); setTargetPickerPower(null);
+        setCurrentQuestionIndex(0); setQuestionsCompleted(false); setIsSpectating(false);
+        setSelectedChoice(null); setAnswerFeedback(null); setLockedAnswers(new Map());
+        setScore(0); setUsedPowers({}); setHasGuardianShield(false);
+        setIsSubmittingAnswer(false); setIsLaunchingPower(null); setBattleLogs([]);
+      }
+      if (snapshotSession) { snapshotSessionRef.current = snapshotSession; setCurrentSessionId(snapshotSession); }
+      if (isTerminalArenaSnapshot(data) && data.result && Number.isFinite(data.result.score)
+        && data.participants?.some((p) => p.studentId === studentId)) {
+        clearGameplayTimers();
+        updateRankingsFromParticipants(data.participants);
+        setScore(data.result.score); setStudentRank(data.result.rank); setExpEarned(data.result.expEarned);
+        setHasGuardianShield(Boolean(data.participants.find((p) => p.studentId === studentId)?.hasShield));
+        setUsedPowers({ ...(data.usedPowers ?? data.arena?.usedPowers?.[studentId] ?? {}) });
+        arenaCompletedRef.current = true; terminalResultReconciledRef.current = true;
+        setArenaCompleted(true);
+        finalizationConfirmedRef.current = true; finalizationAttemptedRef.current = true;
+        setIncomingAttack(null); setTargetPickerPower(null); setFinalizationError(null);
+        setIsSubmittingAnswer(false); setIsLaunchingPower(null);
+        setPhase("podium");
+        return true;
+      }
       const responseReceivedAt = Date.now();
       if (typeof data?.serverTime === "number") {
-        serverTimeOffsetRef.current = data.serverTime - ((requestStartedAt + responseReceivedAt) / 2);
+        serverTimeOffsetRef.current = data.serverTime - (((data.clientRequestStartedAt ?? responseReceivedAt) + responseReceivedAt) / 2);
       }
 
       const sessId = data?.sessionId || data?.arena?.sessionId;
@@ -494,10 +577,13 @@ export function ArenaContent({
       // Authoritative finished state from server
       const currentStatus = data?.status || data?.arena?.status;
       if (currentStatus === "ended" || data?.quizStatus === "ended") {
+        arenaCompletedRef.current = true;
+        setArenaCompleted(true);
         setIncomingAttack(null);
-        void finalizeMatch();
-        return;
+        if (!terminalResultReconciledRef.current) setPhase("finalizing");
+        return false;
       }
+      if (finalizationAttemptedRef.current) return false;
 
       if (currentStatus === "active") {
         setPhase("in_wave");
@@ -512,10 +598,6 @@ export function ArenaContent({
           if (Number.isFinite(endsAt)) {
             const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
             setMatchTimeLeft(remaining);
-            if (remaining <= 0) {
-              void finalizeMatch();
-              return;
-            }
           }
         }
       } else if (currentStatus === "lobby") {
@@ -524,15 +606,14 @@ export function ArenaContent({
 
       // Restore usedPowers from server
       if (data?.usedPowers && typeof data.usedPowers === "object") {
-        setUsedPowers((prev) => ({ ...prev, ...data.usedPowers }));
-        if (data.usedPowers.shield) {
-          setHasGuardianShield(false);
-        }
+        setUsedPowers({ ...data.usedPowers });
       }
 
       // Reconcile participants and rankings
       if (Array.isArray(data?.participants)) {
         updateRankingsFromParticipants(data.participants);
+        const me = data.participants.find((p) => p.studentId === studentId);
+        if (me) setHasGuardianShield(Boolean(me.hasShield));
       }
 
       const activeIncomingAttack = incomingAttackRef.current;
@@ -541,8 +622,6 @@ export function ArenaContent({
         if (!authoritativeAttack || authoritativeAttack.status !== "pending") {
           clearIncomingAttack(activeIncomingAttack.attackId);
           if (authoritativeAttack?.status === "deflected") {
-            setHasGuardianShield(false);
-            setUsedPowers((prev) => ({ ...prev, shield: true }));
             showAttackFeedback(activeIncomingAttack.attackId, "deflected", {
               type: "deflected",
               attackerName: activeIncomingAttack.attackerName,
@@ -562,22 +641,28 @@ export function ArenaContent({
           }
         }
       }
-    } catch {}
-  }, [quizId, finalizeMatch, updateRankingsFromParticipants, clearIncomingAttack, showAttackFeedback]);
+      return false;
+  }, [quizId, studentId, updateRankingsFromParticipants, clearIncomingAttack, showAttackFeedback, clearGameplayTimers]);
+
+  const refreshArenaState = useCallback(async () => { await reconciliationRef.current?.refresh(); }, []);
 
   // Periodic background state reconciliation
   useEffect(() => {
-    if (phase === "podium" || phase === "finalizing") return;
-    void refreshArenaState();
-    const interval = setInterval(() => {
-      void refreshArenaState();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [phase, refreshArenaState]);
+    const worker = startArenaReconciliation({ read: (signal) => fetchArenaSnapshot(quizId, signal),
+      apply: (data) => applyArenaSnapshot(data) === true });
+    reconciliationRef.current = worker;
+    const refresh = () => { if (!document.hidden) void worker.refresh(); };
+    window.addEventListener("online", refresh); document.addEventListener("visibilitychange", refresh);
+    return () => {
+      worker.stop(); reconciliationRef.current = null;
+      window.removeEventListener("online", refresh); document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [quizId, applyArenaSnapshot]);
 
   // ── Realtime Pusher Subscription (private-arena-${quizId} ONLY) ──
   useEffect(() => {
     let pusher: PusherClient | null = null;
+    let subscribed = true;
 
     try {
       pusher = new PusherClient(
@@ -588,15 +673,21 @@ export function ArenaContent({
         }
       );
 
-      const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quizId}`), arenaRevisionRef);
+      const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quizId}`), arenaRevisionRef, {
+        getIdentity: readRealtimeIdentity,
+        isLive: () => subscribed,
+        onStateHint: () => reconciliationRef.current?.hint(),
+        onSessionHint: () => reconciliationRef.current?.hint({ allowTerminal: true }),
+      });
+      pusher.connection.bind("connected", () => { void reconciliationRef.current?.refresh(); });
 
       // ── Student Joined Event in Realtime ─────────────────────────
-      arenaChannel.bind("arena-student-joined", (data?: {
-        participants?: ArenaParticipant[];
-      }) => {
-        if (Array.isArray(data?.participants)) {
-          updateRankingsFromParticipants(data.participants);
-        }
+      arenaChannel.bind("arena-student-joined", (data?: ArenaSnapshot & { quizId?: number }) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
+        if (data?.quizId !== undefined && data.quizId !== quizId) return;
+        const sessionId = data?.sessionId ?? data?.arena?.sessionId;
+        if (sessionId && sessionId !== snapshotSessionRef.current) return;
+        reconciliationRef.current?.hint();
       });
 
       // ── Match Started by Teacher ─────────────────────────────────
@@ -607,7 +698,7 @@ export function ArenaContent({
         matchDuration?: number;
         participants?: ArenaParticipant[];
       }) => {
-        if (finalizationAttemptedRef.current) return;
+        if (finalizationAttemptedRef.current || arenaCompletedRef.current) return;
         setPhase("in_wave");
         if (data?.sessionId || data?.arena?.sessionId) {
           setCurrentSessionId(data.sessionId || data?.arena?.sessionId || null);
@@ -629,47 +720,35 @@ export function ArenaContent({
       });
 
       // ── Dedicated Session Reset / Fresh Session Event ─────────────
-      const handleSessionCreated = (data?: { sessionId?: string }) => {
-        finalizationGenerationRef.current++;
-        finalizationInFlightRef.current = false;
-        setIsFinalizing(false);
-        setIncomingAttack(null);
-        setPhase("lobby");
-        finalizationAttemptedRef.current = false;
-        finalizationConfirmedRef.current = false;
-        setFinalizationError(null);
-        if (data?.sessionId) {
-          setCurrentSessionId(data.sessionId);
-        }
-        setCurrentQuestionIndex(0);
-        setQuestionsCompleted(false);
-        setIsSpectating(false);
-        setScore(0);
-        setUsedPowers({});
-        setHasGuardianShield(false);
-        setBattleLogs([]);
+      const handleSessionCreated = () => {
+        // Session adoption/reset occurs only in applyArenaSnapshot.
+        reconciliationRef.current?.hint({ allowTerminal: true });
       };
       arenaChannel.bind("arena-session-created", handleSessionCreated);
       arenaChannel.bind("arena-reset", handleSessionCreated);
 
       // ── Match Ended by Teacher / Server ──────────────────────────
-      arenaChannel.bind("arena-end", () => {
+      arenaChannel.bind("arena-end", (data?: ArenaSnapshot) => {
+        if (terminalResultReconciledRef.current) return;
+        if (Array.isArray(data?.participants)) updateRankingsFromParticipants(data.participants);
+        arenaCompletedRef.current = true;
+        setArenaCompleted(true);
         setIncomingAttack(null);
-        void finalizeMatch();
+        setPhase("finalizing");
+        void reconciliationRef.current?.refresh();
       });
 
       // ── Host Airdrop ─────────────────────────────────────────────
-      arenaChannel.bind("arena-airdrop", () => {
-        setHasGuardianShield(true);
-        setUsedPowers((prev) => ({ ...prev, shield: false })); // Re-arm shield
-        setScore((prev) => prev + 50);
+      arenaChannel.bind("arena-airdrop", (data: ArenaSnapshot) => {
+        if (!applyGameplayState(data)) { void refreshArenaState(); return; }
         if (soundEnabled) playShieldDeflectSound();
         setCelebrationMessage("🎁 HOST AIRDROP! +50 Bonus Points & Guardian Shield Armed!");
-        setTimeout(() => setCelebrationMessage(null), 4000);
+        scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 4000);
       });
 
       // ── Incoming Attack Warning Event ────────────────────────────
       const handleIncomingAttackEvent = (data: IncomingAttackAlert) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
         if (hasTerminalArenaFeedback(displayedAttackFeedbackRef.current, data.attackId)) return;
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
         if (data.targetStudentId === studentId) {
@@ -685,7 +764,7 @@ export function ArenaContent({
         } else if (data.attackerId === studentId) {
           if (claimAttackFeedback(data.attackId, "launched")) {
             setCelebrationMessage(`🚀 STRIKE LAUNCHED at ${data.targetName}! Strike in progress...`);
-            setTimeout(() => setCelebrationMessage(null), 2500);
+            scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 2500);
           }
         }
       };
@@ -712,8 +791,10 @@ export function ArenaContent({
         sessionId?: string;
         status?: string;
       }) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
-        const applySnapshot = acceptArenaRevision(arenaRevisionRef, data);
+        const applySnapshot = applyGameplayState(data);
+        if (!applySnapshot) void refreshArenaState();
         const penalty = data.scorePenalty || data.damage || 40;
         const isStaleForModal = Boolean(
           incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId,
@@ -744,7 +825,7 @@ export function ArenaContent({
         } else if (data.attackerId === studentId) {
           if (claimAttackFeedback(data.attackId, "hit")) {
             setCelebrationMessage(`🎯 DIRECT HIT on ${data.targetName}! -${penalty} PTS deducted!`);
-            setTimeout(() => setCelebrationMessage(null), 3000);
+            scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 3000);
           }
         }
 
@@ -768,22 +849,17 @@ export function ArenaContent({
         sessionId?: string;
         status?: string;
       }) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
-        const applySnapshot = acceptArenaRevision(arenaRevisionRef, data);
+        // This event describes the outcome, not the full current protection state.
+        // Read committed state instead of inferring a Shield mutation from it.
+        void refreshArenaState();
         if (data.targetStudentId === studentId) {
           if (incomingAttackRef.current && incomingAttackRef.current.attackId !== data.attackId) {
             claimAttackFeedback(data.attackId, "deflected");
-            if (applySnapshot) {
-              setHasGuardianShield(false);
-              setUsedPowers((prev) => ({ ...prev, shield: true }));
-            }
             return;
           }
           clearIncomingAttack(data.attackId);
-          if (applySnapshot) {
-            setHasGuardianShield(false);
-            setUsedPowers((prev) => ({ ...prev, shield: true }));
-          }
           const feedbackShown = showAttackFeedback(data.attackId, "deflected", {
             type: "deflected",
             attackerName: data.attackerName,
@@ -794,7 +870,7 @@ export function ArenaContent({
         } else if (data.attackerId === studentId) {
           if (claimAttackFeedback(data.attackId, "deflected")) {
             setCelebrationMessage(`🛡️ ${data.targetName} blocked your ${data.powerType.toUpperCase()} with Guardian Shield! (0 PTS deducted)`);
-            setTimeout(() => setCelebrationMessage(null), 3000);
+            scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 3000);
           }
         }
       };
@@ -802,36 +878,40 @@ export function ArenaContent({
       arenaChannel.bind("attack-blocked", handleAttackBlockedEvent);
 
       // ── Live Score / Leaderboard Update ──────────────────────────
-      arenaChannel.bind("arena-score-updated", (data: {
+      arenaChannel.bind("arena-score-updated", (data: ArenaSnapshot & {
         studentId: string;
         score: number;
         rank: number;
         totalCount: number;
       }) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
         if (data.studentId === studentId) {
-          setScore(data.score);
-          setStudentRank(data.rank);
+          if (!applyGameplayState(data)) void refreshArenaState();
         }
-        if (data.totalCount) setTotalParticipants(data.totalCount);
       });
 
-      arenaChannel.bind("arena-leaderboard-updated", (data: { participants?: ArenaParticipant[] }) => {
-        if (Array.isArray(data?.participants)) {
-          updateRankingsFromParticipants(data.participants);
-        }
+      arenaChannel.bind("arena-leaderboard-updated", (data: ArenaSnapshot) => {
+        if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
+        if (!applyGameplayState(data)) void refreshArenaState();
       });
 
       // ── Authoritative Arena End Event ────────────────────────────
-      arenaChannel.bind("arena-end", () => {
+      arenaChannel.bind("arena-end", (data?: ArenaSnapshot) => {
+        if (terminalResultReconciledRef.current) return;
+        if (Array.isArray(data?.participants)) updateRankingsFromParticipants(data.participants);
+        arenaCompletedRef.current = true;
+        setArenaCompleted(true);
         setIncomingAttack(null);
         setTargetPickerPower(null);
-        void finalizeMatch();
+        setPhase("finalizing");
+        void reconciliationRef.current?.refresh();
       });
     } catch (e) {
       console.error("Arena Pusher connection error:", e);
     }
 
     return () => {
+      subscribed = false;
       if (pusher) {
         pusher.unsubscribe(`private-arena-${quizId}`);
         pusher.disconnect();
@@ -848,11 +928,13 @@ export function ArenaContent({
     getServerAdjustedNow,
     claimAttackFeedback,
     showAttackFeedback,
+    applyGameplayState, captureGameplayAction, clearGameplayTimers, scheduleGameplayCallback, refreshArenaState, readRealtimeIdentity,
   ]);
 
   // ── Reaction Countdown Interval for Incoming Attack ───────────
   useEffect(() => {
     if (!incomingAttack) return;
+    const action = captureGameplayAction();
     const expiry = typeof incomingAttack.expiresAt === "number"
       ? incomingAttack.expiresAt
       : (incomingAttack.warningExpiry ? Date.parse(incomingAttack.warningExpiry) : getServerAdjustedNow() + 2500);
@@ -860,6 +942,7 @@ export function ArenaContent({
     setReactionTimeLeftMs(Math.max(0, expiry - getServerAdjustedNow()));
 
     const interval = setInterval(() => {
+      if (!action.isSameView()) { clearInterval(interval); return; }
       const remaining = Math.max(0, expiry - getServerAdjustedNow());
       setReactionTimeLeftMs(remaining);
       if (remaining <= 0) {
@@ -868,6 +951,7 @@ export function ArenaContent({
       }
     }, 50);
     const staleSafeguard = setTimeout(() => {
+      if (!action.isSameView()) return;
       if (incomingAttackRef.current?.attackId === incomingAttack.attackId) {
         clearIncomingAttack(incomingAttack.attackId);
         void refreshArenaState();
@@ -877,7 +961,7 @@ export function ArenaContent({
       clearInterval(interval);
       clearTimeout(staleSafeguard);
     };
-  }, [incomingAttack, getServerAdjustedNow, refreshArenaState, clearIncomingAttack]);
+  }, [incomingAttack, getServerAdjustedNow, refreshArenaState, clearIncomingAttack, captureGameplayAction]);
 
   // ── Overall Match Timer Countdown ─────────────────────────────
   useEffect(() => {
@@ -906,6 +990,8 @@ export function ArenaContent({
 
   // ── Automatic Student Question Progression ────────────────────
   const handleSelectChoice = async (choiceId: number) => {
+    const action = captureGameplayAction();
+    if (!action.isSameView()) return;
     const currentQ = questions[currentQuestionIndex];
     if (!currentQ || lockedAnswers.has(currentQ.id) || isSubmittingAnswer) return;
 
@@ -914,7 +1000,7 @@ export function ArenaContent({
     setErrorMessage(null);
 
     try {
-      const res = await fetch("/api/quizzes/answer", {
+      const { ok, data } = await readGameplayResponse("/api/quizzes/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -925,14 +1011,15 @@ export function ArenaContent({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMessage(data.error || "Failed to submit answer.");
-        setIsSubmittingAnswer(false);
+      if (!ok) {
+        if (action.isCurrent()) setErrorMessage(data.error || "Failed to submit answer.");
+        void refreshArenaState();
         return;
       }
+      if (!action.isCurrent(data)) { void refreshArenaState(); return; }
 
       const isCorrect = Boolean(data.isCorrect);
+      applyGameplayState(data);
       setLockedAnswers((prev) => new Map(prev).set(currentQ.id, { choiceId, isCorrect }));
       setAnswerFeedback({ isCorrect, choiceId });
       playFeedbackChime(isCorrect);
@@ -941,9 +1028,6 @@ export function ArenaContent({
         const nextStreak = streak + 1;
         setStreak(nextStreak);
         if (nextStreak > highestStreak) setHighestStreak(nextStreak);
-        const streakMultiplier = nextStreak;
-        const pointsEarned = currentQ.points || 100;
-        setScore((prev) => prev + pointsEarned * streakMultiplier);
       } else {
         setStreak(0);
       }
@@ -952,7 +1036,7 @@ export function ArenaContent({
       if (typeof data.totalCount === "number") setTotalParticipants(data.totalCount);
 
       // Automatic progression to next question after short 1s feedback
-      setTimeout(() => {
+      scheduleGameplayCallback(captureGameplayAction(), () => {
         setSelectedChoice(null);
         setAnswerFeedback(null);
         setIsSubmittingAnswer(false);
@@ -964,8 +1048,9 @@ export function ArenaContent({
         }
       }, 1000);
     } catch {
-      setErrorMessage("Network error submitting answer.");
-      setIsSubmittingAnswer(false);
+      if (action.isCurrent()) setErrorMessage("Network error submitting answer.");
+    } finally {
+      if (action.isSameView()) setIsSubmittingAnswer(false);
     }
   };
 
@@ -983,6 +1068,8 @@ export function ArenaContent({
   };
 
   const executeBattlePower = async (powerType: BattlePowerType, targetStudentId?: string) => {
+    const action = captureGameplayAction();
+    if (!action.isSameView()) return;
     if (usedPowers[powerType]) return;
     setErrorMessage(null);
     setTargetPickerPower(null);
@@ -998,7 +1085,6 @@ export function ArenaContent({
 
     // Immediate optimistic launch feedback & sound
     if (powerType === "shield") {
-      setHasGuardianShield(true);
       if (soundEnabled) playShieldDeflectSound();
       setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
       setBattleLogs((prev) => ["🛡️ You armed Guardian Shield!", ...prev].slice(0, 15));
@@ -1008,12 +1094,11 @@ export function ArenaContent({
       setBattleLogs((prev) => [`🚀 Launched ${names[powerType]} at ${targetLabel}!`, ...prev].slice(0, 15));
     }
 
-    // Visually mark as used immediately with NO waiting delay
-    setUsedPowers((prev) => ({ ...prev, [powerType]: true }));
+    setIsLaunchingPower(powerType);
 
     try {
       const currentQ = questions[currentQuestionIndex];
-      const res = await fetch("/api/arena/battle-action", {
+      const { ok, data } = await readGameplayResponse("/api/arena/battle-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1025,41 +1110,39 @@ export function ArenaContent({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        // Rollback optimistic power state on server error
-        setUsedPowers((prev) => {
-          const next = { ...prev };
-          delete next[powerType];
-          return next;
-        });
-        if (powerType === "shield") setHasGuardianShield(false);
+      if (!ok && data.arenaRevision === undefined) {
+        if (action.isCurrent()) { setErrorMessage(data.error || "Failed to cast battle power."); setCelebrationMessage(null); }
+        void refreshArenaState(); return;
+      }
+      if (!action.isCurrent(data)) { void refreshArenaState(); return; }
+      applyGameplayState(data);
+      if (!ok) {
         setErrorMessage(data.error || "Failed to cast battle power.");
         setCelebrationMessage(null);
         return;
       }
 
-      setTimeout(() => setCelebrationMessage(null), 3000);
+      scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 3000);
     } catch {
-      setUsedPowers((prev) => {
-        const next = { ...prev };
-        delete next[powerType];
-        return next;
-      });
-      if (powerType === "shield") setHasGuardianShield(false);
-      setErrorMessage("Network error launching battle power.");
-      setCelebrationMessage(null);
+      if (action.isCurrent()) {
+        setErrorMessage("Network error launching battle power."); setCelebrationMessage(null);
+      }
+      void refreshArenaState();
+    } finally {
+      if (action.isSameView()) setIsLaunchingPower(null);
     }
   };
 
   // ── Defend Incoming Attack with Guardian Shield ───────────────
   const handleDefendIncomingAttack = async () => {
+    const action = captureGameplayAction();
+    if (!action.isSameView()) return;
     if (!incomingAttack || isShieldActivating || usedPowers.shield || reactionTimeLeftMs <= 0) return;
     const attackToDefend = incomingAttack;
     setIsShieldActivating(true);
     setErrorMessage(null);
     try {
-      const res = await fetch("/api/arena/battle-action", {
+      const { ok, data } = await readGameplayResponse("/api/arena/battle-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1070,7 +1153,12 @@ export function ArenaContent({
         }),
       });
 
-      const data = await res.json();
+      if (!ok && data.arenaRevision === undefined) {
+        if (action.isCurrent()) setErrorMessage(data.error || "Guardian Shield could not be activated.");
+        void refreshArenaState(); return;
+      }
+      if (!action.isCurrent(data)) { void refreshArenaState(); return; }
+      applyGameplayState(data);
       const terminalOutcome = getShieldTerminalOutcome(data);
       const hasNewerIncomingAttack = Boolean(
         incomingAttackRef.current && incomingAttackRef.current.attackId !== attackToDefend.attackId,
@@ -1078,16 +1166,12 @@ export function ArenaContent({
       if (hasNewerIncomingAttack) {
         if (terminalOutcome === "deflected") {
           claimAttackFeedback(attackToDefend.attackId, "deflected");
-          setHasGuardianShield(false);
-          setUsedPowers((prev) => ({ ...prev, shield: true }));
         }
         return;
       }
       if (terminalOutcome === "deflected") {
         clearIncomingAttack(attackToDefend.attackId);
         setErrorMessage(null);
-        setHasGuardianShield(false);
-        setUsedPowers((prev) => ({ ...prev, shield: true }));
         const feedbackShown = showAttackFeedback(attackToDefend.attackId, "deflected", {
           type: "deflected",
           attackerName: attackToDefend.attackerName,
@@ -1113,19 +1197,18 @@ export function ArenaContent({
       } else if (data.code === "already_resolved") {
         setErrorMessage("That attack already resolved.");
       } else if (data.code === "shield_already_used") {
-        setUsedPowers((prev) => ({ ...prev, shield: true }));
         setErrorMessage("Guardian Shield has already been used in this match.");
-      } else if (!res.ok) {
+      } else if (!ok) {
         setErrorMessage(data.error || "Guardian Shield could not be activated.");
       }
       void refreshArenaState();
     } catch {
-      if (!displayedAttackFeedbackRef.current.has(`${attackToDefend.attackId}:deflected`)) {
+      if (action.isCurrent() && !displayedAttackFeedbackRef.current.has(`${attackToDefend.attackId}:deflected`)) {
         setErrorMessage("Network error activating Guardian Shield.");
       }
       void refreshArenaState();
     } finally {
-      setIsShieldActivating(false);
+      if (action.isSameView()) setIsShieldActivating(false);
     }
   };
 
@@ -1161,9 +1244,9 @@ export function ArenaContent({
       <div className="min-h-screen bg-[#070a14] text-white flex flex-col items-center justify-center gap-4 p-6 text-center">
         <Trophy className="w-12 h-12 text-amber-400" />
         <h1 className="text-2xl font-bold">Match Ended</h1>
-        <p className="text-slate-300">{isFinalizing ? "Submitting your Arena result..." : "Your Arena result is not confirmed yet."}</p>
+        <p className="text-slate-300">{isFinalizing ? "Submitting your Arena result..." : arenaCompleted ? "Loading your final Arena results..." : "Your Arena result is not confirmed yet."}</p>
         {finalizationError && <p role="alert" className="text-rose-400">{finalizationError}</p>}
-        {!isFinalizing && finalizationError && (
+        {!isFinalizing && !arenaCompleted && finalizationError && (
           <button type="button" onClick={() => void finalizeMatch(true)} className="rounded-xl bg-indigo-600 px-6 py-3 font-bold hover:bg-indigo-500">
             Retry Submission
           </button>

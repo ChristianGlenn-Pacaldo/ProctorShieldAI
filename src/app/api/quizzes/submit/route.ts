@@ -14,19 +14,14 @@ import {
   parseVerdict,
 } from "@/lib/quiz-submission";
 
-import { awardStudentExp, getArenaExpAwarded, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
-import { getArenaState, mutateArena } from "@/lib/arena";
+import { awardStudentExp, getStudentProgression, EXP_REWARDS } from "@/lib/student-progression";
+import { mutateArena } from "@/lib/arena";
+import { recoverArenaFinalization } from "@/lib/arena-finalization";
 
 import { canSubmitProctored } from "@/lib/proctored-runtime";
 
 class InvalidSubmissionError extends Error {}
 class SubmissionConflictError extends Error {}
-
-async function persistedArenaExp(quizId: number, studentId: string): Promise<number> {
-  const arena = await getArenaState(quizId);
-  if (!arena || arena.quizId !== quizId || !arena.participants?.[studentId]) return 0;
-  return getArenaExpAwarded(arena.sessionId, studentId);
-}
 
 async function POSTImpl(req: NextRequest) {
   try {
@@ -55,6 +50,45 @@ async function POSTImpl(req: NextRequest) {
 
     if (!studentQuiz) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
+    }
+
+    const isArena = studentQuiz.attemptMode === "arena";
+    if (isArena) {
+      const reply = await mutateArena(studentQuiz.quizId, async (mutation) => {
+        const tx = mutation.tx;
+        const arena = mutation.state;
+        const attempt = await tx.studentQuiz.findFirst({
+          where: { studentId: session.userId, quizId: studentQuiz.quizId },
+          include: { quiz: true }, orderBy: { attemptNumber: "desc" },
+        });
+        if (!attempt || attempt.attemptMode !== "arena" || attempt.quiz.quizMode !== "arena"
+          || !["in_progress", "ended"].includes(attempt.quiz.quizStatus)
+          || ["pending_approval", "rejected"].includes(attempt.quizStatus || "")) {
+          return () => NextResponse.json({ error: "Arena session is unavailable" }, { status: 409 });
+        }
+        if (!arena || arena.teacherId !== attempt.quiz.teacherId || !arena.participants[session.userId]
+          || (typeof requestedSessionId === "string" && requestedSessionId !== arena.sessionId)) {
+          return () => NextResponse.json({ error: "Stale Arena session" }, { status: 409 });
+        }
+        await recoverArenaFinalization(mutation, attempt.quiz.quizStatus);
+        if (!arena.finalizedAt) {
+          return () => NextResponse.json({ error: "Arena match is still active", code: "ARENA_NOT_ENDED" }, { status: 409 });
+        }
+        const completed = await tx.studentQuiz.findUniqueOrThrow({ where: { id: attempt.id } });
+        if (completed.quizStatus !== "completed" || !completed.endTime || completed.score === null) {
+          throw new Error("Arena final result is unavailable");
+        }
+        const payout = arena.payouts?.find((p) => p.studentId === session.userId);
+        if (!payout) throw new Error("Arena final reward is unavailable");
+        // Do not regrade/replace accepted answers or overwrite the final points.
+        return () => NextResponse.json({ success: true, studentQuiz: completed, rank: payout.rank,
+          arenaRevision: arena.revision, sessionId: arena.sessionId, result: {
+          score: Number(completed.score), violationCount: 0, integrityInvalidated: false,
+          deadlineExpired: arena.completionReason === "timer_expiry",
+          aiVerdict: null, cheatingProbability: null, expEarned: payout.amount, attemptMode: "arena",
+        } });
+      });
+      return reply();
     }
 
     if (studentQuiz.attemptMode !== "arena" && requestedAttemptId !== studentQuiz.id) {
@@ -96,31 +130,6 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "This quiz is not accepting submissions" }, { status: 409 });
     }
     if (studentQuiz.quizStatus === "completed" || studentQuiz.endTime) {
-      if (studentQuiz.attemptMode === "arena" && studentQuiz.quiz.quizMode === "arena"
-        && studentQuiz.quizStatus === "completed" && studentQuiz.endTime) {
-        const expEarned = await persistedArenaExp(studentQuiz.quizId, session.userId);
-        return NextResponse.json({
-          success: true,
-          studentQuiz: {
-            id: studentQuiz.id,
-            quizId: studentQuiz.quizId,
-            studentId: studentQuiz.studentId,
-            quizStatus: studentQuiz.quizStatus,
-            endTime: studentQuiz.endTime,
-            score: studentQuiz.score,
-            attemptMode: studentQuiz.attemptMode,
-          },
-          result: {
-            score: studentQuiz.score,
-            violationCount: 0,
-            integrityInvalidated: false,
-            aiVerdict: null,
-            cheatingProbability: null,
-            expEarned,
-            attemptMode: "arena",
-          },
-        });
-      }
       return NextResponse.json({ error: "This quiz has already been submitted" }, { status: 409 });
     }
     if (["pending_approval", "rejected"].includes(studentQuiz.quizStatus || "")) {
@@ -157,129 +166,8 @@ async function POSTImpl(req: NextRequest) {
       mergeLockedAnswers(submittedAnswers, lockedAnswers),
     );
     let score = grading.score;
-    const effectiveMode = studentQuiz.attemptMode === "arena" ? "arena" : "proctored";
-    const isArena = effectiveMode === "arena";
+    const effectiveMode = "proctored";
     const completedAt = new Date();
-
-    // ─────────────────────────────────────────────────────────────
-    // ARENA SUBMISSION PATH (Zero Gemini / Integrity Analysis)
-    // ─────────────────────────────────────────────────────────────
-    if (isArena) {
-      let recordedScore = score;
-      let completion;
-      try {
-        completion = await mutateArena(studentQuiz.quizId, async (mutation) => {
-          const tx = mutation.tx;
-          const arena = mutation.state;
-          if (typeof requestedSessionId === "string" && arena?.sessionId !== requestedSessionId) throw new SubmissionConflictError();
-          if (!arena?.participants?.[session.userId]) throw new SubmissionConflictError();
-          const freshLocked = await tx.answer.findMany({
-            where: { studentQuizId: studentQuiz.id, isCorrect: { not: null } },
-            select: { questionId: true, answerText: true },
-          });
-          grading = gradeSubmission(dbQuestions, mergeLockedAnswers(submittedAnswers, freshLocked.flatMap((answer) => {
-            const choiceId = Number(answer.answerText);
-            return Number.isInteger(choiceId) ? [{ questionId: answer.questionId, choiceId }] : [];
-          })));
-          recordedScore = score = grading.score;
-          const claimed = await tx.studentQuiz.updateMany({
-            where: {
-              id: studentQuiz.id,
-              endTime: null,
-              quizStatus: { notIn: ["completed", "submitting", "pending_approval", "rejected"] },
-              quiz: { quizStatus: { in: ["in_progress", "ended"] } },
-            },
-            data: { quizStatus: "submitting" },
-          });
-          if (claimed.count !== 1) throw new SubmissionConflictError();
-
-          await tx.answer.deleteMany({ where: { studentQuizId: studentQuiz.id } });
-          if (grading.records.length > 0) {
-            await tx.answer.createMany({
-              data: grading.records.map((record) => ({ ...record, studentQuizId: studentQuiz.id })),
-            });
-          }
-
-          const completed = await tx.studentQuiz.update({
-            where: { id: studentQuiz.id },
-            data: {
-              endTime: completedAt,
-              quizStatus: "completed",
-              score: recordedScore,
-              remarks: deadlineExpired ? "Arena match submitted automatically after the time limit expired." : null,
-              aiVerdict: null,
-              cheatingProbability: null,
-            },
-          });
-
-          await tx.notification.createMany({
-            data: [
-              {
-                userId: studentQuiz.quiz.teacherId,
-                title: "Power Arena Match Completed",
-                message: `${session.fullName} completed Power Arena "${studentQuiz.quiz.title}" with a score of ${score}%.`,
-              },
-              {
-                userId: session.userId,
-                title: "Arena Match Completed",
-                message: `You completed Power Arena "${studentQuiz.quiz.title}". Score: ${score}%.`,
-              },
-            ],
-          });
-
-          const expEarned = await getArenaExpAwarded(arena.sessionId, session.userId, tx);
-          return { completed, expEarned };
-        });
-      } catch (error) {
-        if (error instanceof SubmissionConflictError) {
-          return NextResponse.json({ error: "This arena session is already being submitted or completed" }, { status: 409 });
-        }
-        throw error;
-      }
-
-      const updatedStudentQuiz = completion.completed;
-
-      try {
-        const channelName = `private-teacher-${studentQuiz.quiz.teacherId}`;
-        await pusherServer.trigger(channelName, "student-submitted", {
-          studentId: session.userId,
-          studentName: session.fullName,
-          quizId: studentQuiz.quiz.id,
-          quizTitle: studentQuiz.quiz.title,
-          attemptMode: "arena",
-          score: recordedScore,
-          timestamp: new Date().toISOString(),
-        });
-
-        await pusherServer.trigger("private-admin-dashboard", "activity", {
-          type: "arena-submit",
-          userId: session.userId,
-          fullName: session.fullName,
-          role: "student",
-          activity: `Power Arena completed: ${studentQuiz.quiz.title} by ${session.fullName}`,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (pusherErr) {
-        console.error("Pusher arena submit broadcast error:", pusherErr);
-      }
-
-      // Power Arena EXP is awarded by Teacher End, never by submission.
-      const expEarned = completion.expEarned;
-      return NextResponse.json({
-        success: true,
-        studentQuiz: updatedStudentQuiz,
-        result: {
-          score: recordedScore,
-          violationCount: 0,
-          integrityInvalidated: false,
-          deadlineExpired,
-          aiVerdict: null,
-          cheatingProbability: null,
-          expEarned,
-          attemptMode: "arena",
-        },
-      });
-    }
 
     // ─────────────────────────────────────────────────────────────
     // 3. PROCTORED EXAM AI VERDICT & INTEGRITY POLICY ENFORCEMENT

@@ -13,8 +13,9 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
   }).outputText);
   const exports: any = {};
   vm.runInNewContext(compiled.get(file)!, {
-    exports, Date, Map, Set, Promise, Buffer, crypto, structuredClone,
-    setTimeout, process: { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn() {} },
+    exports, Date: dependencies.__Date ?? Date, Map, Set, Promise, Buffer, crypto, structuredClone,
+    setTimeout, clearTimeout, AbortController, AbortSignal,
+    process: dependencies.__process ?? { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn(...args: unknown[]) { (dependencies.__warnings as unknown[][] | undefined)?.push(args); }, info() {} },
     require: (name: string) => {
       if (name === "node:crypto") return crypto;
       if (!(name in dependencies)) throw new Error(`Missing dependency ${name}`);
@@ -29,7 +30,7 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
 export function arenaFixture(status: "active" | "lobby" = "active") {
   const settings = new Map<string, { settingKey: string; settingValue: string }>();
   let data: any = {
-    settings, answers: new Map(),
+    settings, answers: new Map(), notifications: [],
     quiz: { id: 77, teacherId: "teacher", quizMode: "arena", quizStatus: status === "active" ? "in_progress" : "active",
       title: "Fixture", totalQuestions: 2, questions: [1, 2].map((id) => ({ id, choices: [{ isCorrect: true }, { isCorrect: false }] })), _count: { questions: 2 } },
     attempts: new Map(["a", "b", "c"].map((id) => [id, { id: `attempt-${id}`, studentId: id, quizId: 77,
@@ -57,14 +58,15 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
     return row[key] === expected;
   });
   const db: any = {
-    $transaction: async (operation: (tx: any) => Promise<any>) => {
+    $transaction: async (operation: (tx: any) => Promise<any>, options?: { isolationLevel?: string }) => {
       transactions++;
       let release: (() => void) | undefined;
-      let local: any;
+      let local: any = options?.isolationLevel === "RepeatableRead" ? structuredClone(data) : undefined;
       const fail = (name: string) => { if (failure === name) { failure = ""; throw new Error(`injected ${name} failure`); } };
       const ready = () => { assert.ok(local, "authoritative reads must follow the advisory lock"); return local; };
       const tx: any = {
         $executeRaw: async (_sql: TemplateStringsArray, key: string) => {
+          if (_sql.join("") === "SET TRANSACTION READ ONLY") { timeline.push("readonly"); return 1; }
           timeline.push(`lock:${key}`);
           if (local) return 1;
           assert.equal(key, "arena-state:77", "Arena lock must precede answer/progression locks");
@@ -108,7 +110,13 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
             for (const row of ready().attempts.values()) if (matches(row, where)) { Object.assign(row, update); count++; }
             return { count };
           },
+          findUniqueOrThrow: async ({ where }: any) => {
+            const row = [...ready().attempts.values()].find((a: any) => a.id === where.id);
+            if (!row) throw new Error("attempt missing");
+            return structuredClone(row);
+          },
           update: async ({ where, data: update }: any) => {
+            fail("attempt");
             const row: any = [...ready().attempts.values()].find((a: any) => a.id === where.id);
             Object.assign(row, update); return row;
           },
@@ -121,7 +129,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
           deleteMany: async ({ where }: any) => { for (const [key, row] of ready().answers) if (row.studentQuizId === where.studentQuizId) local.answers.delete(key); },
           createMany: async ({ data: rows }: any) => { for (const row of rows) ready().answers.set(JSON.stringify({ studentQuizId: row.studentQuizId, questionId: row.questionId }), structuredClone(row)); },
         },
-        notification: { createMany: async () => {} },
+        notification: { createMany: async ({ data: rows }: any) => { fail("notification"); ready().notifications.push(...structuredClone(rows)); } },
       };
       try {
         const result = await operation(tx);
@@ -160,15 +168,18 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
     if (pusherFailure) throw new Error("pusher unavailable");
     events.push({ event, data: structuredClone(payload) });
   } };
-  const realtime = loadArenaModule("src/lib/arena-realtime.ts", { "@/lib/pusher": { pusherServer: pusher } });
+  const realtime = loadArenaModule("src/lib/arena-realtime.ts", { "./arena.ts": arena, "@/lib/pusher": { arenaPusher: pusher } });
   const progression = loadArenaModule("src/lib/student-progression.ts", { "./prisma.ts": { __esModule: true, default: db } });
+  const finalization = loadArenaModule("src/lib/arena-finalization.ts", {
+    "./arena.ts": arena, "./arena-realtime.ts": realtime, "./student-progression.ts": progression,
+  });
   const load = (file: string, userId: string, role = "student") => loadArenaModule(`src/app/api/${file}/route.ts`, {
     __diagnostics: errors,
     "next/server": { NextResponse: { json: (body: any, options: any = {}) => ({ status: options.status ?? 200, body: structuredClone(body) }) } },
     "@/lib/auth": { getSession: async () => ({ userId, role, fullName: userId }) },
     "@/lib/prisma": { __esModule: true, default: db },
-    "@/lib/arena": arena, "@/lib/arena-realtime": realtime, "@/lib/student-progression": progression,
-    "@/lib/pusher": { pusherServer: pusher }, "@/lib/security": {},
+    "@/lib/arena": arena, "@/lib/arena-finalization": finalization, "@/lib/arena-realtime": realtime, "@/lib/student-progression": progression,
+    "@/lib/pusher": { pusherServer: pusher, arenaPusher: pusher }, "@/lib/security": {},
     "@/lib/quiz-mode": quizMode, "@/lib/quiz-access": {},
     "@/lib/quiz-submission": grading, "@/lib/proctored-runtime": {}, "@/lib/gemini": {},
     "@/lib/quiz-availability": { DELETED_QUIZ_STATUS: "deleted", isQuizAvailable: (s: string) => s !== "deleted", quizNotAvailableResponse: () => ({ error: "unavailable" }) },
@@ -177,7 +188,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
   });
   const request = (body: object) => ({ json: async () => body, headers: { get: () => null } });
   return {
-    arena, db, events, timeline, load, errors,
+    arena, finalization, db, events, timeline, load, errors,
     runScheduled: async () => { for (const work of scheduled.splice(0)) await work(); },
     restartRead: () => loadArenaModule("src/lib/arena.ts", {
       "./prisma.ts": { __esModule: true, default: db },

@@ -29,7 +29,7 @@ test("Test A & G: Arena submission branches before Gemini analysis and Proctored
   // Confirm submission mode resolution strictly checks studentQuiz.attemptMode
   assert.match(
     submitRouteSrc,
-    /const effectiveMode =\s*studentQuiz\.attemptMode === ["']arena["'] \? ["']arena["'] : ["']proctored["']/
+    /const isArena = studentQuiz\.attemptMode === "arena"/
   );
 
   // Confirm Arena block is placed BEFORE Gemini prompt and call
@@ -50,11 +50,11 @@ test("Test A & G: Arena submission branches before Gemini analysis and Proctored
 
 test("Test B, C, D & E: Arena submission never invalidates score, sets null AI verdicts, and never touches AiAnalysis", () => {
   const arenaBlockIndex = submitRouteSrc.indexOf("if (isArena) {");
-  const proctoredSectionIndex = submitRouteSrc.indexOf("// ─────────────────────────────────────────────────────────────\n    // 3. PROCTORED EXAM AI VERDICT");
+  const proctoredSectionIndex = submitRouteSrc.indexOf("    if (studentQuiz.attemptMode !==");
   const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
 
   // Never invalidates score
-  assert.match(arenaSubstring, /let recordedScore = score;/);
+  assert.match(arenaSubstring, /score: Number\(completed\.score\)/);
   assert.equal(arenaSubstring.includes("isIntegrityInvalidated"), false);
 
   // aiVerdict and cheatingProbability remain null
@@ -68,10 +68,10 @@ test("Test B, C, D & E: Arena submission never invalidates score, sets null AI v
 
 test("Test F: Arena scoring remains independent from retired coin rewards", () => {
   const arenaBlockIndex = submitRouteSrc.indexOf("if (isArena) {");
-  const proctoredSectionIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
+  const proctoredSectionIndex = submitRouteSrc.indexOf("    if (studentQuiz.attemptMode !==");
   const arenaSubstring = submitRouteSrc.substring(arenaBlockIndex, proctoredSectionIndex);
-  assert.match(arenaSubstring, /let recordedScore = score;/);
-  assert.match(arenaSubstring, /expEarned,/);
+  assert.match(arenaSubstring, /score: Number\(completed\.score\)/);
+  assert.match(arenaSubstring, /expEarned: payout\.amount/);
   assert.equal(arenaSubstring.includes("awardArenaExpOnce"), false);
   assert.equal(arenaSubstring.includes("awardStudentExp"), false);
   assert.equal(arenaSubstring.includes("studentCoinLedger"), false);

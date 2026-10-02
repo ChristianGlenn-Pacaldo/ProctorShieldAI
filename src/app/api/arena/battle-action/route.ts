@@ -1,3 +1,4 @@
+import { recoverArenaFinalization, resolveArenaAttackDurably } from "@/lib/arena-finalization";
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -8,90 +9,27 @@ import {
   mutateArena,
   getPowerPenalty,
   isArenaPowerId,
-  resolveArenaAttack,
   resolvePendingAttackInState,
   type ArenaParticipant,
   type ArenaPowerId,
   type ArenaState,
   type PendingAttack,
 } from "@/lib/arena";
-import { arenaRealtime } from "@/lib/arena-realtime";
-import { pusherServer } from "@/lib/pusher";
+import { arenaRealtime, broadcastArenaAttackHit } from "@/lib/arena-realtime";
 import { isQuizAvailable, quizNotAvailableResponse } from "@/lib/quiz-availability";
 const REACTION_WINDOW_MS = 2500;
 // Build JSON after commit so the body carries its committed Arena revision.
 function jsonAfterCommit(body: unknown, init?: ResponseInit) {
   return () => NextResponse.json(body, init);
 }
-async function broadcastPendingAttackHit(quizId: number, arena: ArenaState, resolution: {
-  attack: PendingAttack;
-  target: ArenaParticipant;
-  participants?: ArenaParticipant[];
-  penalty?: number;
-}, realtime: Pick<typeof pusherServer, "trigger"> | ReturnType<typeof arenaRealtime> = pusherServer) {
-  const attack = resolution.attack;
-  const target = resolution.target;
-  const penalty = resolution.penalty ?? getPowerPenalty(attack.powerType);
-  const updatedRankings = resolution.participants ?? computeArenaRankings(arena.participants);
-  const hitEventData = {
-    arenaRevision: arena.revision,
-    attackId: attack.attackId,
-    sessionId: attack.sessionId || arena.sessionId,
-    attackerId: attack.attackerId,
-    attackerName: attack.attackerName,
-    targetStudentId: attack.targetStudentId,
-    targetId: attack.targetStudentId,
-    targetName: attack.targetName,
-    powerType: attack.powerType,
-    scorePenalty: penalty,
-    damage: penalty,
-    targetCurrentScore: target.score,
-    targetRank: target.rank,
-    participants: updatedRankings,
-    status: "hit",
-    timestamp: new Date().toISOString(),
-  };
-  await Promise.allSettled([
-    realtime.trigger([`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`], "arena-attack-hit", hitEventData),
-    realtime.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
-    realtime.trigger(`private-arena-${quizId}`, "arena-score-updated", {
-      quizId,
-      arenaRevision: arena.revision,
-      sessionId: arena.sessionId,
-      studentId: attack.targetStudentId,
-      score: target.score,
-      rank: target.rank,
-      totalCount: updatedRankings.length,
-      penalty,
-    }),
-    realtime.trigger(`private-arena-${quizId}`, "arena-leaderboard-updated", {
-      quizId,
-      arenaRevision: arena.revision,
-      sessionId: arena.sessionId,
-      participants: updatedRankings,
-    }),
-  ]);
-  return hitEventData;
-}
+const broadcastPendingAttackHit = broadcastArenaAttackHit;
 // Resolve an expired pending attack into a confirmed hit with score deduction
 async function applyPendingAttackHit(
   quizId: number,
   attackId: string,
   options: { resolverStudentId?: string; expectedTargetStudentId?: string } = {},
 ) {
-  const { state: arena, resolution } = await resolveArenaAttack(quizId, attackId, options);
-  if (!arena || resolution.code !== "resolved" || !resolution.attack || !resolution.target) {
-    return { code: resolution.code, hit: null, attack: resolution.attack };
-  }
-
-  const hitEventData = await broadcastPendingAttackHit(quizId, arena, {
-    attack: resolution.attack,
-    target: resolution.target,
-    participants: resolution.participants,
-    penalty: resolution.penalty,
-  });
-
-  return { code: resolution.code, hit: hitEventData, attack: resolution.attack };
+  return resolveArenaAttackDurably(quizId, attackId, options);
 }
 // POST /api/arena/battle-action — authoritative realtime targeted score-based combat
 async function POSTImpl(req: NextRequest) {
@@ -144,6 +82,7 @@ async function POSTImpl(req: NextRequest) {
       if (!arena || arena.status === "lobby") {
         return jsonAfterCommit({ error: "Arena has not started yet. Wait for teacher to start.", code: "ARENA_NOT_STARTED" }, { status: 409 });
       }
+      if (arena.participants[session.userId] && (typeof record?.sessionId !== "string" || record.sessionId === arena.sessionId)) await recoverArenaFinalization(mutation);
       if (arena.status === "ended" || (arena.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt))) {
         return jsonAfterCommit({ error: "Arena match has already ended.", code: "ARENA_ENDED" }, { status: 409 });
       }
@@ -155,10 +94,15 @@ async function POSTImpl(req: NextRequest) {
       if (!arena.participants || !arena.participants[session.userId]) {
         return jsonAfterCommit({ error: "You are not an active participant in this Arena session.", code: "NOT_ARENA_PARTICIPANT" }, { status: 403 });
       }
+      // Authorized participant facts and revision are materialized AFTER commit.
+      const arenaReply = (body: object, init?: ResponseInit) => () => NextResponse.json({
+        ...body, quizId, arenaRevision: arena.revision, sessionId: arena.sessionId,
+        participants: computeArenaRankings(arena.participants), usedPowers: arena.usedPowers[session.userId] ?? {},
+      }, init);
       if (isResolveAction) {
         const attackId = (record.attackId as string).trim();
         if (!/^[a-zA-Z0-9_-]{1,128}$/.test(attackId)) {
-          return jsonAfterCommit({ error: "Invalid attack ID", code: "INVALID_ATTACK_ID" }, { status: 400 });
+          return arenaReply({ error: "Invalid attack ID", code: "INVALID_ATTACK_ID" }, { status: 400 });
         }
         const resolution = resolvePendingAttackInState(arena, attackId, {
           resolverStudentId: session.userId,
@@ -170,7 +114,7 @@ async function POSTImpl(req: NextRequest) {
         const result = { code: resolution.code, attack: resolution.attack };
         const code = result.code;
         if (code === "resolved" || code === "already_resolved") {
-          return jsonAfterCommit({
+          return arenaReply({
             success: true,
             resolved: code === "resolved",
             code,
@@ -179,25 +123,25 @@ async function POSTImpl(req: NextRequest) {
           });
         }
         if (code === "wrong_student" || code === "not_participant") {
-          return jsonAfterCommit({ error: "You cannot resolve another student's attack", code }, { status: 403 });
+          return arenaReply({ error: "You cannot resolve another student's attack", code }, { status: 403 });
         }
         if (code === "wrong_target" || code === "invalid_attack") {
-          return jsonAfterCommit({ error: "Attack target does not match the pending action", code }, { status: 400 });
+          return arenaReply({ error: "Attack target does not match the pending action", code }, { status: 400 });
         }
         if (code === "premature") {
-          return jsonAfterCommit({ error: "Attack reaction window is still active", code }, { status: 409 });
+          return arenaReply({ error: "Attack reaction window is still active", code }, { status: 409 });
         }
         if (code === "arena_inactive") {
-          return jsonAfterCommit({ error: "Arena match is no longer active", code }, { status: 409 });
+          return arenaReply({ error: "Arena match is no longer active", code }, { status: 409 });
         }
-        return jsonAfterCommit({ error: "Pending attack not found", code }, { status: 404 });
+        return arenaReply({ error: "Pending attack not found", code }, { status: 404 });
       }
       if (!isArenaPowerId(rawPower)) {
-        return jsonAfterCommit({ error: "Invalid battle power" }, { status: 400 });
+        return arenaReply({ error: "Invalid battle power" }, { status: 400 });
       }
       const powerType = rawPower as ArenaPowerId;
       if (Array.isArray(arena.enabledPowers) && !arena.enabledPowers.includes(powerType)) {
-        return jsonAfterCommit({ error: "That battle power is disabled for this arena" }, { status: 403 });
+        return arenaReply({ error: "That battle power is disabled for this arena" }, { status: 403 });
       }
       if (!arena.usedPowers)
         arena.usedPowers = {};
@@ -207,7 +151,7 @@ async function POSTImpl(req: NextRequest) {
         arena.pendingAttacks = {};
       if (powerType === "shield" && defendAttackId) {
         if (!/^[a-zA-Z0-9_-]{1,128}$/.test(defendAttackId)) {
-          return jsonAfterCommit({ error: "Invalid attack ID", code: "invalid_attack" }, { status: 400 });
+          return arenaReply({ error: "Invalid attack ID", code: "invalid_attack" }, { status: 400 });
         }
         const lockedArena = arena;
         const resolution = deflectPendingAttackInState(arena, defendAttackId, {
@@ -234,7 +178,7 @@ async function POSTImpl(req: NextRequest) {
             realtime.trigger(`private-arena-${quizId}`, "attack-deflected", deflectEventData),
             realtime.trigger(`private-arena-${quizId}`, "attack-blocked", deflectEventData),
           ]);
-          return jsonAfterCommit({
+          return arenaReply({
             success: true,
             deflected: true,
             code: resolution.code,
@@ -257,21 +201,21 @@ async function POSTImpl(req: NextRequest) {
           }, realtime);
         }
         if (resolution.code === "already_resolved") {
-          return jsonAfterCommit({ success: true, code: resolution.code, attackStatus });
+          return arenaReply({ success: true, code: resolution.code, attackStatus });
         }
         if (resolution.code === "shield_already_used") {
-          return jsonAfterCommit({ error: "Guardian Shield has already been used in this match.", code: resolution.code, attackStatus }, { status: 409 });
+          return arenaReply({ error: "Guardian Shield has already been used in this match.", code: resolution.code, attackStatus }, { status: 409 });
         }
         if (resolution.code === "too_late") {
-          return jsonAfterCommit({ error: "Guardian Shield arrived after the reaction window.", code: resolution.code, attackStatus }, { status: 409 });
+          return arenaReply({ error: "Guardian Shield arrived after the reaction window.", code: resolution.code, attackStatus }, { status: 409 });
         }
         if (resolution.code === "wrong_student" || resolution.code === "not_participant") {
-          return jsonAfterCommit({ error: "You cannot defend another student.", code: resolution.code }, { status: 403 });
+          return arenaReply({ error: "You cannot defend another student.", code: resolution.code }, { status: 403 });
         }
         if (resolution.code === "arena_inactive") {
-          return jsonAfterCommit({ error: "Arena match is no longer active.", code: resolution.code }, { status: 409 });
+          return arenaReply({ error: "Arena match is no longer active.", code: resolution.code }, { status: 409 });
         }
-        return jsonAfterCommit({ error: "Pending attack not found.", code: resolution.code }, { status: 404 });
+        return arenaReply({ error: "Pending attack not found.", code: resolution.code }, { status: 404 });
       }
       // ─────────────────────────────────────────────────────────────
       // RULE 13 & 14: EVERY POWER IS ONCE PER STUDENT PER MATCH
@@ -283,7 +227,7 @@ async function POSTImpl(req: NextRequest) {
           blizzard: "Blizzard",
           shield: "Guardian Shield",
         };
-        return jsonAfterCommit({
+        return arenaReply({
           error: `${powerNames[powerType]} has already been used in this match.`,
           code: "POWER_ALREADY_USED",
         }, { status: 409 });
@@ -307,7 +251,7 @@ async function POSTImpl(req: NextRequest) {
           realtime.trigger([`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`], "arena-shield-equipped", shieldArmData),
         ]);
         await shieldBroadcast;
-        return jsonAfterCommit({
+        return arenaReply({
           success: true,
           powerType: "shield",
           targetId: session.userId,
@@ -318,22 +262,22 @@ async function POSTImpl(req: NextRequest) {
       // CASE 2: OFFENSIVE POWERS (METEOR, EARTHQUAKE, BLIZZARD)
       // ─────────────────────────────────────────────────────────────
       if (!targetStudentId) {
-        return jsonAfterCommit({ error: "Target student is required for offensive battle powers", code: "INVALID_TARGET" }, { status: 400 });
+        return arenaReply({ error: "Target student is required for offensive battle powers", code: "INVALID_TARGET" }, { status: 400 });
       }
       if (targetStudentId === session.userId) {
-        return jsonAfterCommit({ error: "You cannot target yourself with an offensive power", code: "SELF_TARGET" }, { status: 400 });
+        return arenaReply({ error: "You cannot target yourself with an offensive power", code: "SELF_TARGET" }, { status: 400 });
       }
       // Target must be a currently joined participant in this Arena session
       const targetParticipant = arena.participants[targetStudentId];
       if (!targetParticipant) {
-        return jsonAfterCommit({ error: "Target student is not a currently joined participant in this Arena session.", code: "INVALID_TARGET" }, { status: 400 });
+        return arenaReply({ error: "Target student is not a currently joined participant in this Arena session.", code: "INVALID_TARGET" }, { status: 400 });
       }
       const targetEnrollment = await prisma.studentQuiz.findFirst({
         where: { quizId, studentId: targetStudentId, quizStatus: { not: "rejected" } },
         select: { attemptMode: true },
       });
       if (!targetEnrollment || targetEnrollment.attemptMode !== "arena") {
-        return jsonAfterCommit({ error: "Target student does not belong to this arena", code: "INVALID_TARGET" }, { status: 400 });
+        return arenaReply({ error: "Target student does not belong to this arena", code: "INVALID_TARGET" }, { status: 400 });
       }
       // Mark offensive power as USED permanently for this student in this match
       arena.usedPowers[session.userId][powerType] = true;
@@ -398,7 +342,7 @@ async function POSTImpl(req: NextRequest) {
         }
       }));
       await broadcastPromise;
-      return jsonAfterCommit({
+      return arenaReply({
         success: true,
         ...incomingEventData,
       });

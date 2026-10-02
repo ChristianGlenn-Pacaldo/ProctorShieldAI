@@ -72,7 +72,10 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
  */
 export async function getStudentProgression(
   studentId: string,
-  client: DbClient = prisma
+  client: DbClient = prisma,
+  // Arena recovery excludes its own formerly incomplete award from history.
+  // Supplying this also makes bootstrap failures fatal to the caller's tx.
+  bootstrapExcludedAttemptIds?: string[],
 ): Promise<StudentProgression> {
   const key = progressionKey(studentId);
 
@@ -93,6 +96,7 @@ export async function getStudentProgression(
       };
     }
   } catch (err) {
+    if (bootstrapExcludedAttemptIds !== undefined) throw err;
     console.error(`Error reading progression for student ${studentId}:`, err);
   }
 
@@ -111,7 +115,9 @@ export async function getStudentProgression(
     let baselineExp = 0;
     try {
       const completed = await tx.studentQuiz.findMany({
-        where: { studentId, quizStatus: "completed" },
+        where: { studentId, quizStatus: "completed",
+          ...(bootstrapExcludedAttemptIds === undefined ? {} : { id: { notIn: bootstrapExcludedAttemptIds } }),
+        },
         select: { score: true },
       });
       const count = completed.length;
@@ -140,6 +146,7 @@ export async function getStudentProgression(
         },
       });
     } catch (err) {
+      if (bootstrapExcludedAttemptIds !== undefined) throw err;
       console.error(`Error bootstrapping progression for student ${studentId}:`, err);
     }
 
@@ -153,7 +160,8 @@ export async function getStudentProgression(
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${studentId}`}))`;
         return runBootstrap(tx);
       });
-    } catch {
+    } catch (error) {
+      if (bootstrapExcludedAttemptIds !== undefined) throw error;
       totalExp = await runBootstrap(client);
     }
   } else {

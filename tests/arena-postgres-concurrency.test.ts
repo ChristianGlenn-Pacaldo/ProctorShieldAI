@@ -20,8 +20,8 @@ test("PostgreSQL independent connections serialize Arena mutations and roll back
   assert.equal(url.pathname, "/proctorshield_arena_atomic_test");
   const schema = `arena_atomic_${crypto.randomBytes(8).toString("hex")}`;
   const admin = new Client({ connectionString: configured });
-  const one = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1 }, { schema }) });
-  const two = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1 }, { schema }) });
+  const one = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1, application_name: schema }, { schema }) });
+  const two = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1, application_name: schema }, { schema }) });
   const arena = loadArenaModule("src/lib/arena.ts", {
     "./prisma.ts": { __esModule: true, default: one },
     "./redis.ts": { getRedis: () => null, isRedisReady: () => false },
@@ -58,7 +58,7 @@ test("PostgreSQL independent connections serialize Arena mutations and roll back
       // A bounded poll observes PostgreSQL's actual advisory-lock wait.
       let observedWait = false;
       for (let i = 0; i < 100; i++) {
-        const waiting = await admin.query("SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())");
+        const waiting = await admin.query("SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE locktype = 'advisory' AND NOT granted AND a.application_name=$1", [schema]);
         if (waiting.rowCount) { observedWait = true; break; }
         await new Promise((resolve) => setTimeout(resolve, 10));
       }

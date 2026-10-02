@@ -145,7 +145,7 @@ model StudentQuiz {
   randomSeed          String?  @map("random_seed")
   startTime           DateTime? @map("start_time")
   endTime             DateTime? @map("end_time")
-  score               Decimal?  @db.Decimal(5, 2)
+  score               Decimal?  @db.Decimal(20, 2)
   remarks             String?
   aiVerdict           String?  @map("ai_verdict")
   cheatingProbability Decimal? @map("cheating_probability") @db.Decimal(5, 2)

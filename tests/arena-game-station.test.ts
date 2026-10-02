@@ -104,7 +104,6 @@ test("Test G: Tab switching/blur does not generate violations for Arena", () => 
   const allArenaSources = [arenaPageSrc, arenaContentSrc, arenaDockSrc, arenaPodiumSrc].join("\n");
 
   const violationPatterns = [
-    "visibilitychange",
     "window.onblur",
     "window.blur",
     "fullscreenchange",

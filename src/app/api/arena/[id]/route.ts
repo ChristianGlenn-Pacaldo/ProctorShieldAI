@@ -13,9 +13,9 @@ import {
   reconcileArenaAttacksInState,
   isArenaAction,
   normalizeArenaConfig,
+  type ArenaState,
 } from "@/lib/arena";
-import { awardArenaExpOnce, EXP_REWARDS } from "@/lib/student-progression";
-import type { ArenaState } from "@/lib/arena";
+import { finalizeArena, recoverArenaFinalization } from "@/lib/arena-finalization";
 import { isQuizAvailable, quizNotAvailableResponse } from "@/lib/quiz-availability";
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -61,30 +61,7 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string, d
   }
   return quiz;
 }
-async function awardArenaExp(state: ArenaState, tx: Prisma.TransactionClient) {
-  if (!state.participants)
-    return [];
-  const ranked = computeArenaRankings(state.participants);
-  const awards: Array<{
-    studentId: string;
-    rank: number;
-    amount: number;
-  }> = [];
-  // Acquire progression locks in student-id order across all Arena finalizers.
-  for (const p of [...ranked].sort((a, b) => a.studentId.localeCompare(b.studentId))) {
-    let exp = EXP_REWARDS.ARENA_PARTICIPATION;
-    if (p.rank === 1)
-      exp += EXP_REWARDS.ARENA_RANK_1;
-    else if (p.rank === 2)
-      exp += EXP_REWARDS.ARENA_RANK_2;
-    else if (p.rank === 3)
-      exp += EXP_REWARDS.ARENA_RANK_3;
-    await awardArenaExpOnce(state.sessionId, p.studentId, exp, `Arena Match Completion (Rank #${p.rank})`, tx);
-    awards.push({ studentId: p.studentId, rank: p.rank, amount: exp });
-  }
-  return awards.sort((a, b) => a.rank - b.rank);
-}
-async function GETImpl(_req: NextRequest, { params }: RouteParams) {
+async function GETImpl(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {
@@ -94,6 +71,31 @@ async function GETImpl(_req: NextRequest, { params }: RouteParams) {
     const quizId = parseQuizId(id);
     if (!quizId)
       return NextResponse.json({ error: "Invalid quiz ID" }, { status: 400 });
+    if (req.nextUrl?.searchParams.get("view") === "snapshot") {
+      // Client reconciliation must never finalize, resolve attacks or award EXP.
+      // One repeatable, read-only PostgreSQL snapshot also prevents mixed reset/
+      // completion facts between the authorization, state and attempt reads.
+      return await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+        const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role, tx);
+        if (!quiz) return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
+        if (!isQuizAvailable(quiz.quizStatus)) return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
+        if (quiz.quizMode !== "arena") return NextResponse.json({ error: "Not an Arena quiz", code: "INVALID_QUIZ_MODE" }, { status: 409 });
+        const record = await tx.setting.findUnique({ where: { settingKey: `arena:state:${quizId}` } });
+        const state: ArenaState | null = record?.settingValue ? JSON.parse(record.settingValue) : null;
+        const resultReady = !!state?.finalizedAt && state.status === "ended";
+        const payout = state?.payouts?.find((p) => p.studentId === session.userId);
+        const attempt = session.role === "student" && resultReady && payout
+          ? await tx.studentQuiz.findFirst({ where: { quizId, studentId: session.userId, attemptMode: "arena" }, orderBy: { attemptNumber: "desc" } }) : null;
+        const result = attempt?.quizStatus === "completed" && attempt.endTime && attempt.score !== null && payout
+          ? { score: Number(attempt.score), rank: payout.rank, expEarned: payout.amount } : null;
+        return NextResponse.json({ success: true, quizId, serverTime: Date.now(), arena: state,
+          status: state?.status ?? "lobby", sessionId: state?.sessionId,
+          participants: state?.participants ? computeArenaRankings(state.participants) : [],
+          usedPowers: state?.usedPowers?.[session.userId] ?? {}, quizStatus: quiz.quizStatus, resultReady, result,
+        }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 10_000 });
+    }
     const reply = await mutateArena(quizId, async (mutation) => {
       const prisma = mutation.tx;
       const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role, prisma);
@@ -108,32 +110,11 @@ async function GETImpl(_req: NextRequest, { params }: RouteParams) {
           code: "INVALID_QUIZ_MODE",
         }, { status: 409 });
       }
-      let state = mutation.state;
+      const state = mutation.state;
       if (state)
         reconcileArenaAttacksInState(state, mutation.now);
       try {
-        // Authoritative check: If overall timer expired while active, transition to ended
-        if (state?.status === "active" && state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)) {
-          state = {
-            ...state,
-            status: "ended",
-            endedAt: state.endedAt || new Date().toISOString(),
-            pendingAttacks: {},
-          };
-          await prisma.quiz.update({
-            where: { id: quizId },
-            data: { quizStatus: "ended" },
-          });
-          await prisma.studentQuiz.updateMany({
-            where: { quizId, quizStatus: "in_progress" },
-            data: { quizStatus: "completed", endTime: new Date() },
-          });
-        }
-        if (quiz.quizStatus === "ended") {
-          if (state && state.status !== "ended") {
-            state = { ...state, status: "ended", endedAt: state.endedAt || new Date().toISOString() };
-          }
-        }
+        await recoverArenaFinalization(mutation, quiz.quizStatus);
         // Only return participants who explicitly joined the current Arena session (NO ghost participants)
         const rankedParticipants = state?.participants
           ? computeArenaRankings(state.participants)
@@ -146,7 +127,7 @@ async function GETImpl(_req: NextRequest, { params }: RouteParams) {
           sessionId: state?.sessionId,
           participants: rankedParticipants,
           usedPowers: (state?.usedPowers && state.usedPowers[session.userId]) || {},
-          quizStatus: quiz.quizStatus,
+          quizStatus: state?.status === "ended" ? "ended" : quiz.quizStatus,
         }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
       }
       finally {
@@ -198,7 +179,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
         return jsonAfterCommit({ error: "Add at least one question before launching an arena" }, { status: 409 });
       }
       let state = mutation.state;
-      if (state)
+      if (state && action !== "end")
         reconcileArenaAttacksInState(state, mutation.now);
       try {
         const actionId = typeof record.actionId === "string" ? record.actionId : undefined;
@@ -206,10 +187,11 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
         if (actionId && !/^[a-zA-Z0-9_-]{1,128}$/.test(actionId)) {
           return jsonAfterCommit({ error: "Invalid action identity" }, { status: 400 });
         }
-        if (state?.status === "active" && state.matchEndsAt && mutation.now >= Date.parse(state.matchEndsAt) && action !== "end") {
+        await recoverArenaFinalization(mutation, quiz.quizStatus);
+        if (state?.status === "ended" && action !== "end") {
           return jsonAfterCommit({ error: "Arena match has already ended", code: "ARENA_ENDED" }, { status: 409 });
         }
-        let payouts: Awaited<ReturnType<typeof awardArenaExp>> = [];
+        let payouts: Awaited<ReturnType<typeof finalizeArena>> = [];
         // ─────────────────────────────────────────────────────────────
         // ACTION: JOIN (Student explicitly joins current session lobby)
         // ─────────────────────────────────────────────────────────────
@@ -293,7 +275,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           return jsonAfterCommit({ error: "Stale Arena session", code: "STALE_ARENA_SESSION" }, { status: 409 });
         }
         // Server-Side Reuse Block: Completed Arena Quizzes cannot be re-hosted or reset
-        if (quiz.quizStatus === "ended" || (state?.status === "ended" && action !== "end")) {
+        if ((quiz.quizStatus === "ended" || state?.status === "ended") && action !== "end") {
           return jsonAfterCommit({
             error: "This Power Arena quiz has already been completed. Create a new quiz to host another Arena match.",
             code: "ARENA_QUIZ_ALREADY_COMPLETED",
@@ -427,34 +409,8 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
             }
           }
           else if (action === "end") {
-            if (state.participants) {
-              for (const studentId of Object.keys(state.participants).sort()) {
-                await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-progression:${studentId}`}))`;
-              }
-              for (const p of Object.values(state.participants)) {
-                await prisma.studentQuiz.updateMany({
-                  where: { quizId, studentId: p.studentId },
-                  data: { score: p.score },
-                });
-              }
-            }
-            payouts = await awardArenaExp(state, prisma);
-            if (!isEndRetry) {
-              state = {
-                ...state,
-                status: "ended",
-                endedAt: new Date().toISOString(),
-                pendingAttacks: {},
-              };
-              await prisma.quiz.update({
-                where: { id: quizId },
-                data: { quizStatus: "ended" },
-              });
-              await prisma.studentQuiz.updateMany({
-                where: { quizId, quizStatus: "in_progress" },
-                data: { quizStatus: "completed", endTime: new Date() },
-              });
-            }
+            mutation.state = state;
+            payouts = await finalizeArena(mutation);
           }
           else if (action === "airdrop") {
             if (state.participants) {
@@ -492,7 +448,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
             amount: payout.amount,
           })),
         };
-        await realtime.trigger(`private-arena-${quizId}`, event, eventData);
+        if (action !== "end") await realtime.trigger(`private-arena-${quizId}`, event, eventData);
         return jsonAfterCommit({
           success: true,
           action,
@@ -515,4 +471,6 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
   }
 }
 export const POST = withBackupWriteGate(POSTImpl);
-export const GET = withBackupWriteGate(GETImpl);
+const gatedGET = withBackupWriteGate(GETImpl);
+export const GET = (req: NextRequest, params: RouteParams) => req.nextUrl?.searchParams.get("view") === "snapshot"
+  ? GETImpl(req, params) : gatedGET(req, params);

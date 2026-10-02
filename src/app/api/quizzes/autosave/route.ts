@@ -1,3 +1,4 @@
+import { recoverArenaFinalization } from "@/lib/arena-finalization";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -37,7 +38,7 @@ async function POSTImpl(req: NextRequest) {
     }
 
     const deadline = studentQuiz.startTime.getTime() + (studentQuiz.quiz.duration ?? 60) * 60_000 + 60_000;
-    if (Date.now() > deadline) {
+    if (studentQuiz.attemptMode !== "arena" && Date.now() > deadline) {
       return NextResponse.json({ error: "The autosave deadline has passed" }, { status: 409 });
     }
 
@@ -98,12 +99,16 @@ async function POSTImpl(req: NextRequest) {
       }
     };
     if (studentQuiz.attemptMode === "arena") {
-      await mutateArena(quizId, async ({ tx, state }) => {
+      const saved = await mutateArena(quizId, async (mutation) => {
+        const { tx, state } = mutation;
+        if (state?.participants[session.userId] && (typeof body.sessionId !== "string" || body.sessionId === state.sessionId)) await recoverArenaFinalization(mutation);
         if (!state || state.status !== "active" || !state.participants[session.userId]
           || (state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt))
-          || (typeof body.sessionId === "string" && body.sessionId !== state.sessionId)) throw new AutosaveConflictError();
+          || (typeof body.sessionId === "string" && body.sessionId !== state.sessionId)) return false;
         await saveAnswers(tx);
+        return true;
       });
+      if (!saved) throw new AutosaveConflictError();
     } else {
       await prisma.$transaction(saveAnswers);
     }

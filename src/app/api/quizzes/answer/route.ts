@@ -1,3 +1,4 @@
+import { recoverArenaFinalization } from "@/lib/arena-finalization";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -45,6 +46,10 @@ async function POSTImpl(req: NextRequest) {
       });
       if (!attempt?.startTime || (attempt.attemptMode !== "arena" && body.studentQuizId !== attempt.id)) {
         return jsonAfterCommit({ error: "Active quiz session not found" }, { status: 409 });
+      }
+      if (attempt.attemptMode === "arena" && arena?.participants[session.userId]
+        && (typeof body.sessionId !== "string" || body.sessionId === arena.sessionId)) {
+        await recoverArenaFinalization(mutation);
       }
       const deadline = attempt.startTime.getTime() + (attempt.quiz.duration ?? 60) * 60000 + 60000;
       if (Date.now() > deadline) {
@@ -175,13 +180,17 @@ async function POSTImpl(req: NextRequest) {
           }),
         ]);
       }
-      return jsonAfterCommit({
+      const response = {
         success: true,
         ...result,
         score: updatedScore,
         rank: updatedRank,
         totalCount,
-      });
+      };
+      return () => NextResponse.json({ ...response, ...(attempt.attemptMode === "arena" && arena ? {
+        quizId, arenaRevision: arena.revision, sessionId: arena.sessionId, status: arena.status,
+        participants: computeArenaRankings(arena.participants), usedPowers: arena.usedPowers[session.userId] ?? {},
+      } : {}) });
     });
     return reply();
   }

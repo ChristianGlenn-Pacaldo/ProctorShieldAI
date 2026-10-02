@@ -37,6 +37,8 @@ const apiArenaRouteSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/api/arena/[id]/route.ts"),
   "utf-8"
 );
+const finalizationSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/arena-finalization.ts"), "utf8");
+const arenaRealtimeSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/arena-realtime.ts"), "utf8");
 const battleActionRouteSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/api/arena/battle-action/route.ts"),
   "utf-8"
@@ -116,8 +118,9 @@ test("Requirement 7: Student completing all questions does not end whole Arena",
 
 test("Requirement 8: Match timer expiry ends all students", () => {
   // Server GET /api/arena/[id] checks matchEndsAt expiry and transitions to ended
-  assert.match(apiArenaRouteSrc, /state\.matchEndsAt\s*&&\s*Date\.now\(\)\s*>=\s*Date\.parse\(state\.matchEndsAt\)/);
-  assert.match(apiArenaRouteSrc, /status:\s*["']ended["']/);
+  assert.match(apiArenaRouteSrc, /recoverArenaFinalization\(mutation, quiz\.quizStatus\)/);
+  assert.match(finalizationSrc, /mutation\.now >= Date\.parse\(state\.matchEndsAt\)/);
+  assert.match(finalizationSrc, /state\.status = "ended"/);
 
   // Student timer expiry calls finalizeMatch()
   assert.match(studentArenaContentSrc, /if\s*\(remaining\s*<=\s*0\)\s*\{\s*void\s*finalizeMatch\(\);/);
@@ -129,14 +132,13 @@ test("Requirement 9: Teacher End Arena immediately ends all students", () => {
   assert.match(teacherArenaContentSrc, /broadcastArenaAction\(["']end["']\)/);
 
   // Student client listens to arena-end and transitions to podium
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{/);
-  assert.match(studentArenaContentSrc, /void\s*finalizeMatch\(\)/);
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],[\s\S]*?arenaCompletedRef\.current = true[\s\S]*?reconciliationRef\.current\?\.refresh\(\)/);
 });
 
 test("Requirement 10: Reconnect restores correct match state", () => {
   // GET /api/arena/[id] restores arena state, ranked participants, and student's usedPowers
   assert.match(apiArenaRouteSrc, /usedPowers:\s*\(state\?\.usedPowers\s*&&\s*state\.usedPowers\[session\.userId\]\)/);
-  assert.match(studentArenaContentSrc, /setUsedPowers\(\(prev\)\s*=>\s*\(\{\s*\.\.\.prev,\s*\.\.\.data\.usedPowers\s*\}\)\)/);
+  assert.match(studentArenaContentSrc, /setUsedPowers\(\{\s*\.\.\.data\.usedPowers\s*\}\)/);
 });
 
 test("Requirement 11 & 12: 20 students generate ranks #1 through #20 and full leaderboard length matches participant count", () => {
@@ -290,8 +292,8 @@ test("Shield deflection remains terminal and causes no score deduction", () => {
 
 test("Requirement 30 & 31: Score deduction triggers ranking recalculation and broadcasts leaderboard update", () => {
   assert.match(libArenaSrc, /const participants = computeArenaRankings\(state\.participants\)/);
-  assert.match(battleActionRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-leaderboard-updated["']/);
-  assert.match(battleActionRouteSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-score-updated["']/);
+  assert.match(arenaRealtimeSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-leaderboard-updated["']/);
+  assert.match(arenaRealtimeSrc, /realtime\.trigger\(`private-arena-\${quizId}`,\s*["']arena-score-updated["']/);
 });
 
 test("Requirement 32: Teacher sees attacker, target, power, and combat result", () => {
@@ -302,8 +304,9 @@ test("Requirement 32: Teacher sees attacker, target, power, and combat result", 
 });
 
 test("Requirement 33: arena-end cancels/invalidates pending attacks", () => {
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*setIncomingAttack\(null\)/);
-  assert.match(apiArenaRouteSrc, /action\s*===\s*["']end["'][\s\S]*pendingAttacks:\s*\{\}/);
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],[\s\S]*setIncomingAttack\(null\)/);
+  assert.match(apiArenaRouteSrc, /action === "end"[\s\S]*finalizeArena\(mutation\)/);
+  assert.match(finalizationSrc, /state\.pendingAttacks = \{\}/);
 });
 
 test("Requirement 34 & 35: Final leaderboard contains all participants and podium highlights top 3 without hiding rest", () => {

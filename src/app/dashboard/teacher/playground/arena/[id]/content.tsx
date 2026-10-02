@@ -1,6 +1,7 @@
 "use client";
 
-import { acceptArenaRevision, guardArenaChannel } from "@/lib/arena-feedback";
+import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel } from "@/lib/arena-feedback";
+import { fetchArenaSnapshot, isTerminalArenaSnapshot, startArenaReconciliation, type ArenaSnapshot } from "@/lib/arena-client-reconciliation";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
@@ -102,7 +103,6 @@ export default function ArenaHostContent({
 }: ArenaHostContentProps) {
   // Arena Phase: 'lobby' | 'wave' | 'podium'
   const arenaRevisionRef = useRef(0);
-  useEffect(() => { arenaRevisionRef.current = 0; }, [quiz.id]);
   const [phase, setPhase] = useState<"lobby" | "wave" | "podium">("lobby");
 
   // Overall Match Duration Config (Teacher can choose 30m or 1h in lobby)
@@ -120,10 +120,25 @@ export default function ArenaHostContent({
   const [isActionPending, setIsActionPending] = useState(false);
   const actionPendingRef = useRef(false);
   const arenaSessionRef = useRef<string | null>(null);
+  const actionGenerationRef = useRef(0);
+  const terminalReconciledRef = useRef(false);
+  const actionQuizRef = useRef(quiz.id);
   const retryActionRef = useRef<{ action: string; payload: string; id: string; sessionId: string | null } | null>(null);
+  const readRealtimeIdentity = useCallback(() => ({ quizId: quiz.id, sessionId: arenaSessionRef.current,
+    terminal: terminalReconciledRef.current }), [quiz.id]);
+  useEffect(() => {
+    actionQuizRef.current = quiz.id;
+    arenaRevisionRef.current = 0;
+    arenaSessionRef.current = null;
+    terminalReconciledRef.current = false;
+    retryActionRef.current = null;
+    actionGenerationRef.current++;
+    return () => { actionGenerationRef.current++; };
+  }, [quiz.id]);
 
   // Battlers State: Starts EMPTY (0 ghost participants). Populated only when students join current session.
   const [battlers, setBattlers] = useState<Battler[]>([]);
+  const reconciliationRef = useRef<ReturnType<typeof startArenaReconciliation> | null>(null);
 
   // Live Combat Events Activity Feed
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([
@@ -252,38 +267,46 @@ export default function ArenaHostContent({
     });
   }, [quiz.questions.length]);
 
-  const addParticipant = useCallback((data: { studentId: string; studentName?: string; name?: string; initials?: string }) => {
-    const sId = data.studentId;
-    const sName = data.studentName || data.name || "Student Fighter";
-    if (!sId) return;
-
-    setBattlers((prev) => {
-      if (prev.some((b) => b.id === sId)) return prev;
-      const updated = [
-        ...prev,
-        {
-          id: sId,
-          name: sName,
-          initials: data.initials || getStudentInitials(sName, "ST"),
-          score: 0,
-          rank: prev.length + 1,
-          questionsAnswered: 0,
-          totalQuestions: quiz.questions.length,
-          isFinished: false,
-          hasShield: false,
-          isAi: false,
-        },
-      ];
-      updated.sort((a, b) => b.score - a.score);
-      updated.forEach((b, i) => {
-        b.rank = i + 1;
-      });
-      return updated;
-    });
-  }, [quiz.questions.length]);
+  const applyArenaSnapshot = useCallback((data: ArenaSnapshot) => {
+    if ([data.quizId, data.arena?.quizId].some(id => id !== undefined && id !== quiz.id)) return false;
+    if (!acceptArenaRevision(arenaRevisionRef, data)) return false;
+    const sessionId = data.sessionId ?? data.arena?.sessionId;
+    if (sessionId && sessionId !== arenaSessionRef.current) {
+      arenaSessionRef.current = sessionId;
+      actionGenerationRef.current++;
+      terminalReconciledRef.current = false;
+    }
+    // Apply the whole committed leaderboard before displaying its winner.
+    if (Array.isArray(data.participants)) syncRankedBattlers(data.participants);
+    if (isTerminalArenaSnapshot(data)) {
+      if (!terminalReconciledRef.current) actionGenerationRef.current++;
+      terminalReconciledRef.current = true;
+      setIsTimerRunning(false);
+      setPhase("podium");
+      return true;
+    }
+    if (data.arena?.status === "active") {
+      setPhase("wave"); setIsTimerRunning(true);
+      if (data.arena.matchEndsAt) {
+        setMatchEndsAt(data.arena.matchEndsAt);
+        setTimeLeft(Math.max(0, Math.ceil((Date.parse(data.arena.matchEndsAt) - Date.now()) / 1000)));
+      }
+    } else if (data.arena?.status === "lobby") {
+      setPhase("lobby"); setIsTimerRunning(false);
+    }
+    // Ended hints/partial events are not evidence that the final snapshot was
+    // applied. Keep read-only reconciliation alive until finalizedAt is visible.
+    return false;
+  }, [quiz.id, syncRankedBattlers]);
 
   const broadcastArenaAction = async (action: string, payload?: Record<string, unknown>) => {
-    if (actionPendingRef.current) return false;
+    if (actionPendingRef.current) return null;
+    const generation = actionGenerationRef.current;
+    const requestSession = arenaSessionRef.current;
+    const requestRevision = arenaRevisionRef.current;
+    const requestQuiz = quiz.id;
+    const requestIsCurrent = () => generation === actionGenerationRef.current
+      && requestSession === arenaSessionRef.current && requestQuiz === actionQuizRef.current;
     actionPendingRef.current = true;
     setArenaError("");
     setIsActionPending(true);
@@ -299,18 +322,37 @@ export default function ArenaHostContent({
         body: JSON.stringify({ action, payload, sessionId, actionId }),
       });
       const data = await response.json();
+      // The request may have committed before a newer terminal read/session
+      // replaced this view. It cannot authorize any delayed local continuation.
+      if (!requestIsCurrent()) {
+        void reconciliationRef.current?.refresh();
+        return null;
+      }
       if (!response.ok || !data.success) {
-        setArenaError(data.error || "Arena action failed. Please try again.");
-        return false;
+        if (requestRevision === arenaRevisionRef.current) setArenaError(data.error || "Arena action failed. Please try again.");
+        return null;
       }
-      if (acceptArenaRevision(arenaRevisionRef, data)) {
-        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
+      const revision = data.arenaRevision ?? data.arena?.revision;
+      const responseSession = data.sessionId ?? data.arena?.sessionId;
+      const createsSession = action === "reset" || action === "create_session";
+      if (!Number.isSafeInteger(revision) || revision < arenaRevisionRef.current || !responseSession
+        || (requestSession && responseSession !== requestSession && !createsSession)) {
+        void reconciliationRef.current?.refresh();
+        return null;
       }
+      // Apply committed state, never arithmetic derived from an action amount.
+      applyArenaSnapshot({ ...data, resultReady: data.arena?.status === "ended" && !!data.arena?.finalizedAt });
+      const acceptedGeneration = actionGenerationRef.current;
+      void reconciliationRef.current?.refresh();
       retryActionRef.current = null;
-      return true;
+      // Recheck at the caller's await boundary: a pending terminal read can
+      // finish after response application but before that continuation resumes.
+      return { isCurrent: () => acceptedGeneration === actionGenerationRef.current
+        && revision === arenaRevisionRef.current && responseSession === arenaSessionRef.current
+        && requestQuiz === actionQuizRef.current };
     } catch {
-      setArenaError("Network error. The arena action was not delivered.");
-      return false;
+      if (requestIsCurrent() && requestRevision === arenaRevisionRef.current) setArenaError("Network error. The arena action was not delivered.");
+      return null;
     } finally {
       actionPendingRef.current = false;
       setIsActionPending(false);
@@ -319,6 +361,7 @@ export default function ArenaHostContent({
 
   // Realtime Pusher Subscriptions
   useEffect(() => {
+    let subscribed = true;
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
       {
@@ -326,18 +369,34 @@ export default function ArenaHostContent({
         authEndpoint: "/api/pusher/auth",
       },
     );
-    const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quiz.id}`), arenaRevisionRef);
-    const teacherChannel = guardArenaChannel(pusher.subscribe(`private-teacher-${teacherId}`), arenaRevisionRef);
+    const stateHints = { getIdentity: readRealtimeIdentity,
+      isLive: () => subscribed && actionQuizRef.current === quiz.id,
+      onStateHint: () => reconciliationRef.current?.hint(),
+      onSessionHint: () => reconciliationRef.current?.hint({ allowTerminal: true }) };
+    const arenaChannel = guardArenaChannel(pusher.subscribe(`private-arena-${quiz.id}`), arenaRevisionRef, stateHints);
+    const teacherChannel = guardArenaChannel(pusher.subscribe(`private-teacher-${teacherId}`), arenaRevisionRef, stateHints);
+    pusher.connection.bind("connected", () => { void reconciliationRef.current?.refresh(); });
+    const refreshSession = () => { void reconciliationRef.current?.refresh(); };
+    arenaChannel.bind("arena-reset", refreshSession);
+    arenaChannel.bind("arena-session-created", refreshSession);
 
-    const handleStudentJoined = (data: { studentId: string; studentName?: string; name?: string; initials?: string }) => {
-      addParticipant(data);
+    const handleStudentJoined = (data?: ArenaSnapshot & { quizId?: number; studentId?: string; studentName?: string; name?: string }) => {
+      if (terminalReconciledRef.current || actionQuizRef.current !== quiz.id) return;
+      if (data?.quizId !== undefined && data.quizId !== quiz.id) return;
+      const sessionId = data?.sessionId ?? data?.arena?.sessionId;
+      if (sessionId && sessionId !== arenaSessionRef.current) return;
+      const revision = data?.arenaRevision ?? data?.arena?.revision;
+      if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < arenaRevisionRef.current)) return;
+      // Enrollment is a read hint, never a participant or result snapshot.
+      reconciliationRef.current?.hint();
+      if (!data?.studentId) return;
       playJoinChime();
       const displayName = data.studentName || data.name || "A fighter";
       setBattleEvents((prev) => [
         {
           id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           timestamp: "Just now",
-          text: `🎮 ${displayName} entered the Arena!`,
+          text: `🎮 ${displayName} joined the quiz.`,
           type: "info",
         },
         ...prev.slice(0, 25),
@@ -348,7 +407,7 @@ export default function ArenaHostContent({
     teacherChannel.bind("arena-student-joined", handleStudentJoined);
 
     // Live Student Answer Progress Event
-    const handleAnswerEvent = (data: {
+    const handleAnswerEvent = (data: ArenaSnapshot & {
       studentId: string;
       studentName: string;
       questionId: number;
@@ -359,6 +418,7 @@ export default function ArenaHostContent({
       questionsAnswered: number;
       isFinished: boolean;
     }) => {
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
       setBattlers((prev) => {
         const updated = prev.map((b) => {
           if (b.id !== data.studentId) return b;
@@ -416,7 +476,7 @@ export default function ArenaHostContent({
     teacherChannel.bind("arena-incoming-attack", handleIncomingAttack);
 
     // Attack Hit Event
-    const handleAttackHit = (data: {
+    const handleAttackHit = (data: ArenaSnapshot & {
       attackId: string;
       attackerName: string;
       targetStudentId: string;
@@ -440,7 +500,7 @@ export default function ArenaHostContent({
         ...prev.slice(0, 25),
       ]);
 
-      if (!acceptArenaRevision(arenaRevisionRef, data)) return;
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
       if (Array.isArray(data.participants)) {
         syncRankedBattlers(data.participants);
       } else {
@@ -461,17 +521,20 @@ export default function ArenaHostContent({
     teacherChannel.bind("arena-attack-hit", handleAttackHit);
 
     // Attack Blocked Event
-    const handleAttackBlocked = (data: {
+    const handleAttackBlocked = (data: ArenaSnapshot & {
       attackId: string;
       attackerName: string;
       targetStudentId: string;
       targetName: string;
       powerType: string;
+      sessionId?: string;
     }) => {
       if (!claimArenaFeedback(displayedCombatFeedbackRef.current, data.attackId, "deflected")) return;
-      setBattlers((prev) =>
-        prev.map((b) => (b.id === data.targetStudentId ? { ...b, hasShield: false } : b))
-      );
+      if (acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) {
+        setBattlers((prev) =>
+          prev.map((b) => (b.id === data.targetStudentId ? { ...b, hasShield: false } : b))
+        );
+      }
       setBattleEvents((prev) => [
         {
           id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
@@ -487,14 +550,16 @@ export default function ArenaHostContent({
     teacherChannel.bind("arena-attack-blocked", handleAttackBlocked);
 
     // Leaderboard Updated Event
-    arenaChannel.bind("arena-leaderboard-updated", (data: { participants?: ArenaParticipant[] }) => {
+    arenaChannel.bind("arena-leaderboard-updated", (data: ArenaSnapshot) => {
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
       if (Array.isArray(data?.participants)) {
         syncRankedBattlers(data.participants);
       }
     });
 
     // Score Updated Event
-    arenaChannel.bind("arena-score-updated", (data: { studentId: string; score: number; rank: number }) => {
+    arenaChannel.bind("arena-score-updated", (data: ArenaSnapshot & { studentId: string; score: number; rank: number }) => {
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
       setBattlers((prev) => {
         const updated = prev.map((b) =>
           b.id === data.studentId ? { ...b, score: data.score } : b
@@ -508,7 +573,9 @@ export default function ArenaHostContent({
     });
 
     // Arena Start
-    arenaChannel.bind("arena-start", (data?: { matchDuration?: number; matchEndsAt?: string; participants?: ArenaParticipant[] }) => {
+    arenaChannel.bind("arena-start", (data?: ArenaSnapshot & { matchDuration?: number; matchEndsAt?: string }) => {
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
+      void reconciliationRef.current?.refresh();
       setPhase("wave");
       setIsTimerRunning(true);
       if (data?.matchEndsAt) {
@@ -524,110 +591,43 @@ export default function ArenaHostContent({
     });
 
     // Arena End
-    arenaChannel.bind("arena-end", () => {
+    arenaChannel.bind("arena-end", (data?: ArenaSnapshot) => {
+      if (!acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) return;
+      if (Array.isArray(data?.participants)) syncRankedBattlers(data.participants);
       playFanfareSound();
       setIsTimerRunning(false);
       setPhase("podium");
+      // An event can be partial; independently confirm PostgreSQL's result.
+      void reconciliationRef.current?.refresh();
     });
 
     return () => {
+      subscribed = false;
       arenaChannel.unbind_all();
       teacherChannel.unbind_all();
       pusher.unsubscribe(`private-arena-${quiz.id}`);
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
     };
-  }, [addParticipant, quiz.id, quiz.questions.length, syncRankedBattlers, teacherId]);
+  }, [quiz.id, quiz.questions.length, syncRankedBattlers, teacherId, readRealtimeIdentity]);
 
-  // Initial load on mount (fetch current session state & participants)
+  // Initial, periodic and reconnect recovery share the same read-only path.
   useEffect(() => {
-    let isMounted = true;
-    async function loadArenaInitial() {
-      try {
-        const response = await fetch(`/api/arena/${quiz.id}`);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!acceptArenaRevision(arenaRevisionRef, data)) return;
-        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
-        if (!isMounted) return;
-
-        if (data?.status === "lobby") {
-          setPhase("lobby");
-          setIsTimerRunning(false);
-        } else if (data?.status === "ended" || data?.arena?.status === "ended" || data?.quizStatus === "ended") {
-          setPhase("podium");
-          setIsTimerRunning(false);
-        } else if (data?.status === "active" || data?.arena?.status === "active") {
-          setPhase("wave");
-          setIsTimerRunning(true);
-          const endsAt = data.arena?.matchEndsAt;
-          if (endsAt) {
-            setMatchEndsAt(endsAt);
-            const rem = Math.max(0, Math.ceil((Date.parse(endsAt) - Date.now()) / 1000));
-            setTimeLeft(rem);
-          }
-        }
-
-        if (Array.isArray(data?.participants)) {
-          syncRankedBattlers(data.participants);
-        }
-      } catch (err) {
-        console.error("Failed to load initial arena state:", err);
-      }
-    }
-    void loadArenaInitial();
+    const worker = startArenaReconciliation({ read: (signal) => fetchArenaSnapshot(quiz.id, signal), apply: applyArenaSnapshot });
+    reconciliationRef.current = worker;
+    const refresh = () => { if (!document.hidden) void worker.refresh(); };
+    window.addEventListener("online", refresh); document.addEventListener("visibilitychange", refresh);
     return () => {
-      isMounted = false;
+      worker.stop(); reconciliationRef.current = null;
+      window.removeEventListener("online", refresh); document.removeEventListener("visibilitychange", refresh);
     };
-  }, [quiz.id, syncRankedBattlers]);
-
-  // Periodic reconciliation with server
-  useEffect(() => {
-    if (phase === "podium") return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/arena/${quiz.id}`);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!acceptArenaRevision(arenaRevisionRef, data)) return;
-        arenaSessionRef.current = data.sessionId ?? data.arena?.sessionId ?? arenaSessionRef.current;
-
-        if (data?.arena?.status === "ended" || data?.quizStatus === "ended") {
-          setPhase("podium");
-          setIsTimerRunning(false);
-          return;
-        }
-
-        if (data?.arena?.status === "active") {
-          setPhase("wave");
-          setIsTimerRunning(true);
-          if (data.arena.matchEndsAt) {
-            setMatchEndsAt(data.arena.matchEndsAt);
-            const remaining = Math.max(0, Math.ceil((Date.parse(data.arena.matchEndsAt) - Date.now()) / 1000));
-            setTimeLeft(remaining);
-            if (remaining <= 0) {
-              setPhase("podium");
-              setIsTimerRunning(false);
-            }
-          }
-        }
-
-        if (Array.isArray(data?.participants)) {
-          syncRankedBattlers(data.participants);
-        }
-      } catch {}
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [phase, quiz.id, syncRankedBattlers]);
+  }, [quiz.id, applyArenaSnapshot]);
 
   // End Arena Match Manually
   const handleEndArena = async () => {
-    setIsTimerRunning(false);
-    if (!(await broadcastArenaAction("end"))) return;
+    const result = await broadcastArenaAction("end");
+    if (!result?.isCurrent()) return;
     playFanfareSound();
-    setPhase("podium");
   };
 
   // Overall Match Timer Countdown
@@ -664,23 +664,14 @@ export default function ArenaHostContent({
       matchDuration: selectedMatchDuration,
       enabledPowers,
     });
-    if (!started) return;
+    if (!started?.isCurrent()) return;
     playGongSound();
-    setTimeLeft(selectedMatchDuration);
-    setIsTimerRunning(true);
-    setPhase("wave");
   };
 
   const handleDropAirdrop = async () => {
-    if (!(await broadcastArenaAction("airdrop"))) return;
+    const result = await broadcastArenaAction("airdrop");
+    if (!result?.isCurrent()) return;
     playAirdropSound();
-    setBattlers((prev) =>
-      prev.map((b) => ({
-        ...b,
-        hasShield: true,
-        score: b.score + 50,
-      }))
-    );
     setBattleEvents((prev) => [
       {
         id: `ev-${Date.now()}`,

@@ -27,6 +27,7 @@ const sessionRoute = source("src/app/api/quizzes/session/route.ts");
 const arenaRoute = source("src/app/api/arena/[id]/route.ts");
 const arenaPage = source("src/app/arena/[id]/page.tsx");
 const battleRoute = source("src/app/api/arena/battle-action/route.ts");
+const arenaRealtime = source("src/lib/arena-realtime.ts");
 const arenaContent = source("src/app/arena/[id]/content.tsx");
 const resultsRoute = source("src/app/api/dashboard/student/results/route.ts");
 const teacherQuizzes = source("src/app/dashboard/teacher/quizzes/content.tsx");
@@ -74,7 +75,7 @@ test("deleted proctored quizzes cannot load, preflight, or start", () => {
 
 test("deleted Arena quizzes cannot load, join, create participants, or create sessions", () => {
   assert.match(arenaPage, /!isQuizAvailable\(quiz\.quizStatus\)/);
-  assert.equal((arenaRoute.match(/quizNotAvailableResponse\(\)/g) || []).length, 2);
+  assert.equal((arenaRoute.match(/quizNotAvailableResponse\(\)/g) || []).length, 3);
   assert.match(arenaRoute, /if\s*\(action\s*===\s*"join"\)/);
   assert.match(arenaRoute, /action\s*===\s*"reset"\s*\|\|\s*action\s*===\s*"create_session"/);
   assert.match(battleRoute, /!isQuizAvailable\(attempt\.quiz\.quizStatus\)/);
@@ -165,7 +166,7 @@ test("attack realtime payloads and client state are correlated by session and at
   assert.match(battleRoute, /createArenaAttackId\(arena\.sessionId\)/);
   assert.match(battleRoute, /sessionId:\s*arena\.sessionId/);
   assert.match(battleRoute, /status:\s*"pending"/);
-  assert.match(battleRoute, /status:\s*"hit"/);
+  assert.match(arenaRealtime, /status:\s*"hit"/);
   assert.match(battleRoute, /status:\s*"deflected"/);
   assert.match(arenaContent, /data\.sessionId\s*&&\s*currentSessionId\s*&&\s*data\.sessionId\s*!==\s*currentSessionId/);
   assert.match(arenaContent, /incomingAttackRef\.current\?\.attackId\s*===\s*data\.attackId/);

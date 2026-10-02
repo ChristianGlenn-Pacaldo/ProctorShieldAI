@@ -141,7 +141,7 @@ test("Test I: Historical attemptMode precedence remains authoritative", () => {
   // When Quiz is changed or legacy, studentQuiz.attemptMode determines submission & results
   assert.match(
     submitRouteSrc,
-    /const effectiveMode =\s*studentQuiz\.attemptMode === ["']arena["'] \? ["']arena["'] : ["']proctored["']/
+    /const isArena = studentQuiz\.attemptMode === "arena"/
   );
   assert.match(
     studentResultsRouteSrc,

@@ -70,11 +70,13 @@ test("A, B, C: Starting new Arena match from reused quiz generates fresh session
 // ─────────────────────────────────────────────────────────────
 // D, E, F, G: READ-ONLY GET & POST CREATE_SESSION SEPARATION
 // ─────────────────────────────────────────────────────────────
-test("D: GET /api/arena/[id] cannot create a fresh session and is covered by the backup gate", () => {
+test("D: GET cannot create sessions; mutating reads are gated and snapshots are PostgreSQL read-only", () => {
   const getFnIndex = apiArenaRouteSrc.indexOf("async function GETImpl");
   const postFnIndex = apiArenaRouteSrc.indexOf("async function POSTImpl");
   assert.ok(getFnIndex > 0 && postFnIndex > getFnIndex);
-  assert.match(apiArenaRouteSrc, /export const GET = withBackupWriteGate\(GETImpl\)/);
+  assert.match(apiArenaRouteSrc, /const gatedGET = withBackupWriteGate\(GETImpl\)/);
+  assert.match(apiArenaRouteSrc, /searchParams\.get\("view"\) === "snapshot"[\s\S]*?GETImpl\(req, params\) : gatedGET\(req, params\)/);
+  assert.match(apiArenaRouteSrc, /SET TRANSACTION READ ONLY/);
 
   const getBody = apiArenaRouteSrc.substring(getFnIndex, postFnIndex);
   assert.equal(getBody.includes("searchParams.get(\"fresh\")"), false);
@@ -94,7 +96,7 @@ test("F & G: Refreshing existing lobby or active match restores same session wit
   const postFnIndex = apiArenaRouteSrc.indexOf("async function POSTImpl");
   const getBody = apiArenaRouteSrc.substring(getFnIndex, postFnIndex);
   assert.match(getBody, /sessionId:\s*state\?\.sessionId/);
-  assert.match(teacherArenaContentSrc, /loadArenaInitial/);
+  assert.match(teacherArenaContentSrc, /startArenaReconciliation\([\s\S]*?fetchArenaSnapshot\(quiz.id, signal\)/);
 });
 
 test("Dedicated Reset Event: Session creation triggers arena-session-created and does not overload arena-end", () => {
@@ -107,7 +109,7 @@ test("Dedicated Reset Event: Session creation triggers arena-session-created and
   assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-reset["']/);
 
   // arena-end is strictly reserved for actual match conclusion
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?void finalizeMatch\(\)/);
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],[\s\S]*?arenaCompletedRef\.current = true[\s\S]*?reconciliationRef\.current\?\.refresh\(\)/);
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -133,8 +135,8 @@ test("K: Spectator lobby shows current score, rank, full leaderboard, countdown 
   assert.match(studentArenaContentSrc, /formatTimer\(matchTimeLeft\)/);
 });
 
-test("L: arena-end starts finalization without showing an unconfirmed podium", () => {
-  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],\s*\(\)\s*=>\s*\{[\s\S]*?void finalizeMatch\(\)/);
+test("L: arena-end reads committed results without displaying an unconfirmed podium", () => {
+  assert.match(studentArenaContentSrc, /arenaChannel\.bind\(["']arena-end["'],[\s\S]*?setPhase\("finalizing"\)[\s\S]*?reconciliationRef\.current\?\.refresh\(\)/);
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -219,7 +221,7 @@ test("X, Y, Z: Arena final EXP is awarded only once per sessionId/student and gu
   const arenaSubmitIndex = submitRouteSrc.indexOf("if (isArena) {");
   const proctoredSubmitIndex = submitRouteSrc.indexOf("// 3. PROCTORED EXAM AI VERDICT");
   const arenaSubmitBlock = submitRouteSrc.substring(arenaSubmitIndex, proctoredSubmitIndex);
-  assert.match(arenaSubmitBlock, /expEarned,/);
+  assert.match(arenaSubmitBlock, /expEarned: payout\.amount/);
   assert.equal(arenaSubmitBlock.includes("awardArenaExpOnce"), false);
 
   // Key format for arena idempotency marker
@@ -227,7 +229,7 @@ test("X, Y, Z: Arena final EXP is awarded only once per sessionId/student and gu
   assert.equal(key, "arena:exp_rewarded:session-abc:student-xyz");
 
   // Arena finalization route atomically combines the award and marker.
-  assert.match(apiArenaRouteSrc, /awardArenaExpOnce\(/);
+  assert.match(apiArenaRouteSrc, /finalizeArena\(mutation\)/);
   assert.match(progressionLibSrc, /pg_advisory_xact_lock\(hashtext\(\$\{key\}\)\)/);
   assert.match(progressionLibSrc, /const progression = await awardStudentExp\(studentId, expAwarded, reason, tx\)/);
 });

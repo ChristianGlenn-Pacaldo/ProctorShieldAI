@@ -154,7 +154,9 @@ test("Phase 3.1 Test F: Power Arena game mechanics are preserved in /arena/[id]"
     path.resolve(process.cwd(), "src/app/arena/[id]/content.tsx"),
     "utf-8"
   );
-  assert.match(arenaContentSrc, /streakMultiplier/);
+  assert.match(arenaContentSrc, /setStreak\(nextStreak\)/);
+  assert.match(arenaContentSrc, /applyGameplayState\(data\)/);
+  assert.doesNotMatch(arenaContentSrc, /setScore\(\(prev\)\s*=>\s*prev\s*\+/);
   assert.match(arenaContentSrc, /battlePowerInventory/);
   assert.match(arenaContentSrc, /handleIncomingAttack/);
   assert.match(arenaContentSrc, /ArenaPodium/);

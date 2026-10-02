@@ -221,12 +221,12 @@ test("delayed realtime and readback snapshots cannot replace a newer revision", 
   const cursor = { current: 0 };
   const callbacks = new Map<string, (data: unknown) => void>();
   const channel = { bind: (event: string, handler: (data: unknown) => void) => callbacks.set(event, handler), unbind_all: () => callbacks.clear() };
-  const guarded = guardArenaChannel(channel, cursor);
+  const guarded = guardArenaChannel(channel, cursor, { getIdentity: () => ({ quizId: 77, sessionId: "session", terminal: false }) });
   const seen: number[] = [];
   guarded.bind("score", (data: any) => seen.push(data.arenaRevision));
-  callbacks.get("score")!({ arenaRevision: 2 });
-  callbacks.get("score")!({ arenaRevision: 1 });
-  callbacks.get("score")!({ arenaRevision: 2 });
+  callbacks.get("score")!({ quizId: 77, sessionId: "session", arenaRevision: 2 });
+  callbacks.get("score")!({ quizId: 77, sessionId: "session", arenaRevision: 1 });
+  callbacks.get("score")!({ quizId: 77, sessionId: "session", arenaRevision: 2 });
   assert.deepEqual(seen, [2, 2]);
   assert.equal(acceptArenaRevision(cursor, { arena: { revision: 1 } }), false);
   assert.equal(acceptArenaRevision(cursor, { arena: { revision: 3 } }), true);
@@ -243,15 +243,15 @@ test("teacher replay receipts cannot bypass role checks or change parameters", a
   assert.equal(f.read().participants.a.score, 100);
 });
 
-test("Arena submission regrades fresh locked answers after waiting for answer commit", async () => {
+test("Arena submission cannot replace authoritative points or prematurely complete the match", async () => {
   const f = arenaFixture();
   const results = await f.overlap(() => f.answer("a"), () => f.submit("a"));
-  assert.deepEqual(results.map((r) => r.status), [200, 200]);
+  assert.deepEqual(results.map((r) => r.status), [200, 409]);
   assert.equal(f.data.answers.size, 1);
   assert.equal([...f.data.answers.values()][0].isCorrect, true);
-  assert.equal(f.data.attempts.get("a").score, 50);
+  assert.equal(f.data.attempts.get("a").quizStatus, "in_progress");
   assert.equal(f.read().participants.a.score, 100);
-  assert.equal((await f.answer("a", 2)).status, 409);
+  assert.equal((await f.answer("a", 2)).status, 200);
 });
 
 test("autosave cannot replace a scored Arena answer or write after Teacher End", async () => {
@@ -270,12 +270,12 @@ test("a delayed attack warning survives unrelated newer scores and cannot reopen
   const channel = { bind: (_event: string, handler: (data: unknown) => void) => { callback = handler; } };
   const seen: string[] = [];
   const displayed = new Set<string>();
-  guardArenaChannel(channel, cursor).bind("arena-incoming-attack", (data: any) => {
+  guardArenaChannel(channel, cursor, { getIdentity: () => ({ quizId: 77, sessionId: "session", terminal: false }) }).bind("arena-incoming-attack", (data: any) => {
     if (!hasTerminalArenaFeedback(displayed, data.attackId)) seen.push(data.attackId);
   });
-  callback({ arenaRevision: 8, attackId: "still-pending" });
+  callback({ quizId: 77, sessionId: "session", arenaRevision: 8, attackId: "still-pending" });
   displayed.add("terminal:hit");
-  callback({ arenaRevision: 8, attackId: "terminal" });
+  callback({ quizId: 77, sessionId: "session", arenaRevision: 8, attackId: "terminal" });
   assert.deepEqual(seen, ["still-pending"]);
   assert.equal(cursor.current, 9);
 });

@@ -110,6 +110,7 @@ function fixture() {
       } },
     "@prisma/client": {}, "@/lib/device-capabilities": devices,
     "@/lib/arena": { getArenaState: async () => null },
+    "@/lib/arena-finalization": { recoverArenaFinalization: async () => { throw new Error("Proctored must never enter Arena finalization"); } },
     "@/lib/security": { consumeRateLimitGroup: async () => ({ allowed: true }), getClientIp: () => "local" },
     "@/lib/evidence-storage": { uploadEvidence: async () => null },
     "@/lib/proctoring-detection": detection,
@@ -123,7 +124,7 @@ function fixture() {
     "./redis.ts": { getRedis: () => null, isRedisReady: () => false },
     "./student-identity.ts": { getStudentInitials: () => "ST" },
   });
-  deps["@/lib/arena-realtime"] = loadArenaModule("src/lib/arena-realtime.ts", { "@/lib/pusher": deps["@/lib/pusher"] });
+  deps["@/lib/arena-realtime"] = loadArenaModule("src/lib/arena-realtime.ts", { "./arena.ts": deps["@/lib/arena"], "@/lib/pusher": { arenaPusher: deps["@/lib/pusher"].pusherServer } });
   const load = (path: string) => route(`src/app/api/${path}/route.ts`, deps);
   const submit = (reason: string, extra = {}) => load("quizzes/submit").POST(request({ quizId: 7, studentQuizId: "attempt-1", reason, answers: [], ...extra }));
   const strikes = (count: number) => { state.violations = Array.from({ length: count }, (_, index) => ({ id: BigInt(index + 1), violationType: "tab_switch", confidenceScore: 100, timestamp: new Date() })); };

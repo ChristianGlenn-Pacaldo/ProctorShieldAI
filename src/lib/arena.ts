@@ -88,9 +88,13 @@ export interface ArenaState {
   totalQuestions: number;
   startedAt?: string | null;
   endedAt?: string | null;
+  finalizedAt?: string;
+  completionReason?: "teacher_end" | "timer_expiry" | "recovered";
+  payouts?: Array<{ studentId: string; rank: number; amount: number }>;
   participants: Record<string, ArenaParticipant>;
   usedPowers: Record<string, Record<string, boolean>>; // studentId -> powerId -> boolean
   pendingAttacks?: Record<string, PendingAttack>;
+  attackResults?: Record<string, PendingAttack>; // terminal combat facts retained after finalization
   // Deprecated wave fields preserved for compatibility during transition
   currentWave?: number;
   currentQuestionId?: number;
@@ -223,10 +227,12 @@ export function resolvePendingAttackInState(
     now?: number;
     resolverStudentId?: string;
     expectedTargetStudentId?: string;
+    allowUnfinalizedEnd?: boolean; // server recovery at the recorded completion cutoff only
   } = {},
 ): ArenaAttackResolution {
   const now = options.now ?? Date.now();
-  if (state.status !== "active" || (state.matchEndsAt && now >= Date.parse(state.matchEndsAt))) {
+  if (state.finalizedAt || (state.status !== "active" && !(options.allowUnfinalizedEnd && state.status === "ended"))
+    || (state.matchEndsAt && now >= Date.parse(state.matchEndsAt))) {
     return { code: "arena_inactive" };
   }
 
@@ -240,7 +246,8 @@ export function resolvePendingAttackInState(
   if (options.expectedTargetStudentId && attack.targetStudentId !== options.expectedTargetStudentId) {
     return { code: "wrong_target", attack };
   }
-  if (!state.participants?.[attack.attackerId] || !state.participants?.[attack.targetStudentId]) {
+  if ((attack.sessionId && attack.sessionId !== state.sessionId) || !Number.isFinite(attack.expiresAt)
+    || !state.participants?.[attack.attackerId] || !state.participants?.[attack.targetStudentId]) {
     return { code: "invalid_attack", attack };
   }
   if (attack.status !== "pending") return { code: "already_resolved", attack };
@@ -407,8 +414,10 @@ export interface ArenaMutation {
   tx: Prisma.TransactionClient;
   state: ArenaState | null;
   now: number;
-  afterCommit: (effect: () => Promise<unknown>) => void;
+  afterCommit: (effect: (context: { signal: AbortSignal }) => Promise<unknown>, options?: { realtime?: boolean }) => void;
 }
+
+export const ARENA_REALTIME_COMMIT_BUDGET_MS = 5_000;
 
 async function invalidateArenaCaches(quizId: number) {
   // Never publish snapshots here: an older transaction's delayed cache write
@@ -434,14 +443,15 @@ export async function mutateArena<T>(
   quizId: number,
   operation: (mutation: ArenaMutation) => Promise<T>,
   client: PrismaClient = prisma,
+  options: { realtimeSignal?: AbortSignal; realtimeBudgetMs?: number } = {},
 ): Promise<T> {
-  const effects: Array<() => Promise<unknown>> = [];
+  const effects: Array<{ run: (context: { signal: AbortSignal }) => Promise<unknown>; realtime: boolean }> = [];
   let changed = false;
   const result = await client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
     const state = await readArenaState(tx, quizId);
     const before = JSON.stringify(state);
-    const mutation: ArenaMutation = { tx, state, now: Date.now(), afterCommit: (effect) => effects.push(effect) };
+    const mutation: ArenaMutation = { tx, state, now: Date.now(), afterCommit: (run, settings) => effects.push({ run, realtime: !!settings?.realtime }) };
     const value = await operation(mutation);
     if (mutation.state?.players) mutation.state.players = mutation.state.participants;
     changed = JSON.stringify(mutation.state) !== before;
@@ -460,8 +470,37 @@ export async function mutateArena<T>(
   // Rejection/rollback never reaches this boundary. Provider failures cannot
   // undo a commit or turn a successful mutation into a misleading retry.
   if (changed && client === prisma) await invalidateArenaCaches(quizId);
-  for (const effect of effects) {
-    try { await effect(); } catch { console.warn("Arena post-commit delivery failed; reload authoritative state"); }
+  // Cancellation is wired only AFTER commit. It cannot cancel/roll back DB
+  // finalization; non-realtime effects (including tracked DB work) still run.
+  const controller = new AbortController();
+  const cancel = () => controller.abort("cancelled");
+  options.realtimeSignal?.addEventListener("abort", cancel, { once: true });
+  if (options.realtimeSignal?.aborted) cancel();
+  const budgetMs = Math.min(ARENA_REALTIME_COMMIT_BUDGET_MS, Math.max(1, options.realtimeBudgetMs ?? ARENA_REALTIME_COMMIT_BUDGET_MS));
+  const deadline = effects.some((effect) => effect.realtime)
+    ? setTimeout(() => controller.abort("timeout"), budgetMs) : undefined;
+  deadline?.unref();
+  let reported = false;
+  try {
+    for (const effect of effects) {
+      if (effect.realtime && controller.signal.aborted) {
+        if (!reported) console.warn("Arena realtime delivery skipped after commit", { reason: controller.signal.reason === "timeout" ? "timeout" : "cancelled" });
+        reported = true; continue;
+      }
+      try { await effect.run({ signal: controller.signal }); }
+      catch (error) {
+        if (effect.realtime) {
+          controller.abort("delivery_failed"); // Skip the rest of this failed batch; later Arenas continue.
+          const code = (error as { code?: unknown } | null)?.code;
+          const reason = typeof code === "string" && ["timeout", "cancelled", "rejected", "network", "invalid"].includes(code) ? code : "failed";
+          console.warn("Arena realtime delivery failed after commit; reload authoritative state", { reason });
+          reported = true;
+        } else console.warn("Arena post-commit delivery failed; reload authoritative state");
+      }
+    }
+  } finally {
+    if (deadline) clearTimeout(deadline);
+    options.realtimeSignal?.removeEventListener("abort", cancel);
   }
   return result;
 }
@@ -512,12 +551,19 @@ export async function deflectArenaAttack(
   }, client);
 }
 
-export function reconcileArenaAttacksInState(state: ArenaState, now: number): ArenaAttackResolution[] {
+export function reconcileArenaAttacksInState(state: ArenaState, now: number, options: {
+  allowUnfinalizedEnd?: boolean; preserveScoresFor?: ReadonlySet<string>; limit?: number;
+} = {}): ArenaAttackResolution[] {
   const resolved: ArenaAttackResolution[] = [];
-  for (const attack of Object.values(state.pendingAttacks || {})) {
-    if (attack.status !== "pending" || attack.expiresAt >= now) continue;
-    const resolution = resolvePendingAttackInState(state, attack.attackId, { now });
+  let examined = 0;
+  // Stable due-time ordering also makes batched recovery reproducible.
+  const attacks = Object.values(state.pendingAttacks || {}).sort((a, b) => a.expiresAt - b.expiresAt || a.attackId.localeCompare(b.attackId));
+  for (const attack of attacks) {
+    if (attack.status !== "pending" || attack.expiresAt >= now || options.preserveScoresFor?.has(attack.targetStudentId)) continue;
+    if (examined++ >= (options.limit ?? Infinity)) break;
+    const resolution = resolvePendingAttackInState(state, attack.attackId, { now, allowUnfinalizedEnd: options.allowUnfinalizedEnd });
     if (resolution.code === "resolved") resolved.push(resolution);
+    else if (resolution.code === "invalid_attack") attack.status = "cancelled";
   }
   return resolved;
 }
