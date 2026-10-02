@@ -57,6 +57,7 @@ function listFixture(relativePath: string, responseKey: "users" | "quizzes", ini
     exports: component,
     require: (name: string) => {
       if (name === "react") return react;
+      if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "pusher-js") return { __esModule: true, default: class {
         subscribe() { return { bind: (_event: string, callback: (payload: { type: string }) => void) => { onActivity = callback; } }; }
@@ -162,6 +163,7 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
     exports: component,
     require: (name: string) => {
       if (name === "react") return react;
+      if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return { Users: "icon", FileText: "icon", AlertTriangle: "icon", Brain: "icon" };
       if (name === "pusher-js") return { __esModule: true, default: class {

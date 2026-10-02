@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import PusherClient from "pusher-js";
+import { AdminSessionLifecycleContext, createAdminSessionLifecycle, type AdminSessionLoss } from "./admin-session-lifecycle";
 
 interface Notification {
   id: string;
@@ -134,62 +135,116 @@ export default function DashboardShell({
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const [sessionLifecycle] = useState(createAdminSessionLifecycle);
+  const adminSession = role === "admin" ? sessionLifecycle : null;
+  const [adminSessionLost, setAdminSessionLost] = useState<AdminSessionLoss | null>(null);
+  const notificationLifecycle = useRef({ active: false, generation: 0 });
+  const notificationRequests = useRef(new Set<AbortController>());
+  const notificationRefresh = useRef(0);
+
+  const isNotificationActive = (generation: number) =>
+    notificationLifecycle.current.active && notificationLifecycle.current.generation === generation && !adminSession?.getLoss();
+
+  const beginNotificationRequest = () => {
+    const generation = notificationLifecycle.current.generation;
+    if (!isNotificationActive(generation)) return null;
+    const controller = new AbortController();
+    notificationRequests.current.add(controller);
+    return { controller, generation };
+  };
 
   const loadNotifications = async () => {
+    const request = beginNotificationRequest();
+    if (!request) return;
+    const refresh = ++notificationRefresh.current;
     try {
-      const res = await fetch("/api/notifications");
+      const res = await fetch("/api/notifications", { signal: request.controller.signal, cache: "no-store" });
+      if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
+      if (adminSession && (res.status === 401 || res.status === 403)) { adminSession.reportLoss(res.status); return; }
       if (res.ok) {
         const data = await res.json();
-        if (data.success) {
+        if (isNotificationActive(request.generation) && !request.controller.signal.aborted && refresh === notificationRefresh.current && data.success) {
           setNotifications(data.notifications || []);
           setUnreadCount(data.unreadCount || 0);
         }
       }
     } catch (e) {
-      console.error("Failed to load notifications:", e);
+      if (isNotificationActive(request.generation) && !request.controller.signal.aborted) console.error("Failed to load notifications:", e);
+    } finally {
+      notificationRequests.current.delete(request.controller);
     }
   };
 
   // Load notifications and maintain one role-aware realtime connection.
   useEffect(() => {
-    let isMounted = true;
+    const lifecycle = notificationLifecycle.current;
+    const requests = notificationRequests.current;
+    const generation = ++lifecycle.generation;
+    lifecycle.active = true;
+    setNotifications([]);
+    setUnreadCount(0);
+    setNotifOpen(false);
+    const isActive = () => lifecycle.active && lifecycle.generation === generation && !adminSession?.getLoss();
     let pusher: PusherClient | null = null;
+    const channels: Array<{ name: string; channel: ReturnType<PusherClient["subscribe"]> }> = [];
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let stopped = false;
 
-    const fetchNotifs = async () => {
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      lifecycle.active = false;
+      lifecycle.generation++;
+      if (pollInterval !== null) clearInterval(pollInterval);
+      for (const controller of requests) controller.abort();
+      requests.clear();
       try {
-        const res = await fetch("/api/notifications");
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          if (data.success) {
-            setNotifications(data.notifications || []);
-            setUnreadCount(data.unreadCount || 0);
-          }
+        for (const { name, channel } of channels) {
+          channel.unbind_all();
+          pusher?.unsubscribe(name);
         }
-      } catch (e) {
-        console.error("Failed to load notifications:", e);
+      } finally {
+        pusher?.disconnect();
       }
     };
 
-    void fetchNotifs();
-
-    const pollInterval = setInterval(() => {
-      void fetchNotifs();
-    }, 15_000);
+    const loseAuthorization = (status: AdminSessionLoss) => {
+      stop();
+      setNotifications([]);
+      setUnreadCount(0);
+      setNotifOpen(false);
+      setProfileOpen(false);
+      setAdminSessionLost(status);
+    };
+    const unsubscribeSession = adminSession?.subscribe(loseAuthorization);
+    const knownLoss = adminSession?.getLoss();
+    if (knownLoss) loseAuthorization(knownLoss);
+    else {
+      setAdminSessionLost(null);
+      void loadNotifications();
+      pollInterval = setInterval(() => { if (isActive()) void loadNotifications(); }, 15_000);
+    }
 
     const connectRealtime = async () => {
       const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
       const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
-      if (!key || !cluster) return;
+      if (!key || !cluster || !isActive()) return;
 
+      const request = beginNotificationRequest();
+      if (!request) return;
       try {
-        const response = await fetch("/api/auth/session");
-        if (!response.ok || !isMounted) return;
+        const response = await fetch("/api/auth/session", { signal: request.controller.signal, cache: "no-store" });
+        if (!isActive() || request.controller.signal.aborted) return;
+        if (adminSession && (response.status === 401 || response.status === 403)) { adminSession.reportLoss(response.status); return; }
+        if (!response.ok) return;
 
         const session = await response.json() as {
-          user?: { userId?: number } | null;
+          user?: { userId?: string | number; role?: string } | null;
         };
         const userId = session.user?.userId;
-        if (!userId || !isMounted) return;
+        if (!isActive() || request.controller.signal.aborted) return;
+        if (adminSession && session.user?.role !== "admin") { adminSession.reportLoss(403); return; }
+        if (!userId) return;
 
         pusher = new PusherClient(key, {
           cluster,
@@ -197,31 +252,34 @@ export default function DashboardShell({
         });
 
         const userChannel = pusher.subscribe(`private-user-${userId}`);
-        userChannel.bind("notification", () => void fetchNotifs());
+        channels.push({ name: `private-user-${userId}`, channel: userChannel });
+        userChannel.bind("notification", () => { if (isActive()) void loadNotifications(); });
         userChannel.bind("pusher:subscription_error", (error: unknown) => {
-          console.warn("Notification channel subscription failed:", error);
+          if (isActive()) console.warn("Notification channel subscription failed:", error);
         });
 
         if (role === "admin") {
           const adminChannel = pusher.subscribe("private-admin-dashboard");
-          adminChannel.bind("activity", () => void fetchNotifs());
+          channels.push({ name: "private-admin-dashboard", channel: adminChannel });
+          adminChannel.bind("activity", () => { if (isActive()) void loadNotifications(); });
           adminChannel.bind("pusher:subscription_error", (error: unknown) => {
-            console.warn("Admin activity channel subscription failed:", error);
+            if (isActive()) console.warn("Admin activity channel subscription failed:", error);
           });
         }
       } catch (error) {
-        console.error("Failed to initialize realtime notifications:", error);
+        if (isActive() && !request.controller.signal.aborted) console.error("Failed to initialize realtime notifications:", error);
+      } finally {
+        requests.delete(request.controller);
       }
     };
 
     void connectRealtime();
 
     return () => {
-      isMounted = false;
-      clearInterval(pollInterval);
-      pusher?.disconnect();
+      unsubscribeSession?.();
+      stop();
     };
-  }, [role]);
+  }, [role, adminSession]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -238,29 +296,40 @@ export default function DashboardShell({
   }, []);
 
   const openNotifications = async () => {
+    const generation = notificationLifecycle.current.generation;
+    if (!isNotificationActive(generation)) return;
     const nextState = !notifOpen;
     setNotifOpen(nextState);
     if (nextState) {
       setProfileOpen(false);
       // Re-fetch latest notifications from DB when opening dropdown
       await loadNotifications();
+      if (!isNotificationActive(generation)) return;
       // Mark as read in DB
+      const request = beginNotificationRequest();
+      if (!request) return;
       try {
         const response = await fetch("/api/notifications", {
           method: "PUT",
+          signal: request.controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: "all" }),
         });
+        if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
+        if (adminSession && (response.status === 401 || response.status === 403)) { adminSession.reportLoss(response.status); return; }
         if (!response.ok) {
           throw new Error(`Failed to mark notifications read (${response.status})`);
         }
-        setNotifications((current) => current.map((notification) => ({
+        notificationRefresh.current++;
+        setNotifications((current) => isNotificationActive(request.generation) ? current.map((notification) => ({
           ...notification,
           isRead: true,
-        })));
+        })) : current);
         setUnreadCount(0);
       } catch (e) {
-        console.error("Failed to mark notifications read:", e);
+        if (isNotificationActive(request.generation) && !request.controller.signal.aborted) console.error("Failed to mark notifications read:", e);
+      } finally {
+        notificationRequests.current.delete(request.controller);
       }
     }
   };
@@ -299,11 +368,13 @@ export default function DashboardShell({
   };
 
   const handleNotificationClick = (notification: Notification) => {
+    if (!isNotificationActive(notificationLifecycle.current.generation)) return;
     setNotifOpen(false);
     router.push(notification.actionUrl);
   };
 
   return (
+    <AdminSessionLifecycleContext.Provider value={adminSession}>
     <div className="dashboard-ambient app-gradient-shell flex h-screen">
       {/* ── SIDEBAR ─────────────────────────────── */}
       <aside
@@ -422,6 +493,7 @@ export default function DashboardShell({
             <div className="relative" ref={notifRef}>
               <button
                 onClick={openNotifications}
+                disabled={role === "admin" && adminSessionLost !== null}
                 aria-label="Open notifications"
                 aria-expanded={notifOpen}
                 className="dashboard-icon-button relative p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
@@ -532,5 +604,6 @@ export default function DashboardShell({
         <main key={pathname} className="dashboard-main app-page-enter flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">{children}</main>
       </div>
     </div>
+    </AdminSessionLifecycleContext.Provider>
   );
 }

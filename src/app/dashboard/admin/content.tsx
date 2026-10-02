@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Users, FileText, AlertTriangle, Brain } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
+import { useAdminSessionLifecycle } from "@/components/admin-session-lifecycle";
 
 interface Activity {
   id: string;
@@ -37,6 +38,7 @@ const activityColors: Record<string, string> = {
 };
 
 export default function AdminDashboardContent() {
+  const adminSession = useAdminSessionLifecycle();
   const [stats, setStats] = useState({
     totalUsers: 0, // Mapped to Active Sessions
     totalQuizzes: 0, // Mapped to Quizzes In-Progress
@@ -65,18 +67,19 @@ export default function AdminDashboardContent() {
   const stopBackgroundRef = useRef<(() => void) | null>(null);
 
   const beginRequest = () => {
-    if (!lifecycleRef.current.active || sessionLostRef.current) return null;
+    if (!lifecycleRef.current.active || sessionLostRef.current || adminSession?.getLoss()) return null;
     const controller = new AbortController();
     requestsRef.current.add(controller);
     return { controller, generation: lifecycleRef.current.generation };
   };
   const requestIsActive = (request: NonNullable<ReturnType<typeof beginRequest>>) =>
-    lifecycleRef.current.active && !sessionLostRef.current
+    lifecycleRef.current.active && !sessionLostRef.current && !adminSession?.getLoss()
     && request.generation === lifecycleRef.current.generation && !request.controller.signal.aborted;
 
   const loseAdminSession = (status: 401 | 403) => {
     if (sessionLostRef.current) return;
     sessionLostRef.current = true;
+    adminSession?.reportLoss(status);
     lifecycleRef.current.generation++;
     for (const controller of requestsRef.current) controller.abort();
     requestsRef.current.clear();
@@ -215,12 +218,15 @@ export default function AdminDashboardContent() {
   };
 
   useEffect(() => {
-    if (sessionLostRef.current) return;
+    const unsubscribeSession = adminSession?.subscribe(loseAdminSession);
+    const knownLoss = adminSession?.getLoss();
+    if (knownLoss) loseAdminSession(knownLoss);
+    if (sessionLostRef.current) return unsubscribeSession;
     const lifecycle = lifecycleRef.current;
     const requests = requestsRef.current;
     lifecycle.active = true;
     const generation = ++lifecycle.generation;
-    const isActive = () => lifecycle.active && lifecycle.generation === generation && !sessionLostRef.current;
+    const isActive = () => lifecycle.active && lifecycle.generation === generation && !sessionLostRef.current && !adminSession?.getLoss();
 
     // Set up Pusher subscription for real-time admin updates
     const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
@@ -308,6 +314,7 @@ export default function AdminDashboardContent() {
     void fetchDashboardData();
 
     return () => {
+      unsubscribeSession?.();
       lifecycle.active = false;
       lifecycle.generation++;
       for (const controller of requests) controller.abort();
@@ -315,7 +322,7 @@ export default function AdminDashboardContent() {
       stopBackground();
       if (stopBackgroundRef.current === stopBackground) stopBackgroundRef.current = null;
     };
-  }, []);
+  }, [adminSession]);
 
   if (sessionLost) {
     return (

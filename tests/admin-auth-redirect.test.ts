@@ -161,7 +161,8 @@ function dashboardFixture(role: "admin" | "student" | "teacher") {
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
-      if (name === "react") return { useState: (initial: unknown) => [initial, () => {}], useEffect: () => {}, useRef: () => ({ current: null }) };
+      if (name === "react") return { useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}], useEffect: () => {}, useRef: (initial: unknown) => ({ current: initial }) };
+      if (name === "./admin-session-lifecycle") return { createAdminSessionLifecycle: () => ({ getLoss: () => null }), AdminSessionLifecycleContext: { Provider: "provider" } };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "Fragment" };
       if (name === "next/navigation") return { usePathname: () => `/dashboard/${role}`, useRouter: () => ({ push() {} }) };
       if (name === "clsx") return { clsx: (...values: unknown[]) => values.filter(Boolean).join(" ") };

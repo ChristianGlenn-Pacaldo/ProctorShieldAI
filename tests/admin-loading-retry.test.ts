@@ -75,6 +75,7 @@ function fixture(relativePath: string, replies: Array<Reply | Promise<Reply>>) {
     exports: component,
     require: (name: string) => {
       if (name === "react") return react;
+      if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
       if (name === "./csv") return { createAiLogsCsv };

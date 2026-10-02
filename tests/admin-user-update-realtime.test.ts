@@ -53,6 +53,7 @@ function fixture(backendActivities: Activity[] = []) {
     exports,
     require: (name: string) => {
       if (name === "react") return react;
+      if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return { Users: "icon", FileText: "icon", AlertTriangle: "icon", Brain: "icon" };
       if (name === "pusher-js") return PusherClient;
