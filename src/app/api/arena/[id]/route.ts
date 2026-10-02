@@ -230,19 +230,16 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           const rankedParticipants = computeArenaRankings(state.participants);
           // Only broadcast join if student was not already in current session
           if (!alreadyJoined) {
+            const joinEvent = {
+              joinKind: "participant",
+              joinEventId: JSON.stringify([quizId, state.sessionId, session.userId]),
+              studentId: session.userId,
+              studentName: session.fullName,
+              initials: participant.initials,
+              participantsCount: Object.keys(state.participants).length,
+            };
             try {
-              await realtime.trigger(`private-arena-${quizId}`, "arena-student-joined", {
-                studentId: session.userId,
-                studentName: session.fullName,
-                initials: participant.initials,
-                participantsCount: Object.keys(state.participants).length,
-              });
-              await realtime.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", {
-                studentId: session.userId,
-                studentName: session.fullName,
-                initials: participant.initials,
-                participantsCount: Object.keys(state.participants).length,
-              });
+              await realtime.trigger([`private-arena-${quizId}`, `private-teacher-${quiz.teacherId}`], "arena-student-joined", joinEvent);
             }
             catch (pusherErr) {
               console.error("Pusher join broadcast error:", pusherErr);

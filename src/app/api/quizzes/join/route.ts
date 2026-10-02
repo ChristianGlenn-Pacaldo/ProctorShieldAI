@@ -272,26 +272,7 @@ async function POSTImpl(req: NextRequest) {
     const studentInitials = getStudentInitials(session.fullName, "ST");
 
     if (enrollmentResult.kind === "existing") {
-      // Trigger live arena join event so the teacher's lobby displays returning students immediately
-      if (quizMode === "arena") {
-        try {
-          const { pusherServer } = await import("@/lib/pusher");
-          const arenaPayload = {
-            quizId: quiz.id,
-            studentId: session.userId,
-            studentName: session.fullName,
-            initials: studentInitials,
-            timestamp: new Date().toISOString(),
-          };
-          await Promise.allSettled([
-            pusherServer.trigger(`private-arena-${quiz.id}`, "arena-student-joined", arenaPayload),
-            pusherServer.trigger(`private-teacher-${quiz.teacherId}`, "arena-student-joined", arenaPayload),
-          ]);
-        } catch (e) {
-          console.error("Failed to trigger push event for existing student:", e);
-        }
-      }
-
+      // Returning enrollment is not a new membership transition or notification.
       return NextResponse.json({
         success: true,
         message: `Welcome back to ${quiz.title}`,
@@ -360,8 +341,9 @@ async function POSTImpl(req: NextRequest) {
       }
 
       if (quizMode === "arena") {
-        // Broadcast arena student joined only on private-arena channel and teacher channel
+        // Enrollment is a refresh hint, never an actual Arena membership transition.
         const arenaPayload = {
+          joinKind: "enrollment",
           quizId: quiz.id,
           studentId: session.userId,
           studentName: session.fullName,

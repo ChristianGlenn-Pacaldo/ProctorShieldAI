@@ -5,9 +5,15 @@ import vm from "node:vm";
 import crypto from "node:crypto";
 import ts from "typescript";
 import { spawnSync } from "node:child_process";
-import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel, claimArenaFeedback } from "../src/lib/arena-feedback.ts";
+import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel, claimArenaFeedback, claimArenaJoinFeedback, getArenaJoinKey } from "../src/lib/arena-feedback.ts";
 import { beginArenaGameplayAction, fetchArenaSnapshot, isTerminalArenaSnapshot, startArenaReconciliation, type ArenaSnapshot } from "../src/lib/arena-client-reconciliation.ts";
 import { arenaFixture, loadArenaModule } from "./helpers/arena-fixture.ts";
+import * as quizAccessCode from "../src/lib/quiz-access-code.ts";
+import * as quizMode from "../src/lib/quiz-mode.ts";
+import * as quizJoin from "../src/lib/quiz-join.ts";
+import * as quizAvailability from "../src/lib/quiz-availability.ts";
+import * as subscriptionRules from "../src/lib/subscription-rules.ts";
+import * as studentIdentity from "../src/lib/student-identity.ts";
 
 const files = {
   teacher: ts.createSourceFile("teacher.tsx", fs.readFileSync("src/app/dashboard/teacher/playground/arena/[id]/content.tsx", "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX),
@@ -51,10 +57,11 @@ function client(kind: "teacher" | "student", completed = false) {
     finalizationAttemptedRef: { current: completed }, finalizationInFlightRef: { current: false },
     actionGenerationRef: { current: 0 }, terminalReconciledRef: { current: false }, actionQuizRef: { current: 77 },
     actionPendingRef: { current: false }, retryActionRef: { current: null },
+    displayedJoinFeedbackRef: { current: new Set<string>() },
     arenaCompletedRef: { current: completed }, terminalResultReconciledRef: { current: false },
     reconciliationRef: { current: null as ReturnType<typeof startArenaReconciliation> | null },
   };
-  const context: Record<string, any> = { ...refs, acceptArenaRevision, acceptArenaEventRevision, isTerminalArenaSnapshot, startArenaReconciliation, fetchArenaSnapshot,
+  const context: Record<string, any> = { ...refs, acceptArenaRevision, acceptArenaEventRevision, claimArenaJoinFeedback, getArenaJoinKey, isTerminalArenaSnapshot, startArenaReconciliation, fetchArenaSnapshot,
     beginArenaGameplayAction, clearGameplayTimers() {}, crypto, studentId: "a", quizId: 77, quiz: { id: 77, questions: [1, 2] }, isAlreadyEnded: completed,
     incomingAttackRef: { current: null }, serverTimeOffsetRef: { current: 0 }, lockedAnswers: new Map(),
     getStudentInitials: () => "A", clearIncomingAttack() {}, showAttackFeedback() {}, playFanfareSound() {},
@@ -613,14 +620,16 @@ test("post-completion enrollment hints/readback preserve EXP, reward markers, no
 
 function realtimeClient(kind: "teacher" | "student", quizId = 77, sessionId = "session") {
   const f = client(kind); let feedback = 0, hints = 0, sessionHints = 0, live = true;
+  let joinChimes = 0;
+  let feedRows: Array<{ id: string; text: string }> = [];
   const state = Object.assign(f.state, { protection: { shield: false, powers: {} as Record<string, boolean> } });
   Object.assign(f.context, { quizId, quiz: { id: quizId, questions: [1, 2] }, currentSessionId: sessionId,
     claimArenaFeedback, hasTerminalArenaFeedback: (displayed: Set<string>, id: string) => displayed.has(`${id}:hit`) || displayed.has(`${id}:deflected`),
     displayedCombatFeedbackRef: { current: new Set() }, displayedAttackFeedbackRef: { current: new Set() },
     claimAttackFeedback: () => true, getServerAdjustedNow: () => Date.now(),
-    setBattleEvents() { feedback++; }, showAttackFeedback() { feedback++; return true; },
+    setBattleEvents(update: (rows: typeof feedRows) => typeof feedRows) { feedback++; feedRows = update(feedRows); }, showAttackFeedback() { feedback++; return true; },
     setIsShieldActivating() {}, setReactionTimeLeftMs() {}, soundEnabled: false,
-    setCelebrationMessage() {}, refreshArenaState: async () => {}, playJoinChime() {},
+    setCelebrationMessage() {}, refreshArenaState: async () => {}, playJoinChime() { joinChimes++; },
     setHasGuardianShield(value: boolean) { state.protection.shield = value; },
     setUsedPowers(value: Record<string, boolean>) { state.protection.powers = value; },
   });
@@ -631,7 +640,7 @@ function realtimeClient(kind: "teacher" | "student", quizId = 77, sessionId = "s
     f.context.applyGameplayState = callback(kind, "applyGameplayState", f.context);
   }
   const callbacks = new Map<string, (data: unknown) => void>();
-  const channel = guardArenaChannel({ bind(event: string, run: (data: unknown) => void) { callbacks.set(event, run); } }, f.refs.arenaRevisionRef,
+  const channel = (name: string) => guardArenaChannel({ bind(event: string, run: (data: unknown) => void) { callbacks.set(`${name}:${event}`, run); } }, f.refs.arenaRevisionRef,
     { getIdentity: f.context.readRealtimeIdentity, isLive: () => live,
       onStateHint() { hints++; f.refs.reconciliationRef.current?.hint(); },
       onSessionHint() { sessionHints++; f.refs.reconciliationRef.current?.hint({ allowTerminal: true }); } });
@@ -643,14 +652,15 @@ function realtimeClient(kind: "teacher" | "student", quizId = 77, sessionId = "s
     return compile(kind, node, f.context);
   };
   const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && node.expression.getText(files[kind]) === "arenaChannel.bind" && ts.isStringLiteral(node.arguments[0])) {
-      channel.bind(node.arguments[0].text, compileHandler(node.arguments[1]));
+    if (ts.isCallExpression(node) && ["arenaChannel.bind", "teacherChannel.bind"].includes(node.expression.getText(files[kind])) && ts.isStringLiteral(node.arguments[0])) {
+      channel(node.expression.getText(files[kind]).split(".")[0]).bind(node.arguments[0].text, compileHandler(node.arguments[1]));
     }
     ts.forEachChild(node, visit);
   };
   visit(files[kind]);
   return { ...f, state, apply: callback(kind, "applyArenaSnapshot", f.context),
-    deliver(event: string, data: unknown) { const run = callbacks.get(event); assert.ok(run, `Actual ${kind} callback for ${event}`); run(data); },
+    deliver(event: string, data: unknown, source = "arenaChannel") { const run = callbacks.get(`${source}:${event}`); assert.ok(run, `Actual ${kind} callback for ${event}`); run(data); },
+    joinChimes: () => joinChimes, feedRows: () => feedRows,
     feedback: () => feedback, hints: () => hints, sessionHints: () => sessionHints, dispose: () => { live = false; },
   };
 }
@@ -674,6 +684,185 @@ async function producedHit(quizId: number, sessionId: string, revision: number, 
   return hit.data;
 }
 
+function joinFixture() {
+  const fixture = arenaFixture("lobby"), state = fixture.read();
+  delete state.participants.a; delete state.participants.b; fixture.save(state);
+  const teacher = realtimeClient("teacher", 77, state.sessionId);
+  teacher.refs.arenaRevisionRef.current = 0;
+  teacher.refs.reconciliationRef.current = { hint() {}, refresh: async () => {}, stop() {} } as any;
+  return { fixture, teacher, async join(studentId = "a") {
+    const before = fixture.events.length;
+    assert.equal((await fixture.action("join", studentId, { sessionId: state.sessionId })).status, 200);
+    return fixture.events.slice(before).find(event => event.event === "arena-student-joined")?.data;
+  }, deliver(payload: unknown) {
+    teacher.deliver("arena-student-joined", payload);
+    teacher.deliver("arena-student-joined", payload, "teacherChannel");
+  } };
+}
+
+function enrollmentProducer(existing = false) {
+  let enrollment: object | null = existing ? { id: "existing" } : null;
+  const events: Array<{ channel: string; event: string; data: unknown }> = [];
+  const quiz = { id: 77, teacherId: "teacher", title: "Arena", quizMode: "arena", quizStatus: "active",
+    teacher: { fullName: "Teacher" }, subject: { subjectName: "Test" } };
+  const db = {
+    $executeRaw: async () => 1,
+    user: { findUnique: async () => ({ id: "a" }) },
+    quiz: { findFirst: async () => quiz, findUnique: async () => quiz },
+    setting: { findUnique: async () => null },
+    studentQuiz: { findFirst: async () => enrollment, findMany: async () => [], create: async () => (enrollment = { id: "new" }) },
+    notification: { create: async () => ({ id: 1, createdAt: new Date() }) },
+    activityLog: { create: async () => ({}) },
+  };
+  const route = loadArenaModule("src/app/api/quizzes/join/route.ts", {
+    "@/lib/backup-write-gate": { withBackupWriteGate: (work: unknown) => work },
+    "next/server": { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } },
+    "@/lib/prisma": { __esModule: true, default: db },
+    "@/lib/arena": { mutateArena: async (_id: number, work: (context: unknown) => Promise<unknown>) => work({ tx: db }) },
+    "@/lib/auth": { getSession: async () => ({ userId: "a", role: "student", fullName: "A" }) },
+    "@/lib/security": { consumeRateLimitGroup: async () => ({ allowed: true }), getClientIp: () => "fixture" },
+    "@/lib/quiz-access-code": quizAccessCode, "@/lib/quiz-mode": quizMode, "@/lib/quiz-join": quizJoin,
+    "@/lib/quiz-availability": quizAvailability, "@/lib/subscription-rules": subscriptionRules,
+    "@/lib/student-identity": studentIdentity, "@/lib/teacher-entitlements": { hasActiveProSubscription: async () => true },
+    "@/lib/pusher": { pusherServer: { trigger: async (channel: string, event: string, data: unknown) => { events.push({ channel, event, data }); } } },
+  });
+  return { events, enroll: () => route.POST({ json: async () => ({ accessCode: "ARENA1" }), headers: { get: () => null } }) };
+}
+
+test("actual membership producer through both actual Teacher channels yields exactly one row/chime and member", async () => {
+  const f = joinFixture(), event = await f.join();
+  assert.equal(event.joinKind, "participant"); assert.equal(event.quizId, 77);
+  assert.equal(event.sessionId, "session-1"); assert.equal(event.joinEventId, getArenaJoinKey(77, "session-1", "a"));
+  assert.equal(event.arenaRevision, f.fixture.read().revision);
+  f.deliver(event);
+  assert.equal(f.teacher.feedRows().length, 1); assert.equal(f.teacher.joinChimes(), 1);
+  assert.equal(Object.keys(f.fixture.read().participants).filter(id => id === "a").length, 1);
+  assert.equal(f.teacher.refs.arenaRevisionRef.current, 0, "informational join does not advance state revision");
+});
+
+test("retried actual join emits no new transition; delivery retry/reconnect replay cannot duplicate feed/chime", async () => {
+  const f = joinFixture(), event = await f.join(); f.deliver(event);
+  assert.equal(await f.join(), undefined);
+  for (let i = 0; i < 10; i++) f.deliver(event);
+  assert.equal(f.teacher.feedRows().length, 1); assert.equal(f.teacher.joinChimes(), 1);
+  const state = f.fixture.read();
+  f.teacher.apply({ quizId: 77, sessionId: state.sessionId, arena: state, participants: f.fixture.arena.computeArenaRankings(state.participants) });
+  f.deliver(event);
+  assert.equal(f.teacher.feedRows().length, 1); assert.equal(f.teacher.joinChimes(), 1);
+});
+
+test("actual quiz enrollment producers are hints only; existing enrollment publishes no additional join", async () => {
+  const producer = enrollmentProducer(); assert.equal((await producer.enroll()).status, 201);
+  assert.equal(producer.events.length, 2);
+  assert.deepEqual(producer.events.map(event => event.channel), ["private-arena-77", "private-teacher-teacher"]);
+  const f = joinFixture();
+  for (const event of producer.events) {
+    assert.equal(event.event, "arena-student-joined");
+    assert.equal((event.data as any).joinKind, "enrollment");
+    f.deliver(event.data);
+  }
+  assert.equal(f.teacher.feedRows().length, 0); assert.equal(f.teacher.joinChimes(), 0);
+  assert.equal((await producer.enroll()).status, 200); assert.equal(producer.events.length, 2);
+  const membership = await f.join(); f.deliver(membership);
+  for (const event of producer.events) f.deliver(event.data);
+  assert.equal(f.teacher.feedRows().length, 1); assert.equal(f.teacher.joinChimes(), 1);
+});
+
+test("existing quiz enrollment followed by actual membership yields one Teacher join", async () => {
+  const producer = enrollmentProducer(true); assert.equal((await producer.enroll()).status, 200);
+  assert.equal(producer.events.length, 0);
+  const f = joinFixture(); f.deliver(await f.join());
+  assert.equal(f.teacher.feedRows().length, 1); assert.equal(f.teacher.joinChimes(), 1);
+});
+
+test("two distinct Students with duplicate deliveries produce two logical rows/chimes", async () => {
+  const f = joinFixture(), first = await f.join("a"), second = await f.join("b");
+  for (const event of [first, second, second, first]) f.deliver(event);
+  assert.equal(f.teacher.feedRows().length, 2); assert.equal(f.teacher.joinChimes(), 2);
+  assert.equal(new Set(f.teacher.feedRows().map(row => row.id)).size, 2);
+  assert.ok(f.fixture.read().participants.a && f.fixture.read().participants.b);
+});
+
+for (const reversed of [false, true]) test(`delayed joins at different revisions survive a newer active snapshot (${reversed ? "reverse" : "forward"} delivery)`, async () => {
+  const f = joinFixture(), initial = f.fixture.read();
+  f.teacher.apply({ quizId: 77, sessionId: initial.sessionId, arena: initial,
+    participants: f.fixture.arena.computeArenaRankings(initial.participants) });
+  const first = await f.join("a"), second = await f.join("b");
+  assert.ok(first.arenaRevision < second.arenaRevision);
+  assert.equal((await f.fixture.action("start")).status, 200);
+  const readback = (await f.fixture.load("arena/[id]", "teacher", "teacher").GET({ nextUrl: {
+    searchParams: new URLSearchParams({ view: "snapshot" }),
+  } }, { params: Promise.resolve({ id: "77" }) })).body;
+  f.teacher.apply(readback);
+  assert.equal(f.teacher.refs.terminalReconciledRef.current, false);
+  const cursor = f.teacher.refs.arenaRevisionRef.current;
+  assert.ok(first.arenaRevision < cursor && second.arenaRevision < cursor);
+  const displayed = JSON.stringify(f.teacher.state);
+  const persisted = JSON.stringify(f.fixture.data, (_key, item) => item instanceof Map ? [...item] : item);
+  for (const event of reversed ? [second, first, first, second] : [first, second, second, first]) f.deliver(event);
+  assert.deepEqual({ rows: f.teacher.feedRows().length, chimes: f.teacher.joinChimes() }, { rows: 2, chimes: 2 });
+  assert.equal(new Set(f.teacher.feedRows().map(row => row.id)).size, 2);
+  assert.ok(f.teacher.feedRows().some(row => row.id === `join-${first.joinEventId}`));
+  assert.ok(f.teacher.feedRows().some(row => row.id === `join-${second.joinEventId}`));
+  assert.equal(JSON.stringify(f.teacher.state), displayed, "feedback cannot replace authoritative gameplay");
+  assert.equal(f.teacher.refs.arenaRevisionRef.current, cursor, "feedback never changes gameplay revision");
+  assert.equal(JSON.stringify(f.fixture.data, (_key, item) => item instanceof Map ? [...item] : item), persisted);
+});
+
+test("disposed Teacher subscription rejects delayed same-session join even after cursor advancement", async () => {
+  const f = joinFixture(), event = await f.join();
+  f.teacher.refs.arenaRevisionRef.current = event.arenaRevision + 10;
+  f.teacher.dispose(); f.deliver(event);
+  assert.equal(f.teacher.feedRows().length, 0); assert.equal(f.teacher.joinChimes(), 0);
+});
+
+test("new authoritative Arena session permits one new join for same Student and rejects old session replay", async () => {
+  const f = joinFixture(), event = await f.join(); f.deliver(event);
+  const state = f.fixture.read(); state.sessionId = "session-2"; state.revision++; delete state.participants.a;
+  f.fixture.save(state);
+  f.teacher.apply({ quizId: 77, sessionId: state.sessionId, arena: state, participants: f.fixture.arena.computeArenaRankings(state.participants) });
+  f.deliver(event);
+  const reply = await f.fixture.action("join", "a", { sessionId: "session-2" }); assert.equal(reply.status, 200);
+  const next = f.fixture.events.filter(event => event.event === "arena-student-joined").at(-1)!.data;
+  f.deliver(next); f.deliver(next);
+  assert.equal(f.teacher.feedRows().length, 2); assert.equal(f.teacher.joinChimes(), 2);
+});
+
+test("Teacher refresh adopts existing participants silently and replay cannot invent new arrivals", async () => {
+  const f = joinFixture(), event = await f.join(), fresh = realtimeClient("teacher", 77, "unknown");
+  const state = f.fixture.read(); fresh.refs.arenaRevisionRef.current = 0;
+  fresh.apply({ quizId: 77, sessionId: state.sessionId, arena: state, participants: f.fixture.arena.computeArenaRankings(state.participants) });
+  fresh.deliver("arena-student-joined", event); fresh.deliver("arena-student-joined", event, "teacherChannel");
+  assert.equal(fresh.feedRows().length, 0); assert.equal(fresh.joinChimes(), 0);
+});
+
+test("foreign, old-session, malformed and legacy join events never claim feed authority", async () => {
+  const f = joinFixture(), event = await f.join(), before = JSON.stringify(f.teacher.state);
+  for (const invalid of [{ ...event, quizId: 88 }, { ...event, sessionId: "old" }, { ...event, joinEventId: "forged" },
+    { ...event, joinKind: undefined }, { ...event, arenaRevision: undefined }]) f.deliver(invalid);
+  assert.equal(f.teacher.feedRows().length, 0); assert.equal(f.teacher.joinChimes(), 0);
+  assert.equal(JSON.stringify(f.teacher.state), before); assert.equal(f.teacher.refs.arenaRevisionRef.current, 0);
+});
+
+for (const reason of ["teacher_end", "timer_expiry"]) test(`late duplicate joins after ${reason} cannot change results, rewards or feed`, async () => {
+  const f = joinFixture(), event = await f.join();
+  assert.equal((await f.fixture.action("start")).status, 200);
+  if (reason === "timer_expiry") {
+    const expired = f.fixture.read(); expired.matchEndsAt = new Date(Date.now() - 1000).toISOString();
+    f.fixture.save(expired); assert.equal((await f.fixture.get()).status, 200);
+  } else assert.equal((await f.fixture.action("end")).status, 200);
+  const persisted = JSON.stringify(f.fixture.data, (_key, item) => item instanceof Map ? [...item] : item);
+  const state = f.fixture.read();
+  assert.ok(state.finalizedAt); assert.equal(state.status, "ended");
+  f.teacher.apply({ quizId: 77, sessionId: state.sessionId, arena: { ...state, completionReason: reason },
+    resultReady: true, participants: f.fixture.arena.computeArenaRankings(state.participants) });
+  const displayed = JSON.stringify(f.teacher.state);
+  f.deliver(event); f.deliver(enrollmentPayload());
+  assert.equal(JSON.stringify(f.teacher.state), displayed);
+  assert.equal(f.teacher.feedRows().length, 0); assert.equal(f.teacher.joinChimes(), 0);
+  assert.equal(JSON.stringify(f.fixture.data, (_key, item) => item instanceof Map ? [...item] : item), persisted);
+});
+
 test("exact Teacher foreign Arena hit cannot replace terminal 150/100 or poison its revision-12 readback", async () => {
   const f = realtimeClient("teacher"); const terminal = finalTeacherSnapshot("teacher_end", 150); f.apply(terminal);
   const before = JSON.stringify(f.state); f.deliver("arena-attack-hit", await producedHit(88, "foreign-session", 13));
@@ -687,6 +876,17 @@ for (const kind of ["teacher", "student"] as const) {
     f.deliver("arena-attack-hit", await producedHit(77, "session", 13, 37));
     assert.equal(f.refs.arenaRevisionRef.current, 13);
     assert.equal(kind === "teacher" ? f.state.participants.find(p => p.id === "a").score : f.state.score, 37);
+  });
+  test(`${kind} stale score/shield/power payloads remain rejected independently of join feedback`, async () => {
+    const f = realtimeClient(kind); f.apply(committedAction(12, 150, true) as unknown as ArenaSnapshot);
+    const before = JSON.stringify(f.state);
+    const stale = { ...committedAction(11, 999, false), arenaRevision: 11, studentId: "a", score: 999,
+      rank: 99, usedPowers: { shield: false, meteor: false }, hasShield: false,
+      attackId: "stale-shield", attackerName: "B", targetStudentId: "a", targetName: "A", powerType: "meteor" };
+    for (const event of ["arena-score-updated", "arena-leaderboard-updated", "arena-attack-blocked"]) f.deliver(event, stale);
+    if (kind === "student") f.deliver("arena-airdrop", stale);
+    assert.equal(JSON.stringify(f.state), before);
+    assert.equal(f.refs.arenaRevisionRef.current, 12);
   });
   test(`${kind} rejects foreign Arena and old session before revision comparison`, async () => {
     const f = realtimeClient(kind); f.apply(committedAction(12, 150, false) as unknown as ArenaSnapshot); const before = JSON.stringify(f.state);

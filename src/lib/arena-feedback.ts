@@ -77,8 +77,9 @@ export function guardArenaChannel<T extends object>(channel: T, cursor: { curren
             }
             if (view.sessionId && [record?.sessionId, record?.arena?.sessionId].some(id => id !== undefined && id !== view.sessionId)) return;
             if (view.terminal) return;
-            // Enrollment identifies a user, not an authoritative participant.
-            // Its hint-only handlers must never advance the snapshot cursor.
+            // Join notifications refresh membership; only explicitly identified
+            // participant transitions may additionally produce informational feed.
+            // Neither enrollment nor join feedback advances the snapshot cursor.
             if (event === "arena-student-joined") { handler(data); return; }
             if (!arenaEventMatchesView(data, view)) { options?.onStateHint?.(); return; }
             // Combat feedback is independently identified by attackId. A newer
@@ -118,4 +119,22 @@ export function claimArenaFeedback(
   if (displayed.has(key)) return false;
   displayed.add(key);
   return true;
+}
+
+/** One membership transition per Student in an authoritative Arena session. */
+export function getArenaJoinKey(quizId: number, sessionId: string, studentId: string): string {
+  return JSON.stringify([quizId, sessionId, studentId]);
+}
+
+/** Informational transitions dedupe by identity, independently of state revisions. */
+export function claimArenaJoinFeedback(displayed: Set<string>, data: unknown, view: ArenaRealtimeView): string | null {
+  if (view.terminal || !arenaEventMatchesView(data, view)) return null;
+  const record = data as ArenaEventIdentity & { joinKind?: unknown; studentId?: unknown; joinEventId?: unknown };
+  const revision = record.arenaRevision ?? record.revision ?? record.arena?.revision;
+  if (record.joinKind !== "participant" || typeof record.studentId !== "string" || !record.studentId
+    || !Number.isSafeInteger(revision)) return null;
+  const key = getArenaJoinKey(view.quizId, view.sessionId!, record.studentId);
+  if (record.joinEventId !== key || displayed.has(key)) return null;
+  displayed.add(key);
+  return key;
 }

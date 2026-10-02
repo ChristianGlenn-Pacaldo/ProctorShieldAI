@@ -34,7 +34,7 @@ import PusherClient from "pusher-js";
 import { computeArenaRankings, type ArenaParticipant } from "@/lib/arena";
 import { ArenaIdentity } from "@/components/arena/arena-identity";
 import { getStudentInitials } from "@/lib/student-identity";
-import { claimArenaFeedback } from "@/lib/arena-feedback";
+import { claimArenaFeedback, claimArenaJoinFeedback, getArenaJoinKey } from "@/lib/arena-feedback";
 
 interface Choice {
   id: number;
@@ -124,6 +124,7 @@ export default function ArenaHostContent({
   const terminalReconciledRef = useRef(false);
   const actionQuizRef = useRef(quiz.id);
   const retryActionRef = useRef<{ action: string; payload: string; id: string; sessionId: string | null } | null>(null);
+  const displayedJoinFeedbackRef = useRef(new Set<string>());
   const readRealtimeIdentity = useCallback(() => ({ quizId: quiz.id, sessionId: arenaSessionRef.current,
     terminal: terminalReconciledRef.current }), [quiz.id]);
   useEffect(() => {
@@ -132,6 +133,7 @@ export default function ArenaHostContent({
     arenaSessionRef.current = null;
     terminalReconciledRef.current = false;
     retryActionRef.current = null;
+    displayedJoinFeedbackRef.current.clear();
     actionGenerationRef.current++;
     return () => { actionGenerationRef.current++; };
   }, [quiz.id]);
@@ -273,6 +275,12 @@ export default function ArenaHostContent({
     const sessionId = data.sessionId ?? data.arena?.sessionId;
     if (sessionId && sessionId !== arenaSessionRef.current) {
       arenaSessionRef.current = sessionId;
+      displayedJoinFeedbackRef.current.clear();
+      // Participants already present when this view adopts a session are not
+      // new arrivals. Reconnect/replay must not announce historical membership.
+      for (const participant of data.participants ?? []) {
+        displayedJoinFeedbackRef.current.add(getArenaJoinKey(quiz.id, sessionId, participant.studentId));
+      }
       actionGenerationRef.current++;
       terminalReconciledRef.current = false;
     }
@@ -386,17 +394,20 @@ export default function ArenaHostContent({
       const sessionId = data?.sessionId ?? data?.arena?.sessionId;
       if (sessionId && sessionId !== arenaSessionRef.current) return;
       const revision = data?.arenaRevision ?? data?.arena?.revision;
-      if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < arenaRevisionRef.current)) return;
+      if (revision !== undefined && !Number.isSafeInteger(revision)) return;
       // Enrollment is a read hint, never a participant or result snapshot.
       reconciliationRef.current?.hint();
-      if (!data?.studentId) return;
+      // A newer gameplay snapshot cannot suppress an unseen informational join.
+      const joinIdentity = claimArenaJoinFeedback(displayedJoinFeedbackRef.current, data,
+        readRealtimeIdentity());
+      if (!joinIdentity || !data?.studentId) return;
       playJoinChime();
       const displayName = data.studentName || data.name || "A fighter";
       setBattleEvents((prev) => [
         {
-          id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          id: `join-${joinIdentity}`,
           timestamp: "Just now",
-          text: `🎮 ${displayName} joined the quiz.`,
+          text: `🎮 ${displayName} entered the Arena!`,
           type: "info",
         },
         ...prev.slice(0, 25),
