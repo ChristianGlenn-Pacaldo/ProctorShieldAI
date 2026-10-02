@@ -2,10 +2,9 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
+import { MissingPremiumPlanError, setManualSubscription, subscriptionTransactionOptions } from "@/lib/paymongo-subscription";
 
 class LastActiveAdminError extends Error {}
-class MissingPremiumPlanError extends Error {}
 
 async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let suspendingAdmin = false;
@@ -32,7 +31,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
 
     const user = await prisma.user.findUnique({
       where: { id },
-      include: { role: true, userSubscriptions: true },
+      include: { role: true },
     });
 
     if (!user) {
@@ -52,22 +51,12 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
         const activeAdmins = await tx.user.count({ where: { roleId: user.roleId, status: "active" } });
         if (activeAdmins <= 1) throw new LastActiveAdminError("Cannot suspend the last active Admin account");
       }
-      const activeSubscription = plan ? await tx.userSubscription.findFirst({
-        where: {
-          userId: id,
-          subscriptionStatus: "active",
-          endDate: { gt: new Date() },
-          plan: { yearlyPrice: { gt: 0 } },
-        },
-        select: { id: true },
-      }) : null;
-      const premiumPlan = plan === "Premium" && !activeSubscription
-        ? await tx.subscriptionPlan.findFirst({
-          where: { planName: { contains: "Premium" }, yearlyPrice: { gt: 0 } }
-        })
-        : null;
-      if (plan === "Premium" && !activeSubscription && !premiumPlan) {
-        throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+      if (plan) {
+        await setManualSubscription(tx, {
+          userId: id, actorId: session.userId, action: plan === "Premium" ? "grant" : "revoke",
+          source: req.headers.get("x-forwarded-for") || "unknown",
+          revokedStatus: "cancelled", planNames: "contains",
+        });
       }
       // Handle Status Toggle (Suspend/Restore)
       if (status && (status === "active" || status === "suspended")) {
@@ -77,44 +66,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
         });
       }
 
-      // Handle Plan Update (Premium / Free Tier) - Only applies to teachers
-      if (plan && user.role.roleName === "teacher") {
-        if (plan === "Premium" && !activeSubscription) {
-          if (!premiumPlan) throw new MissingPremiumPlanError("No valid paid Premium plan is available");
-          // Deactivate any other active plan before granting Premium.
-          await tx.userSubscription.updateMany({
-            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
-            data: { subscriptionStatus: "cancelled" }
-          });
-
-          const startDate = new Date();
-          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
-          await tx.userSubscription.upsert({
-            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
-            update: {
-              startDate,
-              endDate,
-              paymentStatus: "paid_manual",
-              subscriptionStatus: "active",
-            },
-            create: {
-              userId: id,
-              planId: premiumPlan.id,
-              startDate,
-              endDate,
-              paymentStatus: "paid_manual",
-              subscriptionStatus: "active",
-            }
-          });
-        } else if (plan === "Free Tier" && activeSubscription) {
-          // Just cancel the active subscription
-          await tx.userSubscription.updateMany({
-            where: { userId: id, subscriptionStatus: "active" },
-            data: { subscriptionStatus: "cancelled" }
-          });
-        }
-      }
-    }, suspendingAdmin ? { isolationLevel: "Serializable" } : undefined);
+    }, suspendingAdmin ? { isolationLevel: "Serializable" } : plan ? subscriptionTransactionOptions : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

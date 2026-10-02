@@ -76,7 +76,7 @@ test("activation acquires payment then Teacher lock before any authoritative rea
     });
   } } as unknown as PrismaClient;
   assert.equal(await loadBillingModule(client).activatePaidCheckout(paidCheckout("one"), billingEvent("one")), "invalid");
-  assert.deepEqual(order, ["bounded-lock-wait", "payment-lock", "teacher-lock", "user-read", "plan-read"]);
+  assert.deepEqual(order, ["bounded-lock-wait", "payment-lock", "bounded-lock-wait", "teacher-lock", "user-read", "plan-read"]);
 });
 
 test("checkout reconciliation still uses the same authoritative activation primitive", () => {

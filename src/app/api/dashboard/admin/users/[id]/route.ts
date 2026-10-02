@@ -2,10 +2,9 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
+import { MissingPremiumPlanError, setManualSubscription, subscriptionTransactionOptions } from "@/lib/paymongo-subscription";
 
 class LastActiveAdminError extends Error {}
-class MissingPremiumPlanError extends Error {}
 
 async function PUTImpl(
   req: NextRequest,
@@ -57,22 +56,13 @@ async function PUTImpl(
         const activeAdmins = await tx.user.count({ where: { roleId: user.roleId, status: "active" } });
         if (activeAdmins <= 1) throw new LastActiveAdminError("Cannot suspend the last active Admin account");
       }
-      const activeSubscription = subscriptionStatus ? await tx.userSubscription.findFirst({
-        where: {
-          userId: id,
-          subscriptionStatus: "active",
-          endDate: { gt: new Date() },
-          plan: { yearlyPrice: { gt: 0 } },
-        },
-        select: { id: true },
-      }) : null;
-      const premiumPlan = subscriptionStatus === "active" && !activeSubscription
-        ? await tx.subscriptionPlan.findFirst({
-          where: { planName: { in: ["Premium Monthly", "Premium Yearly"] }, yearlyPrice: { gt: 0 } },
-        })
-        : null;
-      if (subscriptionStatus === "active" && !activeSubscription && !premiumPlan) {
-        throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+      if (subscriptionStatus) {
+        const subscriptionActivity = await setManualSubscription(tx, {
+          userId: id, actorId: session.userId, action: subscriptionStatus === "active" ? "grant" : "revoke",
+          source: req.headers.get("x-forwarded-for") || "unknown",
+          revokedStatus: "expired", planNames: "exact",
+        });
+        activity ??= subscriptionActivity;
       }
       // 2. Update basic status if provided
       if (status && ["active", "suspended"].includes(status)) {
@@ -92,64 +82,8 @@ async function PUTImpl(
         });
       }
 
-      // 3. Update subscription status if provided and user is a teacher
-      if (subscriptionStatus && user.role.roleName === "teacher") {
-        if (subscriptionStatus === "active" && !activeSubscription) {
-          if (!premiumPlan) throw new MissingPremiumPlanError("No valid paid Premium plan is available");
-          const startDate = new Date();
-          const endDate = new Date(startDate.getTime() + PRO_SUBSCRIPTION_DURATION_DAYS * 86_400_000);
-
-          await tx.userSubscription.updateMany({
-            where: { userId: id, planId: { not: premiumPlan.id }, subscriptionStatus: "active" },
-            data: { subscriptionStatus: "cancelled" },
-          });
-          await tx.userSubscription.upsert({
-            where: { userId_planId: { userId: id, planId: premiumPlan.id } },
-            update: {
-              subscriptionStatus: "active",
-              paymentStatus: "paid_manual",
-              startDate,
-              endDate,
-            },
-            create: {
-              userId: id,
-              planId: premiumPlan.id,
-              startDate,
-              endDate,
-              subscriptionStatus: "active",
-              paymentStatus: "paid_manual",
-            },
-          });
-
-          const subscriptionActivity = `Admin manually granted Pro subscription to: ${user.fullName}`;
-          await tx.activityLog.create({
-            data: {
-              userId: session.userId,
-              activity: subscriptionActivity,
-              ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-            }
-          });
-          activity ??= subscriptionActivity;
-        } else if (subscriptionStatus === "expired" && activeSubscription) {
-          // Expire all subscriptions for this user
-          await tx.userSubscription.updateMany({
-            where: { userId: id },
-            data: { subscriptionStatus: "expired" }
-          });
-
-          const subscriptionActivity = `Admin manually revoked Pro subscription for: ${user.fullName}`;
-          await tx.activityLog.create({
-            data: {
-              userId: session.userId,
-              activity: subscriptionActivity,
-              ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-            }
-          });
-          activity ??= subscriptionActivity;
-        }
-      }
       return activity;
-    }, suspendingAdmin ? { isolationLevel: "Serializable" } : undefined);
+    }, suspendingAdmin ? { isolationLevel: "Serializable" } : subscriptionStatus ? subscriptionTransactionOptions : undefined);
 
     // 4. Notify admin dashboard clients via Pusher
     try {

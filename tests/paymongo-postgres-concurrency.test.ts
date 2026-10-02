@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import vm from "node:vm";
+import ts from "typescript";
 import { Client } from "pg";
 import { PrismaClient } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
@@ -41,9 +43,10 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
       CREATE TABLE payments(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL REFERENCES user_subscriptions(id),amount DECIMAL(10,2) NOT NULL,payment_method TEXT,payment_status TEXT,transaction_reference TEXT UNIQUE,provider_payment_id TEXT UNIQUE,refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0,refunded_at TIMESTAMP,paid_at TIMESTAMP);
       CREATE TABLE webhook_events(id TEXT PRIMARY KEY,provider TEXT NOT NULL,event_id TEXT UNIQUE NOT NULL,event_type TEXT NOT NULL,processed_at TIMESTAMP NOT NULL DEFAULT now());
       CREATE TABLE activity_logs(id BIGSERIAL PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),activity TEXT NOT NULL,ip_address TEXT,created_at TIMESTAMP NOT NULL DEFAULT now());
-      INSERT INTO roles(role_name) VALUES('teacher');
+      INSERT INTO roles(role_name) VALUES('teacher'),('admin');
       INSERT INTO users(id,full_name,email,password,role_id) VALUES('teacher','Disposable Teacher','disposable@example.invalid','unused',1),('other','Other Teacher','other@example.invalid','unused',1);
-      INSERT INTO subscription_plans(plan_name,yearly_price,duration_days) VALUES('Pro',500,30),('Alternate',500,45);
+      INSERT INTO users(id,full_name,email,password,role_id) VALUES('admin','Disposable Admin','admin@example.invalid','unused',2);
+      INSERT INTO subscription_plans(plan_name,yearly_price,duration_days) VALUES('Premium Monthly',500,30),('Alternate',500,45);
     `);
     await admin.query("INSERT INTO user_subscriptions(id,user_id,plan_id,start_date,end_date,payment_status,subscription_status) VALUES('migration-sub','teacher',1,CURRENT_DATE-15,CURRENT_DATE+15,'paid','active')");
     await admin.query("INSERT INTO payments(id,subscription_id,amount,provider_payment_id,payment_status,paid_at) VALUES('migration-payment','migration-sub',500,'pay-migration','paid',now()-interval '15 days')");
@@ -51,6 +54,7 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
     // Apply the actual additive migration against existing rows. Never use
     // prisma migrate commands that could load the application's .env URL.
     await admin.query(fs.readFileSync("prisma/migrations/20261001000000_paymongo_grant_accounting/migration.sql", "utf8"));
+    await admin.query(fs.readFileSync("prisma/migrations/20261002000000_manual_entitlement_accounting/migration.sql", "utf8"));
     await t.test("additive migration preserves historical expiry and leaves attribution explicitly unknown", async () => {
       const subscription = await one.userSubscription.findUniqueOrThrow({ where: { id: "migration-sub" } });
       const payment = await one.payment.findUniqueOrThrow({ where: { id: "migration-payment" } });
@@ -63,7 +67,7 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
       assert.equal((await one.payment.findUniqueOrThrow({ where: { id: payment.id } })).grantDurationDays, null);
     });
     const reset = async (expiry: Date | null = future) => {
-      await admin.query("TRUNCATE activity_logs,webhook_events,payments,user_subscriptions");
+      await admin.query("TRUNCATE activity_logs,webhook_events,payments,manual_subscription_adjustments,user_subscriptions");
       if (expiry) await admin.query("INSERT INTO user_subscriptions(id,user_id,plan_id,start_date,end_date,payment_status,subscription_status) VALUES('sub','teacher',1,CURRENT_DATE,$1,'paid','active')", [expiry]);
     };
     const expiry = async () => (await one.userSubscription.findUniqueOrThrow({ where: { userId_planId: { userId: "teacher", planId: 1 } } })).endDate;
@@ -361,6 +365,204 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
       await assert.rejects(billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), two), /outside grant accounting/);
       await assert.rejects(billing.refundPaidCheckout({ providerPaymentId: "pay-old", refundedCentavos: 50_000 }, billingEvent("refund", "payment.refunded"), two), /outside grant accounting/);
       assert.deepEqual({ counts: await counts(), payments: await one.payment.findMany(), subscription: await one.userSubscription.findFirst() }, before);
+    });
+    let manualEvents = 0;
+    const manual = async (client: PrismaClient, action: "grant" | "revoke", secondary = false, status?: string) => {
+      const route: { PUT?: (request: Request, context: object) => Promise<Response> } = {};
+      vm.runInNewContext(ts.transpileModule(fs.readFileSync(secondary ? "src/app/api/users/[id]/route.ts" : "src/app/api/dashboard/admin/users/[id]/route.ts", "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+      }).outputText, { exports: route, Date, console: { error() {} }, require(name: string) {
+        if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
+        if (name === "next/server") return { NextResponse: { json: (body: unknown, options?: ResponseInit) => Response.json(body, options) } };
+        if (name === "@/lib/auth") return { getSession: async () => ({ userId: "admin", role: "admin" }) };
+        if (name === "@/lib/prisma") return { __esModule: true, default: client };
+        if (name === "@/lib/paymongo-subscription") return billing;
+        if (name === "@/lib/pusher") return { pusherServer: { trigger: async () => { manualEvents++; } } };
+        throw new Error(name);
+      } });
+      const body = secondary ? { plan: action === "grant" ? "Premium" : "Free Tier", ...(status ? { status } : {}) }
+        : { subscriptionStatus: action === "grant" ? "active" : "expired", ...(status ? { status } : {}) };
+      return route.PUT!(new Request("https://test.invalid/api/users/teacher", { method: "PUT", body: JSON.stringify(body) }), { params: Promise.resolve({ id: "teacher" }) });
+    };
+    const adjustmentCount = () => one.manualSubscriptionAdjustment.count();
+    const fullRefund = (client: PrismaClient) => billing.refundPaidCheckout({ providerPaymentId: "pay-old", refundedCentavos: 50_000 }, billingEvent("refund", "payment.refunded"), client);
+    const readFacts = async (client = one) => ({ subscription: await client.userSubscription.findFirst({ where: { userId: "teacher" } }),
+      payments: await client.payment.findMany({ orderBy: { id: "asc" } }),
+      adjustments: await client.manualSubscriptionAdjustment.findMany({ orderBy: { sequence: "asc" } }),
+      events: await client.webhookEvent.count(), audits: await client.activityLog.count() });
+    await t.test("both Admin routes leave effective provider access unchanged without a manual grant/audit", async () => {
+      await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+      const before = await readFacts();
+      assert.equal((await manual(two, "grant")).status, 200);
+      assert.equal((await manual(two, "grant", true)).status, 200);
+      assert.deepEqual(await readFacts(), before);
+    });
+    await t.test("manual grant without paid access is thirty days, repeated saves are no-ops, later payment preserves it", async () => {
+      for (const secondary of [false, true]) {
+        await reset(null);
+        assert.equal((await manual(one, "grant", secondary)).status, 200);
+        assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+        assert.equal(await one.payment.count(), 0); assert.equal(await adjustmentCount(), 1);
+        assert.equal(await one.activityLog.count(), 1);
+        const before = await readFacts();
+        assert.equal((await manual(two, "grant", secondary)).status, 200); assert.deepEqual(await readFacts(), before);
+        await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), two);
+        assert.equal((await expiry()).getTime(), today.getTime() + 60 * day);
+        assert.equal(await adjustmentCount(), 1);
+      }
+    });
+    await t.test("Admin revoke ends access, preserves provider facts, and a new payment adds only new access", async () => {
+      await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+      const before = await one.payment.findMany();
+      assert.equal((await manual(two, "revoke")).status, 200);
+      assert.equal((await expiry()).getTime(), today.getTime());
+      assert.equal((await one.userSubscription.findFirst())?.subscriptionStatus, "expired");
+      assert.deepEqual(await one.payment.findMany(), before);
+      const revoked = await readFacts();
+      await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("duplicate"), two);
+      assert.deepEqual((await readFacts()).subscription, revoked.subscription);
+      await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), two);
+      assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+      assert.equal((await one.userSubscription.findFirst())?.subscriptionStatus, "active");
+      assert.equal(await one.payment.count(), 2);
+    });
+    await t.test("manual revoke versus new activation follows the authoritative serialization order", async () => {
+      for (const revokeFirst of [false, true]) {
+        await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+        const revoke = async (c: PrismaClient) => { assert.equal((await manual(c, "revoke")).status, 200); };
+        const purchase = async (c: PrismaClient) => { assert.equal(await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), c), "activated"); };
+        await overlap(revokeFirst ? revoke : purchase, revokeFirst ? purchase : revoke);
+        assert.equal((await expiry()).getTime(), today.getTime() + (revokeFirst ? 30 : 0) * day);
+        assert.equal(await one.payment.count(), 2); assert.equal(await adjustmentCount(), 1);
+      }
+    });
+    await t.test("manual grant versus activation is serialized; provider-first grant is a no-op", async () => {
+      for (const manualFirst of [false, true]) {
+        await reset(null);
+        const grant = async (c: PrismaClient) => { assert.equal((await manual(c, "grant")).status, 200); };
+        const purchase = async (c: PrismaClient) => { assert.equal(await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), c), "activated"); };
+        await overlap(manualFirst ? grant : purchase, manualFirst ? purchase : grant);
+        assert.equal((await expiry()).getTime(), today.getTime() + (manualFirst ? 60 : 30) * day);
+        assert.equal(await adjustmentCount(), manualFirst ? 1 : 0);
+      }
+    });
+    await t.test("manual revoke and full refund never rewrite payment ownership or fabricate manual refunds", async () => {
+      for (const revokeFirst of [false, true]) {
+        // The manual grant remains after refund, making the revoke a real
+        // transition in either ordering rather than an already-expired no-op.
+        await reset(null); assert.equal((await manual(one, "grant")).status, 200);
+        await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+        const revoke = async (c: PrismaClient) => { assert.equal((await manual(c, "revoke")).status, 200); };
+        const refund = async (c: PrismaClient) => { await fullRefund(c); };
+        await overlap(revokeFirst ? revoke : refund, revokeFirst ? refund : revoke);
+        assert.equal((await expiry()).getTime(), today.getTime());
+        const payment = await one.payment.findUniqueOrThrow({ where: { providerPaymentId: "pay-old" } });
+        assert.equal(Number(payment.refundedAmount), 500); assert.equal(payment.grantDurationDays, 30);
+        assert.equal(await adjustmentCount(), 2); assert.equal(await one.payment.count(), 1);
+      }
+    });
+    await t.test("refund after a new manual grant cannot deduct manual-only access", async () => {
+      await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+      assert.equal((await manual(one, "revoke")).status, 200);
+      assert.equal((await manual(one, "grant")).status, 200);
+      await fullRefund(two);
+      assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+      assert.equal((await one.userSubscription.findFirst())?.subscriptionStatus, "active");
+      assert.equal(await adjustmentCount(), 2);
+      await billing.refundPaidCheckout({ providerPaymentId: "pay-old", refundedCentavos: 50_000 }, billingEvent("refund-replay", "payment.refunded"), two);
+      assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+    });
+    await t.test("two simultaneous manual grants create exactly one accounting fact and audit", async () => {
+      await reset(null);
+      await overlap(async c => { assert.equal((await manual(c, "grant")).status, 200); }, async c => { assert.equal((await manual(c, "grant", true)).status, 200); });
+      assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+      assert.equal(await adjustmentCount(), 1); assert.equal(await one.activityLog.count(), 1);
+    });
+    await t.test("two simultaneous manual revokes create one adjustment and cannot remove history twice", async () => {
+      await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+      const payments = await one.payment.findMany();
+      await overlap(async c => { assert.equal((await manual(c, "revoke")).status, 200); }, async c => { assert.equal((await manual(c, "revoke", true)).status, 200); });
+      assert.equal((await expiry()).getTime(), today.getTime());
+      assert.equal(await adjustmentCount(), 1); assert.equal(await one.activityLog.count(), 2);
+      assert.deepEqual(await one.payment.findMany(), payments);
+    });
+    await t.test("manual grant overlapping a consumed provider refund retains manual access in both lock orders", async () => {
+      for (const grantFirst of [false, true]) {
+        await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+        const accepted = new Date(today.getTime() - 45 * day);
+        await one.payment.update({ where: { providerPaymentId: "pay-old" }, data: { paidAt: accepted } });
+        await one.userSubscription.update({ where: { userId_planId: { userId: "teacher", planId: 1 } }, data: {
+          startDate: accepted, grantBaselineAt: accepted, grantBaselineEndDate: accepted, endDate: new Date(today.getTime() - 15 * day),
+        } });
+        const grant = async (c: PrismaClient) => { assert.equal((await manual(c, "grant")).status, 200); };
+        const refund = async (c: PrismaClient) => { await fullRefund(c); };
+        await overlap(grantFirst ? grant : refund, grantFirst ? refund : grant);
+        assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+        assert.equal(await adjustmentCount(), 1); assert.equal(await one.payment.count(), 1);
+      }
+    });
+    await t.test("manual grant audit/constraint failure rolls back adjustment, balance, status and post-commit event", async () => {
+      for (const secondary of [false, true]) {
+        await reset(null);
+        await admin.query("ALTER TABLE activity_logs ADD CONSTRAINT injected_manual_failure CHECK (activity NOT LIKE 'Admin manually%')");
+        const events = manualEvents;
+        try {
+          assert.equal((await manual(two, "grant", secondary, "suspended")).status, 500);
+          assert.deepEqual(await readFacts(), { subscription: null, payments: [], adjustments: [], events: 0, audits: 0 });
+          assert.equal((await one.user.findUniqueOrThrow({ where: { id: "teacher" } })).status, "active");
+          assert.equal(manualEvents, events);
+        } finally { await admin.query("ALTER TABLE activity_logs DROP CONSTRAINT injected_manual_failure"); }
+      }
+    });
+    await t.test("manual revoke audit failure rolls back all facts and preserves paid access", async () => {
+      await reset(null); await billing.activatePaidCheckout(paidCheckout("old"), billingEvent("old"));
+      const before = await readFacts(), events = manualEvents;
+      await admin.query("ALTER TABLE activity_logs ADD CONSTRAINT injected_manual_failure CHECK (activity NOT LIKE 'Admin manually%')");
+      try { assert.equal((await manual(two, "revoke")).status, 500); assert.deepEqual(await readFacts(), before); assert.equal(manualEvents, events); }
+      finally { await admin.query("ALTER TABLE activity_logs DROP CONSTRAINT injected_manual_failure"); }
+    });
+    await t.test("unrelated manual ledger uniqueness failure rolls back rather than becoming a duplicate success", async () => {
+      await reset(null); await manual(one, "grant"); await manual(one, "revoke");
+      const before = await readFacts(), events = manualEvents;
+      const collision = before.adjustments[0].id;
+      const faulted = new Proxy(two, { get(client, property) {
+        if (property !== "$transaction") return Reflect.get(client, property);
+        return (work: (tx: Prisma.TransactionClient) => Promise<unknown>, options: object) => client.$transaction(tx => work(new Proxy(tx, {
+          get(transaction, field) {
+            if (field !== "manualSubscriptionAdjustment") return Reflect.get(transaction, field);
+            return new Proxy(transaction.manualSubscriptionAdjustment, { get(delegate, method) {
+              if (method !== "create") return Reflect.get(delegate, method);
+              return (args: Prisma.ManualSubscriptionAdjustmentCreateArgs) => delegate.create({ ...args, data: { ...args.data, id: collision } });
+            } });
+          },
+        })), options);
+      } });
+      assert.equal((await manual(faulted, "grant")).status, 500);
+      assert.deepEqual(await readFacts(), before); assert.equal(manualEvents, events);
+    });
+    await t.test("unknown historical manual balance is preserved without fabricating original grant facts", async () => {
+      await reset(new Date(today.getTime() + 17 * day));
+      await one.userSubscription.update({ where: { id: "sub" }, data: { paymentStatus: "paid_manual" } });
+      const before = await one.userSubscription.findUniqueOrThrow({ where: { id: "sub" } });
+      assert.equal((await manual(two, "grant")).status, 200);
+      assert.deepEqual(await one.userSubscription.findUniqueOrThrow({ where: { id: "sub" } }), before);
+      await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"), two);
+      await billing.refundPaidCheckout({ providerPaymentId: "pay-new", refundedCentavos: 50_000 }, billingEvent("refund-new", "payment.refunded"), two);
+      assert.equal((await expiry()).getTime(), before.endDate.getTime());
+      assert.equal(await adjustmentCount(), 0);
+      assert.equal((await one.userSubscription.findUniqueOrThrow({ where: { id: "sub" } })).grantBaselineEndDate?.getTime(), before.endDate.getTime());
+    });
+    await t.test("adopting an inactive future-expiry legacy row does not resurrect disabled entitlement", async () => {
+      await reset(new Date(today.getTime() + 17 * day));
+      await one.userSubscription.update({ where: { id: "sub" }, data: { subscriptionStatus: "cancelled" } });
+      assert.equal((await manual(two, "grant")).status, 200);
+      assert.equal((await expiry()).getTime(), today.getTime() + 30 * day);
+      assert.deepEqual((await one.manualSubscriptionAdjustment.findMany({ orderBy: { sequence: "asc" } })).map(a => a.kind), ["revoke", "grant"]);
+    });
+    await t.test("fresh client reads the same manual adjustment/provider facts and effective expiry", async () => {
+      await reset(null); await manual(one, "grant"); await billing.activatePaidCheckout(paidCheckout("new"), billingEvent("new"));
+      const before = await readFacts(), fresh = newClient();
+      try { assert.deepEqual(await readFacts(fresh), before); } finally { await fresh.$disconnect(); }
     });
     await t.test("fresh client readback retains all committed concurrent grants", async () => {
       await reset(); await overlap(c => billing.activatePaidCheckout(paidCheckout("one"), billingEvent("one"), c), c => billing.activatePaidCheckout(paidCheckout("two"), billingEvent("two"), c));

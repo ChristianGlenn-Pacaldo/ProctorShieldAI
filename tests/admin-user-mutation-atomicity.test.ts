@@ -4,11 +4,17 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { loadBillingModule } from "./helpers/paymongo-fixture.ts";
+import type { PrismaClient } from "@prisma/client";
 
 const adminRoute = "src/app/api/dashboard/admin/users/[id]/route.ts";
 const dashboardRoute = "src/app/api/users/[id]/route.ts";
 
 type Subscription = {
+  id: string;
+  grantBaselineAt: Date | null;
+  grantBaselineEndDate: Date | null;
+  accountingSequence: bigint;
   userId: string;
   planId: number;
   startDate: Date;
@@ -20,6 +26,7 @@ type Subscription = {
 type State = {
   user: { id: string; fullName: string; status: string };
   subscriptions: Subscription[];
+  adjustments: any[];
   logs: Array<{ activity: string }>;
 };
 
@@ -29,10 +36,10 @@ function fixture(fault: Fault = null, activePaid = false) {
   let state: State = {
     user: { id: "teacher-1", fullName: "Teacher Name", status: "active" },
     subscriptions: [{
-      userId: "teacher-1", planId: 1, subscriptionStatus: "active", paymentStatus: "paid",
+      id: "sub-1", grantBaselineAt: null, grantBaselineEndDate: null, accountingSequence: BigInt(0), userId: "teacher-1", planId: 1, subscriptionStatus: "active", paymentStatus: "paid",
       startDate: new Date("2025-01-01"), endDate: new Date(activePaid ? "2099-01-01" : "2025-02-01"),
     }],
-    logs: [],
+    logs: [], adjustments: [],
   };
   let commits = 0;
   let subscriptionWrites = 0;
@@ -40,6 +47,12 @@ function fixture(fault: Fault = null, activePaid = false) {
   const eventPayloads: Array<{ type: string; userId: string; fullName: string; role: string; activity: string; timestamp: string }> = [];
 
   const clientFor = (target: State) => ({
+    $executeRaw: async () => 1,
+    payment: { findMany: async () => [] },
+    manualSubscriptionAdjustment: {
+      findMany: async ({ where }: any) => target.adjustments.filter(a => a.subscriptionId === where.subscriptionId),
+      create: async ({ data }: any) => { const a = { ...data, id: String(target.adjustments.length + 1) }; target.adjustments.push(a); return a; },
+    },
     user: {
       findUnique: async () => ({ ...target.user, role: { roleName: "teacher" }, userSubscriptions: target.subscriptions }),
       update: async ({ data }: { data: { status: string } }) => {
@@ -49,6 +62,17 @@ function fixture(fault: Fault = null, activePaid = false) {
     },
     subscriptionPlan: { findFirst: async () => ({ id: 2, planName: "Premium Monthly" }) },
     userSubscription: {
+      findMany: async ({ where }: any) => target.subscriptions.filter(s => s.userId === where.userId && s.subscriptionStatus === "active" && s.endDate > where.endDate.gt),
+      findUnique: async ({ where }: any) => target.subscriptions.find(s => s.userId === where.userId_planId.userId && s.planId === where.userId_planId.planId) ?? null,
+      update: async ({ where, data }: any) => {
+        const s = target.subscriptions.find(s => s.id === where.id)!;
+        if (fault === "updateMany" && data.subscriptionStatus) throw new Error("subscription update failed");
+        const increment = data.accountingSequence?.increment;
+        const oldSequence = s.accountingSequence;
+        Object.assign(s, data);
+        if (increment) s.accountingSequence = oldSequence + BigInt(increment);
+        return s;
+      },
       findFirst: async ({ where }: {
         where: { userId: string; subscriptionStatus: string; endDate: { gt: Date } };
       }) => target.subscriptions.find((subscription) =>
@@ -79,8 +103,8 @@ function fixture(fault: Fault = null, activePaid = false) {
           subscription.userId === where.userId_planId.userId
           && subscription.planId === where.userId_planId.planId);
         if (existing) Object.assign(existing, update);
-        else target.subscriptions.push({ ...create });
-        return existing ?? create;
+        else target.subscriptions.push({ ...create, id: `sub-${create.planId}`, accountingSequence: BigInt(0) });
+        return existing ?? target.subscriptions.at(-1)!;
       },
     },
     activityLog: {
@@ -111,7 +135,7 @@ function fixture(fault: Fault = null, activePaid = false) {
     },
     "@/lib/prisma": { __esModule: true, default: prisma },
     "@/lib/auth": { getSession: async () => ({ role: "admin", userId: "admin-1" }) },
-    "@/lib/subscription-rules": { PRO_SUBSCRIPTION_DURATION_DAYS: 30 },
+    "@/lib/paymongo-subscription": loadBillingModule(prisma as unknown as PrismaClient),
     "@/lib/pusher": {
       pusherServer: {
         trigger: async (_channel: string, _event: string, payload: typeof eventPayloads[number]) => {
@@ -269,7 +293,7 @@ test("Dashboard user update commits status and plan without changing its respons
   assert.deepEqual(await response.json(), { success: true });
   assert.equal(setup.getState().user.status, "suspended");
   assert.deepEqual(setup.getState().subscriptions.map((subscription) => [subscription.planId, subscription.subscriptionStatus]), [[1, "cancelled"], [2, "active"]]);
-  assert.equal(setup.getState().logs.length, 0);
+  assert.equal(setup.getState().logs.length, 1);
   assert.equal(setup.events.length, 0);
   assert.equal(setup.getCommits(), 1);
 });

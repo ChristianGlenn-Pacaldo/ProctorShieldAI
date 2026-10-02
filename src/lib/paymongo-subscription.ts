@@ -2,11 +2,12 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import type { PaidCheckout, RefundedPayment } from "@/lib/paymongo-events";
 import { entitlementDay, rebuildEntitlement } from "@/lib/paymongo-entitlement";
+import { PRO_SUBSCRIPTION_DURATION_DAYS } from "@/lib/subscription-rules";
 
 export type PaidCheckoutActivation = "activated" | "already_processed" | "invalid";
 
 type BillingEvent = { id: string; type: string; source: string };
-const transactionOptions = { isolationLevel: "ReadCommitted" as const, maxWait: 10_000, timeout: 20_000 };
+export const subscriptionTransactionOptions = { isolationLevel: "ReadCommitted" as const, maxWait: 10_000, timeout: 20_000 };
 
 // Every provider mutation takes payment identity first, then Teacher identity.
 // The Teacher lock also protects first-time creation and spans all their plans.
@@ -18,8 +19,17 @@ async function lockPayment(tx: Prisma.TransactionClient, paymentId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(17001, hashtext(${paymentId}))`;
 }
 
-async function lockTeacher(tx: Prisma.TransactionClient, userId: string) {
+export async function lockTeacherSubscription(tx: Prisma.TransactionClient, userId: string) {
+  await tx.$executeRaw`SET LOCAL lock_timeout = '10s'`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(17002, hashtext(${userId}))`;
+}
+
+async function nextSequence(tx: Prisma.TransactionClient, subscriptionId: string) {
+  const subscription = await tx.userSubscription.update({
+    where: { id: subscriptionId }, data: { accountingSequence: { increment: 1 } },
+    select: { accountingSequence: true },
+  });
+  return subscription.accountingSequence;
 }
 
 async function eventReceipt(tx: Prisma.TransactionClient, event: BillingEvent) {
@@ -44,13 +54,15 @@ async function subscriptionExpiry(tx: Prisma.TransactionClient, subscription: {
   }
   const payments = await tx.payment.findMany({
     where: { subscriptionId: subscription.id, grantDurationDays: { not: null } },
-    select: { id: true, providerPaymentId: true, paidAt: true, grantDurationDays: true, grantRevokedOn: true },
+    select: { id: true, providerPaymentId: true, paidAt: true, grantDurationDays: true, grantRevokedOn: true, grantSequence: true },
   });
+  const adjustments = await tx.manualSubscriptionAdjustment.findMany({ where: { subscriptionId: subscription.id } });
   return rebuildEntitlement(subscription.grantBaselineAt, subscription.grantBaselineEndDate, payments.map(payment => {
     if (!payment.paidAt || payment.grantDurationDays === null) throw new Error("Incomplete PayMongo grant snapshot");
     return { key: payment.providerPaymentId ?? payment.id, paidAt: payment.paidAt,
-      durationDays: payment.grantDurationDays, revokedOn: payment.grantRevokedOn };
-  }), now);
+      durationDays: payment.grantDurationDays, revokedOn: payment.grantRevokedOn, sequence: payment.grantSequence };
+  }), now, adjustments.map(adjustment => ({ key: `manual:${adjustment.id}`, sequence: adjustment.sequence,
+    kind: adjustment.kind, durationDays: adjustment.durationDays, effectiveOn: adjustment.effectiveOn })));
 }
 
 async function validateExpiry(tx: Prisma.TransactionClient, subscription: {
@@ -62,6 +74,79 @@ async function validateExpiry(tx: Prisma.TransactionClient, subscription: {
   }
 }
 
+export class MissingPremiumPlanError extends Error {}
+
+// Caller owns the transaction so compound Admin status changes and audits also
+// roll back. Manual writers acquire only Teacher; never a payment lock afterward.
+export async function setManualSubscription(
+  tx: Prisma.TransactionClient,
+  request: { userId: string; actorId: string; action: "grant" | "revoke"; source: string;
+    revokedStatus: "expired" | "cancelled"; planNames: "exact" | "contains" },
+): Promise<string | null> {
+  await lockTeacherSubscription(tx, request.userId);
+  const user = await tx.user.findUnique({ where: { id: request.userId }, include: { role: true } });
+  if (!user || user.role.roleName !== "teacher") throw new Error("Manual entitlement target is no longer a Teacher");
+  const now = new Date();
+  const active = await tx.userSubscription.findMany({
+    where: { userId: request.userId, subscriptionStatus: "active", endDate: { gt: now }, plan: { yearlyPrice: { gt: 0 } } },
+    orderBy: { id: "asc" },
+  });
+  if ((request.action === "grant" && active.length > 0) || (request.action === "revoke" && active.length === 0)) return null;
+
+  const initialize = async (subscription: Prisma.UserSubscriptionGetPayload<object>) => {
+    if (subscription.grantBaselineAt) {
+      await validateExpiry(tx, subscription, now);
+      return subscription;
+    }
+    // Snapshot the existing persisted balance today, not an invented original
+    // grant. Unknown provider durations still cannot be fully refunded.
+    return tx.userSubscription.update({ where: { id: subscription.id }, data: {
+      grantBaselineAt: entitlementDay(now), grantBaselineEndDate: subscription.endDate,
+    } });
+  };
+  const adjust = async (subscriptionId: string, kind: "grant" | "revoke") => tx.manualSubscriptionAdjustment.create({
+    data: { subscriptionId, sequence: await nextSequence(tx, subscriptionId), kind,
+      durationDays: kind === "grant" ? PRO_SUBSCRIPTION_DURATION_DAYS : null,
+      effectiveOn: entitlementDay(now), actorId: request.actorId },
+  });
+
+  if (request.action === "grant") {
+    const plan = await tx.subscriptionPlan.findFirst({ where: {
+      planName: request.planNames === "exact" ? { in: ["Premium Monthly", "Premium Yearly"] } : { contains: "Premium" },
+      yearlyPrice: { gt: 0 },
+    }, orderBy: { id: "asc" } });
+    if (!plan) throw new MissingPremiumPlanError("No valid paid Premium plan is available");
+    await tx.userSubscription.updateMany({ where: {
+      userId: request.userId, planId: { not: plan.id }, subscriptionStatus: "active",
+    }, data: { subscriptionStatus: "cancelled" } });
+    const existing = await tx.userSubscription.findUnique({ where: { userId_planId: { userId: request.userId, planId: plan.id } } });
+    const subscription = existing ? await initialize(existing) : await tx.userSubscription.upsert({
+      where: { userId_planId: { userId: request.userId, planId: plan.id } }, update: {}, create: {
+        userId: request.userId, planId: plan.id, startDate: now, endDate: entitlementDay(now),
+        grantBaselineAt: entitlementDay(now), grantBaselineEndDate: entitlementDay(now),
+      } });
+    // A previously disabled subscription may retain a future expiry. Record
+    // that observed inactive access before granting; never resurrect its balance.
+    if (subscription.endDate > now) await adjust(subscription.id, "revoke");
+    await adjust(subscription.id, "grant");
+    await tx.userSubscription.update({ where: { id: subscription.id }, data: {
+      startDate: now, endDate: await subscriptionExpiry(tx, subscription, now),
+      paymentStatus: "paid_manual", subscriptionStatus: "active",
+    } });
+  } else {
+    for (const current of active) {
+      const subscription = await initialize(current);
+      await adjust(subscription.id, "revoke");
+      await tx.userSubscription.update({ where: { id: subscription.id }, data: {
+        endDate: await subscriptionExpiry(tx, subscription, now), subscriptionStatus: request.revokedStatus,
+      } });
+    }
+  }
+  const activity = `Admin manually ${request.action === "grant" ? "granted" : "revoked"} Pro subscription ${request.action === "grant" ? "to" : "for"}: ${user.fullName}`;
+  await tx.activityLog.create({ data: { userId: request.actorId, activity, ipAddress: request.source } });
+  return activity;
+}
+
 export async function activatePaidCheckout(
   paid: PaidCheckout,
   event: BillingEvent,
@@ -71,7 +156,7 @@ export async function activatePaidCheckout(
 
   return client.$transaction(async (tx) => {
     await lockPayment(tx, paid.providerPaymentId);
-    await lockTeacher(tx, paid.userId);
+    await lockTeacherSubscription(tx, paid.userId);
     const [user, plan] = await Promise.all([
       tx.user.findFirst({ where: { id: paid.userId, role: { roleName: "teacher" } } }),
       tx.subscriptionPlan.findUnique({ where: { id: paid.planId } }),
@@ -131,6 +216,7 @@ export async function activatePaidCheckout(
         providerPaymentId: paid.providerPaymentId,
         paidAt: now,
         grantDurationDays: durationDays,
+        grantSequence: await nextSequence(tx, subscription.id),
       },
     });
     await tx.userSubscription.update({
@@ -145,7 +231,7 @@ export async function activatePaidCheckout(
       },
     });
     return "activated";
-  }, transactionOptions);
+  }, subscriptionTransactionOptions);
 }
 
 export async function refundPaidCheckout(
@@ -161,7 +247,7 @@ export async function refundPaidCheckout(
       select: { subscription: { select: { userId: true } } },
     });
     if (!owner) throw new Error("Refunded PayMongo payment was not found");
-    await lockTeacher(tx, owner.subscription.userId);
+    await lockTeacherSubscription(tx, owner.subscription.userId);
     const payment = await tx.payment.findUnique({
       where: { providerPaymentId: refund.providerPaymentId },
       include: { subscription: true },
@@ -219,5 +305,5 @@ export async function refundPaidCheckout(
       },
     });
     return "refunded";
-  }, transactionOptions);
+  }, subscriptionTransactionOptions);
 }

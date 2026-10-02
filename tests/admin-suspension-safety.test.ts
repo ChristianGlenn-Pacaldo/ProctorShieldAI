@@ -4,6 +4,8 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { loadBillingModule } from "./helpers/paymongo-fixture.ts";
+import type { PrismaClient } from "@prisma/client";
 
 const routes = [
   "src/app/api/dashboard/admin/users/[id]/route.ts",
@@ -83,7 +85,7 @@ function fixture(targetRole: RoleName, targetId = "target", actorActive = true, 
       new Response(JSON.stringify(body), { status: options.status ?? 200 }) } },
     "@/lib/prisma": { __esModule: true, default: prisma },
     "@/lib/auth": { getSession: async () => ({ role: "admin", userId: "admin-actor" }) },
-    "@/lib/subscription-rules": { PRO_SUBSCRIPTION_DURATION_DAYS: 30 },
+    "@/lib/paymongo-subscription": loadBillingModule(prisma as unknown as PrismaClient),
     "@/lib/pusher": { pusherServer: { trigger: async (_channel: string, _event: string, payload: unknown) => { events.push(payload); } } },
   };
 

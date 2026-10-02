@@ -4,6 +4,8 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { loadBillingModule } from "./helpers/paymongo-fixture.ts";
+import type { PrismaClient } from "@prisma/client";
 
 const routes = [
   { file: "src/app/api/dashboard/admin/users/[id]/route.ts", grant: { subscriptionStatus: "active" }, free: { subscriptionStatus: "expired" } },
@@ -13,20 +15,36 @@ const routes = [
 type PlanAvailability = "missing" | "free" | "paid";
 
 function routeFixture(file: string, role = "teacher", planAvailability: PlanAvailability = "paid", hasPaidAccess = false) {
-  let state = { status: "active", hasPaidAccess };
+  let state = { status: "active", hasPaidAccess, subscription: null as any, adjustments: [] as any[] };
   const writes: string[] = [];
   let broadcasts = 0;
   let planWasFilteredByPrice = false;
   const clientFor = (target: typeof state) => ({
+    $executeRaw: async () => 1,
+    payment: { findMany: async () => [] },
+    manualSubscriptionAdjustment: {
+      findMany: async () => target.adjustments,
+      create: async ({ data }: any) => { const a = { ...data, id: "manual" }; target.adjustments.push(a); return a; },
+    },
     user: {
       findUnique: async () => ({ id: "target", fullName: "QA User", roleId: 2, status: target.status, role: { roleName: role }, userSubscriptions: [] }),
       update: async ({ data }: { data: { status: string } }) => { writes.push("user"); target.status = data.status; },
       count: async () => 2,
     },
     userSubscription: {
+      findMany: async () => target.hasPaidAccess ? [target.subscription ?? { id: "paid-subscription" }] : [],
+      findUnique: async () => target.subscription,
+      update: async ({ data }: any) => {
+        const increment = data.accountingSequence?.increment;
+        const oldSequence = target.subscription.accountingSequence;
+        Object.assign(target.subscription, data);
+        if (increment) target.subscription.accountingSequence = oldSequence + BigInt(increment);
+        if (data.subscriptionStatus) target.hasPaidAccess = data.subscriptionStatus === "active";
+        return target.subscription;
+      },
       findFirst: async () => target.hasPaidAccess ? { id: "paid-subscription" } : null,
       updateMany: async () => { writes.push("subscription update"); target.hasPaidAccess = false; },
-      upsert: async () => { writes.push("subscription grant"); target.hasPaidAccess = true; },
+      upsert: async ({ create }: any) => { writes.push("subscription grant"); target.subscription = { ...create, id: "manual-sub", accountingSequence: BigInt(0) }; return target.subscription; },
     },
     subscriptionPlan: {
       findFirst: async ({ where }: { where: { yearlyPrice?: { gt: number } } }) => {
@@ -41,7 +59,7 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
   const prisma = {
     ...clientFor(state),
     $transaction: async <Result>(callback: (client: ReturnType<typeof clientFor>) => Promise<Result>) => {
-      const draft = { ...state };
+      const draft = structuredClone(state);
       const result = await callback(clientFor(draft));
       state = draft;
       return result;
@@ -51,7 +69,7 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
     "next/server": { NextResponse: { json: (body: unknown, options?: { status?: number }) => new Response(JSON.stringify(body), { status: options?.status ?? 200 }) } },
     "@/lib/prisma": { __esModule: true, default: prisma },
     "@/lib/auth": { getSession: async () => ({ role: "admin", userId: "admin" }) },
-    "@/lib/subscription-rules": { PRO_SUBSCRIPTION_DURATION_DAYS: 30 },
+    "@/lib/paymongo-subscription": loadBillingModule(prisma as unknown as PrismaClient),
     "@/lib/pusher": { pusherServer: { trigger: async () => { broadcasts++; } } },
   };
   const filename = path.resolve(process.cwd(), file);

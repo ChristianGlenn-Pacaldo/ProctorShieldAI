@@ -284,14 +284,33 @@ model UserSubscription {
   subscriptionStatus String?  @map("subscription_status")
   grantBaselineAt    DateTime? @map("grant_baseline_at") @db.Date
   grantBaselineEndDate DateTime? @map("grant_baseline_end_date") @db.Date
+  accountingSequence BigInt @default(0) @map("accounting_sequence")
 
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan     SubscriptionPlan @relation(fields: [planId], references: [id])
   payments Payment[]
+  manualAdjustments ManualSubscriptionAdjustment[]
 
   @@unique([userId, planId])
   @@index([subscriptionStatus, endDate])
   @@map("user_subscriptions")
+}
+
+model ManualSubscriptionAdjustment {
+  id             String @id @default(uuid())
+  subscriptionId String @map("subscription_id")
+  sequence       BigInt
+  kind           String
+  durationDays   Int? @map("duration_days")
+  effectiveOn    DateTime @map("effective_on") @db.Date
+  actorId        String @map("actor_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  subscription UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, sequence])
+  @@index([subscriptionId, effectiveOn])
+  @@map("manual_subscription_adjustments")
 }
 
 model StudentGameProfile {
@@ -337,6 +356,7 @@ model Payment {
   paidAt               DateTime? @map("paid_at")
   grantDurationDays    Int?      @map("grant_duration_days")
   grantRevokedOn       DateTime? @map("grant_revoked_on") @db.Date
+  grantSequence        BigInt?   @map("grant_sequence")
 
   subscription UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
