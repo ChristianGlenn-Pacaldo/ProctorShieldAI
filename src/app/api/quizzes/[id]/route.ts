@@ -53,8 +53,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       include: {
         subject: true,
         questions: {
+          orderBy: { id: "asc" },
           include: {
-            choices: true
+            choices: { orderBy: { id: "asc" } }
           }
         }
       }
@@ -79,7 +80,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    let questions = quiz.questions;
+    // There is no authored-position column. Persisted IDs provide the canonical
+    // creation order; never seed a shuffle from an unspecified relation order.
+    let questions = [...quiz.questions].sort((a, b) => a.id - b.id).map((question) => ({
+      ...question,
+      choices: [...question.choices].sort((a, b) => a.id - b.id),
+    }));
     let studentQuiz: Awaited<ReturnType<typeof prisma.studentQuiz.findFirst>> = null;
 
     // Check permissions and apply shuffling/stripping for students
@@ -109,7 +115,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (quiz.shuffleQuestions) {
         // Shuffle questions deterministically using the student's unique studentQuiz.id
-        questions = shuffleArray(quiz.questions, studentQuiz.id);
+        questions = shuffleArray(questions, studentQuiz.id);
         
         // Also shuffle choices for each question deterministically
         questions = questions.map((q) => ({
