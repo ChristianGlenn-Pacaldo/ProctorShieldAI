@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Users, FileText, AlertTriangle, Brain } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
@@ -56,17 +56,63 @@ export default function AdminDashboardContent() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [sessionLost, setSessionLost] = useState<401 | 403 | null>(null);
+  const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
+  const sessionLostRef = useRef(false);
+  const lifecycleRef = useRef({ active: false, generation: 0 });
+  const latestRefreshRef = useRef(0);
+  const requestsRef = useRef(new Set<AbortController>());
+  const stopBackgroundRef = useRef<(() => void) | null>(null);
+
+  const beginRequest = () => {
+    if (!lifecycleRef.current.active || sessionLostRef.current) return null;
+    const controller = new AbortController();
+    requestsRef.current.add(controller);
+    return { controller, generation: lifecycleRef.current.generation };
+  };
+  const requestIsActive = (request: NonNullable<ReturnType<typeof beginRequest>>) =>
+    lifecycleRef.current.active && !sessionLostRef.current
+    && request.generation === lifecycleRef.current.generation && !request.controller.signal.aborted;
+
+  const loseAdminSession = (status: 401 | 403) => {
+    if (sessionLostRef.current) return;
+    sessionLostRef.current = true;
+    lifecycleRef.current.generation++;
+    for (const controller of requestsRef.current) controller.abort();
+    requestsRef.current.clear();
+    setStats({ totalUsers: 0, totalQuizzes: 0, totalViolations: 0, aiVerdictsToday: 0 });
+    setPlatformBars([]);
+    setActivityBars([]);
+    setActivities([]);
+    setUsers([]);
+    setEditingUser(null);
+    setUpdatingUserId(null);
+    setIsSaving(false);
+    setStatusError(null);
+    setPlanError(null);
+    setLoadError(null);
+    setHasLoaded(false);
+    setLastSuccessAt(null);
+    setIsLoading(false);
+    setSessionLost(status);
+    stopBackgroundRef.current?.();
+  };
 
   const handleToggleStatus = async (userId: string, currentStatus: string) => {
+    const request = beginRequest();
+    if (!request) return;
     const newStatus = currentStatus === "Suspended" ? "active" : "suspended";
     setStatusError(null);
     setUpdatingUserId(userId);
     try {
       const response = await fetch(`/api/users/${userId}`, {
         method: "PUT",
+        signal: request.controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (!requestIsActive(request)) return;
+      if (response.status === 401 || response.status === 403) { loseAdminSession(response.status); return; }
       if (!response.ok) {
         setStatusError("Could not update user status. Changes were not saved.");
         await fetchDashboardData(true);
@@ -81,11 +127,13 @@ export default function AdminDashboardContent() {
       } : user));
       await fetchDashboardData(true);
     } catch (e) {
+      if (!requestIsActive(request)) return;
       console.error("Failed to toggle status", e);
       setStatusError("Could not update user status. Changes were not saved.");
       await fetchDashboardData(true);
     } finally {
-      setUpdatingUserId(null);
+      requestsRef.current.delete(request.controller);
+      if (requestIsActive(request)) setUpdatingUserId(null);
     }
   };
 
@@ -93,14 +141,19 @@ export default function AdminDashboardContent() {
     e.preventDefault();
     if (!editingUser) return;
     if (users.some((user) => user.id === editingUser.id && user.plan === editingUser.plan)) return;
+    const request = beginRequest();
+    if (!request) return;
     setPlanError(null);
     setIsSaving(true);
     try {
       const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PUT",
+        signal: request.controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: editingUser.plan }),
       });
+      if (!requestIsActive(request)) return;
+      if (response.status === 401 || response.status === 403) { loseAdminSession(response.status); return; }
       if (!response.ok) {
         setPlanError("Could not save subscription. Changes were not saved.");
         await fetchDashboardData(true);
@@ -113,21 +166,30 @@ export default function AdminDashboardContent() {
       setEditingUser(null);
       await fetchDashboardData(true);
     } catch (e) {
+      if (!requestIsActive(request)) return;
       console.error("Failed to update plan", e);
       setPlanError("Could not save subscription. Changes were not saved.");
       await fetchDashboardData(true);
     } finally {
-      setIsSaving(false);
+      requestsRef.current.delete(request.controller);
+      if (requestIsActive(request)) setIsSaving(false);
     }
   };
 
   // Fetch initial dashboard metrics from database (online users, active quizzes)
   const fetchDashboardData = async (silent = false) => {
+    const request = beginRequest();
+    if (!request) return;
+    const refresh = ++latestRefreshRef.current;
     if (!silent) setIsLoading(true);
     try {
-      const res = await fetch("/api/dashboard/admin");
+      const res = await fetch("/api/dashboard/admin", { signal: request.controller.signal, cache: "no-store" });
+      if (!requestIsActive(request)) return;
+      // Authorization loss wins even if a different refresh is already in flight.
+      if (res.status === 401 || res.status === 403) { loseAdminSession(res.status); return; }
       if (!res.ok) throw new Error(`Dashboard request failed: ${res.status}`);
       const data = await res.json();
+      if (!requestIsActive(request) || refresh !== latestRefreshRef.current) return;
       setStats(data.stats);
       setPlatformBars(data.platformBars);
       setActivityBars(data.activityBars);
@@ -140,17 +202,25 @@ export default function AdminDashboardContent() {
       }
       setUsers(data.users);
       setHasLoaded(true);
+      setLastSuccessAt(new Date().toISOString());
       setLoadError(null);
     } catch (err) {
+      if (!requestIsActive(request) || refresh !== latestRefreshRef.current) return;
       console.error("Failed to load admin dashboard data:", err);
       setLoadError("Could not load Admin Dashboard data. Existing data may be out of date.");
     } finally {
-      setIsLoading(false);
+      requestsRef.current.delete(request.controller);
+      if (requestIsActive(request) && refresh === latestRefreshRef.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    if (sessionLostRef.current) return;
+    const lifecycle = lifecycleRef.current;
+    const requests = requestsRef.current;
+    lifecycle.active = true;
+    const generation = ++lifecycle.generation;
+    const isActive = () => lifecycle.active && lifecycle.generation === generation && !sessionLostRef.current;
 
     // Set up Pusher subscription for real-time admin updates
     const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774";
@@ -165,6 +235,7 @@ export default function AdminDashboardContent() {
 
     // Listen for platform activities in real-time
     channel.bind("activity", (data: any) => {
+      if (!isActive()) return;
       if (!data || typeof data !== "object") {
         fetchDashboardData(true);
         return;
@@ -218,15 +289,42 @@ export default function AdminDashboardContent() {
     });
 
     const presenceRefresh = setInterval(() => {
-      fetchDashboardData(true);
+      if (isActive()) void fetchDashboardData(true);
     }, 30_000);
 
-    return () => {
+    let stopped = false;
+    const stopBackground = () => {
+      if (stopped) return;
+      stopped = true;
       clearInterval(presenceRefresh);
-      pusher.unsubscribe("private-admin-dashboard");
-      pusher.disconnect();
+      try {
+        channel.unbind_all();
+        pusher.unsubscribe("private-admin-dashboard");
+      } finally {
+        pusher.disconnect();
+      }
+    };
+    stopBackgroundRef.current = stopBackground;
+    void fetchDashboardData();
+
+    return () => {
+      lifecycle.active = false;
+      lifecycle.generation++;
+      for (const controller of requests) controller.abort();
+      requests.clear();
+      stopBackground();
+      if (stopBackgroundRef.current === stopBackground) stopBackgroundRef.current = null;
     };
   }, []);
+
+  if (sessionLost) {
+    return (
+      <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-600 dark:text-rose-400">
+        <p>{sessionLost === 401 ? "Your Admin session has expired or changed." : "You no longer have Admin access."} Sign in as an Admin to continue.</p>
+        <Link href="/admin/login" prefetch={false} className="mt-3 inline-block font-semibold underline">Admin Login</Link>
+      </div>
+    );
+  }
 
   if (!hasLoaded && loadError) {
     return (
@@ -278,11 +376,16 @@ export default function AdminDashboardContent() {
     <div className="space-y-6 animate-fade-in">
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
-          <span>{loadError}</span>
+          <span>{loadError} Previously loaded data is stale.</span>
           <button type="button" disabled={isLoading} onClick={() => fetchDashboardData()} className="font-semibold underline disabled:opacity-50">
             {isLoading ? "Retrying..." : "Retry"}
           </button>
         </div>
+      )}
+      {lastSuccessAt && (
+        <p className="text-xs text-[var(--muted)]">
+          Last successful refresh: <time dateTime={lastSuccessAt}>{new Date(lastSuccessAt).toLocaleString()}</time>
+        </p>
       )}
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -296,7 +399,7 @@ export default function AdminDashboardContent() {
                 {s.icon}
               </div>
               <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-[var(--surface2)] text-[var(--muted)] border border-[var(--border)]">
-                {s.badge}
+                {loadError ? "STALE" : hasLoaded ? s.badge : "LOADING"}
               </span>
             </div>
             {isLoading && s.value === 0 ? (
@@ -306,7 +409,7 @@ export default function AdminDashboardContent() {
                 {s.value}
               </div>
             )}
-            <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{s.label}</div>
+            <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{loadError && s.label === "Violations (Live)" ? "Violations (Last Refresh)" : s.label}</div>
             <div className="text-[10px] text-[var(--muted)] mt-0.5">{s.sub}</div>
           </div>
         ))}
@@ -365,7 +468,7 @@ export default function AdminDashboardContent() {
         <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🕐 Recent Activity Feed</h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600/15 text-blue-600 dark:text-blue-400 rounded-full animate-pulse">REAL-TIME</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600/15 text-blue-600 dark:text-blue-400 rounded-full">{loadError ? "STALE" : "REAL-TIME"}</span>
           </div>
           <div className="p-5 space-y-2 max-h-[300px] overflow-y-auto">
             {activities.length === 0 ? (

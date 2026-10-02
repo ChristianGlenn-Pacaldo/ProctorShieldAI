@@ -128,6 +128,8 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
   const { absolutePath, code } = compile("src/app/dashboard/admin/content.tsx", true);
   const states: unknown[] = [];
   let stateIndex = 0;
+  const refs: Array<{ current: unknown }> = [];
+  let refIndex = 0;
   let effectStarted = false;
   let cleanup: (() => void) | undefined;
   let interval: (() => void) | undefined;
@@ -142,6 +144,10 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
       return [states[index], (next: unknown) => {
         states[index] = typeof next === "function" ? (next as (previous: unknown) => unknown)(states[index]) : next;
       }];
+    },
+    useRef: (initial: unknown) => {
+      const index = refIndex++;
+      return refs[index] ??= { current: initial };
     },
     useEffect: (callback: () => void | (() => void)) => {
       if (!effectStarted) {
@@ -159,7 +165,7 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return { Users: "icon", FileText: "icon", AlertTriangle: "icon", Brain: "icon" };
       if (name === "pusher-js") return { __esModule: true, default: class {
-        subscribe() { return { bind() {} }; }
+        subscribe() { return { bind() {}, unbind_all() {} }; }
         unsubscribe() {}
         disconnect() {}
       } };
@@ -179,6 +185,7 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
       };
     },
     process: { env: {} },
+    AbortController,
     setInterval: (callback: () => void, ms: number) => { interval = callback; intervalMs = ms; return 1; },
     clearInterval: (id: number) => { assert.equal(id, 1); cleared = true; },
     console: { error() {} },

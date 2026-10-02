@@ -40,6 +40,9 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
   let serverUser = { ...initialUser };
   const states: unknown[] = [];
   let stateIndex = 0;
+  const refs: Array<{ current: unknown }> = [];
+  let refIndex = 0, effectStarted = false;
+  let cleanup: (() => void) | undefined;
   let dashboardFetches = 0;
   const requests: Array<Record<string, string>> = [];
   const react = {
@@ -50,7 +53,13 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
         states[index] = typeof next === "function" ? (next as (previous: unknown) => unknown)(states[index]) : next;
       }];
     },
-    useEffect: () => {},
+    useRef: (initial: unknown) => {
+      const index = refIndex++;
+      return refs[index] ??= { current: initial };
+    },
+    useEffect: (callback: () => () => void) => {
+      if (!effectStarted) { effectStarted = true; cleanup = callback(); }
+    },
   };
   const jsx = (type: string, props: Record<string, any>) => ({ type, props });
   const exports: { default?: () => ElementNode } = {};
@@ -60,6 +69,11 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return { Users: "icon", FileText: "icon", AlertTriangle: "icon", Brain: "icon" };
+      if (name === "pusher-js") return { __esModule: true, default: class {
+        subscribe() { return { bind() {}, unbind_all() {} }; }
+        unsubscribe() {}
+        disconnect() {}
+      } };
       return {};
     },
     fetch: async (url: string, options?: { method?: string; body?: string }) => {
@@ -80,10 +94,15 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
       };
     },
     console: { error() {} },
+    AbortController,
+    process: { env: {} },
+    setInterval: () => 1,
+    clearInterval() {},
   }, { filename: componentPath });
 
   const render = () => {
     stateIndex = 0;
+    refIndex = 0;
     return exports.default!();
   };
   const button = (root: ElementNode, label: string) => findElement(root, (element) =>
@@ -92,7 +111,7 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
     element.type === "tr" && textOf(element).includes("QA Teacher"))!;
   const error = (root: ElementNode) => findElement(root, (element) => element.props.role === "alert");
 
-  return { render, button, row, error, getRequests: () => requests, getDashboardFetches: () => dashboardFetches };
+  return { render, button, row, error, unmount: () => cleanup?.(), getRequests: () => requests, getDashboardFetches: () => dashboardFetches };
 }
 
 for (const [initialStatus, action] of [["Active", "Suspend"], ["Suspended", "Restore"]] as const) {
@@ -104,7 +123,8 @@ for (const [initialStatus, action] of [["Active", "Suspend"], ["Suspended", "Res
     assert.match(textOf(setup.row(view)), new RegExp(initialStatus));
     assert.ok(setup.button(view, action));
     assert.match(textOf(setup.error(view)), /Changes were not saved/);
-    assert.equal(setup.getDashboardFetches(), 1);
+    assert.equal(setup.getDashboardFetches(), 2);
+    setup.unmount();
   });
 }
 
@@ -119,7 +139,8 @@ for (const [initialStatus, action, finalStatus] of [
 
     assert.match(textOf(setup.row(view)), new RegExp(finalStatus));
     assert.equal(setup.error(view), undefined);
-    assert.equal(setup.getDashboardFetches(), 1);
+    assert.equal(setup.getDashboardFetches(), 2);
+    setup.unmount();
   });
 }
 
@@ -134,11 +155,12 @@ for (const succeeds of [false, true]) {
     const view = setup.render();
 
     assert.equal(setup.getRequests()[0].plan, "Premium");
-    assert.equal(setup.getDashboardFetches(), 1);
+    assert.equal(setup.getDashboardFetches(), 2);
     assert.match(textOf(setup.row(view)), succeeds ? /Premium/ : /Free Tier/);
     assert.equal(Boolean(findElement(view, (element) => element.type === "form")), !succeeds);
     if (succeeds) assert.equal(setup.error(view), undefined);
     else assert.match(textOf(setup.error(view)), /Changes were not saved/);
+    setup.unmount();
   });
 }
 
@@ -151,5 +173,6 @@ test("unchanged Dashboard subscription Save is disabled and sends no request", a
   const form = findElement(view, (element) => element.type === "form")!;
   await form.props.onSubmit({ preventDefault() {} });
   assert.deepEqual(setup.getRequests(), []);
-  assert.equal(setup.getDashboardFetches(), 0);
+  assert.equal(setup.getDashboardFetches(), 1);
+  setup.unmount();
 });

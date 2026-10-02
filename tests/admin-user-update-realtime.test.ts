@@ -16,6 +16,8 @@ type Activity = { id: string; icon: string; title: string; sub: string; type: st
 function fixture(backendActivities: Activity[] = []) {
   const states: unknown[] = [];
   let stateIndex = 0;
+  const refs: Array<{ current: unknown }> = [];
+  let refIndex = 0;
   let effectStarted = false;
   let onActivity: ((payload: unknown) => void) | undefined;
   let dashboardFetches = 0;
@@ -27,6 +29,10 @@ function fixture(backendActivities: Activity[] = []) {
         states[index] = typeof next === "function" ? (next as (previous: unknown) => unknown)(states[index]) : next;
       }];
     },
+    useRef: (initial: unknown) => {
+      const index = refIndex++;
+      return refs[index] ??= { current: initial };
+    },
     useEffect: (callback: () => void) => {
       if (!effectStarted) {
         effectStarted = true;
@@ -37,7 +43,7 @@ function fixture(backendActivities: Activity[] = []) {
   const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
   class PusherClient {
     subscribe() {
-      return { bind: (_event: string, callback: (payload: unknown) => void) => { onActivity = callback; } };
+      return { bind: (_event: string, callback: (payload: unknown) => void) => { onActivity = callback; }, unbind_all() {} };
     }
     unsubscribe() {}
     disconnect() {}
@@ -64,6 +70,7 @@ function fixture(backendActivities: Activity[] = []) {
       };
     },
     process: { env: {} },
+    AbortController,
     console: { error() {} },
     setInterval: () => 1,
     clearInterval: () => {},
@@ -71,6 +78,7 @@ function fixture(backendActivities: Activity[] = []) {
 
   const render = () => {
     stateIndex = 0;
+    refIndex = 0;
     return exports.default!();
   };
   return {
