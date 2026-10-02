@@ -208,7 +208,18 @@ test("all unsafe API handlers use the gate; health and status GET remain availab
     if (file.endsWith(path.join("internal", "backup-write-gate", "route.ts"))) continue;
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
       if (new RegExp(`async function ${method}Impl\\b`).test(source)) {
-        assert.match(source, new RegExp(`export const ${method} = withBackupWriteGate\\(${method}Impl\\)`), file);
+        if (method === "POST" && file.endsWith(path.join("auth", "logout", "route.ts"))) {
+          // Logout deliberately keeps browser-only cleanup outside admission;
+          // all DB revocation remains behind the real gate (behavior tested in
+          // auth-phase1-blockers, including paused/unavailable admission).
+          assert.match(source, /const revokeWithWriteGate = withBackupWriteGate\(POSTImpl\)/, file);
+          assert.match(source, /response = await revokeWithWriteGate\(req\)/, file);
+          assert.match(source, /await clearSession\(response\)/, file);
+          const outer = source.slice(source.indexOf("export async function POST("));
+          assert.doesNotMatch(outer, /prisma\./, "logout outer cleanup cannot perform ungated DB writes");
+        } else {
+          assert.match(source, new RegExp(`export const ${method} = withBackupWriteGate\\(${method}Impl\\)`), file);
+        }
         guarded++;
       } else {
         assert.doesNotMatch(source, new RegExp(`export async function ${method}\\b`), file);

@@ -29,7 +29,7 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/users/me", {
+      const res = await fetch("/api/users/me?scope=user&role=student", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName: cleanName }),

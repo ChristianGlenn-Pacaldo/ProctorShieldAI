@@ -155,12 +155,12 @@ async function authenticatedContext(browser: Browser, user: TestUser, role: Role
   const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3100";
   const context = await browser.newContext({ baseURL });
   const token = jwt.sign(
-    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion },
+    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion, sessionClass: "user" },
     secret,
-    { algorithm: "HS256", expiresIn: "15m" },
+    { algorithm: "HS256", expiresIn: "15m", audience: "proctorshield:user" },
   );
   await context.addCookies([{
-    name: `ps_session_${role}`,
+    name: "ps_session_user",
     value: token,
     url: baseURL,
     httpOnly: true,

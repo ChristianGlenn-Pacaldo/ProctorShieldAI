@@ -42,7 +42,10 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
     require: (name: string) => {
       if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (name === "next/server") return { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } };
-      if (name === "@/lib/auth") return { getSession: async () => options.role === null ? null : ({ role: options.role ?? "student", userId: options.owner ?? "student-1" }) };
+      if (name === "@/lib/auth") return {
+        getSession: async () => options.role === null ? null : ({ role: options.role ?? "student", userId: options.owner ?? "student-1" }),
+        getUserSession: async () => options.role === null ? null : ({ role: options.role ?? "student", userId: options.owner ?? "student-1" }),
+      };
       if (name === "@/lib/retake-eligibility") return eligibility;
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: ["deleted"] };
       if (name === "@/lib/pusher") return { pusherServer: { trigger: async () => {} } };

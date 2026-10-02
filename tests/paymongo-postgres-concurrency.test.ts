@@ -10,6 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { billingEvent, loadBillingModule, paidCheckout } from "./helpers/paymongo-fixture.ts";
 import { rebuildEntitlement } from "../src/lib/paymongo-entitlement.ts";
+import { isTrustedAuthOrigin } from "../src/lib/auth-origin.ts";
 
 const configured = process.env.PAYMONGO_CONCURRENCY_TEST_DATABASE_URL;
 const day = 86_400_000;
@@ -374,7 +375,8 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
       }).outputText, { exports: route, Date, console: { error() {} }, require(name: string) {
         if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
         if (name === "next/server") return { NextResponse: { json: (body: unknown, options?: ResponseInit) => Response.json(body, options) } };
-        if (name === "@/lib/auth") return { getSession: async () => ({ userId: "admin", role: "admin" }) };
+        if (name === "@/lib/auth") return { getAdminSession: async () => ({ userId: "admin", role: "admin" }) };
+        if (name === "@/lib/auth-origin") return { isTrustedAuthOrigin };
         if (name === "@/lib/prisma") return { __esModule: true, default: client };
         if (name === "@/lib/paymongo-subscription") return billing;
         if (name === "@/lib/pusher") return { pusherServer: { trigger: async () => { manualEvents++; } } };
@@ -382,7 +384,7 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
       } });
       const body = secondary ? { plan: action === "grant" ? "Premium" : "Free Tier", ...(status ? { status } : {}) }
         : { subscriptionStatus: action === "grant" ? "active" : "expired", ...(status ? { status } : {}) };
-      return route.PUT!(new Request("https://test.invalid/api/users/teacher", { method: "PUT", body: JSON.stringify(body) }), { params: Promise.resolve({ id: "teacher" }) });
+      return route.PUT!(new Request("https://test.invalid/api/users/teacher", { method: "PUT", headers: { Origin: "https://test.invalid" }, body: JSON.stringify(body) }), { params: Promise.resolve({ id: "teacher" }) });
     };
     const adjustmentCount = () => one.manualSubscriptionAdjustment.count();
     const fullRefund = (client: PrismaClient) => billing.refundPaidCheckout({ providerPaymentId: "pay-old", refundedCentavos: 50_000 }, billingEvent("refund", "payment.refunded"), client);

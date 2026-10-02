@@ -23,7 +23,7 @@ export default function SettingsContent() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/session")
+    fetch("/api/auth/session?scope=user&role=teacher")
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated && data.user) {
@@ -48,7 +48,7 @@ export default function SettingsContent() {
     }
     setIsSaving(true);
     try {
-      const res = await fetch("/api/auth/profile", {
+      const res = await fetch("/api/auth/profile?scope=user&role=teacher", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName }),
@@ -82,7 +82,7 @@ export default function SettingsContent() {
     }
     setIsChangingPassword(true);
     try {
-      const res = await fetch("/api/auth/profile", {
+      const res = await fetch("/api/auth/profile?scope=user&role=teacher", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),

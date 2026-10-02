@@ -52,7 +52,7 @@ async function loadResultsApi(role: string | null = "student") {
     require: (name: string) => {
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: { studentQuiz: { findMany: async () => { queried = true; return attempts; } } } };
-      if (name === "@/lib/auth") return { getSession: async () => role ? { role, userId: "student-1" } : null };
+      if (name === "@/lib/auth") return { getUserSession: async () => role ? { role, userId: "student-1" } : null };
       if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getUserSession } from "@/lib/auth";
 import { withRetakeEligibility } from "@/lib/retake-eligibility";
 
 export async function GET() {
   try {
-    const session = await getSession();
+    const session = await getUserSession();
     if (!session || session.role !== "student") {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }

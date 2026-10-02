@@ -141,6 +141,18 @@ export default function DashboardShell({
   const notificationLifecycle = useRef({ active: false, generation: 0 });
   const notificationRequests = useRef(new Set<AbortController>());
   const notificationRefresh = useRef(0);
+  const stopNotifications = useRef<(() => void) | null>(null);
+  const consumerScope = role === "admin" ? "scope=admin" : `scope=user&role=${role}`;
+
+  const reportNotificationLoss = (status: AdminSessionLoss) => {
+    if (adminSession) adminSession.reportLoss(status);
+    else {
+      stopNotifications.current?.();
+      setNotifications([]);
+      setUnreadCount(0);
+      setNotifOpen(false);
+    }
+  };
 
   const isNotificationActive = (generation: number) =>
     notificationLifecycle.current.active && notificationLifecycle.current.generation === generation && !adminSession?.getLoss();
@@ -158,9 +170,9 @@ export default function DashboardShell({
     if (!request) return;
     const refresh = ++notificationRefresh.current;
     try {
-      const res = await fetch("/api/notifications", { signal: request.controller.signal, cache: "no-store" });
+      const res = await fetch(`/api/notifications?${consumerScope}`, { signal: request.controller.signal, cache: "no-store" });
       if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
-      if (adminSession && (res.status === 401 || res.status === 403)) { adminSession.reportLoss(res.status); return; }
+      if (res.status === 401 || res.status === 403) { reportNotificationLoss(res.status); return; }
       if (res.ok) {
         const data = await res.json();
         if (isNotificationActive(request.generation) && !request.controller.signal.aborted && refresh === notificationRefresh.current && data.success) {
@@ -207,6 +219,7 @@ export default function DashboardShell({
         pusher?.disconnect();
       }
     };
+    stopNotifications.current = stop;
 
     const loseAuthorization = (status: AdminSessionLoss) => {
       stop();
@@ -233,9 +246,9 @@ export default function DashboardShell({
       const request = beginNotificationRequest();
       if (!request) return;
       try {
-        const response = await fetch("/api/auth/session", { signal: request.controller.signal, cache: "no-store" });
+        const response = await fetch(`/api/auth/session?${consumerScope}`, { signal: request.controller.signal, cache: "no-store" });
         if (!isActive() || request.controller.signal.aborted) return;
-        if (adminSession && (response.status === 401 || response.status === 403)) { adminSession.reportLoss(response.status); return; }
+        if (response.status === 401 || response.status === 403) { reportNotificationLoss(response.status); return; }
         if (!response.ok) return;
 
         const session = await response.json() as {
@@ -243,12 +256,12 @@ export default function DashboardShell({
         };
         const userId = session.user?.userId;
         if (!isActive() || request.controller.signal.aborted) return;
-        if (adminSession && session.user?.role !== "admin") { adminSession.reportLoss(403); return; }
+        if (session.user?.role !== role) { reportNotificationLoss(403); return; }
         if (!userId) return;
 
         pusher = new PusherClient(key, {
           cluster,
-          authEndpoint: "/api/pusher/auth",
+          authEndpoint: `/api/pusher/auth?${consumerScope}`,
         });
 
         const userChannel = pusher.subscribe(`private-user-${userId}`);
@@ -278,6 +291,7 @@ export default function DashboardShell({
     return () => {
       unsubscribeSession?.();
       stop();
+      if (stopNotifications.current === stop) stopNotifications.current = null;
     };
   }, [role, adminSession]);
 
@@ -309,14 +323,14 @@ export default function DashboardShell({
       const request = beginNotificationRequest();
       if (!request) return;
       try {
-        const response = await fetch("/api/notifications", {
+        const response = await fetch(`/api/notifications?${consumerScope}`, {
           method: "PUT",
           signal: request.controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: "all" }),
         });
         if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
-        if (adminSession && (response.status === 401 || response.status === 403)) { adminSession.reportLoss(response.status); return; }
+        if (response.status === 401 || response.status === 403) { reportNotificationLoss(response.status); return; }
         if (!response.ok) {
           throw new Error(`Failed to mark notifications read (${response.status})`);
         }
@@ -364,7 +378,7 @@ export default function DashboardShell({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: role }),
     });
-    window.location.href = role === "admin" ? "/admin/login" : "/login";
+    window.location.href = "/login";
   };
 
   const handleNotificationClick = (notification: Notification) => {

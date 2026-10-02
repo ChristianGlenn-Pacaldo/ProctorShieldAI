@@ -1,13 +1,15 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession, hashPassword, verifyPassword, setSessionCookie } from "@/lib/auth";
+import { getScopedSession, hashPassword, verifyPassword, prepareSessionToken, setPreparedSessionCookie, AuthenticationChangedError } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { isStrongPassword } from "@/lib/security";
 
 // PUT /api/auth/profile — Update full name and/or password
 async function PUTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const session = await getSession();
+    const session = await getScopedSession(req);
     if (!session) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -22,6 +24,11 @@ async function PUTImpl(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
+    }
+    if (user.status !== "active" || user.sessionVersion !== session.sessionVersion
+      || user.role.roleName.toLowerCase() !== session.role
+      || (session.role === "admin" ? "admin" : "user") !== session.sessionClass) {
+      throw new AuthenticationChangedError();
     }
 
     const updateData: { fullName?: string; password?: string; sessionVersion?: { increment: number } } = {};
@@ -70,31 +77,26 @@ async function PUTImpl(req: NextRequest) {
       return NextResponse.json({ success: true, message: "No changes to save." });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: session.userId },
-      data: updateData,
+    const token = await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: session.userId, status: "active", sessionVersion: session.sessionVersion,
+          password: user.password, role: { roleName: { equals: session.role, mode: "insensitive" } } },
+        data: updateData,
+      });
+      const prepared = await prepareSessionToken({
+        userId: session.userId, email: updatedUser.email, role: session.role, fullName: updatedUser.fullName,
+      }, { userId: session.userId, role: session.role, sessionVersion: updatedUser.sessionVersion, password: updatedUser.password }, tx);
+      await tx.activityLog.create({ data: {
+        userId: session.userId, activity: "Updated profile settings", ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+      } });
+      return prepared;
     });
-
-    // Refresh session cookie with updated name
-    await setSessionCookie({
-      userId: updatedUser.id,
-      email: updatedUser.email,
-      role: user.role.roleName.toLowerCase(),
-      fullName: updatedUser.fullName,
-    });
-
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        activity: "Updated profile settings",
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
-      },
-    });
+    await setPreparedSessionCookie(token);
 
     return NextResponse.json({ success: true, message: "Profile updated successfully." });
   } catch (error: unknown) {
-    console.error("Profile update error:", error);
+    if (error instanceof AuthenticationChangedError || (error as { code?: string })?.code === "P2025") return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
+    console.error("Profile update error:");
     return NextResponse.json(
       { success: false, message: "Failed to update profile. Please try again." },
       { status: 500 }

@@ -1,13 +1,14 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getScopedSession } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { getNotificationDestination } from "@/lib/notification-destination";
 
 // GET /api/notifications — Fetch unread notifications for current user
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await getScopedSession(req);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -40,8 +41,9 @@ export async function GET(req: NextRequest) {
 
 // PUT /api/notifications — Mark all as read for current user
 async function PUTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const session = await getSession();
+    const session = await getScopedSession(req);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

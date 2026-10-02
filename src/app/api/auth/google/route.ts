@@ -5,11 +5,13 @@ import prisma from "@/lib/prisma";
 import { sendOtpEmail } from "@/lib/email";
 import { consumeRateLimitGroup, generateOtp, getClientIp, hashOtp } from "@/lib/security";
 import { hashPassword } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { hasVerifiedGoogleEmail } from "@/lib/google-identity";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
 async function POSTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
     const { credential, role } = await req.json();
 
@@ -29,8 +31,8 @@ async function POSTImpl(req: NextRequest) {
     }
 
     const { email, name, picture } = payload;
-    const requestedRole = String(role || "student").toLowerCase();
-    if (!['student', 'teacher', 'admin'].includes(requestedRole)) {
+    let requestedRole = String(role || "student").toLowerCase();
+    if (!['student', 'teacher'].includes(requestedRole)) {
       return NextResponse.json({ success: false, message: "Invalid account role." }, { status: 400 });
     }
 
@@ -52,14 +54,14 @@ async function POSTImpl(req: NextRequest) {
       include: { role: true },
     });
 
-    // Security Check: Prevent unauthorized users from becoming admins via Google Auth
-    if (requestedRole.toLowerCase() === "admin") {
-      if (!user || user.role?.roleName.toLowerCase() !== "admin") {
-        return NextResponse.json(
-          { success: false, message: "Admin registration via Google is restricted." },
-          { status: 403 }
-        );
+    // Existing-account authorization comes only from PostgreSQL. Admin Google
+    // login is deliberately disabled; only password authentication can issue it.
+    if (user) {
+      requestedRole = user.role.roleName.toLowerCase();
+      if (!["teacher", "student"].includes(requestedRole)) {
+        return NextResponse.json({ error: "Admin login requires a password" }, { status: 403 });
       }
+      if (user.status !== "active") return NextResponse.json({ error: "Account inactive" }, { status: 403 });
     }
 
     // Fetch or create the requested role
@@ -132,13 +134,6 @@ async function POSTImpl(req: NextRequest) {
         }
       });
     } else {
-      if (user.role.roleName.toLowerCase() !== requestedRole) {
-        return NextResponse.json(
-          { success: false, message: `This account is registered as ${user.role.roleName}, not ${requestedRole}.` },
-          { status: 403 }
-        );
-      }
-
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -149,8 +144,11 @@ async function POSTImpl(req: NextRequest) {
       });
     }
 
-    // Check suspension
-    if (user.status === "suspended") {
+    // Recheck after the profile update, which may have raced account changes.
+    if (!["teacher", "student"].includes(user.role.roleName.toLowerCase())) {
+      return NextResponse.json({ error: "Admin login requires a password" }, { status: 403 });
+    }
+    if (user.status !== "active") {
       return NextResponse.json({ success: false, message: "Account suspended" }, { status: 403 });
     }
 
@@ -185,7 +183,7 @@ async function POSTImpl(req: NextRequest) {
       role: user.role.roleName.toLowerCase()
     });
   } catch (error: unknown) {
-    console.error("Google Auth error:", error);
+    console.error("Google Auth error:");
     return NextResponse.json(
       { success: false, message: "Google authentication failed. Please try again." },
       { status: 500 }

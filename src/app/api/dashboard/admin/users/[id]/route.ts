@@ -1,7 +1,8 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getAdminSession } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { MissingPremiumPlanError, setManualSubscription, subscriptionTransactionOptions } from "@/lib/paymongo-subscription";
 
 class LastActiveAdminError extends Error {}
@@ -11,8 +12,9 @@ async function PUTImpl(
   { params }: { params: Promise<{ id: string }> }
 ) {
   let suspendingAdmin = false;
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const session = await getSession();
+    const session = await getAdminSession();
     if (!session || session.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

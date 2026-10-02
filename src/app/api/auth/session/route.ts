@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getScopedSession } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const session = await getSession();
+    const session = await getScopedSession(req);
 
     if (!session) {
       return NextResponse.json(
@@ -21,11 +21,11 @@ export async function GET() {
         fullName: session.fullName,
       },
     });
-  } catch (error) {
-    console.error("Session error:", error);
+  } catch {
+    console.error("Session validation unavailable");
     return NextResponse.json(
       { authenticated: false, user: null },
-      { status: 401 }
+      { status: 503 }
     );
   }
 }

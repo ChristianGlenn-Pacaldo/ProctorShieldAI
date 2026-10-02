@@ -49,7 +49,12 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
     user: {
       findUnique: async ({ where }: { where: { id?: string; email?: string } }) =>
         (where.id === user.id || where.email === user.email) ? structuredClone(user) : null,
-      update: async ({ data }: { data: Partial<Omit<FakeUser, "sessionVersion">> & { sessionVersion?: { increment: number } } }) => {
+      update: async ({ where, data }: { where: { sessionVersion?: number; password?: string; status?: string; role?: { roleName: { equals: string } } }; data: Partial<Omit<FakeUser, "sessionVersion">> & { sessionVersion?: { increment: number } } }) => {
+        if ((where.sessionVersion !== undefined && where.sessionVersion !== user.sessionVersion)
+          || (where.password && where.password !== user.password) || (where.status && where.status !== user.status)
+          || (where.role && where.role.roleName.equals.toLowerCase() !== user.role.roleName.toLowerCase())) {
+          throw Object.assign(new Error("Authentication changed"), { code: "P2025" });
+        }
         const { sessionVersion, ...values } = data;
         Object.assign(user, values);
         if (sessionVersion) user.sessionVersion += sessionVersion.increment;
@@ -95,6 +100,7 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
         if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
         if (name === "@/lib/email") return email;
         if (name === "@/lib/auth") return load("src/lib/auth.ts");
+        if (name === "@/lib/auth-origin") return load("src/lib/auth-origin.ts");
         if (name === "./redis.ts") return { getRedis: () => null, isRedisReady: () => false };
         if (name === "@/lib/security") return {
           ...load("src/lib/security.ts"), generateOtp: () => "123456",
@@ -119,7 +125,7 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
   async function post(route: string, body: unknown) {
     const routeModule = load(`src/app/api/auth/${route}/route.ts`);
     return (routeModule.POST as (request: Request) => Promise<Response>)(new Request(`https://test.invalid/api/auth/${route}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      method: "POST", headers: { "Content-Type": "application/json", Origin: "https://test.invalid" }, body: JSON.stringify(body),
     }));
   }
   return {
@@ -129,9 +135,9 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
       otps.push({ id: crypto.randomUUID(), userId: user.id, code: hashOtp(user.id, "123456", purpose), expiresAt });
     },
     getSession: () => (load("src/lib/auth.ts").getSession as () => Promise<unknown>)(),
-    createSession: () => (load("src/lib/auth.ts").setSessionCookie as (payload: unknown) => Promise<unknown>)({
+    createSession: () => (load("src/lib/auth.ts").setSessionCookie as (payload: unknown, snapshot: unknown) => Promise<unknown>)({
       userId: user.id, email: user.email, fullName: user.fullName, role: "teacher",
-    }),
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }),
   };
 }
 
@@ -150,7 +156,7 @@ test("verified Google identity emails OTP to that Gmail and creates no session u
   assert.doesNotMatch(JSON.stringify(body), /mock-private|mock-access-token|123456/);
   const verified = await setup.post("verify-otp", { userId: setup.user.id, otpCode: "123456" });
   assert.equal(verified.status, 200); assert.equal(setup.sessionCreations, 1);
-  assert.ok(setup.cookies.has("ps_session_teacher")); assert.ok(await setup.getSession());
+  assert.ok(setup.cookies.has("ps_session_user")); assert.ok(await setup.getSession());
   const replay = await setup.post("verify-otp", { userId: setup.user.id, otpCode: "123456" });
   assert.equal(replay.status, 401); assert.equal(setup.sessionCreations, 1);
 });
@@ -188,13 +194,13 @@ test("forgot-password delivery failure returns the same generic response as an u
 
 test("successful reset consumes emailed OTP, changes password, and rejects the old real signed session", async () => {
   const setup = fixture(); await setup.createSession(); assert.ok(await setup.getSession());
-  const originalCookie = setup.cookies.get("ps_session_teacher");
+  const originalCookie = setup.cookies.get("ps_session_user");
   assert.equal((await setup.post("forgot-password", { email: setup.user.email })).status, 200);
   assert.equal(setup.mails.length, 1);
   assert.equal((await setup.post("reset-password", { email: setup.user.email, otpCode: "123456", newPassword: "ChangedPass456" })).status, 200);
   assert.equal(await bcrypt.compare("ChangedPass456", setup.user.password), true);
   assert.equal(setup.user.sessionVersion, 1); assert.equal(setup.otps.length, 0);
-  assert.equal(setup.cookies.get("ps_session_teacher"), originalCookie); assert.equal(await setup.getSession(), null);
+  assert.equal(setup.cookies.get("ps_session_user"), originalCookie); assert.equal(await setup.getSession(), null);
   assert.equal((await setup.post("reset-password", { email: setup.user.email, otpCode: "123456", newPassword: "AnotherPass789" })).status, 401);
   assert.equal(setup.user.sessionVersion, 1);
 });

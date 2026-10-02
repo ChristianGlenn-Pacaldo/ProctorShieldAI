@@ -251,7 +251,7 @@ test("Admin presence requires active status, online flag, and a recent heartbeat
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
-      if (name === "@/lib/auth") return { getSession: async () => ({ role: "admin", userId: "admin" }) };
+      if (name === "@/lib/auth") return { getAdminSession: async () => ({ role: "admin", userId: "admin" }) };
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },

@@ -39,9 +39,9 @@ function proxyFixture() {
         json: () => response(401),
       } };
       if (name === "@/lib/auth") return { verifyToken: (token: string) => {
-        if (token === "valid-admin") return { role: "admin" };
-        if (token === "valid-student") return { role: "student" };
-        if (token === "valid-teacher") return { role: "teacher" };
+        if (token === "valid-admin") return { role: "admin", sessionClass: "admin" };
+        if (token === "valid-student") return { role: "student", sessionClass: "user" };
+        if (token === "valid-teacher") return { role: "teacher", sessionClass: "user" };
         return null;
       } };
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
@@ -58,7 +58,7 @@ function proxyFixture() {
     return exports.proxy!({
       nextUrl: url,
       headers: new Headers(),
-      cookies: { get: (name: string) => cookie && name === `ps_session_${cookie.role}` ? { value: cookie.value } : undefined },
+      cookies: { get: (name: string) => cookie && name === `ps_session_${cookie.role === "admin" ? "admin" : "user"}` ? { value: cookie.value } : undefined },
     });
   };
 }
@@ -104,7 +104,7 @@ async function layoutRedirect(relativePath: string, session: { role: string; ful
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
-      if (name === "@/lib/auth") return { getSession: async () => session };
+      if (name === "@/lib/auth") return { getAdminSession: async () => session, getUserSession: async () => session };
       if (name === "next/navigation") return { redirect: (destination: string) => {
         redirectedTo = destination;
         throw new Error("redirect");
@@ -180,13 +180,13 @@ function dashboardFixture(role: "admin" | "student" | "teacher") {
   return { view, requests, window };
 }
 
-test("Admin logout uses Admin login while Student and Teacher logout keep generic login", async () => {
+test("all roles return to generic login after account-wide logout", async () => {
   for (const role of ["admin", "student", "teacher"] as const) {
     const fixture = dashboardFixture(role);
     const button = findButton(fixture.view, "Log Out");
     assert.ok(button);
     await (button.props.onClick as () => Promise<void>)();
     assert.deepEqual(fixture.requests, [{ url: "/api/auth/logout", role }]);
-    assert.equal(fixture.window.location.href, role === "admin" ? "/admin/login" : "/login");
+    assert.equal(fixture.window.location.href, "/login");
   }
 });

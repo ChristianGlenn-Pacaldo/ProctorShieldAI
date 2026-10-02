@@ -118,9 +118,10 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
     role: "student",
     fullName: "Mobile Student",
     sessionVersion: 0,
-  }, secret, { algorithm: "HS256", expiresIn: "10m" });
+    sessionClass: "user",
+  }, secret, { algorithm: "HS256", expiresIn: "10m", audience: "proctorshield:user" });
   await context.addCookies([{
-    name: "ps_session_student",
+    name: "ps_session_user",
     value: token,
     url: baseURL,
     httpOnly: true,

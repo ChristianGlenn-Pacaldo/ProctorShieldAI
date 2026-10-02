@@ -25,7 +25,7 @@ function loadRoute(routePath: string, prisma: object) {
           new Response(JSON.stringify(body), { status: options.status ?? 200 }) },
       };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
-      if (name === "@/lib/auth") return { getSession: async () => ({ role: "admin", userId: "admin-1" }) };
+      if (name === "@/lib/auth") return { getAdminSession: async () => ({ role: "admin", userId: "admin-1" }) };
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },

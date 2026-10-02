@@ -124,6 +124,7 @@ function fixture() {
     "./redis.ts": { getRedis: () => null, isRedisReady: () => false },
     "./student-identity.ts": { getStudentInitials: () => "ST" },
   });
+  deps["@/lib/auth"].getUserSession = () => deps["@/lib/auth"].getSession();
   deps["@/lib/arena-realtime"] = loadArenaModule("src/lib/arena-realtime.ts", { "./arena.ts": deps["@/lib/arena"], "@/lib/pusher": { arenaPusher: deps["@/lib/pusher"].pusherServer } });
   const load = (path: string) => route(`src/app/api/${path}/route.ts`, deps);
   const submit = (reason: string, extra = {}) => load("quizzes/submit").POST(request({ quizId: 7, studentQuizId: "attempt-1", reason, answers: [], ...extra }));

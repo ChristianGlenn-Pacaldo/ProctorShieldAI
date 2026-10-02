@@ -1,3 +1,4 @@
+import { isTrustedAuthOrigin } from "../src/lib/auth-origin.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -68,7 +69,8 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
   const dependencies: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown, options?: { status?: number }) => new Response(JSON.stringify(body), { status: options?.status ?? 200 }) } },
     "@/lib/prisma": { __esModule: true, default: prisma },
-    "@/lib/auth": { getSession: async () => ({ role: "admin", userId: "admin" }) },
+    "@/lib/auth-origin": { isTrustedAuthOrigin },
+    "@/lib/auth": { getAdminSession: async () => ({ role: "admin", userId: "admin" }) },
     "@/lib/paymongo-subscription": loadBillingModule(prisma as unknown as PrismaClient),
     "@/lib/pusher": { pusherServer: { trigger: async () => { broadcasts++; } } },
   };
@@ -84,7 +86,7 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
   }, { filename });
   return {
     invoke: (body: unknown) => route.PUT!(new Request("http://localhost/api/users/target", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      method: "PUT", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body),
     }), { params: Promise.resolve({ id: "target" }) }),
     getState: () => state,
     getWrites: () => writes,

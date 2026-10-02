@@ -1,9 +1,9 @@
 import DashboardShell from "@/components/dashboard-shell";
-import { getSession } from "@/lib/auth";
+import { getAdminSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
+  const session = await getAdminSession();
 
   if (!session || session.role !== "admin") {
     redirect("/admin/login");

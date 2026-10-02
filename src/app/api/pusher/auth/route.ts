@@ -1,21 +1,25 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, getAdminSession, getUserSession, getScopedSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { pusherServer } from "@/lib/pusher";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
 
 async function POSTImpl(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const formData = await req.formData();
   const socketId = formData.get("socket_id");
   const channelName = formData.get("channel_name");
   if (typeof socketId !== "string" || typeof channelName !== "string") {
     return NextResponse.json({ error: "Invalid channel request" }, { status: 400 });
   }
+  // Admin and role-specific User channels select strict cookie classes. Shared
+  // resource/user channels use the deterministic, conflict-denying resolver.
+  const session = new URL(req.url).searchParams.has("scope") ? await getScopedSession(req)
+    : channelName === "private-admin-dashboard" ? await getAdminSession()
+    : /^private-(student|teacher)-/.test(channelName) ? await getUserSession()
+    : await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let allowed = false;
   if (channelName === `private-user-${session.userId}`) allowed = true;

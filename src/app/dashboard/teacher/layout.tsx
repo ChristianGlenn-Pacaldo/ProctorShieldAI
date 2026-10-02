@@ -1,9 +1,9 @@
 import DashboardShell from "@/components/dashboard-shell";
-import { getSession } from "@/lib/auth";
+import { getUserSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
+  const session = await getUserSession();
 
   if (!session || session.role !== "teacher") {
     redirect("/login");

@@ -1,10 +1,12 @@
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { setSessionCookie } from "@/lib/auth";
+import { setSessionCookie, AuthenticationChangedError } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { consumeRateLimitGroup, getClientIp, hashOtp } from "@/lib/security";
 
 async function POSTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
     const { userId, otpCode } = await req.json();
 
@@ -65,6 +67,10 @@ async function POSTImpl(req: NextRequest) {
       );
     }
 
+    // Reject previously issued Admin Google challenges as well as new requests.
+    if (!["teacher", "student"].includes(user.role.roleName.toLowerCase())) {
+      return NextResponse.json({ error: "Admin login requires a password" }, { status: 403 });
+    }
     const consumed = await prisma.otpCode.deleteMany({ where: { id: otpRecord.id } });
     if (consumed.count !== 1) {
       return NextResponse.json(
@@ -79,7 +85,7 @@ async function POSTImpl(req: NextRequest) {
       email: user.email,
       role: user.role.roleName.toLowerCase(),
       fullName: user.fullName,
-    });
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password });
 
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
     await scheduleTrackedBackupWork(after, async () => {
@@ -140,7 +146,8 @@ async function POSTImpl(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error("Verify OTP error:", error);
+    if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
+    console.error("Verify OTP error:");
     return NextResponse.json(
       { success: false, message: "OTP verification failed. Please try again." },
       { status: 500 }

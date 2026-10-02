@@ -1,11 +1,13 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession, setSessionCookie } from "@/lib/auth";
+import { getScopedSession, prepareSessionToken, setPreparedSessionCookie, AuthenticationChangedError } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 
 async function PUTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const session = await getSession();
+    const session = await getScopedSession(req, ["user"]);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -18,23 +20,21 @@ async function PUTImpl(req: NextRequest) {
 
     const uppercaseName = fullName.trim();
 
-    // Update database
-    await prisma.user.update({
-      where: { id: session.userId },
-      data: { fullName: uppercaseName },
+    const token = await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: session.userId, status: "active", sessionVersion: session.sessionVersion,
+          role: { roleName: { equals: session.role, mode: "insensitive" } } },
+        data: { fullName: uppercaseName },
+      });
+      return prepareSessionToken({ userId: session.userId, email: updatedUser.email, role: session.role, fullName: uppercaseName },
+        { userId: session.userId, role: session.role, sessionVersion: updatedUser.sessionVersion, password: updatedUser.password }, tx);
     });
-
-    // Update session token so the dashboard instantly reflects it
-    await setSessionCookie({
-      userId: session.userId,
-      email: session.email,
-      role: session.role,
-      fullName: uppercaseName,
-    });
+    await setPreparedSessionCookie(token);
 
     return NextResponse.json({ success: true, fullName: uppercaseName });
   } catch (error: any) {
-    console.error("Update profile error:", error);
+    if (error instanceof AuthenticationChangedError || error?.code === "P2025") return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
+    console.error("Update profile error:");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

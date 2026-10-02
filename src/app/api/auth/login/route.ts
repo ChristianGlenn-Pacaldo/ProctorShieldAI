@@ -1,16 +1,18 @@
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyPassword, setSessionCookie } from "@/lib/auth";
+import { verifyPassword, setSessionCookie, AuthenticationChangedError } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 
 async function POSTImpl(req: NextRequest) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
     const { email, password, role } = await req.json();
 
     // Validate input
-    if (!email || !password) {
+    if (typeof email !== "string" || typeof password !== "string" || !email || !password || (role !== undefined && typeof role !== "string")) {
       return NextResponse.json(
         { success: false, message: "Email and password are required" },
         { status: 400 }
@@ -72,7 +74,7 @@ async function POSTImpl(req: NextRequest) {
       email: user.email,
       role: user.role.roleName.toLowerCase(),
       fullName: user.fullName,
-    });
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password });
 
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
     await scheduleTrackedBackupWork(after, async () => {
@@ -131,7 +133,8 @@ async function POSTImpl(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error("Login error:", error);
+    if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
+    console.error("Login error:");
     return NextResponse.json(
       { success: false, message: "An unexpected error occurred. Please try again." },
       { status: 500 }

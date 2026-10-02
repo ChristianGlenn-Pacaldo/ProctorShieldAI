@@ -12,7 +12,7 @@ export default function SettingsContent() {
   const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/session")
+    fetch("/api/auth/session?scope=admin")
       .then((res) => {
         if (!res.ok) throw new Error("Session unavailable");
         return res.json();
@@ -39,7 +39,7 @@ export default function SettingsContent() {
     setIsSaving(true);
     setProfileMessage(null);
     try {
-      const response = await fetch("/api/auth/profile", {
+      const response = await fetch("/api/auth/profile?scope=admin", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName: name }),

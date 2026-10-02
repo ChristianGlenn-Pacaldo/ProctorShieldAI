@@ -1,11 +1,11 @@
 import DashboardShell from "@/components/dashboard-shell";
-import { getSession } from "@/lib/auth";
+import { getUserSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import NameEnforcer from "@/components/name-enforcer";
 import RetakeRedirect from "./retake-redirect";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
+  const session = await getUserSession();
 
   if (!session || session.role !== "student") {
     redirect("/login");

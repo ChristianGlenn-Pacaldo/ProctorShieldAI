@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 
-const TOKEN_PREFIX = "ps_session_";
-const ROLES = ["admin", "teacher", "student"] as const;
+const SESSION_CLASSES = ["admin", "user"] as const;
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -20,6 +19,8 @@ const PUBLIC_API_PATHS = new Set([
   "/api/auth/verify-otp",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  // Logout validates its own session and Origin, and must clear stale cookies.
+  "/api/auth/logout",
   "/api/billing/webhook",
   "/api/health",
   "/api/internal/maintenance",
@@ -100,17 +101,21 @@ export function proxy(request: NextRequest) {
   }
 
   const targetRole = targetRoleForPage(pathname);
-  const candidateRoles = targetRole ? [targetRole] : [...ROLES];
+  const candidateClasses = targetRole ? [targetRole === "admin" ? "admin" : "user"] : [...SESSION_CLASSES];
   let tokenName = "";
   let payload = null;
 
-  for (const role of candidateRoles) {
-    const name = `${TOKEN_PREFIX}${role}`;
+  // Mixed-role endpoints have no safe implicit account selection. Legacy
+  // role cookies are not accepted; they require a fresh authentication.
+  const ambiguous = !targetRole && request.cookies.get("ps_session_admin")?.value && request.cookies.get("ps_session_user")?.value;
+  for (const sessionClass of ambiguous ? [] : candidateClasses) {
+    const name = `ps_session_${sessionClass}`;
     const token = request.cookies.get(name)?.value;
     if (!token) continue;
 
     const verified = verifyToken(token);
-    if (verified && verified.role.toLowerCase() === role) {
+    if (verified && verified.sessionClass === sessionClass &&
+      (sessionClass === "admin" ? verified.role === "admin" : ["teacher", "student"].includes(verified.role))) {
       tokenName = name;
       payload = verified;
       break;

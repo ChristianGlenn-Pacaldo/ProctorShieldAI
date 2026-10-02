@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { authFixture } from "./helpers/auth-fixture.ts";
 
 type Element = { type: unknown; props: Record<string, any> };
 type Reply = { status?: number; body?: unknown } | Error;
@@ -42,7 +43,7 @@ function find(root: unknown, predicate: (node: Element) => boolean): Element | u
 // Mount the actual shell, its actual context provider, and the actual dashboard
 // together. Only browser/network/React scheduling primitives are simulated;
 // authorization propagation and all component callbacks execute production code.
-function fixture(role: "admin" | "teacher" | "student" = "admin") {
+function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnType<typeof authFixture>) {
   const instances = new Map<unknown, Instance>();
   const modules = new Map<string, Record<string, any>>();
   const queues = new Map<string, Array<Reply | Promise<Reply>>>();
@@ -86,7 +87,8 @@ function fixture(role: "admin" | "teacher" | "student" = "admin") {
     connected = true;
     channels = new Map<string, { handlers: Map<string, () => void>; unbind_all: () => void; bind: (event: string, callback: () => void) => void }>();
     unsubscribed: string[] = [];
-    constructor() { Pusher.clients.push(this); }
+    options: { authEndpoint: string };
+    constructor(_key: string, options: { authEndpoint: string }) { this.options = options; Pusher.clients.push(this); }
     subscribe(name: string) {
       const handlers = new Map<string, () => void>();
       const channel = { handlers, bind: (event: string, callback: () => void) => { handlers.set(event, callback); }, unbind_all: () => handlers.clear() };
@@ -123,9 +125,13 @@ function fixture(role: "admin" | "teacher" | "student" = "admin") {
         const record = { url, method, signal: options?.signal, settled: false };
         requests.push(record);
         try {
-          const queued = queues.get(method + url)?.shift();
+          const queueUrl = url.split("?")[0];
+          const queued = queues.get(method + queueUrl)?.shift();
+          if (queued === undefined && auth && ["/api/auth/session", "/api/notifications"].includes(queueUrl)) {
+            return await auth.load(`src/app${queueUrl}/route.ts`)[method](new Request(`https://app.example.test${url}`));
+          }
           const reply = queued === undefined
-            ? { status: 200, body: url === "/api/dashboard/admin" ? dashboard : url === "/api/auth/session" ? { user: { userId: role + "-id", role } } : method === "PUT" ? { success: true } : notification() }
+            ? { status: 200, body: url === "/api/dashboard/admin" ? dashboard : queueUrl === "/api/auth/session" ? { user: { userId: role + "-id", role } } : method === "PUT" ? { success: true } : notification() }
             : await queued;
           if (reply instanceof Error) throw reply;
           const status = reply.status ?? 200;
@@ -206,6 +212,8 @@ function fixture(role: "admin" | "teacher" | "student" = "admin") {
     notificationTitles: () => (instances.get(Shell)!.hooks.find((slot) => Array.isArray(slot.value))!.value as Array<{ title: string }>).map((item) => item.title).join(","),
     bell: () => find(render(), (node) => node.props["aria-label"] === "Open notifications")!,
     resources: () => ({ timers: timers.size, connected: Pusher.clients.filter((client) => client.connected).length, subscriptions: Pusher.clients.reduce((total, client) => total + client.channels.size, 0) }),
+    channelNames: () => Pusher.clients.flatMap(client => [...client.channels.keys()]),
+    authEndpoints: () => Pusher.clients.map(client => client.options.authEndpoint),
     shellCallback: (event = "activity") => Pusher.clients.find((client) => client.channels.has("private-user-" + role + "-id"))!.channels.get(event === "activity" ? "private-admin-dashboard" : "private-user-" + role + "-id")!.handlers.get(event)!,
     shellPoll: () => [...timers.values()].find((timer) => timer.period === 15_000)!.callback,
     remount: () => { unmount(); instances.clear(); render(); },
@@ -342,6 +350,42 @@ test("unmount aborts notification/session fetches and suppresses all delayed cal
 });
 
 for (const role of ["teacher", "student"] as const) {
+  test(`mounted ${role} shell with only Admin cookie cannot adopt identity or notifications`, async () => {
+    const auth = authFixture(); auth.cookies.set("ps_session_admin", auth.token("admin"));
+    const setup = fixture(role, auth); setup.render(); await setup.ready();
+    assert.equal(setup.notificationCount(), 0);
+    assert.deepEqual(setup.resources(), { timers: 0, connected: 0, subscriptions: 0 });
+    const count = setup.requests.length; await setup.advance(45_000); assert.equal(setup.requests.length, count);
+    assert.equal(setup.requests.every(request => request.url.includes(`scope=user&role=${role}`)), true);
+    assert.deepEqual(setup.channelNames(), []); setup.unmount(); setup.assertDisposed();
+  });
+  test(`mounted valid ${role} shell uses strict endpoint and Pusher scope`, async () => {
+    const auth = authFixture(); auth.cookies.set("ps_session_user", auth.token(role));
+    const setup = fixture(role, auth); setup.render(); await setup.ready();
+    assert.equal(setup.notificationTitles(), `${role} notification`);
+    assert.deepEqual(setup.channelNames(), [`private-user-${role}`]);
+    assert.deepEqual(setup.authEndpoints(), [`/api/pusher/auth?scope=user&role=${role}`]);
+    assert.equal(setup.requests.every(request => request.url.includes(`scope=user&role=${role}`)), true);
+    setup.unmount(); setup.assertDisposed();
+  });
+  test(`${role} shell rejects a mismatched successful identity response`, async () => {
+    const setup = fixture(role);
+    setup.queue("/api/auth/session", { body: { user: { userId: "admin-id", role: "admin" } } });
+    setup.render(); await setup.ready();
+    assert.equal(setup.notificationCount(), 0); assert.equal(setup.resources().connected, 0); assert.equal(setup.resources().timers, 0);
+    setup.unmount(); setup.assertDisposed();
+  });
+  test(`${role} replacement session stops old queued callbacks and notification responses`, async () => {
+    const setup = fixture(role); setup.render(); await setup.ready();
+    const callback = setup.shellCallback("notification"), pending = deferred<Reply>();
+    setup.queue("/api/notifications", pending.promise); callback(); await setup.ready();
+    setup.queue("/api/notifications", { status: 401 }); await setup.advance(15_000);
+    const count = setup.requests.length; callback(); await setup.advance(35_000);
+    pending.resolve({ body: notification("Old session data") }); await setup.ready();
+    assert.equal(setup.requests.length, count); assert.equal(setup.notificationCount(), 0);
+    assert.deepEqual(setup.resources(), { timers: 0, connected: 0, subscriptions: 0 });
+    setup.unmount(); setup.assertDisposed();
+  });
   test(`${role} shell retains its polling, user subscription, dropdown and transient-failure behavior`, async () => {
     const setup = fixture(role); setup.render(); await setup.ready();
     assert.deepEqual(setup.resources(), { timers: 1, connected: 1, subscriptions: 1 });

@@ -67,10 +67,10 @@ function fixture(options: {
       return {};
     },
     fetch: async (url: string, request?: { method?: string; body?: string }) => {
-      if (url === "/api/auth/session") {
+      if (url === "/api/auth/session?scope=admin") {
         return { ok: options.sessionOk !== false, json: async () => ({ authenticated: true, user: { fullName: "QA Admin", email: "qa@example.invalid" } }) };
       }
-      assert.equal(url, "/api/auth/profile");
+      assert.equal(url, "/api/auth/profile?scope=admin");
       assert.equal(request?.method, "PUT");
       profileRequests.push({ url, body: JSON.parse(request?.body || "{}") });
       return options.save ? options.save() : { ok: true, json: async () => ({ success: true }) };

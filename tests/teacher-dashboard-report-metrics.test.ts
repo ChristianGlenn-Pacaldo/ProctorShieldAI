@@ -23,7 +23,7 @@ function loadRoute(routePath: string, prisma: object) {
           new Response(JSON.stringify(body), { status: options.status ?? 200 }) },
       };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
-      if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
+      if (name === "@/lib/auth") return { getUserSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
       if (name === "@/lib/maintenance") return { expireSubscriptions: async () => {} };
       if (name === "@/lib/teacher-entitlements") return { hasActiveProSubscription: async () => true };
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
