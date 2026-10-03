@@ -117,6 +117,7 @@ function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnT
         if (name === "next/navigation") return { usePathname: () => `/dashboard/${role}`, useRouter: () => ({ push() {} }) };
         if (name === "clsx") return { clsx: (...values: unknown[]) => values.join(" ") };
         if (name === "pusher-js") return { __esModule: true, default: Pusher };
+        if (name === "./user-session-lifecycle") return load("src/components/user-session-lifecycle.tsx");
         if (name === "./admin-session-lifecycle" || name === "@/components/admin-session-lifecycle") return load("src/components/admin-session-lifecycle.tsx");
         throw new Error(`Unexpected dependency: ${name}`);
       },

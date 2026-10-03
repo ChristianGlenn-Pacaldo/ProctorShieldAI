@@ -1,3 +1,4 @@
+import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -42,19 +43,25 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
   const effects: Array<() => void> = [];
   let hookIndex = 0;
   const react = {
+    createContext: (value: unknown) => ({value}),
+    useContext: (context: {value: unknown}) => context.value,
+    useRef: (initial: unknown) => { const index=hookIndex++; if(!(index in state)) state[index]={current:initial}; return state[index]; },
+    useCallback: (callback: unknown) => { hookIndex++; return callback; },
     useState: (initial: unknown) => {
       const index = hookIndex++;
-      if (!(index in state)) state[index] = initial;
+      if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
       return [state[index], (next: unknown) => { state[index] = typeof next === "function" ? (next as (value: unknown) => unknown)(state[index]) : next; }];
     },
     useEffect: (callback: () => void) => { hookIndex++; effects.push(callback); },
     useTransition: () => { hookIndex++; return [false, (callback: () => void) => callback()]; },
   };
+  const lifecycle=loadUserLifecycleModule(react);
   const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
   const component: { default?: () => ElementNode } = {};
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
@@ -65,6 +72,7 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
+    AbortController,
     fetch: async (url: string) => ({ ok: true, json: async () => url === "/api/quizzes" ? { success: true, quizzes } : { success: true, totalExp: 0, level: 1, currentLevelExp: 0, expToNextLevel: 500, progressPercent: 0, title: "Rookie" } }),
     console: { error() {} },
   });

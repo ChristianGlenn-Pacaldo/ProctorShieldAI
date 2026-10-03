@@ -21,6 +21,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <DashboardShell
+      key={`${session.userId}:${session.sessionVersion}`}
       role="student"
       userName={name}
       userInitials={initials || "SD"}

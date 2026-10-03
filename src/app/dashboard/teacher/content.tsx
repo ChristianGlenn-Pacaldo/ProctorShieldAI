@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Radio, ShieldCheck, Activity, Zap } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
 import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
+import { useUserSessionWork, UserSessionReauthentication } from "@/components/user-session-lifecycle";
 
 interface StatCard {
   label: string;
@@ -74,18 +75,34 @@ export default function TeacherDashboardContent({
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedDashboard, setHasLoadedDashboard] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const { work, loss } = useUserSessionWork(() => {
+    setStats({ totalQuizzes: 0, studentsMonitored: 0, totalViolations: 0, flaggedStudents: 0 });
+    setLiveStudents([]);
+    setRecentVerdicts([]);
+    setViolationsBreakdown([]);
+    setSearchQuery("");
+    setHasLoadedDashboard(false);
+    setLoadError(null);
+    setIsLoading(false);
+  });
+  const refreshSequence = useRef(0);
 
   // Keep refs in sync for websocket handlers
   const liveStudentsRef = useRef<LiveStudent[]>([]);
   useEffect(() => {
-    liveStudentsRef.current = liveStudents;
-  }, [liveStudents]);
+    liveStudentsRef.current = loss ? [] : liveStudents;
+  }, [liveStudents, loss]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
+    const request = work.beginRequest();
+    if (!request) return;
+    const refresh = ++refreshSequence.current;
     try {
-      const res = await fetch("/api/dashboard/teacher");
+      const res = await fetch("/api/dashboard/teacher", { signal: request.controller.signal, cache: "no-store" });
+      if (!await work.acceptResponse(res, request)) return;
       if (!res.ok) throw new Error(`Dashboard request failed (${res.status})`);
       const data = await res.json();
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted || refresh !== refreshSequence.current) return;
       setStats(data.stats);
       setRecentVerdicts(data.recentVerdicts);
       if (data.violationsBreakdown && data.violationsBreakdown.length > 0) {
@@ -94,32 +111,41 @@ export default function TeacherDashboardContent({
       setHasLoadedDashboard(true);
       setLoadError(null);
     } catch (err) {
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted || refresh !== refreshSequence.current) return;
       console.error("Failed to load dashboard data:", err);
       setLoadError("Could not load the Teacher Dashboard. Please try again.");
     } finally {
-      setIsLoading(false);
+      if (work.isCurrent(request.generation) && refresh === refreshSequence.current) setIsLoading(false);
+      work.finishRequest(request.controller);
     }
-  };
+  }, [work]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   // Pusher real-time updates
   useEffect(() => {
+    const generation = work.capture();
+    if (!work.isCurrent(generation)) return;
     if (!isSubscribed || !teacherId || teacherId === "unknown") return;
 
     const pusher = new PusherClient(
       process.env.NEXT_PUBLIC_PUSHER_KEY || "db16de3d58ba71380774",
-      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth" }
+      { cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap1", authEndpoint: "/api/pusher/auth?scope=user&role=teacher" }
     );
 
     const channel = pusher.subscribe(`private-teacher-${teacherId}`);
+    channel.bind("pusher:subscription_error", (error: { status?: number }) => {
+      if (work.isCurrent(generation) && error.status === 401) work.reportLoss(401);
+    });
 
     // Student Joined Event
     channel.bind("student-joined", (data: any) => {
+      if (!work.isCurrent(generation)) return;
       fetchDashboardData();
       setLiveStudents((prev) => {
+        if (!work.isCurrent(generation)) return prev;
         const exists = prev.some((s) => s.name === data.studentName);
         if (exists) return prev;
 
@@ -140,15 +166,17 @@ export default function TeacherDashboardContent({
 
     // New Violation Event
     channel.bind("new-violation", (data: any) => {
+      if (!work.isCurrent(generation)) return;
 
       // Increment general violations counters
-      setStats((curr) => ({
+      setStats((curr) => work.isCurrent(generation) ? ({
         ...curr,
         totalViolations: curr.totalViolations + 1,
-      }));
+      }) : curr);
 
       // Update violation breakdown percentages dynamically
       setViolationsBreakdown((prev) => {
+        if (!work.isCurrent(generation)) return prev;
         const typeMapping: Record<string, string> = {
           tab_switch: "Tab Switching",
           tab_switching: "Tab Switching",
@@ -179,6 +207,7 @@ export default function TeacherDashboardContent({
 
       // Update student feed state
       setLiveStudents((prev) => {
+        if (!work.isCurrent(generation)) return prev;
         return prev.map((student) => {
           if (student.name === data.studentName) {
             const newTrust = Math.max(0, student.trust - 15);
@@ -223,19 +252,26 @@ export default function TeacherDashboardContent({
 
     // Student Submitted / Quiz Complete Event
     channel.bind("student-submitted", (data: any) => {
+      if (!work.isCurrent(generation)) return;
 
       // Remove from live view list
-      setLiveStudents((prev) => prev.filter((s) => s.name !== data.studentName));
+      setLiveStudents((prev) => work.isCurrent(generation) ? prev.filter((s) => s.name !== data.studentName) : prev);
 
       // Re-fetch all dynamic table history and stats from database
       fetchDashboardData();
     });
 
-    return () => {
+    let stopped = false;
+    return work.addCleanup(() => {
+      if (stopped) return;
+      stopped = true;
+      channel.unbind_all();
       pusher.unsubscribe(`private-teacher-${teacherId}`);
       pusher.disconnect();
-    };
-  }, [isSubscribed, teacherId]);
+    });
+  }, [isSubscribed, teacherId, work, fetchDashboardData]);
+
+  if (loss) return <UserSessionReauthentication status={loss} />;
 
   const statCards = [
     {

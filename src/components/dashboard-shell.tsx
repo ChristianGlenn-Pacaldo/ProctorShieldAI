@@ -29,6 +29,7 @@ import {
 import { clsx } from "clsx";
 import PusherClient from "pusher-js";
 import { AdminSessionLifecycleContext, createAdminSessionLifecycle, type AdminSessionLoss } from "./admin-session-lifecycle";
+import { UserSessionLifecycleContext, createUserSessionLifecycle, getUserSessionLoss, UserSessionReauthentication, type UserSessionLoss } from "./user-session-lifecycle";
 
 interface Notification {
   id: string;
@@ -137,6 +138,10 @@ export default function DashboardShell({
   const profileRef = useRef<HTMLDivElement>(null);
   const [sessionLifecycle] = useState(createAdminSessionLifecycle);
   const adminSession = role === "admin" ? sessionLifecycle : null;
+  const [userLifecycle] = useState(createUserSessionLifecycle);
+  const userSession = role === "admin" ? null : userLifecycle;
+  const scopeSession = adminSession ?? userSession;
+  const [userSessionLost, setUserSessionLost] = useState<UserSessionLoss | null>(null);
   const [adminSessionLost, setAdminSessionLost] = useState<AdminSessionLoss | null>(null);
   const notificationLifecycle = useRef({ active: false, generation: 0 });
   const notificationRequests = useRef(new Set<AbortController>());
@@ -145,17 +150,18 @@ export default function DashboardShell({
   const consumerScope = role === "admin" ? "scope=admin" : `scope=user&role=${role}`;
 
   const reportNotificationLoss = (status: AdminSessionLoss) => {
-    if (adminSession) adminSession.reportLoss(status);
-    else {
-      stopNotifications.current?.();
-      setNotifications([]);
-      setUnreadCount(0);
-      setNotifOpen(false);
-    }
+    scopeSession?.reportLoss(status);
+  };
+
+  const notificationResponseLoss = async (res: Response, generation: number) => {
+    const loss = adminSession ? (res.status === 401 || res.status === 403 ? res.status : null) : await getUserSessionLoss(res);
+    if (!isNotificationActive(generation)) return true;
+    if (loss) { reportNotificationLoss(loss); return true; }
+    return false;
   };
 
   const isNotificationActive = (generation: number) =>
-    notificationLifecycle.current.active && notificationLifecycle.current.generation === generation && !adminSession?.getLoss();
+    notificationLifecycle.current.active && notificationLifecycle.current.generation === generation && !scopeSession?.getLoss();
 
   const beginNotificationRequest = () => {
     const generation = notificationLifecycle.current.generation;
@@ -172,7 +178,7 @@ export default function DashboardShell({
     try {
       const res = await fetch(`/api/notifications?${consumerScope}`, { signal: request.controller.signal, cache: "no-store" });
       if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
-      if (res.status === 401 || res.status === 403) { reportNotificationLoss(res.status); return; }
+      if (await notificationResponseLoss(res, request.generation)) return;
       if (res.ok) {
         const data = await res.json();
         if (isNotificationActive(request.generation) && !request.controller.signal.aborted && refresh === notificationRefresh.current && data.success) {
@@ -196,7 +202,7 @@ export default function DashboardShell({
     setNotifications([]);
     setUnreadCount(0);
     setNotifOpen(false);
-    const isActive = () => lifecycle.active && lifecycle.generation === generation && !adminSession?.getLoss();
+    const isActive = () => lifecycle.active && lifecycle.generation === generation && !scopeSession?.getLoss();
     let pusher: PusherClient | null = null;
     const channels: Array<{ name: string; channel: ReturnType<PusherClient["subscribe"]> }> = [];
     let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -227,13 +233,15 @@ export default function DashboardShell({
       setUnreadCount(0);
       setNotifOpen(false);
       setProfileOpen(false);
-      setAdminSessionLost(status);
+      if (adminSession) setAdminSessionLost(status);
+      else setUserSessionLost(status);
     };
-    const unsubscribeSession = adminSession?.subscribe(loseAuthorization);
-    const knownLoss = adminSession?.getLoss();
+    const unsubscribeSession = scopeSession?.subscribe(loseAuthorization);
+    const knownLoss = scopeSession?.getLoss();
     if (knownLoss) loseAuthorization(knownLoss);
     else {
       setAdminSessionLost(null);
+      setUserSessionLost(null);
       void loadNotifications();
       pollInterval = setInterval(() => { if (isActive()) void loadNotifications(); }, 15_000);
     }
@@ -248,7 +256,7 @@ export default function DashboardShell({
       try {
         const response = await fetch(`/api/auth/session?${consumerScope}`, { signal: request.controller.signal, cache: "no-store" });
         if (!isActive() || request.controller.signal.aborted) return;
-        if (response.status === 401 || response.status === 403) { reportNotificationLoss(response.status); return; }
+        if (await notificationResponseLoss(response, request.generation)) return;
         if (!response.ok) return;
 
         const session = await response.json() as {
@@ -268,6 +276,7 @@ export default function DashboardShell({
         channels.push({ name: `private-user-${userId}`, channel: userChannel });
         userChannel.bind("notification", () => { if (isActive()) void loadNotifications(); });
         userChannel.bind("pusher:subscription_error", (error: unknown) => {
+          if (isActive() && userSession && (error as {status?: number})?.status === 401) { userSession.reportLoss(401); return; }
           if (isActive()) console.warn("Notification channel subscription failed:", error);
         });
 
@@ -293,7 +302,7 @@ export default function DashboardShell({
       stop();
       if (stopNotifications.current === stop) stopNotifications.current = null;
     };
-  }, [role, adminSession]);
+  }, [role, scopeSession]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -330,7 +339,7 @@ export default function DashboardShell({
           body: JSON.stringify({ id: "all" }),
         });
         if (!isNotificationActive(request.generation) || request.controller.signal.aborted) return;
-        if (response.status === 401 || response.status === 403) { reportNotificationLoss(response.status); return; }
+        if (await notificationResponseLoss(response, request.generation)) return;
         if (!response.ok) {
           throw new Error(`Failed to mark notifications read (${response.status})`);
         }
@@ -389,6 +398,7 @@ export default function DashboardShell({
 
   return (
     <AdminSessionLifecycleContext.Provider value={adminSession}>
+    <UserSessionLifecycleContext.Provider value={userSession}>
     <div className="dashboard-ambient app-gradient-shell flex h-screen">
       {/* ── SIDEBAR ─────────────────────────────── */}
       <aside
@@ -462,10 +472,10 @@ export default function DashboardShell({
         <div className="px-4 py-4 border-t border-white/10 bg-black/10">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${identityColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
-              {userInitials}
+              {userSessionLost ? "—" : userInitials}
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-white truncate">{userName}</div>
+              <div className="text-sm font-semibold text-white truncate">{userSessionLost ? "Session ended" : userName}</div>
               <div className="text-xs text-blue-200/50 capitalize">{role}</div>
             </div>
           </div>
@@ -498,7 +508,7 @@ export default function DashboardShell({
                 {role === "admin" ? "System Administration" : `${role} Dashboard`}
               </div>
               <div className="truncate text-xs text-[var(--muted)]">
-                Welcome, <span className="font-semibold text-[var(--ink2)]">{userName}</span>
+                {userSessionLost ? "Sign in again to continue" : <>Welcome, <span className="font-semibold text-[var(--ink2)]">{userName}</span></>}
               </div>
             </div>
           </div>
@@ -507,7 +517,7 @@ export default function DashboardShell({
             <div className="relative" ref={notifRef}>
               <button
                 onClick={openNotifications}
-                disabled={role === "admin" && adminSessionLost !== null}
+                disabled={adminSessionLost !== null || userSessionLost !== null}
                 aria-label="Open notifications"
                 aria-expanded={notifOpen}
                 className="dashboard-icon-button relative p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
@@ -580,13 +590,14 @@ export default function DashboardShell({
                   setNotifOpen(false);
                 }}
                 aria-label="Open profile menu"
+                disabled={userSessionLost !== null}
                 aria-expanded={profileOpen}
                 className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 pr-2.5 text-left shadow-sm hover:border-blue-400/50"
               >
                 <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${identityColor} flex items-center justify-center text-[10px] font-bold text-white`}>
-                  {userInitials}
+                  {userSessionLost ? "—" : userInitials}
                 </span>
-                <span className="hidden xl:block max-w-28 truncate text-xs font-semibold text-[var(--ink)]">{userName}</span>
+                <span className="hidden xl:block max-w-28 truncate text-xs font-semibold text-[var(--ink)]">{userSessionLost ? "Session ended" : userName}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${profileOpen ? "rotate-180" : ""}`} aria-hidden="true" />
               </button>
               {profileOpen && (
@@ -615,9 +626,10 @@ export default function DashboardShell({
         </header>
 
         {/* Page Content */}
-        <main key={pathname} className="dashboard-main app-page-enter flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">{children}</main>
+        <main key={pathname} className="dashboard-main app-page-enter flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">{userSessionLost ? <UserSessionReauthentication status={userSessionLost} /> : children}</main>
       </div>
     </div>
+    </UserSessionLifecycleContext.Provider>
     </AdminSessionLifecycleContext.Provider>
   );
 }

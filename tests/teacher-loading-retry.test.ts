@@ -1,3 +1,4 @@
+import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -40,9 +41,11 @@ function fixture(relativePath: string, replies: Reply[]) {
   let subscriptions = 0;
   let requests = 0;
   const react = {
+    createContext: (value: unknown) => ({value}),
+    useContext: (context: {value: unknown}) => context.value,
     useState: (initial: unknown) => {
       const index = hookIndex++;
-      if (!(index in hooks)) hooks[index] = initial;
+      if (!(index in hooks)) hooks[index] = typeof initial === "function" ? initial() : initial;
       return [hooks[index], (next: unknown) => {
         hooks[index] = typeof next === "function" ? (next as (previous: unknown) => unknown)(hooks[index]) : next;
       }];
@@ -61,6 +64,7 @@ function fixture(relativePath: string, replies: Reply[]) {
       if (collectingEffects) effects.push(callback);
     },
   };
+  const lifecycle = loadUserLifecycleModule(react);
   const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
   const component: { default?: (props: Record<string, unknown>) => ElementNode } = {};
   const location = { href: "http://localhost/dashboard/teacher", search: "" };
@@ -68,6 +72,7 @@ function fixture(relativePath: string, replies: Reply[]) {
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "react-dom") return { createPortal: (children: unknown) => children };
@@ -90,6 +95,7 @@ function fixture(relativePath: string, replies: Reply[]) {
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
+    AbortController,
     fetch: async (url: string) => {
       if (url === "/api/billing/status") return { ok: true, json: async () => ({ isSubscribed: true, manualQuizCount: 0, manualQuizLimit: 5 }) };
       requests++;

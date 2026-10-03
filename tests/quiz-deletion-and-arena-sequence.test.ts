@@ -55,7 +55,7 @@ test("deleted quizzes are excluded from active teacher and student dashboard que
   assert.match(quizzesRoute, /quizStatus:\s*\{\s*notIn:\s*\[\.\.\.UNAVAILABLE_QUIZ_STATUSES\]\s*\}/);
   assert.match(quizzesRoute, /quiz:\s*\{\s*quizStatus:\s*\{\s*notIn:\s*\[\.\.\.UNAVAILABLE_QUIZ_STATUSES\]/);
   assert.match(quizzesRoute, /Cache-Control["']:\s*["']private, no-store, max-age=0["']/);
-  assert.match(source("src/app/dashboard/student/content.tsx"), /fetch\("\/api\/quizzes",\s*\{\s*cache:\s*"no-store"\s*\}\)/);
+  assert.match(source("src/app/dashboard/student/content.tsx"), /fetch\("\/api\/quizzes",\s*\{\s*cache:\s*"no-store",\s*signal: request\.controller\.signal\s*\}\)/);
   assert.match(source("src/app/dashboard/student/quizzes/content.tsx"), /fetch\("\/api\/quizzes",\s*\{\s*cache:\s*"no-store"\s*\}\)/);
 });
 

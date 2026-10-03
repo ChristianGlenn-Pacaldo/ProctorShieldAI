@@ -19,6 +19,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
 
   return (
     <DashboardShell
+      key={`${session.userId}:${session.sessionVersion}`}
       role="teacher"
       userName={name}
       userInitials={initials || "TR"}

@@ -1,3 +1,4 @@
+import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -39,24 +40,30 @@ function fixture(relativePath: string, responses: Record<string, Reply[]>) {
   let timers = 0;
   const subscriptions = 0;
   const react = {
+    createContext: (value: unknown) => ({value}),
+    useContext: (context: {value: unknown}) => context.value,
     useState: (initial: unknown) => {
       const index = hookIndex++;
-      if (!(index in state)) state[index] = initial;
+      if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
       return [state[index], (next: unknown) => {
         state[index] = typeof next === "function" ? (next as (previous: unknown) => unknown)(state[index]) : next;
       }];
     },
+    useRef: (initial: unknown) => { const index=hookIndex++; if(!(index in state)) state[index]={current:initial}; return state[index]; },
+    useCallback: (callback: unknown) => { hookIndex++; return callback; },
     useEffect: (callback: () => void) => {
       hookIndex++;
       if (collectEffects) effects.push(callback);
     },
     useTransition: () => { hookIndex++; return [false, (callback: () => void) => callback()]; },
   };
+  const lifecycle = loadUserLifecycleModule(react);
   const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
   const component: { default?: () => ElementNode } = {};
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
@@ -74,6 +81,7 @@ function fixture(relativePath: string, responses: Record<string, Reply[]>) {
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
+    AbortController,
     fetch: async (url: string) => {
       requests.push(url);
       const reply = responses[url]?.shift();

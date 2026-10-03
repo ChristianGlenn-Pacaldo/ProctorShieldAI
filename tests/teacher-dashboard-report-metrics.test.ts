@@ -79,7 +79,7 @@ test("Teacher dashboard labels lifetime distinct students and leaves live feed s
   assert.match(dashboardContent, /sub: "All-time across your quizzes"/);
   assert.match(dashboardContent, /badge: "ALL-TIME"/);
   assert.doesNotMatch(dashboardContent, /sub: "Live Proctored Sessions"/);
-  assert.match(dashboardContent, /channel\.bind\("student-joined", \(data: any\) => \{\s*fetchDashboardData\(\)/);
+  assert.match(dashboardContent, /channel\.bind\("student-joined", \(data: any\) => \{\s*if \(!work\.isCurrent\(generation\)\) return;\s*fetchDashboardData\(\)/);
   assert.doesNotMatch(dashboardContent, /studentsMonitored: curr\.studentsMonitored \+ 1/);
   assert.doesNotMatch(dashboardContent, /flaggedStudents: curr\.flaggedStudents \+ 1/);
   assert.match(dashboardContent, /setLiveStudents\(\(prev\) => \{/);

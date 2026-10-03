@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import { normalizeStudentName, requiresStudentNameSetup } from "@/lib/student-name";
+import { useUserSessionWork } from "./user-session-lifecycle";
 
 export default function NameEnforcer({ initialName }: { initialName: string }) {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
   const [fullName, setFullName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const { work, loss } = useUserSessionWork(() => { setIsOpen(false); setFullName(""); setError(""); setIsLoading(false); });
 
   useEffect(() => {
     setIsOpen(requiresStudentNameSetup(initialName));
@@ -18,6 +20,7 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!work.isCurrent(work.capture())) return;
     setError("");
 
     const cleanName = normalizeStudentName(fullName);
@@ -27,29 +30,37 @@ export default function NameEnforcer({ initialName }: { initialName: string }) {
     }
 
     setIsLoading(true);
+    const request = work.beginRequest();
+    if (!request) return;
 
     try {
       const res = await fetch("/api/users/me?scope=user&role=student", {
         method: "PUT",
+        signal: request.controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName: cleanName }),
       });
 
+      if (!await work.acceptResponse(res, request)) return;
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted) return;
       if (res.ok) {
         setIsOpen(false);
         router.refresh(); // Refresh layout to pick up new session cookie
       } else {
         const data = await res.json();
+        if (!work.isCurrent(request.generation) || request.controller.signal.aborted) return;
         setError(data.error || "Failed to update name");
       }
     } catch (err) {
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted) return;
       setError("Network error. Please try again.");
     } finally {
-      setIsLoading(false);
+      if (work.isCurrent(request.generation)) setIsLoading(false);
+      work.finishRequest(request.controller);
     }
   };
 
-  if (!isOpen) return null;
+  if (loss || !isOpen) return null;
 
   return (
     <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm">

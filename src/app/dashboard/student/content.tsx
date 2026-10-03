@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef, useCallback } from "react";
 import {
   FileText,
   CheckCircle2,
@@ -26,6 +26,7 @@ import {
   toggleSoundEnabled,
 } from "@/lib/student-gamify";
 import { normalizeQuizAccessCode, QUIZ_ACCESS_CODE_INPUT_MAX_LENGTH } from "@/lib/quiz-access-code";
+import { useUserSessionWork, UserSessionReauthentication } from "@/components/user-session-lifecycle";
 
 interface StudentQuiz {
   id: string;
@@ -101,13 +102,30 @@ export default function StudentDashboardContent() {
   const [progressionLoading, setProgressionLoading] = useState(true);
   const [progressionError, setProgressionError] = useState("");
   const [, startTransition] = useTransition();
+  const { work, loss } = useUserSessionWork(() => {
+    setStudentQuizzes([]); setProgression(null); setQuickCode("");
+    setHasLoadedQuizzes(false); setQuizLoadError(""); setProgressionError(""); setJoinError("");
+    setIsFetching(false); setProgressionLoading(false); setJoinLoading(false);
+  });
 
-  const loadProgression = async () => {
+  const quizRequestSequence = useRef(0);
+  const progressionRequestSequence = useRef(0);
+
+  const loadProgression = useCallback(async () => {
+    const request = work.beginRequest();
+    if (!request) return;
+    const sequence = ++progressionRequestSequence.current;
+    const isCurrent = () => work.isCurrent(request.generation) && !request.controller.signal.aborted
+      && sequence === progressionRequestSequence.current;
     setProgressionLoading(true);
     try {
-      const res = await fetch("/api/student/progression");
+      const res = await fetch("/api/student/progression", { signal: request.controller.signal });
+      // Authorization loss outranks request supersession, even for an older response.
+      if (!await work.acceptResponse(res, request)) return;
+      if (!isCurrent()) return;
       if (!res.ok) throw new Error("Could not load your progression.");
       const data = await res.json();
+      if (!isCurrent()) return;
       if (data.success !== true || typeof data.totalExp !== "number" || typeof data.level !== "number") {
         throw new Error("Could not load your progression.");
       }
@@ -121,38 +139,51 @@ export default function StudentDashboardContent() {
       });
       setProgressionError("");
     } catch {
+      if (!isCurrent()) return;
       setProgressionError("Could not load your progression.");
     } finally {
-      setProgressionLoading(false);
+      if (isCurrent()) setProgressionLoading(false);
+      work.finishRequest(request.controller);
     }
-  };
+  }, [work]);
 
-  const fetchQuizzes = async () => {
+  const fetchQuizzes = useCallback(async () => {
+    const request = work.beginRequest();
+    if (!request) return;
+    const sequence = ++quizRequestSequence.current;
+    const isCurrent = () => work.isCurrent(request.generation) && !request.controller.signal.aborted
+      && sequence === quizRequestSequence.current;
     setIsFetching(true);
     try {
-      const res = await fetch("/api/quizzes", { cache: "no-store" });
+      const res = await fetch("/api/quizzes", { cache: "no-store", signal: request.controller.signal });
+      if (!await work.acceptResponse(res, request)) return;
+      if (!isCurrent()) return;
       if (!res.ok) throw new Error("Could not load your quizzes.");
       const data = await res.json();
+      if (!isCurrent()) return;
       if (data.success !== true || !Array.isArray(data.quizzes)) throw new Error("Could not load your quizzes.");
       setStudentQuizzes(data.quizzes);
       setHasLoadedQuizzes(true);
       setQuizLoadError("");
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to fetch quizzes:", error);
       setQuizLoadError("Could not load your quizzes.");
     } finally {
-      setIsFetching(false);
+      if (isCurrent()) setIsFetching(false);
+      work.finishRequest(request.controller);
     }
-  };
+  }, [work]);
 
   useEffect(() => {
     setSoundActive(isSoundEnabled());
     void loadProgression();
     void fetchQuizzes();
-  }, []);
+  }, [loadProgression, fetchQuizzes]);
 
   const handleQuickJoin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!work.isCurrent(work.capture())) return;
     const code = normalizeQuizAccessCode(quickCode);
     if (!code) {
       playErrorBuzz();
@@ -162,19 +193,25 @@ export default function StudentDashboardContent() {
 
     setJoinLoading(true);
     setJoinError("");
+    const request = work.beginRequest();
+    if (!request) return;
 
     try {
       const res = await fetch("/api/quizzes/join", {
         method: "POST",
+        signal: request.controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessCode: code }),
       });
 
+      if (!await work.acceptResponse(res, request)) return;
       const data = await res.json();
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted) return;
       if (res.ok && data.quiz?.id) {
         playSuccessFanfare();
         const target = data.quiz.quizMode === "arena" ? `/arena/${data.quiz.id}` : `/quiz/${data.quiz.id}`;
         startTransition(() => {
+          if (!work.isCurrent(request.generation)) return;
           router.push(target);
         });
       } else {
@@ -182,10 +219,12 @@ export default function StudentDashboardContent() {
         setJoinError(data.error || "Quiz room not found.");
       }
     } catch {
+      if (!work.isCurrent(request.generation) || request.controller.signal.aborted) return;
       playErrorBuzz();
       setJoinError("Network error. Try again.");
     } finally {
-      setJoinLoading(false);
+      if (work.isCurrent(request.generation)) setJoinLoading(false);
+      work.finishRequest(request.controller);
     }
   };
 
@@ -196,6 +235,7 @@ export default function StudentDashboardContent() {
   };
 
   // Filter valid student quiz records
+  if (loss) return <UserSessionReauthentication status={loss} />;
   const validQuizzes = studentQuizzes.filter((se) => se && se.quiz);
   const completed = validQuizzes.filter((se) => se.quizStatus === "completed");
   const upcoming = validQuizzes.filter((se) => se.quizStatus !== "completed");
