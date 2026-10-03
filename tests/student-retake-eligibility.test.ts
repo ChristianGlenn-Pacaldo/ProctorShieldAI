@@ -36,7 +36,7 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
   const rows = options.rows ?? attempts;
   const writes: unknown[] = [];
   const queries: Array<{ where: { studentId: string } }> = [];
-  const route: { GET: () => Promise<Response>; POST: (req: Request) => Promise<Response> } = {} as never;
+  const route: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> } = {} as never;
   vm.runInNewContext(compile(file), {
     exports: route,
     require: (name: string) => {
@@ -62,7 +62,7 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
         }, notification: { create: async () => {} },
       } };
       return {};
-    }, console,
+    }, console, URL,
   });
   return { route, writes, queries };
 }
@@ -122,7 +122,7 @@ for (const [label, file, field] of [
 ]) {
   test(`${label} payload and modal expose retake only for the eligible latest completed attempt`, async () => {
     const api = loadApi(file);
-    const response = await api.route.GET();
+    const response = await api.route.GET(new Request(`http://localhost${label === "Results" ? "/api/dashboard/student/results" : "/api/quizzes"}`));
     assert.equal(response.status, 200);
     assert.equal(api.queries[0].where.studentId, "student-1");
     const rows: Result[] = (await response.json())[field];

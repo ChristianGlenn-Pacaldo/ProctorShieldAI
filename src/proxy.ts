@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken, type TokenPayload } from "@/lib/auth";
 
 const SESSION_CLASSES = ["admin", "user"] as const;
 
@@ -77,8 +77,73 @@ function targetRoleForPage(pathname: string): string | null {
   return null;
 }
 
+function studentRetakeReauthentication(request: NextRequest) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login/student";
+  loginUrl.search = "?reason=session-changed";
+  const response = NextResponse.redirect(loginUrl);
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return addSecurityHeaders(response);
+}
+
+// Only marked retake document requests enter this final authorization boundary.
+// Read the request's verified cookie and persisted account, not a prior fetch.
+async function authorizeStudentRetakeNavigation(request: NextRequest, payload: TokenPayload) {
+  try {
+    const { default: prisma } = await import("@/lib/prisma");
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { status: true, sessionVersion: true, role: { select: { roleName: true } } },
+    });
+    if (!user || user.status !== "active" || user.sessionVersion !== payload.sessionVersion
+      || user.role.roleName.toLowerCase() !== "student") {
+      return studentRetakeReauthentication(request);
+    }
+
+    if (request.nextUrl.pathname !== "/dashboard/student") {
+      const quizId = Number(request.nextUrl.pathname.split("/")[2]);
+      const attempt = Number.isSafeInteger(quizId) && quizId > 0 && quizId <= 2_147_483_647
+        ? await prisma.studentQuiz.findFirst({
+          where: { studentId: payload.userId, quizId },
+          orderBy: { attemptNumber: "desc" },
+          select: { attemptNumber: true, quizStatus: true, endTime: true, attemptMode: true,
+            quiz: { select: { quizMode: true, quizStatus: true } } },
+        }) : null;
+      const mode = attempt?.attemptMode ?? attempt?.quiz.quizMode;
+      if (!attempt || attempt.attemptNumber <= 1 || attempt.endTime !== null
+        || !["enrolled", "in_progress"].includes(attempt.quizStatus || "")
+        || !["in_progress", "ended"].includes(attempt.quiz.quizStatus)
+        || !["arena", "proctored"].includes(mode || "") || mode !== attempt.quiz.quizMode) {
+        return addSecurityHeaders(NextResponse.json({ error: "This retake is no longer available" },
+          { status: 409, headers: { "Cache-Control": "private, no-store, max-age=0" } }));
+      }
+      const destination = `/${mode === "arena" ? "arena" : "quiz"}/${quizId}`;
+      if (request.nextUrl.pathname !== destination) {
+        // Legacy approval events can omit the mode. Preserve the guard on the
+        // redirect so its eventual request must authorize the current cookie.
+        const destinationUrl = request.nextUrl.clone();
+        destinationUrl.pathname = destination;
+        const response = NextResponse.redirect(destinationUrl);
+        response.headers.set("Cache-Control", "private, no-store, max-age=0");
+        return addSecurityHeaders(response);
+      }
+    }
+
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-active-role", "student");
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    return addSecurityHeaders(response);
+  } catch {
+    return addSecurityHeaders(NextResponse.json({ error: "Session validation unavailable" },
+      { status: 503, headers: { "Cache-Control": "private, no-store, max-age=0" } }));
+  }
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const retakeNavigation = (pathname === "/dashboard/student" || /^\/(quiz|arena)\/[1-9]\d*$/.test(pathname))
+    && request.nextUrl.searchParams.has("_retakeStudent");
 
   if (
     pathname.startsWith("/_next") ||
@@ -100,7 +165,7 @@ export function proxy(request: NextRequest) {
     return addSecurityHeaders(response);
   }
 
-  const targetRole = targetRoleForPage(pathname);
+  const targetRole = retakeNavigation ? "student" : targetRoleForPage(pathname);
   const candidateClasses = targetRole ? [targetRole === "admin" ? "admin" : "user"] : [...SESSION_CLASSES];
   let tokenName = "";
   let payload = null;
@@ -120,6 +185,17 @@ export function proxy(request: NextRequest) {
       payload = verified;
       break;
     }
+  }
+
+  if (retakeNavigation) {
+    // The marker can only restrict access. It cannot supply a role or identity.
+    if (!payload || payload.sessionClass !== "user" || payload.role.toLowerCase() !== "student"
+      || request.cookies.get("ps_session_admin")?.value
+      || request.nextUrl.searchParams.getAll("_retakeStudent").length !== 1
+      || request.nextUrl.searchParams.get("_retakeStudent") !== payload.userId) {
+      return studentRetakeReauthentication(request);
+    }
+    return authorizeStudentRetakeNavigation(request, payload);
   }
 
   if (!payload) {

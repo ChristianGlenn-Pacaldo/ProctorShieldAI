@@ -44,11 +44,12 @@ export function find(root: unknown, predicate: (node: Element) => boolean): Elem
 // authorization propagation and all component callbacks execute production code.
 export const teacherDashboard = {stats:{totalQuizzes:7,studentsMonitored:2,totalViolations:3,flaggedStudents:1},recentVerdicts:[{name:"Private Teacher result",quiz:"Private quiz",violations:[],verdict:"Clean",verdictClass:"",score:"100%"}],violationsBreakdown:[]};
 export const studentQuizzes = {success:true,quizzes:[{id:"attempt",quizId:44,attemptNumber:1,quizStatus:"pending_retake",score:100,quiz:{id:44,title:"Private Student quiz",quizStatus:"ended",quizMode:"proctored",teacher:{fullName:"QA Teacher"}}}]};
-export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnType<typeof authFixture>, options: {teacherSource?: string; nameEnforcer?: boolean; nameEnforcerInitialName?: string} = {}) {
+export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnType<typeof authFixture>, options: {teacherSource?: string; retakeSource?: string; studentUserId?: string; quizGet?: (request: Request) => Promise<Response>; nameEnforcer?: boolean; nameEnforcerInitialName?: string} = {}) {
   const instances = new Map<unknown, Instance>();
   const modules = new Map<string, Record<string, any>>();
   const queues = new Map<string, Array<Reply | Promise<Reply>>>();
   const requests: Array<{ url: string; method: string; signal?: AbortSignal; settled: boolean }> = [];
+  const errors: unknown[][] = [];
   const timers = new Map<number, { callback: () => void; period: number; due: number }>();
   const pendingEffects: Array<{owner: Instance; run: () => void}> = [];
   const rendered = new Set<Instance>();
@@ -118,7 +119,9 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     const filename = path.resolve(relative);
     const exports: Record<string, any> = {};
     modules.set(relative, exports);
-    const compiled = ts.transpileModule(relative === "src/app/dashboard/teacher/content.tsx" && options.teacherSource ? options.teacherSource : fs.readFileSync(filename, "utf8"), {
+    const replacement = relative === "src/app/dashboard/teacher/content.tsx" ? options.teacherSource
+      : relative === "src/app/dashboard/student/retake-redirect.tsx" ? options.retakeSource : undefined;
+    const compiled = ts.transpileModule(replacement ?? fs.readFileSync(filename, "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
     }).outputText;
     vm.runInNewContext(compiled, {
@@ -142,13 +145,16 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
         if (name === "./admin-session-lifecycle" || name === "@/components/admin-session-lifecycle") return load("src/components/admin-session-lifecycle.tsx");
         throw new Error(`Unexpected dependency: ${name}`);
       },
-      fetch: async (url: string, options?: { method?: string; signal?: AbortSignal }) => {
-        const method = options?.method ?? "GET";
-        const record = { url, method, signal: options?.signal, settled: false };
+      fetch: async (url: string, requestOptions?: { method?: string; signal?: AbortSignal }) => {
+        const method = requestOptions?.method ?? "GET";
+        const record = { url, method, signal: requestOptions?.signal, settled: false };
         requests.push(record);
         try {
           const queueUrl = url.split("?")[0];
           const queued = queues.get(method + queueUrl)?.shift();
+          if (queued === undefined && options.quizGet && queueUrl === "/api/quizzes") {
+            return await options.quizGet(new Request(`https://app.example.test${url}`));
+          }
           if (queued === undefined && auth && ["/api/auth/session", "/api/notifications"].includes(queueUrl)) {
             return await auth.load(`src/app${queueUrl}/route.ts`)[method](new Request(`https://app.example.test${url}`));
           }
@@ -171,10 +177,10 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
         const id = ++nextTimer; timers.set(id, { callback, period, due: now + period }); return id;
       },
       clearInterval: (id: number) => { timers.delete(id); },
-      console: { error() {}, warn() {} },
+      console: { error(...values: unknown[]) { errors.push(values); }, warn() {} },
       document: { addEventListener() {}, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } } },
       localStorage: { getItem: () => "light", setItem() {} },
-      window: { setInterval: (callback: () => void,period: number) => { const id=++nextTimer; timers.set(id,{callback,period,due:now+period});return id; }, clearInterval: (id: number)=>timers.delete(id), matchMedia: () => ({ matches: false }), location: { href: "", reload() {pushes.push("reload");} } },
+      window: { setInterval: (callback: () => void,period: number) => { const id=++nextTimer; timers.set(id,{callback,period,due:now+period});return id; }, clearInterval: (id: number)=>timers.delete(id), matchMedia: () => ({ matches: false }), location: { href: "", assign(url: string) { pushes.push(url); }, reload() {pushes.push("reload");} } },
     }, { filename });
     return exports;
   }
@@ -209,7 +215,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
   const ready = async () => { for (let i = 0; i < 3; i++) await new Promise(setImmediate); };
   const render = () => {
     rendered.clear();
-    view = materialize(jsx(Shell, { role, userName: "QA User", userInitials: "QA", children: [jsx(Dashboard, {teacherId: auth ? "teacher" : "teacher-id", teacherName:"QA Teacher",isSubscribed:true}), ...(Retake ? [jsx(Retake,{userId:"student-id"})] : []), ...(NameEnforcer ? [jsx(NameEnforcer,{initialName:options.nameEnforcerInitialName ?? "Student"})] : [])] }));
+    view = materialize(jsx(Shell, { role, userName: "QA User", userInitials: "QA", children: [jsx(Dashboard, {teacherId: auth ? "teacher" : "teacher-id", teacherName:"QA Teacher",isSubscribed:true}), ...(Retake ? [jsx(Retake,{userId:options.studentUserId ?? (auth ? "student" : "student-id")})] : []), ...(NameEnforcer ? [jsx(NameEnforcer,{initialName:options.nameEnforcerInitialName ?? "Student"})] : [])] }));
     // React passive mount effects run children first.
     for (const [type,instance] of instances) { if (!rendered.has(instance) && instance.mounted) { for (const slot of instance.hooks) slot.cleanup?.(); instance.mounted=false; instances.delete(type); } }
     const effects=pendingEffects.splice(0);
@@ -238,7 +244,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     assert.equal(writesAfterUnmount, 0, "disposed callbacks do not write React state");
   };
   return {
-    render, ready, advance, unmount, assertDisposed, requests, pushes,
+    render, ready, advance, unmount, assertDisposed, requests, pushes, errors,
     stateWriteCount: () => stateWrites,
     event: (channel: string,event: string) => Pusher.clients.find(c=>c.channels.has(channel))!.channels.get(channel)!.handlers.get(event)! as (data?: any)=>void,
     retry: () => find(render(),n=>n.type === "button" && textOf(n)==="Retry")!.props.onClick(),
@@ -249,7 +255,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     resources: () => ({ timers: timers.size, connected: Pusher.clients.filter((client) => client.connected).length, subscriptions: Pusher.clients.reduce((total, client) => total + client.channels.size, 0) }),
     channelNames: () => Pusher.clients.flatMap(client => [...client.channels.keys()]),
     authEndpoints: () => Pusher.clients.map(client => client.options.authEndpoint),
-    shellCallback: (event = "activity") => Pusher.clients.find((client) => client.channels.has("private-user-" + role + "-id"))!.channels.get(event === "activity" ? "private-admin-dashboard" : "private-user-" + role + "-id")!.handlers.get(event)!,
+    shellCallback: (event = "activity") => { const name = "private-user-" + role + (auth ? "" : "-id"); return Pusher.clients.find((client) => client.channels.has(name))!.channels.get(event === "activity" ? "private-admin-dashboard" : name)!.handlers.get(event)!; },
     shellPoll: () => [...timers.values()].find((timer) => timer.period === 15_000)!.callback,
     remount: () => { unmount(); instances.clear(); render(); },
   };

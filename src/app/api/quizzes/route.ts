@@ -1,7 +1,7 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getScopedSession, getSession } from "@/lib/auth";
 import crypto from "node:crypto";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { getQuizCreationDecision } from "@/lib/subscription-rules";
@@ -21,7 +21,12 @@ function newCode(prefix: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSession();
+    // A role-bound consumer must not receive a replacement account's list.
+    // Preserve the existing unscoped Teacher/Admin callers.
+    const params = new URL(req.url).searchParams;
+    const session = params.has("scope") || params.has("role")
+      ? await getScopedSession(req, params.get("role") === "student" ? ["user"] : undefined)
+      : await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

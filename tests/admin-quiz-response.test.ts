@@ -68,6 +68,7 @@ test("Admin quiz list serializes only the teacher name", async () => {
     exports: route,
     require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : dependencies[name],
     console,
+    URL,
   }, { filename: routePath });
 
   const response = await route.GET!(new Request("http://localhost/api/quizzes"));

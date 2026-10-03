@@ -110,7 +110,8 @@ test("Student content-detected 401 stops the independent retake listener and she
 test("Student normal retake realtime behavior is preserved while authorized",async()=>{
   const setup=fixture("student"); setup.render(); await setup.ready();
   setup.event("private-student-student-id","retake-decision")({action:"accept",quizId:44,quizMode:"proctored"});
-  assert.deepEqual(setup.pushes,["/quiz/44"]); setup.unmount(); setup.assertDisposed();
+  await setup.ready();
+  assert.deepEqual(setup.pushes,["/quiz/44?_retakeStudent=student-id"]); setup.unmount(); setup.assertDisposed();
 });
 
 test("Student name-enforcement request is aborted and cannot refresh the new session after loss",async()=>{

@@ -36,7 +36,8 @@ async function googleLogin(f: Fixture, role: "teacher" | "student", userId: stri
 }
 
 async function expectNamePrompt(f: Fixture, initialName: string, expected: boolean) {
-  const dashboard = dashboardFixture("student", f, { nameEnforcer: true, nameEnforcerInitialName: initialName });
+  const session = await f.auth.getUserSession("student");
+  const dashboard = dashboardFixture("student", f, { studentUserId: session.userId, nameEnforcer: true, nameEnforcerInitialName: initialName });
   try {
     dashboard.render();
     await dashboard.ready();
