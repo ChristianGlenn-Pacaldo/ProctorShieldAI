@@ -137,7 +137,8 @@ async function POSTImpl(req: NextRequest) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
-          fullName: name || user.fullName,
+          // Google initializes names at signup; preserve existing profile edits,
+          // including edits committed after the account lookup above.
           profileImage: picture || user.profileImage,
         },
         include: { role: true },

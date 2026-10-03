@@ -44,7 +44,7 @@ export function find(root: unknown, predicate: (node: Element) => boolean): Elem
 // authorization propagation and all component callbacks execute production code.
 export const teacherDashboard = {stats:{totalQuizzes:7,studentsMonitored:2,totalViolations:3,flaggedStudents:1},recentVerdicts:[{name:"Private Teacher result",quiz:"Private quiz",violations:[],verdict:"Clean",verdictClass:"",score:"100%"}],violationsBreakdown:[]};
 export const studentQuizzes = {success:true,quizzes:[{id:"attempt",quizId:44,attemptNumber:1,quizStatus:"pending_retake",score:100,quiz:{id:44,title:"Private Student quiz",quizStatus:"ended",quizMode:"proctored",teacher:{fullName:"QA Teacher"}}}]};
-export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnType<typeof authFixture>, options: {teacherSource?: string; nameEnforcer?: boolean} = {}) {
+export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnType<typeof authFixture>, options: {teacherSource?: string; nameEnforcer?: boolean; nameEnforcerInitialName?: string} = {}) {
   const instances = new Map<unknown, Instance>();
   const modules = new Map<string, Record<string, any>>();
   const queues = new Map<string, Array<Reply | Promise<Reply>>>();
@@ -209,7 +209,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
   const ready = async () => { for (let i = 0; i < 3; i++) await new Promise(setImmediate); };
   const render = () => {
     rendered.clear();
-    view = materialize(jsx(Shell, { role, userName: "QA User", userInitials: "QA", children: [jsx(Dashboard, {teacherId: auth ? "teacher" : "teacher-id", teacherName:"QA Teacher",isSubscribed:true}), ...(Retake ? [jsx(Retake,{userId:"student-id"})] : []), ...(NameEnforcer ? [jsx(NameEnforcer,{initialName:"Student"})] : [])] }));
+    view = materialize(jsx(Shell, { role, userName: "QA User", userInitials: "QA", children: [jsx(Dashboard, {teacherId: auth ? "teacher" : "teacher-id", teacherName:"QA Teacher",isSubscribed:true}), ...(Retake ? [jsx(Retake,{userId:"student-id"})] : []), ...(NameEnforcer ? [jsx(NameEnforcer,{initialName:options.nameEnforcerInitialName ?? "Student"})] : [])] }));
     // React passive mount effects run children first.
     for (const [type,instance] of instances) { if (!rendered.has(instance) && instance.mounted) { for (const slot of instance.hooks) slot.cleanup?.(); instance.mounted=false; instances.delete(type); } }
     const effects=pendingEffects.splice(0);
