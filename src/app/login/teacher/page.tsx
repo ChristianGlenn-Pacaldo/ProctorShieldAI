@@ -17,6 +17,8 @@ export default function TeacherLoginPage() {
 
   useEffect(() => {
     setMounted(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "register" || params.get("mode") === "register") setActivePanel("register");
   }, []);
 
   // Form state
