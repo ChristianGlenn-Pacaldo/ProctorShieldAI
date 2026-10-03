@@ -26,7 +26,7 @@ function text(value: unknown): string {
   return value === null || value === undefined || typeof value === "boolean" ? "" : String(value);
 }
 
-function ui(fetcher: Fetcher, path = "src/app/login/page.tsx", search = "") {
+function ui(fetcher: Fetcher, path = "src/app/login/content.tsx", search = "") {
   const states: unknown[] = [];
   let index = 0;
   let mounted = false;
@@ -106,6 +106,26 @@ for (const role of ["admin", "teacher", "student"]) {
     assert.deepEqual(page.destinations, [`https://app.example.test/dashboard/${role}`]);
     assert.deepEqual([...fixture.cookies.keys()], [role === "admin" ? "ps_session_admin" : "ps_session_user"]);
     assert.equal(page.find(node => node.type === "button" && node.props.type === "submit").props.disabled, true);
+  });
+}
+
+for (const role of ["admin", "teacher", "student"]) {
+  test(`explicit ${role} password sign-in from reauthentication mode still uses fresh-auth semantics`, async () => {
+    const fixture = authFixture();
+    fixture.cookies.set("ps_session_admin", fixture.token("admin"));
+    fixture.cookies.set("ps_session_user", fixture.token("teacher"));
+    fixture.cookies.set("ps_session_student", "legacy-fixture");
+    const page = ui(async (url, init) => {
+      assert.equal(url, "/api/auth/login");
+      const body = JSON.parse(String(init.body));
+      assert.deepEqual(body, { email: `${role}@example.test`, password: "FixturePassword123" });
+      return fixture.post("auth/login", body);
+    }, "src/app/login/content.tsx", "?reason=session-changed&role=admin");
+    assert.equal(page.calls.length, 0);
+    page.fill(`${role}@example.test`);
+    await page.submit();
+    assert.deepEqual(page.destinations, [`https://app.example.test/dashboard/${role}`]);
+    assert.deepEqual([...fixture.cookies.keys()], [role === "admin" ? "ps_session_admin" : "ps_session_user"]);
   });
 }
 

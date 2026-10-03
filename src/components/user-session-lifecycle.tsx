@@ -103,6 +103,6 @@ export function useUserSessionWork(onLoss?: () => void) {
 export function UserSessionReauthentication({ status }: { status: UserSessionLoss }) {
   return <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6">
     <p>{status === 401 ? "Your session has expired or changed. Sign in again to continue." : "You no longer have access to this User portal. Sign in again to continue."}</p>
-    <a href="/login" className="mt-3 inline-block font-semibold underline">User Login</a>
+    <a href="/login?reason=session-changed" className="mt-3 inline-block font-semibold underline">User Login</a>
   </div>;
 }

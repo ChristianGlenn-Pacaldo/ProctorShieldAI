@@ -150,7 +150,9 @@ export async function setPreparedSessionCookie(token: string) {
   });
 }
 
-async function readSession(sessionClass: SessionClass): Promise<TokenPayload | null> {
+interface SessionReadOptions { touchActivity?: boolean }
+
+async function readSession(sessionClass: SessionClass, options: SessionReadOptions = {}): Promise<TokenPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIES[sessionClass])?.value;
   if (!token) return null;
@@ -177,7 +179,7 @@ async function readSession(sessionClass: SessionClass): Promise<TokenPayload | n
   if (currentRole !== payload.role.toLowerCase()) return null;
   if ((currentRole === "admin" ? "admin" : "user") !== sessionClass) return null;
 
-  if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 30_000) {
+  if (options.touchActivity !== false && (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 30_000)) {
     await runIncidentalBackupWrite(() => prisma.user.update({
       where: { id: payload.userId },
       data: { isOnline: true, lastSeenAt: new Date() },
@@ -194,9 +196,9 @@ async function readSession(sessionClass: SessionClass): Promise<TokenPayload | n
   };
 }
 
-export function getAdminSession() { return readSession("admin"); }
-export async function getUserSession(role?: "teacher" | "student") {
-  const session = await readSession("user");
+export function getAdminSession(options?: SessionReadOptions) { return readSession("admin", options); }
+export async function getUserSession(role?: "teacher" | "student", options?: SessionReadOptions) {
+  const session = await readSession("user", options);
   return role && session?.role !== role ? null : session;
 }
 
@@ -215,15 +217,15 @@ export async function getScopedSession(request: Pick<Request, "url">, allowed: r
 // Compatibility for audited mixed-role callers only. No role fallback and no
 // legacy-token acceptance. Both current cookies means ambiguous identity: deny.
 // Legacy users must authenticate again; legacy cookies are cleared on issuance.
-export async function getSession(roleHint?: string): Promise<TokenPayload | null> {
-  if (roleHint === "admin") return getAdminSession();
-  if (roleHint === "teacher" || roleHint === "student") return getUserSession(roleHint);
+export async function getSession(roleHint?: string, options?: SessionReadOptions): Promise<TokenPayload | null> {
+  if (roleHint === "admin") return getAdminSession(options);
+  if (roleHint === "teacher" || roleHint === "student") return getUserSession(roleHint, options);
   if (roleHint !== undefined) return null;
   const store = await cookies();
   const admin = Boolean(store.get(SESSION_COOKIES.admin)?.value);
   const user = Boolean(store.get(SESSION_COOKIES.user)?.value);
   if (admin === user) return null;
-  return admin ? getAdminSession() : getUserSession();
+  return admin ? getAdminSession(options) : getUserSession(undefined, options);
 }
 
 export async function hasConflictingSessionCookies() {
