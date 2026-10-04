@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchAuth } from "@/lib/auth-request";
+
 import { useState } from "react";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 
@@ -20,7 +22,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/verify-otp", {
+      const res = await fetchAuth(fetch, "/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -57,7 +59,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetchAuth(fetch, "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

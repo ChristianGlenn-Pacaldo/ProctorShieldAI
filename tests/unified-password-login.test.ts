@@ -1,3 +1,4 @@
+import { fetchAuth } from "../src/lib/auth-request.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -61,7 +62,9 @@ function ui(fetcher: Fetcher, path = "src/app/login/content.tsx", search = "") {
       if (name === "next/link") return { __esModule: true, default: "a" };
       if (name === "lucide-react") return new Proxy({}, { get: (_target, name) => String(name) });
       if (name === "@react-oauth/google") return { GoogleOAuthProvider: "GoogleOAuthProvider", GoogleLogin: "GoogleLogin" };
+      if (name === "@/lib/auth-request") return { fetchAuth };
       if (name === "@/lib/auth-destination") return { getAuthDestination };
+      if (name === "./unified-google-signin") return { __esModule: true, default: "UnifiedGoogleSignIn" };
       throw new Error(`Unexpected UI dependency: ${name}`);
     },
   }, { filename: path });
@@ -221,7 +224,7 @@ test("one form has accessible credentials, visibility toggle and compatibility l
   assert.equal(page.find(node => node.props.id === "login-password").props.autoComplete, "current-password");
   for (const [label, href] of [
     ["Create Student Account", "/login/student?tab=register"], ["Create Teacher Account", "/login/teacher?tab=register"],
-    ["Forgot Password?", "/login/forgot-password"], ["Student Google Sign In", "/login/student"], ["Teacher Google Sign In", "/login/teacher"],
+    ["Forgot Password?", "/login/forgot-password"],
   ]) assert.equal(page.find(node => node.type === "a" && text(node.props.children) === label).props.href, href);
   page.find(node => node.props["aria-label"] === "Show password").props.onClick!();
   assert.equal(page.find(node => node.props.id === "login-password").props.type, "text");
@@ -244,4 +247,23 @@ for (const role of ["student", "teacher"]) test(`create ${role} link opens the e
   assert.ok(page.render().filter(node => node.type === "input").length >= 4);
   assert.equal(page.calls.length, 0);
   assert.deepEqual(page.destinations, []);
+});
+
+
+for (const path of ["src/app/login/content.tsx", "src/app/login/student/page.tsx", "src/app/login/teacher/page.tsx", "src/app/admin/login/page.tsx"]) test(`${path} transparently retries browser initialization once`, async () => {
+  const f = authFixture(); const role = path.includes("/admin/") ? "admin" : path.includes("/teacher/") ? "teacher" : "student";
+  const page = ui(async (_url, init) => {
+    const result = await f.deferredPost("auth/login", JSON.parse(String(init.body))); result.apply(); return result.response;
+  }, path);
+  page.fill(role + "@example.test"); await page.submit();
+  assert.equal(page.calls.length, 2); assert.equal(page.destinations.length, 1);
+  assert.equal((await f.auth.getSession(undefined, { touchActivity: false })).role, role);
+});
+
+test("blocked browser cookies stop after one retry and keep the password form usable", async () => {
+  const page = ui(async () => Response.json({ success: false, code: "BROWSER_AUTH_INITIALIZED" }, { status: 409 }));
+  page.fill(); await page.submit();
+  assert.equal(page.calls.length, 2); assert.equal(page.destinations.length, 0);
+  assert.match(page.content(), /Unable to sign in/);
+  assert.equal(page.find(n => n.type === "button" && n.props.type === "submit").props.disabled, false);
 });

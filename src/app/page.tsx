@@ -609,22 +609,13 @@ export default function LandingPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/join"
-              className="px-7 py-3.5 text-sm md:text-base font-extrabold text-white rounded-2xl transition-all shadow-xl shadow-amber-500/25 flex items-center gap-2"
-              style={{
-                background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-              }}
-            >
-              <span>🎓 Enter Room as Student</span>
-            </Link>
-            <Link
-              href="/login/teacher"
+              href="/login"
               className="px-7 py-3.5 text-sm md:text-base font-extrabold text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 flex items-center gap-2"
               style={{
                 background: "linear-gradient(110deg, #1d4ed8 0%, #2563eb 50%, #0ea5e9 100%)",
               }}
             >
-              <span>👩‍🏫 Launch Quiz as Teacher</span>
+              <span>Sign In to ProctorShield</span>
             </Link>
           </div>
         </div>

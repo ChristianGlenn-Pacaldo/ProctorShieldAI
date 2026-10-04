@@ -5,6 +5,7 @@ import { verifyPassword, setSessionCookie, AuthenticationChangedError } from "@/
 import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { pusherServer } from "@/lib/pusher";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
+import { requireBrowserAuthentication, BrowserAuthenticationUnavailableError, browserInitializationResponse } from "@/lib/browser-auth";
 
 async function POSTImpl(req: NextRequest) {
   if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
@@ -20,6 +21,7 @@ async function POSTImpl(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
+    const startingBrowser = await requireBrowserAuthentication(getClientIp(req));
     const rateLimit = await consumeRateLimitGroup(
       [`login:ip:${getClientIp(req)}`, `login:account:${normalizedEmail}`],
       10,
@@ -69,60 +71,8 @@ async function POSTImpl(req: NextRequest) {
     }
 
     // Create session (sets HttpOnly cookie — token is NOT returned in body for security)
-    await setSessionCookie({
-      userId: user.id,
-      email: user.email,
-      role: user.role.roleName.toLowerCase(),
-      fullName: user.fullName,
-    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password });
-
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
-    await scheduleTrackedBackupWork(after, async () => {
-      const results = await Promise.allSettled([
-        prisma.activityLog.create({
-          data: {
-            userId: user.id,
-            activity: `Logged in as ${user.role.roleName}`,
-            ipAddress,
-          },
-        }),
-        (async () => {
-          await pusherServer.trigger("private-admin-dashboard", "activity", {
-            type: "login",
-            userId: user.id,
-            fullName: user.fullName,
-            role: user.role.roleName,
-            activity: `Logged in as ${user.role.roleName}`,
-            timestamp: new Date().toISOString(),
-          });
-
-          const adminUser = await prisma.user.findFirst({
-            where: { role: { roleName: "admin" } },
-          });
-          if (!adminUser) return;
-
-          const notification = await prisma.notification.create({
-            data: {
-              userId: adminUser.id,
-              title: "New Login",
-              message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-              isRead: false,
-            },
-          });
-          await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
-            id: notification.id.toString(),
-            title: "New Login",
-            message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-            createdAt: new Date().toISOString(),
-          });
-        })(),
-      ]);
-      for (const result of results) {
-        if (result.status === "rejected") console.error("Post-login side effect failed:", result.reason);
-      }
-    });
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -132,7 +82,66 @@ async function POSTImpl(req: NextRequest) {
         profileImage: user.profileImage,
       },
     });
+
+    await setSessionCookie({
+      userId: user.id,
+      email: user.email,
+      role: user.role.roleName.toLowerCase(),
+      fullName: user.fullName,
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }, startingBrowser);
+
+    try {
+      await scheduleTrackedBackupWork(after, async () => {
+        const results = await Promise.allSettled([
+          prisma.activityLog.create({
+            data: {
+              userId: user.id,
+              activity: `Logged in as ${user.role.roleName}`,
+              ipAddress,
+            },
+          }),
+          (async () => {
+            await pusherServer.trigger("private-admin-dashboard", "activity", {
+              type: "login",
+              userId: user.id,
+              fullName: user.fullName,
+              role: user.role.roleName,
+              activity: `Logged in as ${user.role.roleName}`,
+              timestamp: new Date().toISOString(),
+            });
+
+            const adminUser = await prisma.user.findFirst({
+              where: { role: { roleName: "admin" } },
+            });
+            if (!adminUser) return;
+
+            const notification = await prisma.notification.create({
+              data: {
+                userId: adminUser.id,
+                title: "New Login",
+                message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+                isRead: false,
+              },
+            });
+            await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
+              id: notification.id.toString(),
+              title: "New Login",
+              message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+              createdAt: new Date().toISOString(),
+            });
+          })(),
+        ]);
+        for (const result of results) {
+          if (result.status === "rejected") console.error("Post-login side effect failed:", result.reason);
+        }
+      });
+    } catch { console.error("Post-authentication scheduling failed"); }
+
+    return response;
   } catch (error: unknown) {
+    const initialized = browserInitializationResponse(error);
+    if (initialized) return initialized;
+    if (error instanceof BrowserAuthenticationUnavailableError) return NextResponse.json({ error: "Sign-in temporarily unavailable" }, { status: 503 });
     if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
     console.error("Login error:");
     return NextResponse.json(

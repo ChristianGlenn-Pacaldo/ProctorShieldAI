@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchAuth } from "@/lib/auth-request";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Target, Camera, Brain, Lock, UserPlus, LogIn, Eye, EyeOff } from "lucide-react";
@@ -43,7 +45,7 @@ export default function StudentLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/google", {
+      const res = await fetchAuth(fetch, "/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,7 +105,7 @@ export default function StudentLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetchAuth(fetch, "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -168,7 +170,7 @@ export default function StudentLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetchAuth(fetch, "/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -208,7 +210,7 @@ export default function StudentLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/verify-otp", {
+      const res = await fetchAuth(fetch, "/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

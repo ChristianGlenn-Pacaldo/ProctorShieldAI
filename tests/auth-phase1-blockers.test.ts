@@ -107,43 +107,39 @@ test("unscoped and invalid consumer scopes cannot fall back to Admin", async () 
   assert.equal((await put(f, "users/me", { fullName: "Forbidden" }, "?scope=admin")).status, 401);
 });
 
-function assertCleanup(response: Response) {
-  const headers = response.headers.getSetCookie();
-  assert.equal(headers.length, 4);
-  for (const name of ["ps_session_admin", "ps_session_user", "ps_session_teacher", "ps_session_student"]) {
-    assert.ok(headers.some(header => header.startsWith(`${name}=;`) && /Max-Age=0/.test(header)));
-  }
+function assertNoDeletion(response: Response) {
+  assert.deepEqual(response.headers.getSetCookie(), []);
 }
 
-for (const unavailable of [false, true]) test(`actual write gate ${unavailable ? "unavailable" : "paused"} still clears logout cookies`, async () => {
+for (const unavailable of [false, true]) test(`actual write gate ${unavailable ? "unavailable" : "paused"} invalidates locally without deletion headers`, async () => {
   const f = authFixture(); f.cookies.set("ps_session_admin", f.token("admin")); f.cookies.set("ps_session_teacher", "legacy"); f.pauseGate(unavailable);
-  const response = await f.post("auth/logout"); assert.equal(response.status, 503); assertCleanup(response);
-  assert.deepEqual(await response.json(), { success: false, cookiesCleared: true, serverRevocation: "failed", error: "Session revocation unavailable; please retry" });
-  assert.equal(response.headers.get("Retry-After"), "30"); assert.equal(f.cookies.size, 0);
+  const response = await f.post("auth/logout"); assert.equal(response.status, 503); assertNoDeletion(response);
+  assert.deepEqual(await response.json(), { success: false, cookiesCleared: false, serverRevocation: "failed", error: "Session revocation unavailable; please retry" });
+  assert.equal(response.headers.get("Retry-After"), "30"); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
   assert.equal(f.users.get("admin")!.sessionVersion, 0); assert.equal(f.logs.length, 0); assert.equal(f.afterWork.length, 0);
 });
 
-test("logout revocation/audit rollback still clears every cookie and reports failure", async () => {
+test("logout revocation/audit rollback invalidates the request generation and reports failure", async () => {
   const f = authFixture(); f.cookies.set("ps_session_user", f.token("student")); f.failAudit();
-  const response = await f.post("auth/logout"); assert.equal(response.status, 503); assertCleanup(response);
-  assert.equal((await response.json()).serverRevocation, "failed"); assert.equal(f.cookies.size, 0);
+  const response = await f.post("auth/logout"); assert.equal(response.status, 503); assertNoDeletion(response);
+  assert.equal((await response.json()).serverRevocation, "failed"); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
   assert.equal(f.users.get("student")!.sessionVersion, 0); assert.equal(f.logs.length, 0); assert.equal(f.afterWork.length, 0);
 });
 
-test("conflicting current/legacy logout cookies all clear without arbitrary revocation", async () => {
+test("conflicting current/legacy logout cookies stay ambiguous without arbitrary revocation", async () => {
   const f = authFixture(); f.cookies.set("ps_session_admin", f.token("admin")); f.cookies.set("ps_session_user", f.token("teacher"));
   f.cookies.set("ps_session_teacher", "legacy"); f.cookies.set("ps_session_student", "legacy");
-  const response = await f.post("auth/logout"); assert.equal(response.status, 409); assertCleanup(response);
-  assert.equal((await response.json()).serverRevocation, "not_performed"); assert.equal(f.cookies.size, 0); assert.equal(f.logs.length, 0);
+  const response = await f.post("auth/logout"); assert.equal(response.status, 409); assertNoDeletion(response);
+  assert.equal((await response.json()).serverRevocation, "not_performed"); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null); assert.equal(f.logs.length, 0);
 });
 
-for (const stalled of [false, true]) test(`logout response and cookie cleanup precede ${stalled ? "stalled" : "failed"} post-response realtime`, async () => {
+for (const stalled of [false, true]) test(`logout response and revocation precede ${stalled ? "stalled" : "failed"} post-response realtime`, async () => {
   const f = authFixture(), token = f.token("teacher"); f.cookies.set("ps_session_user", token);
   let calls = 0, release!: () => void;
   const stalledWork = new Promise<void>(resolve => { release = resolve; });
   f.realtime(async () => { calls++; if (stalled) await stalledWork; else throw new Error("Provider error"); });
-  const response = await f.post("auth/logout"); assert.equal(response.status, 200); assertCleanup(response);
-  assert.equal((await response.json()).serverRevocation, "succeeded"); assert.equal(f.cookies.size, 0);
+  const response = await f.post("auth/logout"); assert.equal(response.status, 200); assertNoDeletion(response);
+  assert.equal((await response.json()).serverRevocation, "succeeded"); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
   assert.equal(f.users.get("teacher")!.sessionVersion, 1); assert.equal(f.logs.length, 1); assert.equal(calls, 0);
   f.cookies.set("ps_session_user", token); assert.equal(await f.auth.getUserSession(), null);
   const background = f.flushAfter(); assert.equal(calls, 1); release(); await background;

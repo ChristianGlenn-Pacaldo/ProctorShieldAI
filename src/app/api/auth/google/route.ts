@@ -1,22 +1,38 @@
+import { requireBrowserAuthentication, BrowserAuthenticationUnavailableError, browserInitializationResponse } from "@/lib/browser-auth";
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import prisma from "@/lib/prisma";
 import { sendOtpEmail } from "@/lib/email";
 import { consumeRateLimitGroup, generateOtp, getClientIp, hashOtp } from "@/lib/security";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, AuthenticationChangedError } from "@/lib/auth";
 import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { hasVerifiedGoogleEmail } from "@/lib/google-identity";
+import { beginGoogleSignIn, readGoogleIntent, createGoogleChallenge, hashGoogleOtp } from "@/lib/google-signin-challenge";
 
 const client = new OAuth2Client(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
 async function POSTImpl(req: NextRequest) {
   if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const { credential, role } = await req.json();
-
-    if (!credential) {
+    const { credential, role, mode, intent: intentToken } = await req.json();
+    if (mode !== undefined && mode !== "signin" && mode !== "begin") {
+      return NextResponse.json({ success: false, message: "Invalid authentication mode" }, { status: 400 });
+    }
+    if (mode !== "begin" && (typeof credential !== "string" || !credential)) {
       return NextResponse.json({ success: false, message: "Missing Google credential" }, { status: 400 });
+    }
+    const startingBrowser = await requireBrowserAuthentication(getClientIp(req));
+    if (mode === "begin") {
+      const limit = await consumeRateLimitGroup([`google-intent:ip:${getClientIp(req)}`], 30, 15 * 60 * 1000);
+      if (!limit.allowed) return NextResponse.json({ success: false }, { status: 429 });
+      // Bootstrap completes on a separate response before signing an intent.
+      return NextResponse.json(await beginGoogleSignIn(startingBrowser), { headers: { "Cache-Control": "no-store" } });
+    }
+    const signInOnly = mode === "signin";
+    const intent = signInOnly ? await readGoogleIntent(intentToken) : null;
+    if (signInOnly && !intent) {
+      return NextResponse.json({ success: false, message: "Sign-in changed. Please start again." }, { status: 401 });
     }
 
     // Verify the Google ID Token
@@ -26,13 +42,13 @@ async function POSTImpl(req: NextRequest) {
     });
 
     const payload = ticket.getPayload();
-    if (!hasVerifiedGoogleEmail(payload)) {
+    if (!hasVerifiedGoogleEmail(payload) || (intent && payload.nonce !== intent.nonce)) {
       return NextResponse.json({ success: false, message: "Invalid Google token" }, { status: 401 });
     }
 
     const { email, name, picture } = payload;
-    let requestedRole = String(role || "student").toLowerCase();
-    if (!['student', 'teacher'].includes(requestedRole)) {
+    let requestedRole = signInOnly ? "" : String(role || "student").toLowerCase();
+    if (!signInOnly && !['student', 'teacher'].includes(requestedRole)) {
       return NextResponse.json({ success: false, message: "Invalid account role." }, { status: 400 });
     }
 
@@ -68,6 +84,11 @@ async function POSTImpl(req: NextRequest) {
     const dbRole = await prisma.role.findFirst({
       where: { roleName: { equals: requestedRole, mode: "insensitive" } },
     });
+
+    if (signInOnly && !user) {
+      return NextResponse.json({ success: false, code: "ACCOUNT_NOT_FOUND",
+        message: "No existing account was found. Create a Student or Teacher account first." }, { status: 404 });
+    }
 
     if (!dbRole) {
       return NextResponse.json({ success: false, message: "Account role is not configured." }, { status: 500 });
@@ -133,7 +154,7 @@ async function POSTImpl(req: NextRequest) {
           if (result.status === "rejected") console.error("Post-Google-registration side effect failed:", result.reason);
         }
       });
-    } else {
+    } else if (!signInOnly) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -159,10 +180,12 @@ async function POSTImpl(req: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await prisma.otpCode.deleteMany({ where: { userId: user.id } });
+    const otpNonce = crypto.randomUUID();
+    const challenge = intent ? createGoogleChallenge({ ...intent, nonce: otpNonce }, user) : undefined;
     await prisma.otpCode.create({
       data: {
         userId: user.id,
-        code: hashOtp(user.id, otpCode, "login"),
+        code: intent ? hashGoogleOtp(otpNonce, user.id, otpCode) : hashOtp(user.id, otpCode, "login"),
         expiresAt: expiresAt,
       }
     });
@@ -181,9 +204,14 @@ async function POSTImpl(req: NextRequest) {
       requiresMfa: true,
       userId: user.id,
       email: user.email,
-      role: user.role.roleName.toLowerCase()
+      role: user.role.roleName.toLowerCase(),
+      ...(challenge ? { challenge } : {})
     });
   } catch (error: unknown) {
+    const initialized = browserInitializationResponse(error);
+    if (initialized) return initialized;
+    if (error instanceof BrowserAuthenticationUnavailableError) return NextResponse.json({ error: "Sign-in temporarily unavailable" }, { status: 503 });
+    if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
     console.error("Google Auth error:");
     return NextResponse.json(
       { success: false, message: "Google authentication failed. Please try again." },

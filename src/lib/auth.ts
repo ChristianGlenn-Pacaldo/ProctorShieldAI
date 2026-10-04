@@ -1,8 +1,13 @@
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { runIncidentalBackupWrite } from "./backup-write-gate";
 import type { Prisma } from "@prisma/client";
+import { AuthenticationChangedError, advanceBrowserAuthentication,
+  isBrowserAuthentication, isCurrentBrowserAuthentication, readBrowserAuthentication,
+  type BrowserAuthenticationState } from "./browser-auth";
+export { AuthenticationChangedError } from "./browser-auth";
 
 // ── SECURITY: Fail loudly if JWT secret is not configured ────────
 function getJwtSecret(): string {
@@ -12,15 +17,10 @@ function getJwtSecret(): string {
   }
   return secret;
 }
-const TOKEN_EXPIRY = "7d";
 const VALID_ROLES = ["student", "teacher", "admin"] as const;
 export type SessionClass = "admin" | "user";
 const SESSION_COOKIES = { admin: "ps_session_admin", user: "ps_session_user" } as const;
 const ALL_SESSION_COOKIES = [...Object.values(SESSION_COOKIES), "ps_session_teacher", "ps_session_student"];
-
-export class AuthenticationChangedError extends Error {
-  constructor() { super("Authentication changed; sign in again"); }
-}
 
 // ── PASSWORD HASHING ────────────────────────────────────
 
@@ -44,15 +44,20 @@ export interface TokenPayload {
   fullName: string;
   sessionVersion: number;
   sessionClass: SessionClass;
+  browserId: string;
+  authGeneration: string;
 }
 
-export function createToken(payload: Omit<TokenPayload, "sessionClass"> & { sessionClass?: SessionClass }): string {
+export function createToken(payload: Omit<TokenPayload, "sessionClass"> & { sessionClass?: SessionClass }, browserExpiresAt = Math.floor(Date.now() / 1000) + 7 * 86400): string {
   const role = payload.role.toLowerCase();
   if (!VALID_ROLES.includes(role as (typeof VALID_ROLES)[number])) throw new AuthenticationChangedError();
   const sessionClass = role === "admin" ? "admin" : "user";
   if (payload.sessionClass && payload.sessionClass !== sessionClass) throw new AuthenticationChangedError();
-  return jwt.sign({ ...payload, role, sessionClass }, getJwtSecret(), {
-    algorithm: "HS256", expiresIn: TOKEN_EXPIRY, audience: `proctorshield:${sessionClass}`,
+  if (!isBrowserAuthentication(payload)) throw new AuthenticationChangedError();
+  const exp = Math.min(Math.floor(Date.now() / 1000) + 7 * 86400, browserExpiresAt);
+  if (!Number.isSafeInteger(exp) || exp <= Math.floor(Date.now() / 1000)) throw new AuthenticationChangedError();
+  return jwt.sign({ ...payload, role, sessionClass, exp }, getJwtSecret(), {
+    algorithm: "HS256", audience: `proctorshield:${sessionClass}`,
   });
 }
 
@@ -68,6 +73,7 @@ export function verifyToken(token: string): TokenPayload | null {
       typeof payload.role !== "string" ||
       !Number.isInteger(payload.sessionVersion) ||
       payload.sessionVersion < 0 ||
+      !isBrowserAuthentication(payload) ||
       !VALID_ROLES.includes(payload.role.toLowerCase() as (typeof VALID_ROLES)[number])
     ) {
       return null;
@@ -92,19 +98,47 @@ export interface AuthenticationSnapshot {
 }
 
 export async function setSessionCookie(
-  payload: Omit<TokenPayload, "sessionVersion" | "sessionClass">,
+  payload: SessionIdentity,
   expected: AuthenticationSnapshot,
+  browser: BrowserAuthenticationState,
 ) {
+  // Final commitment never bootstraps or adopts a newer authentication event.
+  if (!isBrowserAuthentication(browser) || !Number.isSafeInteger(browser.expiresAt)) throw new AuthenticationChangedError();
+  const starting = await readBrowserAuthentication();
+  if (!starting || browser.browserId !== starting.browserId || browser.authGeneration !== starting.authGeneration
+    || browser.expiresAt !== starting.expiresAt) throw new AuthenticationChangedError();
   const { default: prisma } = await import("@/lib/prisma");
-  const token = await prepareSessionToken(payload, expected, prisma);
-  await setPreparedSessionCookie(token);
+  const identity = await prepareSessionIdentity(payload, expected, prisma);
+  const next = randomUUID();
+  const token = createToken({ ...identity, browserId: starting.browserId, authGeneration: next }, starting.expiresAt);
+  const writeCookie = await prepareCookieWrite(token);
+  await advanceBrowserAuthentication(starting, next);
+  // No Redis read, signing or asynchronous preparation after authoritative CAS.
+  writeCookie();
   return token;
 }
 
 // Profile writers prepare under their transaction's row lock. They write the
 // browser cookie only after that transaction (including the audit) commits.
 export async function prepareSessionToken(
-  payload: Omit<TokenPayload, "sessionVersion" | "sessionClass">,
+  payload: SessionIdentity,
+  expected: AuthenticationSnapshot,
+  database: Pick<Prisma.TransactionClient, "user">,
+) {
+  const identity = await prepareSessionIdentity(payload, expected, database);
+  // Profile refreshes retain their request's generation; they never advance a
+  // newer authentication event or adopt the generation of a replacement login.
+  const store = await cookies();
+  const previous = verifyToken(store.get(SESSION_COOKIES[payload.role.toLowerCase() === "admin" ? "admin" : "user"])?.value || "");
+  if (!previous || previous.userId !== expected.userId || previous.role !== expected.role.toLowerCase()) throw new AuthenticationChangedError();
+  const browser = await readBrowserAuthentication();
+  if (!browser || browser.browserId !== previous.browserId || browser.authGeneration !== previous.authGeneration) throw new AuthenticationChangedError();
+  return createToken({ ...identity, browserId: previous.browserId, authGeneration: previous.authGeneration }, browser.expiresAt);
+}
+
+type SessionIdentity = Omit<TokenPayload, "sessionVersion" | "sessionClass" | "browserId" | "authGeneration">;
+async function prepareSessionIdentity(
+  payload: SessionIdentity,
   expected: AuthenticationSnapshot,
   database: Pick<Prisma.TransactionClient, "user">,
 ) {
@@ -130,24 +164,29 @@ export async function prepareSessionToken(
   if (!user || user.id !== expected.userId || user.sessionVersion !== expected.sessionVersion
     || user.role.roleName.toLowerCase() !== expected.role.toLowerCase()) throw new AuthenticationChangedError();
   const role = expected.role.toLowerCase();
-  return createToken({ userId: user.id, email: user.email, fullName: user.fullName, role, sessionVersion: user.sessionVersion });
+  return { userId: user.id, email: user.email, fullName: user.fullName, role, sessionVersion: user.sessionVersion };
 }
 
 export async function setPreparedSessionCookie(token: string) {
   const payload = verifyToken(token);
-  if (!payload) throw new AuthenticationChangedError();
+  if (!payload || !await isCurrentBrowserAuthentication(payload)) throw new AuthenticationChangedError();
+  const writeCookie = await prepareCookieWrite(token);
+  writeCookie();
+}
+
+async function prepareCookieWrite(token: string) {
+  const payload = verifyToken(token) as (TokenPayload & { exp: number }) | null;
+  if (!payload || !Number.isSafeInteger(payload.exp)) throw new AuthenticationChangedError();
   const cookieStore = await cookies();
-
-  // Clear existing session cookies for all roles to prevent stale cross-role cookie conflicts
-  for (const name of ALL_SESSION_COOKIES) cookieStore.delete(name);
-
-  cookieStore.set(SESSION_COOKIES[payload.sessionClass], token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
+  const options = {
+    httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const,
+    path: "/", expires: new Date(payload.exp * 1000),
+    maxAge: Math.max(0, payload.exp - Math.floor(Date.now() / 1000)),
+  };
+  return () => {
+    for (const name of ALL_SESSION_COOKIES) cookieStore.delete(name);
+    cookieStore.set(SESSION_COOKIES[payload.sessionClass], token, options);
+  };
 }
 
 interface SessionReadOptions { touchActivity?: boolean }
@@ -157,7 +196,7 @@ async function readSession(sessionClass: SessionClass, options: SessionReadOptio
   const token = cookieStore.get(SESSION_COOKIES[sessionClass])?.value;
   if (!token) return null;
   const payload = verifyToken(token);
-  if (!payload || payload.sessionClass !== sessionClass) return null;
+  if (!payload || payload.sessionClass !== sessionClass || !await isCurrentBrowserAuthentication(payload)) return null;
 
   const { default: prisma } = await import("@/lib/prisma");
   const user = await prisma.user.findUnique({
@@ -193,6 +232,8 @@ async function readSession(sessionClass: SessionClass, options: SessionReadOptio
     fullName: user.fullName,
     sessionVersion: user.sessionVersion,
     sessionClass,
+    browserId: payload.browserId,
+    authGeneration: payload.authGeneration,
   };
 }
 
@@ -231,6 +272,18 @@ export async function getSession(roleHint?: string, options?: SessionReadOptions
 export async function hasConflictingSessionCookies() {
   const store = await cookies();
   return Boolean(store.get(SESSION_COOKIES.admin)?.value && store.get(SESSION_COOKIES.user)?.value);
+}
+
+// Logout expectation only: signature/class/browser binding, without adopting
+// Redis's newest generation. This is not an authorization reader.
+export async function getLogoutSessionToken(): Promise<TokenPayload | null> {
+  const store = await cookies();
+  const admin = store.get(SESSION_COOKIES.admin)?.value;
+  const user = store.get(SESSION_COOKIES.user)?.value;
+  if (Boolean(admin) === Boolean(user)) return null;
+  const payload = verifyToken(admin || user || "");
+  return payload && payload.sessionClass === (admin ? "admin" : "user")
+    && store.get("ps_browser_auth")?.value === payload.browserId ? payload : null;
 }
 
 export async function clearSession(response?: Response) {

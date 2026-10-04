@@ -96,25 +96,25 @@ test("unrelated issuance DB failures propagate instead of authenticating", async
   assert.equal(f.cookies.size, 0);
 });
 
-test("account-wide logout revokes copied JWT, clears all cookies, and audits once", async () => {
+test("account-wide logout revokes copied JWT, retains revoked cookies safely, and audits once", async () => {
   const f = authFixture(), token = f.token("teacher"); f.cookies.set("ps_session_user", token);
   f.cookies.set("ps_session_teacher", "legacy"); f.cookies.set("ps_session_student", "legacy");
   const response = await f.post("auth/logout", { role: "admin" });
   assert.equal(response.status, 200); assert.equal((await response.json()).redirectTo, "/login");
-  assert.equal(f.users.get("teacher")!.sessionVersion, 1); assert.equal(f.cookies.size, 0); assert.equal(f.logs.length, 1);
+  assert.equal(f.users.get("teacher")!.sessionVersion, 1); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null); assert.equal(f.logs.length, 1);
   f.cookies.set("ps_session_user", token); assert.equal(await f.auth.getUserSession(), null);
   assert.equal((await f.post("auth/logout")).status, 200); assert.equal(f.users.get("teacher")!.sessionVersion, 1);
 });
 
-test("logout audit failure rolls back revocation, clears browser, reports failure", async () => {
+test("logout audit failure rolls back revocation, invalidates browser generation, reports failure", async () => {
   const f = authFixture(); f.cookies.set("ps_session_admin", f.token("admin")); f.failAudit();
   assert.equal((await f.post("auth/logout")).status, 503);
-  assert.equal(f.users.get("admin")!.sessionVersion, 0); assert.equal(f.logs.length, 0); assert.equal(f.cookies.size, 0);
+  assert.equal(f.users.get("admin")!.sessionVersion, 0); assert.equal(f.logs.length, 0); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
 });
 
-test("conflicting logout clears every cookie without claiming arbitrary account revocation", async () => {
+test("conflicting logout preserves cookies without claiming arbitrary account revocation", async () => {
   const f = authFixture(); f.cookies.set("ps_session_admin", f.token("admin")); f.cookies.set("ps_session_user", f.token("teacher"));
-  assert.equal((await f.post("auth/logout")).status, 409); assert.equal(f.cookies.size, 0);
+  assert.equal((await f.post("auth/logout")).status, 409); assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
   assert.equal(f.users.get("admin")!.sessionVersion, 0); assert.equal(f.users.get("teacher")!.sessionVersion, 0);
 });
 

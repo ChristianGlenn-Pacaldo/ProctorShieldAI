@@ -1,9 +1,12 @@
 "use client";
 
+import { fetchAuth } from "@/lib/auth-request";
+
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { getAuthDestination } from "@/lib/auth-destination";
+import UnifiedGoogleSignIn from "./unified-google-signin";
 
 export default function LoginContent({ sessionUnavailable = false }: { sessionUnavailable?: boolean } = {}) {
   const [email, setEmail] = useState("");
@@ -26,7 +29,7 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
     setError("");
     let navigating = false;
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetchAuth(fetch, "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -91,16 +94,12 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
             </div>
             <button type="submit" disabled={isLoading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 text-sm font-bold text-white hover:from-blue-500 hover:to-sky-400 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed">{isLoading ? "Signing in..." : "Sign In"}</button>
           </form>
+          {!isLoading && <UnifiedGoogleSignIn />}
           <div className="mt-6 pt-5 border-t border-slate-800 text-center text-xs">
             <p className="text-slate-400 mb-3">Need an account?</p>
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-3">
               <Link href="/login/student?tab=register" className="font-semibold text-blue-400 hover:text-blue-300">Create Student Account</Link>
               <Link href="/login/teacher?tab=register" className="font-semibold text-blue-400 hover:text-blue-300">Create Teacher Account</Link>
-            </div>
-            <p className="text-slate-400 mt-5 mb-2">Sign in with Google through your existing portal:</p>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-3">
-              <Link href="/login/student" className="font-semibold text-blue-400 hover:text-blue-300">Student Google Sign In</Link>
-              <Link href="/login/teacher" className="font-semibold text-blue-400 hover:text-blue-300">Teacher Google Sign In</Link>
             </div>
           </div>
         </div>

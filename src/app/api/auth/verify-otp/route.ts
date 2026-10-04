@@ -1,14 +1,16 @@
+import { requireBrowserAuthentication, BrowserAuthenticationUnavailableError, browserInitializationResponse } from "@/lib/browser-auth";
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { setSessionCookie, AuthenticationChangedError } from "@/lib/auth";
 import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { consumeRateLimitGroup, getClientIp, hashOtp } from "@/lib/security";
+import { readGoogleChallenge, matchesGoogleChallenge, hashGoogleOtp } from "@/lib/google-signin-challenge";
 
 async function POSTImpl(req: NextRequest) {
   if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
-    const { userId, otpCode } = await req.json();
+    const { userId, otpCode, challenge: challengeToken } = await req.json();
 
     if (!userId || !otpCode) {
       return NextResponse.json(
@@ -24,6 +26,7 @@ async function POSTImpl(req: NextRequest) {
       );
     }
 
+    const startingBrowser = await requireBrowserAuthentication(getClientIp(req));
     const rateLimit = await consumeRateLimitGroup(
       [`verify-otp:ip:${getClientIp(req)}`, `verify-otp:account:${userId}`],
       8,
@@ -36,11 +39,16 @@ async function POSTImpl(req: NextRequest) {
       );
     }
 
+    const challenge = challengeToken !== undefined ? await readGoogleChallenge(challengeToken) : null;
+    if (challengeToken !== undefined && (!challenge || challenge.userId !== userId)) {
+      return NextResponse.json({ success: false, message: "Sign-in changed. Please start again." }, { status: 401 });
+    }
+
     // Find the latest valid OTP for this user
     const otpRecord = await prisma.otpCode.findFirst({
       where: {
         userId: userId,
-        code: hashOtp(userId, otpCode, "login"),
+        code: challenge ? hashGoogleOtp(challenge.nonce, userId, otpCode) : hashOtp(userId, otpCode, "login"),
         expiresAt: {
           gt: new Date() // Must not be expired
         }
@@ -71,6 +79,9 @@ async function POSTImpl(req: NextRequest) {
     if (!["teacher", "student"].includes(user.role.roleName.toLowerCase())) {
       return NextResponse.json({ error: "Admin login requires a password" }, { status: 403 });
     }
+    if (challenge && !matchesGoogleChallenge(challenge, user)) {
+      return NextResponse.json({ success: false, message: "Sign-in changed. Please start again." }, { status: 401 });
+    }
     const consumed = await prisma.otpCode.deleteMany({ where: { id: otpRecord.id } });
     if (consumed.count !== 1) {
       return NextResponse.json(
@@ -80,61 +91,8 @@ async function POSTImpl(req: NextRequest) {
     }
 
     // Create custom JWT session (sets HttpOnly cookie — token is NOT returned in body for security)
-    await setSessionCookie({
-      userId: user.id,
-      email: user.email,
-      role: user.role.roleName.toLowerCase(),
-      fullName: user.fullName,
-    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password });
-
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
-    await scheduleTrackedBackupWork(after, async () => {
-      const results = await Promise.allSettled([
-        prisma.activityLog.create({
-          data: {
-            userId: user.id,
-            activity: `Logged in via Google with MFA as ${user.role.roleName}`,
-            ipAddress,
-          },
-        }),
-        (async () => {
-          const { pusherServer } = await import("@/lib/pusher");
-          await pusherServer.trigger("private-admin-dashboard", "activity", {
-            type: "login",
-            userId: user.id,
-            fullName: user.fullName,
-            role: user.role.roleName,
-            activity: `Logged in via Google with MFA as ${user.role.roleName}`,
-            timestamp: new Date().toISOString(),
-          });
-
-          const adminUser = await prisma.user.findFirst({
-            where: { role: { roleName: "admin" } },
-          });
-          if (!adminUser) return;
-
-          const notification = await prisma.notification.create({
-            data: {
-              userId: adminUser.id,
-              title: "New Login",
-              message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-              isRead: false,
-            },
-          });
-          await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
-            id: notification.id.toString(),
-            title: "New Login",
-            message: `${user.fullName} (${user.role.roleName}) just logged in.`,
-            createdAt: new Date().toISOString(),
-          });
-        })(),
-      ]);
-      for (const result of results) {
-        if (result.status === "rejected") console.error("Post-MFA-login side effect failed:", result.reason);
-      }
-    });
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -145,7 +103,67 @@ async function POSTImpl(req: NextRequest) {
       },
     });
 
+    await setSessionCookie({
+      userId: user.id,
+      email: user.email,
+      role: user.role.roleName.toLowerCase(),
+      fullName: user.fullName,
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }, startingBrowser);
+
+    try {
+      await scheduleTrackedBackupWork(after, async () => {
+        const results = await Promise.allSettled([
+          prisma.activityLog.create({
+            data: {
+              userId: user.id,
+              activity: `Logged in via Google with MFA as ${user.role.roleName}`,
+              ipAddress,
+            },
+          }),
+          (async () => {
+            const { pusherServer } = await import("@/lib/pusher");
+            await pusherServer.trigger("private-admin-dashboard", "activity", {
+              type: "login",
+              userId: user.id,
+              fullName: user.fullName,
+              role: user.role.roleName,
+              activity: `Logged in via Google with MFA as ${user.role.roleName}`,
+              timestamp: new Date().toISOString(),
+            });
+
+            const adminUser = await prisma.user.findFirst({
+              where: { role: { roleName: "admin" } },
+            });
+            if (!adminUser) return;
+
+            const notification = await prisma.notification.create({
+              data: {
+                userId: adminUser.id,
+                title: "New Login",
+                message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+                isRead: false,
+              },
+            });
+            await pusherServer.trigger(`private-user-${adminUser.id}`, "notification", {
+              id: notification.id.toString(),
+              title: "New Login",
+              message: `${user.fullName} (${user.role.roleName}) just logged in.`,
+              createdAt: new Date().toISOString(),
+            });
+          })(),
+        ]);
+        for (const result of results) {
+          if (result.status === "rejected") console.error("Post-MFA-login side effect failed:", result.reason);
+        }
+      });
+    } catch { console.error("Post-authentication scheduling failed"); }
+
+    return response;
+
   } catch (error: unknown) {
+    const initialized = browserInitializationResponse(error);
+    if (initialized) return initialized;
+    if (error instanceof BrowserAuthenticationUnavailableError) return NextResponse.json({ error: "Sign-in temporarily unavailable" }, { status: 503 });
     if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
     console.error("Verify OTP error:");
     return NextResponse.json(

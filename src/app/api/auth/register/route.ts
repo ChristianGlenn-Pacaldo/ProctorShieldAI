@@ -1,3 +1,4 @@
+import { requireBrowserAuthentication, BrowserAuthenticationUnavailableError, browserInitializationResponse } from "@/lib/browser-auth";
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -33,17 +34,6 @@ async function POSTImpl(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const rateLimit = await consumeRateLimitGroup(
-      [`register:ip:${getClientIp(req)}`, `register:account:${normalizedEmail}`],
-      5,
-      60 * 60 * 1000
-    );
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { success: false, message: "Too many registration attempts." },
-        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
-      );
-    }
     if (
       typeof fullName !== "string"
       || fullName.trim().length < 2
@@ -58,6 +48,18 @@ async function POSTImpl(req: NextRequest) {
       );
     }
 
+    const startingBrowser = await requireBrowserAuthentication(getClientIp(req));
+    const rateLimit = await consumeRateLimitGroup(
+      [`register:ip:${getClientIp(req)}`, `register:account:${normalizedEmail}`],
+      5,
+      60 * 60 * 1000
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many registration attempts." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      );
+    }
     const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
@@ -105,45 +107,8 @@ async function POSTImpl(req: NextRequest) {
     });
 
     // Create session (sets HttpOnly cookie — token is NOT returned in body for security)
-    await setSessionCookie({
-      userId: user.id,
-      email: user.email,
-      role: user.role.roleName.toLowerCase(),
-      fullName: user.fullName,
-    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password });
-
     const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
-    await scheduleTrackedBackupWork(after, async () => {
-      const results = await Promise.allSettled([
-        prisma.activityLog.create({
-          data: {
-            userId: user.id,
-            activity: `New ${roleName} account created`,
-            ipAddress,
-          },
-        }),
-        (async () => {
-          const { pusherServer } = await import("@/lib/pusher");
-          await pusherServer.trigger("private-admin-dashboard", "activity", {
-            type: "register",
-            userId: user.id,
-            fullName: user.fullName,
-            role: user.role.roleName,
-            activity: `New ${user.role.roleName} account created`,
-            timestamp: new Date().toISOString(),
-          });
-        })(),
-        (async () => {
-          const { sendWelcomeEmail } = await import("@/lib/email");
-          await sendWelcomeEmail(user.email, user.fullName, user.role.roleName);
-        })(),
-      ]);
-      for (const result of results) {
-        if (result.status === "rejected") console.error("Post-registration side effect failed:", result.reason);
-      }
-    });
-
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         user: {
@@ -155,8 +120,55 @@ async function POSTImpl(req: NextRequest) {
       },
       { status: 201 }
     );
+
+    await setSessionCookie({
+      userId: user.id,
+      email: user.email,
+      role: user.role.roleName.toLowerCase(),
+      fullName: user.fullName,
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }, startingBrowser);
+
+    try {
+      await scheduleTrackedBackupWork(after, async () => {
+        const results = await Promise.allSettled([
+          prisma.activityLog.create({
+            data: {
+              userId: user.id,
+              activity: `New ${roleName} account created`,
+              ipAddress,
+            },
+          }),
+          (async () => {
+            const { pusherServer } = await import("@/lib/pusher");
+            await pusherServer.trigger("private-admin-dashboard", "activity", {
+              type: "register",
+              userId: user.id,
+              fullName: user.fullName,
+              role: user.role.roleName,
+              activity: `New ${user.role.roleName} account created`,
+              timestamp: new Date().toISOString(),
+            });
+          })(),
+          (async () => {
+            const { sendWelcomeEmail } = await import("@/lib/email");
+            await sendWelcomeEmail(user.email, user.fullName, user.role.roleName);
+          })(),
+        ]);
+        for (const result of results) {
+          if (result.status === "rejected") console.error("Post-registration side effect failed:", result.reason);
+        }
+      });
+    } catch { console.error("Post-authentication scheduling failed"); }
+
+    return response;
   } catch (error: unknown) {
-    if (error instanceof AuthenticationChangedError) return NextResponse.json({ error: "Authentication changed; sign in again" }, { status: 401 });
+    const initialized = browserInitializationResponse(error);
+    if (initialized) return initialized;
+    if (error instanceof BrowserAuthenticationUnavailableError) return NextResponse.json({ error: "Sign-in temporarily unavailable" }, { status: 503 });
+    // Account creation may have committed. Do not delete it or advertise a safe
+    // registration replay after its browser expectation becomes obsolete.
+    if (error instanceof AuthenticationChangedError) return NextResponse.json({ code: "AUTHENTICATION_CHANGED",
+      error: "Registration authentication changed. Your account may have been created; sign in normally." }, { status: 401 });
     console.error("Register error:");
     return NextResponse.json(
       { success: false, message: "An unexpected error occurred. Please try again." },

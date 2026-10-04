@@ -8,6 +8,7 @@ import test from "node:test";
 import ts from "typescript";
 import bcrypt from "bcryptjs";
 import { loadEmail } from "./helpers/email-harness.ts";
+import { browserAuthStore } from "./helpers/browser-auth-store.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 type Otp = { id: string; userId: string; code: string; expiresAt: Date };
@@ -81,6 +82,7 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
     },
   };
   const modules = new Map<string, Record<string, unknown>>();
+  const generations = browserAuthStore();
   function load(relativePath: string): Record<string, unknown> {
     if (modules.has(relativePath)) return modules.get(relativePath)!;
     const exports: Record<string, unknown> = {};
@@ -89,20 +91,23 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     vm.runInNewContext(code, {
-      exports, process: { env: environment }, crypto, Date, URL, console: { error: () => {} },
+      exports, process: { env: environment }, crypto, Date, URL, Response, console: { error: () => {} },
       require: (name: string) => {
+        if (name === "@/lib/browser-auth" || name === "./browser-auth") return load("src/lib/browser-auth.ts");
+        if (name === "./redis.ts") return generations.module;
         if (name === "next/server") return { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) }, after: () => {} };
         if (name === "next/headers") return { cookies: async () => ({
           get: (key: string) => cookieValues.has(key) ? { value: cookieValues.get(key) } : undefined,
           delete: (key: string) => cookieValues.delete(key),
-          set: (key: string, value: string) => { sessionCreations++; cookieValues.set(key, value); },
+          set: (key: string, value: string) => { if (key !== "ps_browser_auth") sessionCreations++; cookieValues.set(key, value); },
         }) };
         if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
         if (name === "@/lib/email") return email;
         if (name === "@/lib/auth") return load("src/lib/auth.ts");
         if (name === "@/lib/auth-origin") return load("src/lib/auth-origin.ts");
+        if (name === "@/lib/google-signin-challenge") return load("src/lib/google-signin-challenge.ts");
         if (name === "./redis.ts") return { getRedis: () => null, isRedisReady: () => false };
-        if (name === "@/lib/security") return {
+        if (name === "@/lib/security" || name === "./security") return {
           ...load("src/lib/security.ts"), generateOtp: () => "123456",
           consumeRateLimitGroup: async () => ({ allowed: true }),
         };
@@ -124,9 +129,11 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
   }
   async function post(route: string, body: unknown) {
     const routeModule = load(`src/app/api/auth/${route}/route.ts`);
-    return (routeModule.POST as (request: Request) => Promise<Response>)(new Request(`https://test.invalid/api/auth/${route}`, {
+    const send = () => (routeModule.POST as (request: Request) => Promise<Response>)(new Request(`https://test.invalid/api/auth/${route}`, {
       method: "POST", headers: { "Content-Type": "application/json", Origin: "https://test.invalid" }, body: JSON.stringify(body),
     }));
+    const first = await send();
+    return first.status === 409 && (await first.clone().json()).code === "BROWSER_AUTH_INITIALIZED" ? send() : first;
   }
   return {
     post, mails, get user() { return user; }, get otps() { return otps; }, get sessionCreations() { return sessionCreations; },
@@ -135,9 +142,9 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
       otps.push({ id: crypto.randomUUID(), userId: user.id, code: hashOtp(user.id, "123456", purpose), expiresAt });
     },
     getSession: () => (load("src/lib/auth.ts").getSession as () => Promise<unknown>)(),
-    createSession: () => (load("src/lib/auth.ts").setSessionCookie as (payload: unknown, snapshot: unknown) => Promise<unknown>)({
+    createSession: async () => { const browser = await (load("src/lib/browser-auth.ts").ensureBrowserAuthentication as () => Promise<unknown>)(); return (load("src/lib/auth.ts").setSessionCookie as (payload: unknown, snapshot: unknown, browser: unknown) => Promise<unknown>)({
       userId: user.id, email: user.email, fullName: user.fullName, role: "teacher",
-    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }),
+    }, { userId: user.id, role: user.role.roleName, sessionVersion: user.sessionVersion, password: user.password }, browser); },
   };
 }
 
@@ -147,7 +154,7 @@ test("verified Google identity emails OTP to that Gmail and creates no session u
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.requiresMfa, true); assert.equal(body.email, setup.user.email);
-  assert.equal(setup.sessionCreations, 0); assert.equal(setup.cookies.size, 0);
+  assert.equal(setup.sessionCreations, 0); assert.equal([...setup.cookies.keys()].filter(name => name.startsWith("ps_session_")).length, 0);
   assert.equal(setup.otps.length, 1); assert.notEqual(setup.otps[0].code, "123456");
   assert.ok(setup.otps[0].expiresAt.getTime() >= start + 600_000);
   assert.ok(setup.otps[0].expiresAt.getTime() <= Date.now() + 600_000);
@@ -179,7 +186,7 @@ for (const kind of ["wrong", "expired", "different-purpose"] as const) {
     const setup = fixture();
     setup.addOtp(kind === "different-purpose" ? "password-reset" : "login", new Date(Date.now() + (kind === "expired" ? -1000 : 600_000)));
     const response = await setup.post("verify-otp", { userId: setup.user.id, otpCode: kind === "wrong" ? "654321" : "123456" });
-    assert.equal(response.status, 401); assert.equal(setup.sessionCreations, 0); assert.equal(setup.cookies.size, 0);
+    assert.equal(response.status, 401); assert.equal(setup.sessionCreations, 0); assert.equal([...setup.cookies.keys()].filter(name => name.startsWith("ps_session_")).length, 0);
   });
 }
 

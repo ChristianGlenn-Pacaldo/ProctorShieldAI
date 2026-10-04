@@ -17,7 +17,7 @@ async function saveName(f: Fixture, role: "teacher" | "student", fullName: strin
   assert.equal(response.status, 200);
   assert.equal(f.users.get(role)!.fullName, fullName);
   assert.equal((await f.post("auth/logout")).status, 200);
-  assert.equal(f.cookies.size, 0);
+  assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
 }
 
 async function googleLogin(f: Fixture, role: "teacher" | "student", userId: string = role) {
@@ -26,7 +26,7 @@ async function googleLogin(f: Fixture, role: "teacher" | "student", userId: stri
   const challenge = await response.json();
   assert.equal(challenge.requiresMfa, true);
   assert.equal(challenge.role, role);
-  assert.equal(f.cookies.size, 0, "Google identity verification alone cannot create a session");
+  assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null, "Google identity verification alone cannot create a session");
   assert.equal((await f.post("auth/verify-otp", { userId, otpCode: "123456" })).status, 200);
   assert.equal(f.cookies.has("ps_session_user"), true);
   assert.equal(f.cookies.has("ps_session_admin"), false);
@@ -59,7 +59,7 @@ test("saved Student formal name survives repeated Google + OTP login without reo
     await expectNamePrompt(f, session.fullName, false);
     assert.equal((await f.post("auth/verify-otp", { userId: "student", otpCode: "123456" })).status, 401);
     assert.equal((await f.post("auth/logout")).status, 200);
-    assert.equal(f.cookies.size, 0);
+    assert.equal(await f.auth.getSession(undefined, { touchActivity: false }), null);
   }
 });
 
