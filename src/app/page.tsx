@@ -298,7 +298,7 @@ export default function LandingPage() {
         {/* Subtitle */}
         <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-300/90 max-w-3xl mx-auto leading-relaxed font-medium">
           Automated biometric face tracking, millisecond CCTV evidence replay, and instant Google Gemini AI verdicts
-          empower educators with total quiz integrity — while students enjoy a lightning-fast, gamified arena.
+          empower educators with total quiz integrity while students enjoy a lightning fast, gamified arena.
         </p>
 
         {/* ── FAST PIN QUICK-JOIN CONSOLE (WAYGROUND INSPIRED DIRECT HERO ACCESS) ── */}
