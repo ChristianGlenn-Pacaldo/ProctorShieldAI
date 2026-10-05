@@ -115,6 +115,40 @@ test("password submission unmounts the Google subtree so pending callbacks are d
   assert.equal(page.render().filter(n => n.type === "UnifiedGoogleSignIn").length, 1);
 });
 
+test("public login welcomes returning users with a named form and associated field labels", () => {
+  const page = ui("src/app/login/content.tsx", async () => { throw new Error("Render must not fetch"); });
+  const heading = page.find(n => n.type === "h1");
+  assert.equal(text(heading.props.children), "Welcome Back");
+  assert.equal(page.find(n => n.type === "form").props["aria-labelledby"], heading.props.id);
+  assert.match(page.content(), /Sign in to your ProctorShieldAI account/);
+  assert.match(page.content(), /Don't have an account\?/);
+  for (const [id, label, autocomplete] of [["login-email", "Email Address", "username"], ["login-password", "Password", "current-password"]]) {
+    assert.equal(text(page.find(n => n.type === "label" && n.props.htmlFor === id).props.children), label);
+    const input = page.find(n => n.type === "input" && n.props.id === id);
+    assert.equal(input.props.autoComplete, autocomplete);
+    assert.equal(input.props.required, true);
+  }
+  assert.equal(page.calls.length, 0);
+});
+
+test("password visibility control exposes its target and state without submitting or clearing input", () => {
+  const page = ui("src/app/login/content.tsx", async () => { throw new Error("Visibility must not fetch"); });
+  (page.find(n => n.props.id === "login-password").props.onChange as (e: unknown) => void)({ target: { value: "FixturePassword123" } });
+  const control = page.find(n => n.props["aria-label"] === "Show password");
+  assert.equal(control.props.type, "button");
+  assert.equal(control.props["aria-controls"], "login-password");
+  assert.equal(control.props["aria-pressed"], false);
+  (control.props.onClick as () => void)();
+  assert.equal(page.find(n => n.props.id === "login-password").props.type, "text");
+  const hide = page.find(n => n.props["aria-label"] === "Hide password");
+  assert.equal(hide.props["aria-pressed"], true);
+  (hide.props.onClick as () => void)();
+  const input = page.find(n => n.props.id === "login-password");
+  assert.equal(input.props.type, "password");
+  assert.equal(input.props.value, "FixturePassword123");
+  assert.equal(page.calls.length, 0);
+});
+
 for (const role of ["student", "teacher"]) test(`${role} actual Google + OTP flow navigates only after verified OTP to the allowlisted DB destination`, async () => {
   const f = authFixture(); f.googleIdentity(role);
   const page = await readyGoogle(actualFetcher(f));

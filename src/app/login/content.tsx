@@ -4,7 +4,7 @@ import { fetchAuth } from "@/lib/auth-request";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, BarChart3, Eye, EyeOff, ScanFace, ShieldCheck } from "lucide-react";
 import { getAuthDestination } from "@/lib/auth-destination";
 import UnifiedGoogleSignIn from "./unified-google-signin";
 
@@ -63,50 +63,67 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
   };
 
   return (
-    <div className="auth-shell min-h-screen bg-[var(--dark-bg)] text-white flex items-center justify-center px-4 py-8 sm:p-6 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/30 via-slate-950 to-slate-900 pointer-events-none" />
-      <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg shadow-blue-900/20" aria-hidden="true">🛡️</div>
-          <h1 className="text-3xl font-extrabold font-[family-name:var(--font-display)] tracking-tight text-slate-100">Proctor Shield <span className="text-blue-400">AI</span></h1>
-          <p className="text-sm text-slate-400 mt-2">Sign in to your account</p>
-        </div>
-        <div className="auth-panel p-6 sm:p-8 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl">
-          <h2 className="text-xl font-bold text-slate-100 mb-5 font-[family-name:var(--font-display)]">Sign In</h2>
-          {sessionUnavailable && <p role="alert" className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">Sign-in status is temporarily unavailable. Please try again.</p>}
-          {error && <p role="alert" className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400">{error}</p>}
-          <form onSubmit={handleLogin} aria-busy={isLoading} className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className="text-xs font-semibold text-slate-300 mb-1.5 block">Email</label>
-              <input id="login-email" name="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isLoading} required className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 disabled:opacity-60" />
+    <main className="auth-shell min-h-screen min-h-svh text-white flex items-center justify-center px-4 py-8 sm:px-8 sm:py-12 relative overflow-hidden">
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-slate-950/40 via-transparent to-blue-950/30 pointer-events-none" />
+      <div className="relative z-10 grid w-full max-w-6xl min-w-0 items-center gap-12 lg:grid-cols-[1fr_460px] lg:gap-16 xl:gap-24">
+        <aside aria-labelledby="login-intro" className="hidden min-w-0 lg:block">
+          <div className="mb-12 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-blue-400/25 bg-blue-500/10 text-cyan-300" aria-hidden="true"><ShieldCheck className="h-6 w-6" /></div>
+            <span className="text-2xl font-bold font-[family-name:var(--font-display)] tracking-tight">ProctorShield<span className="text-cyan-300">AI</span></span>
+          </div>
+          <h2 id="login-intro" className="text-5xl xl:text-6xl font-semibold font-[family-name:var(--font-display)] leading-[1.1] tracking-tight text-slate-50">Smarter Quizzes.<br /><span className="text-cyan-300">Higher Integrity.</span></h2>
+          <p className="mt-6 max-w-md text-base leading-7 text-slate-300">Bring your quizzes, monitoring, and assessment insights together in one focused workspace.</p>
+          <ul className="mt-9 space-y-5 text-sm font-medium text-slate-200">
+            <li className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/60 text-cyan-300" aria-hidden="true"><ScanFace className="h-5 w-5" /></span>AI-Assisted Monitoring</li>
+            <li className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/60 text-cyan-300" aria-hidden="true"><ShieldCheck className="h-5 w-5" /></span>Secure Assessments</li>
+            <li className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/60 text-cyan-300" aria-hidden="true"><BarChart3 className="h-5 w-5" /></span>Actionable Analytics</li>
+          </ul>
+        </aside>
+        <div className="w-full min-w-0 max-w-[460px] mx-auto">
+          <div className="mb-6 flex items-center justify-center gap-2.5 lg:hidden">
+            <ShieldCheck className="h-7 w-7 text-cyan-300" aria-hidden="true" />
+            <span className="text-2xl font-bold font-[family-name:var(--font-display)] tracking-tight">ProctorShield<span className="text-cyan-300">AI</span></span>
+          </div>
+          <section aria-labelledby="login-heading" className="rounded-3xl border border-blue-300/15 bg-[#0b1830] p-6 sm:p-8 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.6)]">
+            <div className="mb-7">
+              <h1 id="login-heading" className="text-3xl font-semibold text-slate-50 font-[family-name:var(--font-display)] tracking-tight">Welcome Back</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-300">Sign in to your ProctorShieldAI account</p>
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5 gap-2">
-                <label htmlFor="login-password" className="text-xs font-semibold text-slate-300">Password</label>
-                <Link href="/login/forgot-password" className="text-xs font-semibold text-blue-400 hover:text-blue-300">Forgot Password?</Link>
+            {sessionUnavailable && <p role="alert" className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">Sign-in status is temporarily unavailable. Please try again.</p>}
+            {error && <p role="alert" className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-400">{error}</p>}
+            <form onSubmit={handleLogin} aria-busy={isLoading} aria-labelledby="login-heading" className="space-y-5">
+              <div>
+                <label htmlFor="login-email" className="text-sm font-medium text-slate-200 mb-2 block">Email Address</label>
+                <input id="login-email" name="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isLoading} required className="w-full min-h-12 px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-700 text-base text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 disabled:opacity-60" />
               </div>
-              <div className="relative">
-                <input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isLoading} required className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 disabled:opacity-60" />
-                <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1">
-                  {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
-                </button>
+              <div>
+                <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
+                  <label htmlFor="login-password" className="text-sm font-medium text-slate-200">Password</label>
+                  <Link href="/login/forgot-password" className="rounded text-xs font-semibold text-blue-300 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-4 focus-visible:ring-offset-[#0b1830]">Forgot Password?</Link>
+                </div>
+                <div className="relative">
+                  <input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isLoading} required className="w-full min-h-12 px-4 py-3 pr-14 rounded-xl bg-slate-950/60 border border-slate-700 text-base text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 disabled:opacity-60" />
+                <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-1 my-auto flex h-11 w-11 items-center justify-center rounded-lg text-slate-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                    {showPassword ? <EyeOff className="w-5 h-5" aria-hidden="true" /> : <Eye className="w-5 h-5" aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" disabled={isLoading} className="w-full min-h-12 py-3.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 text-sm font-bold text-white hover:from-blue-600 hover:to-blue-500 shadow-lg shadow-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-4 focus-visible:ring-offset-[#0b1830] disabled:opacity-50 disabled:cursor-not-allowed">{isLoading ? "Signing in..." : "Sign In"}</button>
+            </form>
+            {!isLoading && <UnifiedGoogleSignIn />}
+            <div className="mt-6 pt-5 border-t border-slate-700/60 text-center text-xs">
+              <p className="text-slate-300 mb-4">Don&apos;t have an account?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Link href="/login/student?tab=register" className="flex min-h-11 items-center justify-center rounded-xl border border-slate-600 px-3 py-3 font-semibold text-slate-200 hover:border-blue-400 hover:bg-blue-500/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1830]">Create Student Account</Link>
+                <Link href="/login/teacher?tab=register" className="flex min-h-11 items-center justify-center rounded-xl border border-slate-600 px-3 py-3 font-semibold text-slate-200 hover:border-blue-400 hover:bg-blue-500/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1830]">Create Teacher Account</Link>
               </div>
             </div>
-            <button type="submit" disabled={isLoading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 text-sm font-bold text-white hover:from-blue-500 hover:to-sky-400 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed">{isLoading ? "Signing in..." : "Sign In"}</button>
-          </form>
-          {!isLoading && <UnifiedGoogleSignIn />}
-          <div className="mt-6 pt-5 border-t border-slate-800 text-center text-xs">
-            <p className="text-slate-400 mb-3">Need an account?</p>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-3">
-              <Link href="/login/student?tab=register" className="font-semibold text-blue-400 hover:text-blue-300">Create Student Account</Link>
-              <Link href="/login/teacher?tab=register" className="font-semibold text-blue-400 hover:text-blue-300">Create Teacher Account</Link>
-            </div>
+          </section>
+          <div className="mt-6 text-center">
+            <Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded px-2 text-xs text-slate-300 hover:text-white font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"><ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />Back to Home Page</Link>
           </div>
         </div>
-        <div className="mt-6 text-center">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 font-semibold"><ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />Back to Home Page</Link>
-        </div>
       </div>
-    </div>
+    </main>
   );
 }
