@@ -233,9 +233,9 @@ test("one form has accessible credentials, visibility toggle and compatibility l
   assert.equal(page.calls.length, 0); assert.deepEqual(page.destinations, []);
 });
 
-for (const role of ["student", "teacher", "admin"]) test(`legacy ${role} password page still renders and signs in`, async () => {
+for (const role of ["student", "teacher"]) test(`legacy ${role} password page still renders and signs in`, async () => {
   const fixture = authFixture();
-  const path = role === "admin" ? "src/app/admin/login/page.tsx" : `src/app/login/${role}/page.tsx`;
+  const path = `src/app/login/${role}/page.tsx`;
   const page = ui(async (_url, init) => fixture.post("auth/login", JSON.parse(String(init.body))), path);
   page.fill(`${role}@example.test`); await page.submit();
   assert.deepEqual(page.destinations, [`/dashboard/${role}`]);
@@ -250,8 +250,14 @@ for (const role of ["student", "teacher"]) test(`create ${role} link opens the e
 });
 
 
-for (const path of ["src/app/login/content.tsx", "src/app/login/student/page.tsx", "src/app/login/teacher/page.tsx", "src/app/admin/login/page.tsx"]) test(`${path} transparently retries browser initialization once`, async () => {
-  const f = authFixture(); const role = path.includes("/admin/") ? "admin" : path.includes("/teacher/") ? "teacher" : "student";
+for (const [path, role] of [
+  ["src/app/login/content.tsx", "admin"],
+  ["src/app/login/content.tsx", "teacher"],
+  ["src/app/login/content.tsx", "student"],
+  ["src/app/login/student/page.tsx", "student"],
+  ["src/app/login/teacher/page.tsx", "teacher"],
+]) test(`${path} ${role} sign-in transparently retries browser initialization once`, async () => {
+  const f = authFixture();
   const page = ui(async (_url, init) => {
     const result = await f.deferredPost("auth/login", JSON.parse(String(init.body))); result.apply(); return result.response;
   }, path);
