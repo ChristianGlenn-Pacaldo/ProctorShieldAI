@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { getAuthDestination } from "../src/lib/auth-destination.ts";
 
 type ElementNode = { type: unknown; props: Record<string, unknown> };
 
@@ -33,6 +34,7 @@ function proxyFixture() {
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/auth-destination") return { getAuthDestination };
       if (name === "next/server") return { NextResponse: {
         next: () => response(200),
         redirect: (url: URL) => response(307, url.toString()),

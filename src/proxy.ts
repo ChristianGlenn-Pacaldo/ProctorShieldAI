@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken, type TokenPayload } from "@/lib/auth";
+import { getSession, verifyToken, type TokenPayload } from "@/lib/auth";
+import { getAuthDestination } from "@/lib/auth-destination";
 
 const SESSION_CLASSES = ["admin", "user"] as const;
 
 const PUBLIC_PATHS = new Set([
-  "/",
   "/login",
   "/login/student",
   "/login/teacher",
@@ -140,6 +140,25 @@ async function authorizeStudentRetakeNavigation(request: NextRequest, payload: T
   }
 }
 
+async function authorizeRootNavigation(request: NextRequest) {
+  let session;
+  try {
+    // Resolve the current DB identity and browser generation without activity
+    // writes. The mixed-class reader denies ambiguous cookies; never pick one.
+    session = await getSession(undefined, { touchActivity: false });
+  } catch {
+    // An unavailable validator cannot establish an identity. Keep the public
+    // homepage available without adopting a token role or changing cookies.
+  }
+  const destination = getAuthDestination(session?.role);
+  const response = destination
+    ? NextResponse.redirect(new URL(destination, request.url))
+    : NextResponse.next();
+  // Re-evaluate each navigation after login, replacement, or logout.
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return addSecurityHeaders(response);
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const retakeNavigation = (pathname === "/dashboard/student" || /^\/(quiz|arena)\/[1-9]\d*$/.test(pathname))
@@ -152,6 +171,8 @@ export function proxy(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
+
+  if (pathname === "/") return authorizeRootNavigation(request);
 
   if (
     PUBLIC_PATHS.has(pathname)

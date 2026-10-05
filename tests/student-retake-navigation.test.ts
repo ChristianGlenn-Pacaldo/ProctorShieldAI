@@ -4,6 +4,7 @@ import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import { authFixture } from "./helpers/auth-fixture.ts";
+import { getAuthDestination } from "../src/lib/auth-destination.ts";
 import { deferred, fixture, studentQuizzes } from "./helpers/dashboard-lifecycle-fixture.ts";
 
 const paths = ["event-approval", "event-rejection", "poll-approval", "poll-rejection"] as const;
@@ -39,6 +40,7 @@ function navigationBoundary(auth: ReturnType<typeof authFixture>, initial: Attem
     process: { env: { NODE_ENV: "production" } },
     require: (name: string) => {
       if (name === "@/lib/auth") return auth.auth;
+      if (name === "@/lib/auth-destination") return { getAuthDestination };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "next/server") return { NextResponse: {
         next: () => response(200), redirect: (url: URL) => response(307, url),
