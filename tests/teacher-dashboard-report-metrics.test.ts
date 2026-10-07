@@ -1,3 +1,4 @@
+import { reportAttempt, reportEvent, reportsRoute } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -85,36 +86,18 @@ test("Teacher dashboard labels lifetime distinct students and leaves live feed s
   assert.match(dashboardContent, /setLiveStudents\(\(prev\) => \{/);
 });
 
-test("Teacher reports categorize completed proctored attempts by violation count", async () => {
-  const attempts = [0, 1, 2, 3, 4].map((count) => ({
-    quizStatus: "completed",
-    attemptMode: "proctored",
-    endTime: new Date("2026-01-02"),
-    violations: Array.from({ length: count }, () => ({ violationType: "tab_switch" })),
+test("Teacher AI reports retain actual counts across completed and pending-retake proctored attempts", async () => {
+  const attempts = [0, 1, 2, 3, 4].map((count, index) => reportAttempt({
+    id: "attempt-" + index, violations: Array.from({ length: count }, (_, eventIndex) => reportEvent(BigInt(index * 10 + eventIndex + 1))),
   }));
-  attempts.push({ quizStatus: "completed", attemptMode: "arena", endTime: new Date("2026-01-02"), violations: [] });
-  attempts.push({ quizStatus: "in_progress", attemptMode: "proctored", endTime: null as unknown as Date, violations: [] });
-  const prisma = {
-    studentQuiz: { findMany: async (query: { where: { quizStatus: string; endTime: { not: null }; attemptMode: string; quiz: { teacherId: string } } }) => {
-      assert.equal(query.where.quizStatus, "completed");
-      assert.equal(query.where.endTime.not, null);
-      assert.equal(query.where.attemptMode, "proctored");
-      assert.equal(query.where.quiz.teacherId, "teacher-1");
-      return attempts.filter((attempt) => attempt.quizStatus === "completed" && attempt.endTime && attempt.attemptMode === "proctored");
-    } },
-  };
-  const get = loadRoute(reportsRoutePath, prisma);
-  const response = await get(new Request("http://localhost/api/dashboard/teacher/reports"));
+  attempts.push(reportAttempt({ id: "retake", quizStatus: "pending_retake", violations: [reportEvent(BigInt("99"))] }));
+  attempts.push(reportAttempt({ id: "arena", attemptMode: "arena" }));
+  attempts.push(reportAttempt({ id: "active-empty", quizStatus: "in_progress", endTime: null }));
+  const response = await reportsRoute("teacher", { attempts }).get();
   const body = await response.json();
-
   assert.equal(response.status, 200);
-  assert.deepEqual(body.data.map((bar: { label: string; value: number; pct: number }) => ({
-    label: bar.label, value: bar.value, pct: bar.pct,
-  })), [
-    { label: "✓ Clean (0 violations)", value: 1, pct: 20 },
-    { label: "⚠ Suspicious (1–2 violations)", value: 2, pct: 40 },
-    { label: "🚫 High Risk (3+ violations)", value: 2, pct: 40 },
-  ]);
-  assert.match(reportsContent, /Completed proctored attempts are grouped by recorded violations/);
-  assert.doesNotMatch(fs.readFileSync(reportsRoutePath, "utf8"), /Trust > 90%|70-90%|< 70%/);
+  assert.equal(body.totalReports, 6);
+  assert.equal(body.totalViolations, 11);
+  assert.deepEqual(body.reports.map((report: { violationCount: number }) => report.violationCount).sort((a: number, b: number) => a - b), [0, 1, 1, 2, 3, 4]);
+  assert.match(reportsContent, /<AIReports role="teacher"/);
 });

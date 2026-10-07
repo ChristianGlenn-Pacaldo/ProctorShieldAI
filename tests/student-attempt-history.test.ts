@@ -1,3 +1,4 @@
+import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -147,23 +148,22 @@ test("Results counts completed attempts but keeps unfinished rows with honest st
   assert.match(textOf(tree), /77%.*Average Exam Score/);
 });
 
-test("Reports renders only completed proctored integrity reports", async () => {
+test("Reports renders completed proctored report cards including attempts awaiting retakes", async () => {
   const api = await loadResultsApi();
-  const fixture = pageFixture("src/app/dashboard/student/reports/content.tsx", api.body.results!);
+  const reports = api.body.results!.filter((row) => row.isCompleted && row.effectiveMode === "proctored")
+    .map((row) => reportCard({ ...row, quiz: row.quiz, violationCount: Number((row._count as { violations: number }).violations), analysisCurrent: false }));
+  const fixture = reportsPage("student", [{ ok: true, body: reportPayload({ reports, totalReports: reports.length, totalViolations: 1 }) }]);
   await fixture.mount();
   const tree = fixture.render();
-  const reports = nodesOf(tree, (node) => node.type === "article");
-  assert.equal(reports.length, 2);
+  assert.equal(nodesOf(tree, (node) => node.type === "article").length, 2);
   assert.match(textOf(tree), /Completed Exam/);
   assert.match(textOf(tree), /Retake Pending Exam/);
   assert.doesNotMatch(textOf(tree), /Active Exam|Active Arena|Completed Arena|Rejected Entry/);
   assert.doesNotMatch(textOf(tree), /Cheating risk: 0%/);
 });
 
-test("Reports shows its normal empty state when history has no applicable completed proctored attempt", async () => {
-  const api = await loadResultsApi();
-  const incomplete = api.body.results!.filter((row) => !row.isCompleted || row.effectiveMode === "arena");
-  const fixture = pageFixture("src/app/dashboard/student/reports/content.tsx", incomplete);
+test("Reports shows the normal empty state when there are no applicable monitored reports", async () => {
+  const fixture = reportsPage("student", [{ ok: true, body: reportPayload() }]);
   await fixture.mount();
-  assert.match(textOf(fixture.render()), /No completed quiz reports yet/);
+  assert.match(textOf(fixture.render()), /No matching monitored quiz reports/);
 });

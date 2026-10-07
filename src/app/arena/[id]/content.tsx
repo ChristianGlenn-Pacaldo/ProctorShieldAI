@@ -1292,16 +1292,16 @@ export function ArenaContent({
   if (phase === "lobby") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#070a14] via-[#0d1222] to-[#070a14] text-white flex flex-col justify-between p-4 sm:p-8">
-        <header className="flex items-center justify-between max-w-4xl w-full mx-auto">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-rose-500 to-indigo-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]">
+        <header className="flex items-center justify-between gap-3 max-w-4xl w-full mx-auto">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-amber-500 via-rose-500 to-indigo-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]">
               <Gamepad2 className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="text-xs font-mono font-bold text-amber-400 tracking-wider uppercase">
-                Power Arena Station
+                Power Arena
               </div>
-              <h1 className="text-sm sm:text-base font-black text-white truncate max-w-[220px] sm:max-w-md">
+              <h1 className="text-sm sm:text-base font-black text-white truncate" title={quizTitle}>
                 {quizTitle}
               </h1>
             </div>
@@ -1310,7 +1310,7 @@ export function ArenaContent({
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-2.5 rounded-xl bg-[#141828] border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="shrink-0 p-2.5 rounded-xl bg-[#141828] border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
             title={soundEnabled ? "Mute Game Audio" : "Enable Game Audio"}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
@@ -1327,14 +1327,14 @@ export function ArenaContent({
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold uppercase tracking-wider mb-3">
             <Radio className="w-3.5 h-3.5 animate-pulse text-rose-400" />
-            <span>Waiting for teacher to start Power Arena...</span>
+            <span>Waiting for teacher to start</span>
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-            Power Arena Lobby
+            Lobby
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 max-w-sm mb-4">
-            {quizTitle} • {totalParticipants} {totalParticipants === 1 ? "player" : "players"} joined
+            {totalParticipants} {totalParticipants === 1 ? "player" : "players"} joined
           </p>
 
           {/* Display currently joined fighters in lobby */}
@@ -1613,24 +1613,24 @@ export function ArenaContent({
       )}
 
       {/* Top Game Station HUD */}
-      <header className="max-w-4xl w-full mx-auto flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white shadow-md">
+      <header className="max-w-4xl w-full mx-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-3">
+        <div className="flex items-center gap-2 min-w-0 lg:flex-1">
+          <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white shadow-md">
             <Flame className="w-4 h-4" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">
               {questionsCompleted
                 ? `Completed (${questions.length}/${questions.length})`
                 : `${isRetryQuestion ? "Retry" : "Question"} ${currentQuestionIndex + 1} of ${questions.length}`}
             </div>
-            <div className="text-xs sm:text-sm font-black text-white truncate max-w-[140px] sm:max-w-xs">
+            <h1 className="text-xs sm:text-sm font-black text-white truncate lg:max-w-xs" title={quizTitle}>
               {quizTitle}
-            </div>
+            </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
           <ArenaIdentity studentName={studentName} className="w-9 h-9 text-[10px]" />
           {/* PERSONAL RANK BADGE (#X of N) */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141828] border border-slate-800 shadow-md">
@@ -1665,7 +1665,7 @@ export function ArenaContent({
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-2 rounded-xl bg-[#141828] border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="shrink-0 p-2 rounded-xl bg-[#141828] border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
             title={soundEnabled ? "Mute" : "Unmute"}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
@@ -1720,7 +1720,7 @@ export function ArenaContent({
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                       Active Match • Spectator View
                     </div>
-                    <h3 className="text-base sm:text-lg font-black text-white">Power Arena Live Spectator Lobby</h3>
+                    <h3 className="text-base sm:text-lg font-black text-white">Live Standings</h3>
                   </div>
                 </div>
 

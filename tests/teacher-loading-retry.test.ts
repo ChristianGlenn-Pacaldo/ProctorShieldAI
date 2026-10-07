@@ -1,3 +1,4 @@
+import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
@@ -24,6 +25,10 @@ function nodesOf(value: unknown, predicate: (node: ElementNode) => boolean): Ele
 }
 
 function fixture(relativePath: string, replies: Reply[]) {
+  if (relativePath.includes("/reports/")) {
+    const page = reportsPage("teacher", replies);
+    return { ...page, requests: page.requestsCount, ready: page.settle, refetch: () => page.click("Refresh"), emit: async () => {} };
+  }
   const absolutePath = path.resolve(process.cwd(), relativePath);
   const code = ts.transpileModule(fs.readFileSync(absolutePath, "utf8"), {
     compilerOptions: {
@@ -166,12 +171,12 @@ const dashboardBody = (count: number) => ({
 });
 const quiz = { id: 1, title: "Regression Quiz", mode: "proctored", subject: "Science", quizStatus: "draft", questions: [], studentQuizzes: [] };
 const evidence = { id: "e1", name: "Regression Student", quizTitle: "Regression Quiz", event: "Tab switch", violationType: "tab_switch", timestamp: "Today", bg: "", btnClass: "", screenshotPath: null, evidenceType: null, durationSeconds: null };
-const report = { label: "Clean", value: 3, pct: 100, color: "bg-green-500" };
+const report = reportCard();
 const cases = [
   { name: "Dashboard", path: "src/app/dashboard/teacher/content.tsx", empty: dashboardBody(0), populated: dashboardBody(7), visible: "Total Quizzes", emptyText: "Total Quizzes", error: "Could not load the Teacher Dashboard" },
   { name: "My Quizzes", path: "src/app/dashboard/teacher/quizzes/content.tsx", empty: { quizzes: [], pendingRetakes: [], pendingApprovals: [] }, populated: { quizzes: [quiz], pendingRetakes: [], pendingApprovals: [] }, visible: "Regression Quiz", emptyText: "No quizzes found", error: "Could not load My Quizzes" },
   { name: "Evidence", path: "src/app/dashboard/teacher/evidence/content.tsx", empty: { success: true, evidence: [], total: 0, page: 1, pageSize: 25 }, populated: { success: true, evidence: [evidence], total: 1, page: 1, pageSize: 25 }, visible: "Regression Student", emptyText: "No proctoring violations recorded", error: "Could not load Evidence Logs" },
-  { name: "Reports", path: "src/app/dashboard/teacher/reports/content.tsx", empty: { success: true, data: [] }, populated: { success: true, data: [report] }, visible: "Clean", emptyText: "No quiz data available yet", error: "Could not load Teacher Reports" },
+  { name: "Reports", path: "src/app/dashboard/teacher/reports/content.tsx", empty: reportPayload(), populated: reportPayload({ reports: [report], totalReports: 1 }), visible: "Clean", emptyText: "No matching monitored quiz reports", error: "Could not load AI Reports" },
   { name: "Billing", path: "src/app/dashboard/teacher/billing/content.tsx", empty: { isSubscribed: false, subscription: null, payments: [], paymentMode: "test" }, populated: { isSubscribed: true, subscription: { planName: "Premium Tier" }, payments: [], paymentMode: "test" }, visible: "Premium Tier", emptyText: "Free Tier", error: "Could not load Billing" },
 ];
 
@@ -190,7 +195,7 @@ for (const entry of cases) {
       assert.match(textOf(empty), new RegExp(entry.emptyText));
       assert.equal(setup.requests(), 2);
       assert.equal(setup.subscriptions(), entry.name === "Dashboard" ? 1 : 0);
-      assert.equal(setup.intervals(), entry.name === "Evidence" ? 1 : 0);
+      assert.equal(setup.intervals(), ["Evidence", "Reports"].includes(entry.name) ? 1 : 0);
     });
   }
 
@@ -202,7 +207,7 @@ for (const entry of cases) {
     assert.doesNotMatch(textOf(setup.render()), new RegExp(entry.error));
     assert.equal(setup.requests(), 2);
     assert.equal(setup.subscriptions(), entry.name === "Dashboard" ? 1 : 0);
-    assert.equal(setup.intervals(), entry.name === "Evidence" ? 1 : 0);
+    assert.equal(setup.intervals(), ["Evidence", "Reports"].includes(entry.name) ? 1 : 0);
   });
 
   test(`${entry.name} repeated Retry does not add subscriptions, timers, or duplicate rows`, async () => {
@@ -217,7 +222,7 @@ for (const entry of cases) {
     await setup.retry();
     assert.equal(setup.requests(), 3);
     assert.equal(setup.subscriptions(), entry.name === "Dashboard" ? 1 : 0);
-    assert.equal(setup.intervals(), entry.name === "Evidence" ? 1 : 0);
+    assert.equal(setup.intervals(), ["Evidence", "Reports"].includes(entry.name) ? 1 : 0);
     if (entry.name === "Evidence") {
       const rows = nodesOf(setup.render(), (node) => typeof node.props.className === "string"
         && node.props.className.includes("justify-between px-5 py-4 cursor-pointer"));

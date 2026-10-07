@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth";
-import { expireSubscriptions } from "@/lib/maintenance";
-import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import { InvalidReportQuery, readAIReports } from "@/lib/ai-reports";
 
 const headers = { "Cache-Control": "private, no-store" };
@@ -9,17 +7,10 @@ const headers = { "Cache-Control": "private, no-store" };
 export async function GET(req: NextRequest) {
   try {
     const session = await getUserSession();
-    if (!session || session.role !== "teacher") {
+    if (!session || session.role !== "student") {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401, headers });
     }
-    await expireSubscriptions(session.userId);
-    if (!await hasActiveProSubscription(session.userId)) {
-      return NextResponse.json(
-        { success: false, error: "AI Reports require an active Pro subscription", code: "SUBSCRIPTION_REQUIRED" },
-        { status: 403, headers },
-      );
-    }
-    return NextResponse.json(await readAIReports("teacher", session.userId, req.url), { headers });
+    return NextResponse.json(await readAIReports("student", session.userId, req.url), { headers });
   } catch (error) {
     if (error instanceof InvalidReportQuery) return NextResponse.json({ success: false, error: error.message }, { status: 400, headers });
     console.error("Fetch AI reports failed");

@@ -1,3 +1,4 @@
+import { reportAttempt, reportsRoute } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
@@ -142,10 +143,12 @@ test("monitored autosave, answer evaluation and final results use canonical IDs 
   const auth={getUserSession:async()=>({userId:"a",role:"student"})};
   const results=await loadArenaModule("src/app/api/dashboard/student/results/route.ts",{...f.deps,"@/lib/auth":auth}).GET();
   assert.equal(results.status,200);assert.equal(results.body.results[0].id,a.id);assert.equal(results.body.results[0].score,100);
-  const reports=await loadArenaModule("src/app/api/dashboard/teacher/reports/route.ts",{
-    ...f.deps,"@/lib/auth":{getUserSession:async()=>({userId:"teacher",role:"teacher"})},
-    "@/lib/maintenance":{expireSubscriptions:async()=>{}},"@/lib/teacher-entitlements":{hasActiveProSubscription:async()=>true},
-  }).GET({});assert.equal(reports.status,200);
+  const reports = await reportsRoute("teacher", { attempts: [reportAttempt({ ...results.body.results[0],
+    quiz: { ...results.body.results[0].quiz, teacherId: "teacher-1" }, aiAnalysis: null })] }).get();
+  assert.equal(reports.status, 200);
+  const reportBody = await reports.json();
+  assert.equal(reportBody.reports[0].id, a.id);
+  assert.equal(reportBody.reports[0].score, 100);
 });
 
 test("wrong evaluation and foreign choice rejection follow the question ID rather than its display index", async () => {

@@ -29,7 +29,7 @@ const submitRouteSrc = fs.readFileSync(
   "utf-8"
 );
 const teacherReportsRouteSrc = fs.readFileSync(
-  path.resolve(process.cwd(), "src/app/api/dashboard/teacher/reports/route.ts"),
+  path.resolve(process.cwd(), "src/lib/ai-reports.ts"),
   "utf-8"
 );
 const studentResultsRouteSrc = fs.readFileSync(

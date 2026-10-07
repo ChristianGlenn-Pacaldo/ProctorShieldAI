@@ -78,7 +78,7 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       section: "Main",
       items: [
         { label: "Dashboard", icon: <BarChart3 className="w-4 h-4" />, href: "/dashboard/teacher" },
-        { label: "Playground Arena", icon: <Swords className="w-4 h-4 text-amber-400" />, href: "/dashboard/teacher/playground", badge: "PRO" },
+        { label: "Playground Arena", icon: <Swords className="w-4 h-4" />, href: "/dashboard/teacher/playground", badge: "PRO" },
         { label: "My Quizzes", icon: <ClipboardList className="w-4 h-4" />, href: "/dashboard/teacher/quizzes" },
         { label: "Live Monitor", icon: <Radio className="w-4 h-4" />, href: "/dashboard/teacher/monitor" },
         { label: "Evidence Replay", icon: <Camera className="w-4 h-4" />, href: "/dashboard/teacher/evidence" },
@@ -127,7 +127,8 @@ export default function DashboardShell({
   identityColor = "from-blue-600 to-slate-800",
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const themePreference = useRef<"light" | "dark" | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -359,26 +360,32 @@ export default function DashboardShell({
   const nav = navConfig[role] || navConfig.student;
   const portal = portalConfig[role];
 
-  // Initialize Theme
+  const applyTheme = (nextTheme: "light" | "dark") => {
+    setTheme(nextTheme);
+    if (nextTheme === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  };
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || 
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    if (savedTheme === "dark") {
-      document.documentElement.classList.add("dark");
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    try {
+      const savedTheme = localStorage.getItem("theme");
+      themePreference.current = savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
+    } catch {
+      themePreference.current = null;
     }
-    setTheme(savedTheme);
+    const updateTheme = () => applyTheme(themePreference.current ?? (systemTheme.matches ? "dark" : "light"));
+    updateTheme();
+    systemTheme.addEventListener?.("change", updateTheme);
+    return () => systemTheme.removeEventListener?.("change", updateTheme);
   }, []);
 
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    const nextTheme = theme === "light" ? "dark" : "light";
+    themePreference.current = nextTheme;
+    applyTheme(nextTheme);
+    // A blocked storage write must not prevent the selected appearance.
+    try { localStorage.setItem("theme", nextTheme); } catch {}
   };
 
   const handleLogout = async () => {
@@ -403,18 +410,18 @@ export default function DashboardShell({
       {/* ── SIDEBAR ─────────────────────────────── */}
       <aside
         className={clsx(
-          "dashboard-sidebar fixed inset-y-0 left-0 z-40 w-60 border-r border-white/10 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0",
+          "dashboard-sidebar fixed inset-y-0 left-0 z-40 w-60 border-r border-[var(--border)] flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-[var(--border)]">
           <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${portal.logoColor} flex items-center justify-center text-sm text-white shadow-sm`}>
             <ShieldCheck className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
-            <div className="text-sm font-bold text-white tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
-            <div className="text-[10px] text-blue-200/55 font-semibold tracking-wider uppercase">
+            <div className="text-sm font-bold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
+            <div className="text-[10px] text-[var(--muted)] font-semibold tracking-wider uppercase">
               {portal.sub}
             </div>
           </div>
@@ -424,7 +431,7 @@ export default function DashboardShell({
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((group) => (
             <div key={group.section} className="mb-5">
-              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-blue-200/45">
+              <div className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--muted)]">
                 {group.section}
               </div>
               {group.items.map((item) => {
@@ -436,8 +443,8 @@ export default function DashboardShell({
                     className={clsx(
                       "dashboard-nav-item group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-1",
                       isActive
-                        ? "dashboard-nav-active text-white font-semibold"
-                        : "text-blue-100/60 hover:bg-white/[0.07] hover:text-white"
+                        ? "dashboard-nav-active font-semibold"
+                        : ""
                     )}
                   >
                     {item.icon}
@@ -447,8 +454,8 @@ export default function DashboardShell({
                         className={clsx(
                           "text-[10px] font-extrabold px-1.5 py-0.5 rounded-md shadow-xs",
                           item.badge === "PRO"
-                            ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md shadow-amber-500/40 animate-pulse"
-                            : "bg-blue-500/20 text-blue-300"
+                            ? "dashboard-nav-badge shadow-md"
+                            : "bg-[var(--surface2)] text-[var(--ink2)]"
                         )}
                       >
                         {item.badge}
@@ -461,7 +468,7 @@ export default function DashboardShell({
           ))}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-blue-100/60 hover:bg-rose-500/10 hover:text-rose-300 transition-all w-full mt-2"
+            className="dashboard-nav-item dashboard-sign-out flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full mt-2"
           >
             <LogOut className="w-4 h-4" />
             Log Out
@@ -469,14 +476,14 @@ export default function DashboardShell({
         </nav>
 
         {/* User */}
-        <div className="px-4 py-4 border-t border-white/10 bg-black/10">
+        <div className="px-4 py-4 border-t border-[var(--border)] bg-[var(--surface2)]">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${identityColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
               {userSessionLost ? "—" : userInitials}
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-white truncate">{userSessionLost ? "Session ended" : userName}</div>
-              <div className="text-xs text-blue-200/50 capitalize">{role}</div>
+              <div className="text-sm font-semibold text-[var(--ink)] truncate">{userSessionLost ? "Session ended" : userName}</div>
+              <div className="text-xs text-[var(--muted)] capitalize">{role}</div>
             </div>
           </div>
         </div>
@@ -520,7 +527,7 @@ export default function DashboardShell({
                 disabled={adminSessionLost !== null || userSessionLost !== null}
                 aria-label="Open notifications"
                 aria-expanded={notifOpen}
-                className="dashboard-icon-button relative p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
+                className="dashboard-icon-button relative p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--dashboard-accent)] transition-colors border border-[var(--border)]"
                 title="Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -565,7 +572,7 @@ export default function DashboardShell({
                                 {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
                             </div>
-                            <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted2)] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-blue-500" aria-hidden="true" />
+                            <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted2)] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[var(--dashboard-accent)]" aria-hidden="true" />
                           </div>
                         </button>
                       ))
@@ -577,7 +584,7 @@ export default function DashboardShell({
             <button
               onClick={toggleTheme}
               aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-              className="dashboard-icon-button p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-blue-600 transition-colors border border-[var(--border)]"
+              className="dashboard-icon-button p-2 rounded-xl bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--dashboard-accent)] transition-colors border border-[var(--border)]"
               title="Toggle Theme"
             >
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
@@ -604,18 +611,18 @@ export default function DashboardShell({
                 <div className="dashboard-dropdown absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-2xl animate-dropdown">
                   <div className="px-3 py-2.5 border-b border-[var(--border)] mb-1">
                     <p className="text-xs font-bold text-[var(--ink)] truncate">{userName}</p>
-                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600">{role} account</p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--dashboard-accent)]">{role} account</p>
                   </div>
                   <Link
                     href={`/dashboard/${role}/settings`}
-                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--ink2)] hover:bg-blue-500/10 hover:text-blue-600"
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--ink2)] hover:bg-blue-500/10 hover:text-[var(--dashboard-accent)]"
                   >
                     <UserRound className="w-4 h-4" aria-hidden="true" /> Profile &amp; Settings
                   </Link>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10"
+                    className="mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--dashboard-danger)] hover:bg-rose-500/10"
                   >
                     <LogOut className="w-4 h-4" aria-hidden="true" /> Sign out
                   </button>

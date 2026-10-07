@@ -48,7 +48,20 @@ async function POSTImpl(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        // Retry temporary provider overload only; attempts includes the first call.
+        retryOptions: {
+          attempts: 3,
+          initialDelay: 1,
+          maxDelay: 2,
+          expBase: 2,
+          jitter: 1,
+          httpStatusCodes: [503],
+        },
+      },
+    });
     const body = await req.json();
     const { imageBase64, mimeType, topic, numQuestions } = body;
     const sourceText = typeof body.sourceText === "string" ? body.sourceText.trim() : "";
@@ -148,7 +161,15 @@ async function POSTImpl(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error("AI Create request failed");
+    const providerStatus = typeof error === "object" && error !== null
+      && "status" in error && typeof error.status === "number" ? error.status : undefined;
+    console.error("AI Create request failed", { providerStatus: providerStatus ?? null });
+    if (providerStatus === 503) {
+      return NextResponse.json({
+        error: "AI provider is temporarily busy. Please try again shortly.",
+        code: "AI_PROVIDER_UNAVAILABLE",
+      }, { status: 503, headers: { "Retry-After": "15" } });
+    }
     return NextResponse.json({ error: "Failed to generate questions. Please try again." }, { status: 500 });
   }
 }

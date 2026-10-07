@@ -72,7 +72,7 @@ export interface ProctorShieldQuizEditorProps {
   teacherName?: string;
   onClose: () => void;
   onSaveSuccess: (quiz: any) => void;
-  onOpenAiGenerator?: () => void;
+  onOpenAiGenerator?: (quiz: QuizFormData) => void;
 }
 
 const POINT_OPTIONS = [
@@ -606,14 +606,17 @@ export default function ProctorShieldQuizEditor({
               {onOpenAiGenerator && (
                 <button
                   type="button"
+                  disabled={isContentLocked}
+                  title={isContentLocked ? "Questions cannot be changed after students have joined or attempted this quiz." : undefined}
                   onClick={() => {
+                    if (isContentLocked) return;
                     if (!isSubscribed) {
                       alert("AI Generator requires an active ProctorShield Pro subscription.\n\nPlease upgrade to Pro to unlock automated question generation.");
                       return;
                     }
-                    onOpenAiGenerator();
+                    onOpenAiGenerator(quizForm);
                   }}
-                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all cursor-pointer"
+                  className="hidden md:inline-flex disabled:opacity-50 disabled:cursor-not-allowed items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                   AI Generator
@@ -751,14 +754,17 @@ export default function ProctorShieldQuizEditor({
                 {onOpenAiGenerator && (
                   <button
                     type="button"
+                    disabled={isContentLocked}
+                    title={isContentLocked ? "Questions cannot be changed after students have joined or attempted this quiz." : undefined}
                     onClick={() => {
+                      if (isContentLocked) return;
                       if (!isSubscribed) {
                         alert("AI Generator Assistant requires an active ProctorShield Pro subscription.\n\nPlease upgrade to Pro to unlock automated question generation.");
                         return;
                       }
-                      onOpenAiGenerator();
+                      onOpenAiGenerator(quizForm);
                     }}
-                    className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-slate-900 border border-purple-500/40 hover:border-purple-400 text-left transition-all cursor-pointer group"
+                    className="w-full disabled:opacity-50 disabled:cursor-not-allowed p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-slate-900 border border-purple-500/40 hover:border-purple-400 text-left transition-all cursor-pointer group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs font-black text-purple-300">

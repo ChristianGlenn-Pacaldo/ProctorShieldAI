@@ -8,8 +8,8 @@ const submitRouteSrc = fs.readFileSync(
   path.resolve(process.cwd(), "src/app/api/quizzes/submit/route.ts"),
   "utf-8"
 );
-const teacherReportsRouteSrc = fs.readFileSync(
-  path.resolve(process.cwd(), "src/app/api/dashboard/teacher/reports/route.ts"),
+const reportsQuerySrc = fs.readFileSync(
+  path.resolve(process.cwd(), "src/lib/ai-reports.ts"),
   "utf-8"
 );
 const studentResultsRouteSrc = fs.readFileSync(
@@ -95,7 +95,7 @@ test("Test H: Proctored 3-strike invalidation still functions", () => {
 
 test("Test I: Teacher integrity report strictly filters by attemptMode proctored", () => {
   assert.match(
-    teacherReportsRouteSrc,
+    reportsQuerySrc,
     /attemptMode:\s*["']proctored["']/
   );
 });

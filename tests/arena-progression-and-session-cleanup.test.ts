@@ -127,7 +127,7 @@ test("J: Completed student cannot answer questions again", () => {
 });
 
 test("K: Spectator lobby shows current score, rank, full leaderboard, countdown timer, and activity", () => {
-  assert.match(studentArenaContentSrc, /Power Arena Live Spectator Lobby/);
+  assert.match(studentArenaContentSrc, /Live Standings/);
   assert.match(studentArenaContentSrc, /Your Locked Score/);
   assert.match(studentArenaContentSrc, /Your Current Rank/);
   assert.match(studentArenaContentSrc, /Full Live Leaderboard/);
