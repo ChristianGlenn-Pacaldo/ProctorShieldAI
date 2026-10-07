@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { fileURLToPath } from "node:url";
 
 const isFrontend = process.env.FRONTEND_ONLY === 'true';
 
@@ -27,6 +28,18 @@ const allowedDevOrigins = Array.from(new Set([
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins,
+  // Preserve face-api/COCO's single TensorFlow engine with modular packages.
+  turbopack: {
+    resolveAlias: {
+      "@tensorflow/tfjs/dist/index.js": "./src/lib/tensorflow-browser.ts",
+    },
+  },
+  webpack(config) {
+    config.resolve.alias["@tensorflow/tfjs/dist/index.js$"] = fileURLToPath(
+      new URL("./src/lib/tensorflow-browser.ts", import.meta.url),
+    );
+    return config;
+  },
   ...(isFrontend ? { distDir: '.next-frontend' } : {}),
   async rewrites() {
     if (isFrontend) {

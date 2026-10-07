@@ -69,7 +69,7 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
   if (!cachedFaceApiPromise) {
     cachedFaceApiPromise = (async () => {
       const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
-      const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs");
+      const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs-core");
       sharedTf.enableProdMode();
       await sharedTf.ready();
       await Promise.all([
