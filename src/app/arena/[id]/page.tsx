@@ -1,6 +1,8 @@
 import { redirect, notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { readArenaQuestionWork } from "@/lib/arena-question-work";
+import { getAttemptQuestionOrder } from "@/lib/quiz-question-order";
 import { ArenaContent } from "./content";
 import { isQuizAvailable } from "@/lib/quiz-availability";
 
@@ -28,6 +30,7 @@ export default async function ArenaPage({ params }: ArenaPageProps) {
         orderBy: { id: "asc" },
         include: {
           choices: {
+            orderBy: { id: "asc" },
             select: {
               id: true,
               choiceText: true,
@@ -64,21 +67,26 @@ export default async function ArenaPage({ params }: ArenaPageProps) {
 
   // Load existing answers locked by server for this attempt
   const existingAnswers = await prisma.answer.findMany({
-    where: { studentQuizId: studentQuiz.id },
+    where: { studentQuizId: studentQuiz.id, isCorrect: { not: null } },
     select: { questionId: true, answerText: true, isCorrect: true },
   });
 
+  const arenaRecord = await prisma.setting.findUnique({ where: { settingKey: `arena:state:${quizId}` } });
+  const arena = arenaRecord?.settingValue ? JSON.parse(arenaRecord.settingValue) : null;
+  const initialQuestionWork = (await readArenaQuestionWork(prisma, studentQuiz.id, arena?.sessionId ?? "", quiz.questions,
+    quiz.quizStatus === "ended" || studentQuiz.quizStatus === "completed" || (arena?.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt)))).work;
   return (
     <ArenaContent
+      initialQuestionWork={initialQuestionWork}
       quizId={quiz.id}
       quizTitle={quiz.title}
       subjectName={quiz.subject.subjectName}
       teacherId={quiz.teacherId}
-      questions={quiz.questions.map((q) => ({
+      questions={getAttemptQuestionOrder(quiz.questions, studentQuiz.id).map((q) => ({
         id: q.id,
         questionText: q.questionText,
         points: q.points,
-        choices: q.choices,
+        choices: [...q.choices].sort((a, b) => a.id - b.id),
       }))}
       studentId={session.userId}
       studentName={session.fullName || "Student"}

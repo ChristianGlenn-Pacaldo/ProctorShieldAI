@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { prepareQuizScan, captureQuizScan, quizScanPayload, startQuizScannerCamera, type QuizScanSource } from "@/lib/quiz-scanner";
 import {
   Plus,
   Search,
@@ -78,10 +79,13 @@ export default function TeacherQuizzesPage({
   const [aiTopic, setAiTopic] = useState("");
   const [aiQuestionCount, setAiQuestionCount] = useState(5);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"text" | "upload" | "webcam">("text");
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [activeTab, setActiveTab] = useState<"text" | "scanner">("text");
+  const [scanSource, setScanSource] = useState<QuizScanSource | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [isPreparingScan, setIsPreparingScan] = useState(false);
+  const scanGenerationRef = useRef(0);
+  const cameraCleanupRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Quick Manage Quiz Modal State
@@ -117,35 +121,19 @@ export default function TeacherQuizzesPage({
     checkSub();
   }, [initialManualQuizLimit]);
 
-  // Stop camera helper
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
-    }
+    cameraCleanupRef.current?.(); cameraCleanupRef.current = null;
   };
-
-  // Webcam stream lifecycle
   useEffect(() => {
-    if (isAiModalOpen && activeTab === "webcam" && !capturedImage) {
-      navigator.mediaDevices
-        .getUserMedia({ video: { width: 640, height: 480 }, audio: false })
-        .then((s) => {
-          setStream(s);
-          if (videoRef.current) {
-            videoRef.current.srcObject = s;
-          }
-        })
-        .catch((err) => {
-          console.error("Error accessing camera:", err);
-        });
-    } else {
-      stopCamera();
+    if (isAiModalOpen && activeTab === "scanner" && cameraOpen && !scanSource && videoRef.current) {
+      cameraCleanupRef.current = startQuizScannerCamera(videoRef.current, setScannerError);
     }
-    return () => {
-      stopCamera();
-    };
-  }, [isAiModalOpen, activeTab, capturedImage]);
+    return stopCamera;
+  }, [isAiModalOpen, activeTab, cameraOpen, scanSource]);
+  useEffect(() => {
+    if (!isAiModalOpen) setIsPreparingScan(false);
+    return () => { scanGenerationRef.current++; };
+  }, [isAiModalOpen]);
 
   // Load quiz details when managing a quiz
   useEffect(() => {
@@ -263,7 +251,7 @@ export default function TeacherQuizzesPage({
           title: data.quiz.title,
           subjectName: data.quiz.subject?.subjectName || data.quiz.subjectName || "General",
           description: data.quiz.description || "",
-          duration: data.quiz.duration || 60,
+          duration: data.quiz.duration ?? 60,
           passingScore: data.quiz.passingScore || 70,
           shuffleQuestions: data.quiz.shuffleQuestions ?? true,
           allowRetake: data.quiz.allowRetake ?? true,
@@ -392,8 +380,13 @@ export default function TeacherQuizzesPage({
   };
 
   const updateQuizDuration = async (quiz: any, newDuration: string) => {
-    const durationInt = parseInt(newDuration);
-    if (isNaN(durationInt) || durationInt === quiz.duration || durationInt < 1) return;
+    const durationInt = Number(newDuration);
+    if (!Number.isInteger(durationInt) || durationInt < 1 || durationInt > 480) {
+      setActionError("Duration must be a whole number between 1 and 480 minutes.");
+      return;
+    }
+    if (durationInt === quiz.duration) return;
+    setActionError("");
     try {
       const res = await fetch(`/api/quizzes/${quiz.id}`, {
         method: "PUT",
@@ -403,9 +396,13 @@ export default function TeacherQuizzesPage({
       if (res.ok) {
         setManageQuiz({ ...quiz, duration: durationInt });
         fetchQuizzes();
+      } else {
+        const data = await res.json();
+        setActionError(data.error || "Unable to update quiz duration.");
       }
     } catch (err) {
       console.error(err);
+      setActionError("Unable to update quiz duration. Please try again.");
     }
   };
 
@@ -438,33 +435,21 @@ export default function TeacherQuizzesPage({
 
   const handleCapture = () => {
     if (!videoRef.current) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = 640;
-    canvas.height = 480;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-      const base64 = canvas.toDataURL("image/jpeg", 0.85);
-      setCapturedImage(base64);
-      stopCamera();
-    }
+    try { setScanSource(captureQuizScan(videoRef.current)); setScannerError(null); stopCamera(); setCameraOpen(false); }
+    catch (error) { setScannerError(error instanceof Error ? error.message : "Capture failed."); }
   };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setUploadedImage(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const splitBase64 = (dataUrl: string) => {
-    const parts = dataUrl.split(",");
-    const mime = parts[0].match(/:(.*?);/)?.[1] || "image/jpeg";
-    const raw = parts[1];
-    return { mime, raw };
+    stopCamera(); setCameraOpen(false); setScannerError(null); setIsPreparingScan(true);
+    const generation = ++scanGenerationRef.current;
+    try {
+      const source = await prepareQuizScan(file);
+      if (generation === scanGenerationRef.current) setScanSource(source);
+    } catch (error) {
+      if (generation === scanGenerationRef.current) setScannerError(error instanceof Error ? error.message : "Upload failed.");
+    } finally { if (generation === scanGenerationRef.current) setIsPreparingScan(false); }
   };
 
   const handleAiGenerate = async (e: React.FormEvent) => {
@@ -487,26 +472,10 @@ export default function TeacherQuizzesPage({
         }
         body.topic = aiTopic.trim();
         body.numQuestions = aiQuestionCount;
-      } else if (activeTab === "upload") {
-        if (!uploadedImage) {
-          alert("Please upload an image.");
-          setIsAiGenerating(false);
-          return;
-        }
-        const { mime, raw } = splitBase64(uploadedImage);
-        body.questionCount = 5;
-        body.imageBase64 = raw;
-        body.mimeType = mime;
-      } else if (activeTab === "webcam") {
-        if (!capturedImage) {
-          alert("Please capture an image.");
-          setIsAiGenerating(false);
-          return;
-        }
-        const { mime, raw } = splitBase64(capturedImage);
-        body.questionCount = 5;
-        body.imageBase64 = raw;
-        body.mimeType = mime;
+      } else {
+        if (!scanSource || isPreparingScan) throw new Error("Scan with camera or upload a file first.");
+        if (!Number.isInteger(aiQuestionCount) || aiQuestionCount < 1 || aiQuestionCount > 50) throw new Error("Choose between 1 and 50 questions.");
+        Object.assign(body, quizScanPayload(scanSource), { numQuestions: aiQuestionCount });
       }
 
       const res = await fetch("/api/ai/create", {
@@ -535,12 +504,7 @@ export default function TeacherQuizzesPage({
         throw new Error("AI generation verification is unavailable. Please try again.");
       }
 
-      const displayTopic =
-        activeTab === "text"
-          ? aiTopic
-          : activeTab === "upload"
-          ? "Uploaded Document"
-          : "Captured Document";
+      const displayTopic = activeTab === "text" ? aiTopic : scanSource?.name || "Scanned Document";
 
       setEditingQuizData({
         aiGenerationReceipt: data.aiGenerationReceipt,
@@ -573,8 +537,8 @@ export default function TeacherQuizzesPage({
       // Reset inputs
       setAiTopic("");
       setAiQuestionCount(5);
-      setUploadedImage(null);
-      setCapturedImage(null);
+      setScanSource(null);
+      setCameraOpen(false);
       setActiveTab("text");
     } catch (err: any) {
       console.error(err);
@@ -964,6 +928,8 @@ export default function TeacherQuizzesPage({
                   <input
                     type="number"
                     min="1"
+                    max="480"
+                    disabled={["in_progress", "ended"].includes(manageQuiz.quizStatus)}
                     defaultValue={manageQuiz.duration}
                     onBlur={(e) => updateQuizDuration(manageQuiz, e.target.value)}
                     onKeyDown={(e) => {
@@ -1204,27 +1170,9 @@ export default function TeacherQuizzesPage({
                 >
                   Prompt / Text
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("upload")}
-                  className={`pb-2 text-xs sm:text-sm font-semibold flex-1 border-b-2 transition-colors cursor-pointer ${
-                    activeTab === "upload"
-                      ? "border-purple-500 text-purple-600 dark:text-purple-400"
-                      : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-                  }`}
-                >
-                  Upload File/Image
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("webcam")}
-                  className={`pb-2 text-xs sm:text-sm font-semibold flex-1 border-b-2 transition-colors cursor-pointer ${
-                    activeTab === "webcam"
-                      ? "border-purple-500 text-purple-600 dark:text-purple-400"
-                      : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-                  }`}
-                >
-                  Webcam Scan
+                <button type="button" onClick={() => setActiveTab("scanner")}
+                  className={`pb-2 text-xs sm:text-sm font-semibold flex-1 border-b-2 transition-colors cursor-pointer ${activeTab === "scanner" ? "border-purple-500 text-purple-600 dark:text-purple-400" : "border-transparent text-[var(--muted)]"}`}>
+                  Document Scanner
                 </button>
               </div>
 
@@ -1257,75 +1205,28 @@ export default function TeacherQuizzesPage({
                 </div>
               )}
 
-              {activeTab === "upload" && (
+              {activeTab === "scanner" && (
                 <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-[var(--ink)]">
-                    Upload Exam / Document Image *
-                  </label>
-                  {!uploadedImage ? (
-                    <div className="border-2 border-dashed border-[var(--border)] hover:border-purple-500/50 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer relative bg-[var(--surface2)]">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                      />
-                      <Upload className="w-8 h-8 text-[var(--muted)] mb-2" />
-                      <span className="text-xs text-[var(--muted)] text-center">
-                        Drag &amp; drop or click to upload exam or notes image
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black/40 p-2">
-                      <img
-                        src={uploadedImage}
-                        alt="Uploaded preview"
-                        className="w-full max-h-[180px] object-contain rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setUploadedImage(null)}
-                        className="absolute top-4 right-4 bg-red-500/90 text-white p-1.5 rounded-lg hover:bg-red-600 transition-colors shadow-lg cursor-pointer"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "webcam" && (
-                <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-[var(--ink)]">
-                    Capture Exam Paper from Webcam *
-                  </label>
-                  {!capturedImage ? (
-                    <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black aspect-video flex items-center justify-center">
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={handleCapture}
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-purple-600/30 transition-all cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4" /> Capture Photo
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-black/40 p-2">
-                      <img
-                        src={capturedImage}
-                        alt="Captured preview"
-                        className="w-full max-h-[180px] object-contain rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setCapturedImage(null)}
-                        className="absolute top-4 right-4 bg-red-500/90 text-white p-1.5 rounded-lg hover:bg-red-600 transition-colors shadow-lg cursor-pointer"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={() => { setScanSource(null); setScannerError(null); setCameraOpen(true); }} className="px-4 py-2 rounded-lg bg-purple-600 text-white">Scan with Camera</button>
+                    <label className="px-4 py-2 rounded-lg border border-[var(--border)] cursor-pointer">Upload from Device
+                      <input type="file" accept="image/*,application/pdf,.pdf,text/plain,.txt" onChange={handleFileUpload} className="sr-only" disabled={isPreparingScan} />
+                    </label>
+                  </div>
+                  <p className="text-xs text-[var(--muted)]">Images up to 10 MB, PDF up to 4 MB, or plain text up to 60 KB.</p>
+                  {scannerError && <p role="alert" className="text-sm text-rose-500">{scannerError}</p>}
+                  {isPreparingScan && <p role="status">Preparing scan…</p>}
+                  {cameraOpen && !scanSource && <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
+                    <button type="button" onClick={handleCapture} className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-purple-600 text-white rounded-xl">Capture Photo</button>
+                  </div>}
+                  {scanSource && <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
+                    {scanSource.dataUrl?.startsWith("data:image/") && <img src={scanSource.dataUrl} alt="Scan preview" className="w-full max-h-[220px] object-contain" />}
+                    <p className="text-sm">{scanSource.name}</p>
+                    <button type="button" onClick={() => setScanSource(null)} className="text-sm text-rose-500">Remove scan</button>
+                  </div>}
+                  <label className="block text-xs font-semibold" htmlFor="scan-question-count">Number of Questions (1–50)</label>
+                  <input id="scan-question-count" type="number" min={1} max={50} step={1} required value={aiQuestionCount} onChange={e => setAiQuestionCount(Number(e.target.value))} className="w-full px-3 py-2 border rounded-lg" />
                 </div>
               )}
 
@@ -1344,7 +1245,7 @@ export default function TeacherQuizzesPage({
                 </button>
                 <button
                   type="submit"
-                  disabled={isAiGenerating}
+                  disabled={isAiGenerating || isPreparingScan}
                   className="flex-1 py-2 rounded-lg font-semibold text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-90 transition-all shadow-lg shadow-purple-600/20 disabled:opacity-50 flex justify-center items-center gap-2 cursor-pointer"
                 >
                   {isAiGenerating ? (

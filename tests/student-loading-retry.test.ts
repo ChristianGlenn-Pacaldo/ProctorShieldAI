@@ -196,31 +196,16 @@ for (const entry of cases) {
   });
 }
 
-test("Dashboard progression failure never displays fabricated Level 1 or zero EXP and Retry recovers", async () => {
+test("Bug 10: simplified dashboard retains quiz/results navigation without trust, assigned, or progression cards", async () => {
   const setup = fixture(cases[0].path, {
-    "/api/quizzes": [{ ok: true, body: cases[0].empty }],
-    "/api/student/progression": [{ ok: false }, { ok: true, body: progression }],
+    "/api/quizzes": [{ok:true,body:{success:true,quizzes:[{...quiz,quizStatus:"completed",score:80,aiVerdict:"clean",quiz:{...quiz.quiz,title:"Saved Result"}}]}}],
+    "/api/student/progression": [{ok:true,body:progression}],
   });
   await setup.mount();
-  assert.match(textOf(setup.render()), /Progression unavailable/);
-  assert.match(textOf(setup.render()), /Could not load your progression/);
-  assert.doesNotMatch(textOf(setup.render()), /Level 1|0 Total EXP/);
-  await setup.retry(0);
-  assert.match(textOf(setup.render()), /Level 2/);
-  assert.match(textOf(setup.render()), /850 Total EXP/);
-  assert.equal(setup.requestCount("/api/student/progression"), 2);
-  assert.equal(setup.requestCount("/api/quizzes"), 1);
-});
-
-test("Dashboard progression network failure preserves previously loaded values", async () => {
-  const setup = fixture(cases[0].path, {
-    "/api/quizzes": [{ ok: true, body: cases[0].empty }, { ok: true, body: cases[0].empty }],
-    "/api/student/progression": [{ ok: true, body: progression }, new Error("offline")],
-  });
-  await setup.mount();
-  await setup.refetch();
-  assert.match(textOf(setup.render()), /Level 2/);
-  assert.match(textOf(setup.render()), /Could not load your progression/);
-  assert.equal(setup.timers(), 0);
-  assert.equal(setup.subscriptions(), 0);
+  const text = textOf(setup.render());
+  assert.doesNotMatch(text,/AI Verified|Proctor Trust Index|Assigned|Total EXP|Student Progression|EXP Progress|Level 2/i);
+  assert.match(text,/Completed/); assert.match(text,/80%/); assert.match(text,/Saved Result/);
+  assert.equal(nodesOf(setup.render(), n => n.props.href === "/dashboard/student/results").length > 0,true);
+  assert.equal(nodesOf(setup.render(), n => n.props.href === "/join").length > 0,true);
+  assert.equal(setup.requestCount("/api/student/progression"),0);
 });

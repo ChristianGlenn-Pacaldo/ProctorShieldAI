@@ -3,6 +3,7 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { readProctoredSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 import { mutateArena } from "@/lib/arena";
 import { normalizeSubmittedAnswers } from "@/lib/quiz-submission";
 
@@ -30,15 +31,15 @@ async function POSTImpl(req: NextRequest) {
         quizStatus: "in_progress",
         quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
-      select: { id: true, startTime: true, attemptMode: true, quiz: { select: { duration: true } } },
+      select: { id: true, startTime: true, attemptMode: true, quiz: { select: { id: true, duration: true, quizStatus: true } } },
       orderBy: { attemptNumber: "desc" },
     });
     if (!studentQuiz || !studentQuiz.startTime || (studentQuiz.attemptMode !== "arena" && body.studentQuizId !== studentQuiz.id)) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
     }
 
-    const deadline = studentQuiz.startTime.getTime() + (studentQuiz.quiz.duration ?? 60) * 60_000 + 60_000;
-    if (studentQuiz.attemptMode !== "arena" && Date.now() > deadline) {
+    const timing = studentQuiz.attemptMode === "arena" ? null : await readProctoredSession(prisma, studentQuiz.quiz);
+    if (studentQuiz.attemptMode !== "arena" && (!timing || sessionTimingPayload(timing, studentQuiz.quiz.quizStatus).remainingSeconds === 0)) {
       return NextResponse.json({ error: "The autosave deadline has passed" }, { status: 409 });
     }
 

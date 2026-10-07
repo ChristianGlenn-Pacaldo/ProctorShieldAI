@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
+import { UNAVAILABLE_QUIZ_STATUSES } from "@/lib/quiz-availability";
 import PlaygroundContent from "./content";
 import { redirect } from "next/navigation";
 
@@ -18,7 +19,7 @@ export default async function TeacherPlaygroundPage() {
     where: {
       teacherId: session.userId,
       quizMode: "arena",
-      quizStatus: { not: "ended" },
+      quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES, "inactive", "ended"] },
     },
     include: {
       subject: { select: { subjectName: true, subjectCode: true } },
@@ -35,7 +36,7 @@ export default async function TeacherPlaygroundPage() {
     quizType: q.quizType || "standard",
     quizMode: "arena" as const,
     quizStatus: q.quizStatus,
-    duration: q.duration || 10,
+    duration: q.duration ?? 30,
     passingScore: q.passingScore || 70,
     subjectName: q.subject?.subjectName || "General",
     subjectCode: q.subject?.subjectCode || "GEN",

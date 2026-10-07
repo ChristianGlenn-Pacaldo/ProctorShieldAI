@@ -80,7 +80,7 @@ test("client-supplied mode cannot override PostgreSQL quizMode", () => {
 
 test("Playground cannot masquerade a proctored quiz as Arena", () => {
   assert.match(playgroundPageSource, /quizMode:\s*"arena"/);
-  assert.match(playgroundPageSource, /quizStatus:\s*\{ not:\s*"ended" \}/);
+  assert.match(playgroundPageSource, /quizStatus:\s*\{ notIn:\s*\[\.\.\.UNAVAILABLE_QUIZ_STATUSES, "inactive", "ended"\] \}/);
   assert.match(playgroundContentSource, /if \(!response\.ok \|\| !data\?\.success\)/);
   const rejectionIndex = playgroundContentSource.indexOf("if (!response.ok || !data?.success)");
   const navigationIndex = playgroundContentSource.indexOf("router.push(`/dashboard/teacher/playground/arena/");

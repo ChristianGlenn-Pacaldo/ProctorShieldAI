@@ -18,7 +18,9 @@ import { awardStudentExp, getStudentProgression, EXP_REWARDS } from "@/lib/stude
 import { mutateArena } from "@/lib/arena";
 import { recoverArenaFinalization } from "@/lib/arena-finalization";
 
+import { readArenaQuestionWork } from "@/lib/arena-question-work";
 import { canSubmitProctored } from "@/lib/proctored-runtime";
+import { readProctoredSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 
 class InvalidSubmissionError extends Error {}
 class SubmissionConflictError extends Error {}
@@ -80,9 +82,11 @@ async function POSTImpl(req: NextRequest) {
         }
         const payout = arena.payouts?.find((p) => p.studentId === session.userId);
         if (!payout) throw new Error("Arena final reward is unavailable");
+        const questions = await tx.quiz.findUnique({ where: { id: attempt.quizId }, select: { questions: { select: { id: true } } } });
+        const questionWork = (await readArenaQuestionWork(tx, attempt.id, arena.sessionId, questions?.questions ?? [], true)).work;
         // Do not regrade/replace accepted answers or overwrite the final points.
         return () => NextResponse.json({ success: true, studentQuiz: completed, rank: payout.rank,
-          arenaRevision: arena.revision, sessionId: arena.sessionId, result: {
+          arenaRevision: arena.revision, sessionId: arena.sessionId, questionWork, result: {
           score: Number(completed.score), violationCount: 0, integrityInvalidated: false,
           deadlineExpired: arena.completionReason === "timer_expiry",
           aiVerdict: null, cheatingProbability: null, expEarned: payout.amount, attemptMode: "arena",
@@ -138,9 +142,9 @@ async function POSTImpl(req: NextRequest) {
     if (!studentQuiz.startTime) {
       return NextResponse.json({ error: "Quiz start time is missing" }, { status: 409 });
     }
-    const durationMinutes = studentQuiz.quiz.duration ?? 60;
-    const deadline = studentQuiz.startTime.getTime() + durationMinutes * 60_000 + 60_000;
-    const deadlineExpired = Date.now() > deadline;
+    const timing = await readProctoredSession(prisma, studentQuiz.quiz);
+    if (!timing) return NextResponse.json({ error: "Quiz session deadline is missing" }, { status: 409 });
+    const deadlineExpired = sessionTimingPayload(timing, studentQuiz.quiz.quizStatus).remainingSeconds === 0;
 
     // 2. Dynamic Grading and Saving Answers
     const dbQuestions = await prisma.question.findMany({
@@ -251,7 +255,7 @@ Return ONLY the valid JSON object.`;
         }
         if (!canSubmitProctored({ reason, active: Boolean(studentQuiz.startTime),
           questionCount: dbQuestions.length, answeredCount: grading.records.length,
-          remainingSeconds: Math.ceil((studentQuiz.startTime!.getTime() + durationMinutes * 60_000 - Date.now()) / 1000),
+          remainingSeconds: sessionTimingPayload(timing, studentQuiz.quiz.quizStatus).remainingSeconds,
           violationCount: violations.length, teacherEnded: validTeacherEnd })) {
           throw new InvalidSubmissionError();
         }

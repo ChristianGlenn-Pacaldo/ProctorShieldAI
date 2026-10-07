@@ -1,7 +1,7 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { mutateArena } from "@/lib/arena";
+import { mutateArena, type ArenaState } from "@/lib/arena";
 import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
@@ -183,7 +183,7 @@ async function POSTImpl(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const enroll = async (tx: Prisma.TransactionClient) => {
+    const enroll = async (tx: Prisma.TransactionClient, arenaState?: ArenaState | null) => {
       // Serialize enrollment for this quiz so simultaneous join requests cannot
       // exceed the plan capacity.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-enrollment:${quiz.id}`}))`;
@@ -197,6 +197,16 @@ async function POSTImpl(req: NextRequest) {
       }
       if (currentQuiz.quizStatus === "ended") {
         return { kind: "closed" as const, reason: "ended" as const };
+      }
+
+      // PIN enrollment must not create a competitor after the shared match closes.
+      const arenaLateJoin = quizMode === "arena" && currentQuiz.quizStatus === "in_progress";
+      if (quizMode === "arena" && (arenaLateJoin || arenaState?.status === "active" || arenaState?.status === "ended")) {
+        const endsAt = arenaState?.matchEndsAt ? Date.parse(arenaState.matchEndsAt) : NaN;
+        const startedAt = arenaState?.startedAt ? Date.parse(arenaState.startedAt) : NaN;
+        if (arenaState?.status !== "active" || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || endsAt <= Date.now()) {
+          return { kind: "closed" as const, reason: "ended" as const };
+        }
       }
 
       // Returning students and approved retakes do not consume another seat.
@@ -222,12 +232,16 @@ async function POSTImpl(req: NextRequest) {
         return { kind: "full" as const, capacity };
       }
 
+      if (arenaLateJoin && Date.parse(arenaState!.matchEndsAt!) <= Date.now()) {
+        return { kind: "closed" as const, reason: "ended" as const };
+      }
       const isLateJoin = currentQuiz.quizStatus === "in_progress";
       const studentQuiz = await tx.studentQuiz.create({
         data: {
           studentId: session.userId,
           quizId: quiz.id,
-          quizStatus: isLateJoin ? "pending_approval" : "enrolled",
+          quizStatus: arenaLateJoin ? "in_progress" : isLateJoin ? "pending_approval" : "enrolled",
+          ...(arenaLateJoin ? { startTime: new Date(arenaState!.startedAt!) } : {}),
           attemptMode: quizMode,
         },
       });
@@ -245,8 +259,8 @@ async function POSTImpl(req: NextRequest) {
     };
     // Arena comes before enrollment; Start/End/reset use the same first lock.
     const enrollmentResult = quizMode === "arena"
-      ? await mutateArena(quiz.id, ({ tx }) => enroll(tx))
-      : await prisma.$transaction(enroll);
+      ? await mutateArena(quiz.id, ({ tx, state }) => enroll(tx, state))
+      : await prisma.$transaction((tx) => enroll(tx));
 
     if (enrollmentResult.kind === "closed") {
       return enrollmentResult.reason === "unavailable"

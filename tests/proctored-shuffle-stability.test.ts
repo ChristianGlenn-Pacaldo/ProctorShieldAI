@@ -1,3 +1,5 @@
+import * as questionOrder from "../src/lib/quiz-question-order.ts";
+import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -20,6 +22,8 @@ function load(file: string, db: unknown, role = "student") {
   const exports: Record<string, (...args: unknown[]) => Promise<Response>> = {};
   const dependencies: Record<string, unknown> = {
     "node:crypto": crypto,
+    "@/lib/quiz-session-timing": sessionTiming,
+    "@/lib/quiz-question-order": questionOrder,
     "next/server": { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } },
     "@/lib/backup-write-gate": { withBackupWriteGate: (handler: unknown) => handler },
     "@/lib/auth": { getSession: async () => ({ userId: role === "student" ? "student-1" : "teacher-1", role }) },
@@ -43,7 +47,8 @@ function fixture(shuffleQuestions = true) {
     attemptMode: "proctored", quizStatus: "in_progress", startTime: new Date(), endTime: null as Date | null }];
   let saved: { questionId: number; answerText: string; isCorrect: boolean }[] = [];
   const db = {
-    quiz: { findUnique: async (query: { include: { questions: { orderBy: { id: string }; include: { choices: { orderBy: { id: string } } } } } }) => {
+    quiz: { findUnique: async (query: { include?: { questions: { orderBy: { id: string }; include: { choices: { orderBy: { id: string } } } } } }) => {
+      if (!query.include) return { ...quiz, questions: rows };
       assert.equal(query.include.questions.orderBy.id, "asc");
       assert.equal(query.include.questions.include.choices.orderBy.id, "asc");
       // Intentionally ignore orderBy: the canonical shuffle boundary must also
@@ -51,7 +56,8 @@ function fixture(shuffleQuestions = true) {
       return { ...quiz, questions: rows };
     } },
     studentQuiz: {
-      findFirst: async (query: { orderBy: { attemptNumber: string } }) => {
+      findFirst: async (query: { orderBy: { attemptNumber?: string; startTime?: string } }) => {
+        if (query.orderBy.startTime === "asc") return attempts.find(a => a.startTime);
         assert.equal(query.orderBy.attemptNumber, "desc"); return attempts.at(-1);
       },
       findUnique: async () => ({ ...attempts[0], quiz, student: { fullName: "Student" } }),
@@ -60,6 +66,7 @@ function fixture(shuffleQuestions = true) {
         const attempt = { ...data, id: crypto.randomUUID() }; attempts.push(attempt); return attempt;
       },
     },
+    setting: { findUnique: async () => null },
     answer: { findMany: async () => saved }, violation: { count: async () => 0 },
     notification: { create: async () => {} }, $executeRaw: async () => 1,
     $transaction: async (callback: (tx: unknown) => unknown) => callback(db),
@@ -107,10 +114,10 @@ test("independent Student attempts use their own seed; permutation collisions ar
     assert.deepEqual(ids(next).sort((a, b) => a - b), authored.map(q => q.id));
   }
 });
-test("shuffle disabled preserves canonical persisted question and choice creation order", async () => {
+test("legacy shuffle flag off still shuffles questions per attempt and preserves canonical choice order", async () => {
   const f = fixture(false); f.input(reverseInput()); const data = await f.get();
-  assert.deepEqual(ids(data), authored.map(q => q.id));
-  assert.deepEqual(data.questions.map(q => q.choices.map(c => c.id)), authored.map(q => q.choices.map(c => c.id)));
+  assert.deepEqual(ids(data), questionOrder.getAttemptQuestionOrder(authored, data.studentQuizId).map(q => q.id));
+  assert.ok(data.questions.every(q => JSON.stringify(q.choices.map(c => c.id)) === JSON.stringify(authored.find(original => original.id === q.id)!.choices.map(c => c.id))));
 });
 test("choice-only physical order changes keep the same attempt/question choice seed stable", async () => {
   const f = fixture(); const first = await f.get();

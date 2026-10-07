@@ -1,3 +1,4 @@
+import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -73,6 +74,7 @@ function fixture(relativePath: string, replies: Reply[]) {
     exports: component,
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
+      if (name === "@/lib/quiz-scanner") return quizScanner;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "react-dom") return { createPortal: (children: unknown) => children };

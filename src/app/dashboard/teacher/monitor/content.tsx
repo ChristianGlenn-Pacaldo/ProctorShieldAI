@@ -16,7 +16,7 @@ interface Feed {
   lastSeen: Date;
   violationCount: number;
   snapshot: string | null;
-  deviceType?: "desktop" | "mobile";
+  deviceType?: "desktop" | "mobile" | "tablet";
   monitoringLevel?: "strict" | "reduced";
   connectionStatus?: "online" | "offline";
 }
@@ -98,7 +98,7 @@ const StudentVideoFeed = React.memo(
           <div className="text-[11px] font-medium text-[var(--muted)] mt-0.5 truncate flex items-center justify-between">
             <span title={`Student ID: ${feed.id}`}>{feed.quizTitle}</span>
             <span className={`text-[9px] font-bold ${feed.monitoringLevel === "reduced" ? "text-violet-400" : "text-emerald-500"}`}>
-              {feed.deviceType === "mobile" ? "Mobile" : "Desktop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
+              {feed.deviceType === "tablet" ? "Tablet" : feed.deviceType === "mobile" ? "Mobile" : "Desktop/Laptop"} · {feed.monitoringLevel === "reduced" ? "Reduced" : "Strict"}
             </span>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function LiveMonitorContent({
 
         if (existingIndex >= 0) {
           const cur = prev[existingIndex];
-          const newDevice = data.deviceType === "mobile" ? "mobile" : "desktop";
+          const newDevice = data.deviceType === "tablet" ? "tablet" : data.deviceType === "mobile" ? "mobile" : "desktop";
           const newLevel = data.monitoringLevel === "strict" ? "strict" : "reduced";
 
           if (
@@ -291,7 +291,7 @@ export default function LiveMonitorContent({
               lastSeen: new Date(),
               violationCount: 0,
               snapshot: data.snapshot,
-              deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+              deviceType: data.deviceType === "tablet" ? "tablet" : data.deviceType === "mobile" ? "mobile" : "desktop",
               monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
               connectionStatus: "online",
             },
@@ -322,7 +322,7 @@ export default function LiveMonitorContent({
         const exists = prev.findIndex((f) => f.id === studentId || f.name === data.studentName);
         if (exists >= 0) {
           const cur = prev[exists];
-          const newDevice = data.deviceType === "mobile" ? "mobile" : "desktop";
+          const newDevice = data.deviceType === "tablet" ? "tablet" : data.deviceType === "mobile" ? "mobile" : "desktop";
           const newLevel = data.monitoringLevel === "strict" ? "strict" : "reduced";
           if (cur.deviceType === newDevice && cur.monitoringLevel === newLevel && cur.connectionStatus === "online") {
             cur.lastSeen = new Date();
@@ -352,7 +352,7 @@ export default function LiveMonitorContent({
             lastSeen: new Date(),
             violationCount: 0,
             snapshot: null,
-            deviceType: data.deviceType === "mobile" ? "mobile" : "desktop",
+            deviceType: data.deviceType === "tablet" ? "tablet" : data.deviceType === "mobile" ? "mobile" : "desktop",
             monitoringLevel: data.monitoringLevel === "strict" ? "strict" : "reduced",
             connectionStatus: "online",
           },
@@ -393,7 +393,7 @@ export default function LiveMonitorContent({
           lastSeen: new Date(),
           violationCount: existingIndex >= 0 ? prev[existingIndex].violationCount + 1 : 1,
           snapshot: currentSnap,
-          deviceType: data.deviceType === "mobile"
+          deviceType: data.deviceType === "tablet" ? "tablet" : data.deviceType === "mobile"
             ? "mobile"
             : existingIndex >= 0 ? prev[existingIndex].deviceType : "desktop",
           monitoringLevel: data.monitoringLevel === "strict"
@@ -491,7 +491,7 @@ export default function LiveMonitorContent({
               if (idx >= 0) {
                 const cur = updated[idx];
                 const newSnapshot = snap.snapshot || null;
-                const newDevice = snap.deviceType === "mobile" ? "mobile" : "desktop";
+                const newDevice = snap.deviceType === "tablet" ? "tablet" : snap.deviceType === "mobile" ? "mobile" : "desktop";
                 const newLevel = snap.monitoringLevel === "strict" ? "strict" : "reduced";
                 const newStatus = snap.connectionStatus === "offline" ? "Offline" : snap.violationCount > 0 ? "⚠ Flagged" : "✓ Active";
                 const newStatusColor = snap.violationCount > 0 ? "text-red-500" : "text-emerald-500";
@@ -537,7 +537,7 @@ export default function LiveMonitorContent({
                   lastSeen: new Date(snap.updatedAt || Date.now()),
                   violationCount: snap.violationCount,
                   snapshot: snap.snapshot,
-                  deviceType: snap.deviceType === "mobile" ? "mobile" : "desktop",
+                  deviceType: snap.deviceType === "tablet" ? "tablet" : snap.deviceType === "mobile" ? "mobile" : "desktop",
                   monitoringLevel: snap.monitoringLevel === "strict" ? "strict" : "reduced",
                   connectionStatus: snap.connectionStatus,
                 });

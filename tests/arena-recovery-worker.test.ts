@@ -92,3 +92,33 @@ test("runtime registration is a singleton and shutdown removes every worker sign
   const restarted = recovery.startArenaRecovery(); assert.notEqual(restarted, one);
   await restarted.stop(); assert.equal(scans, 2);
 });
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createRequire } from "node:module";
+import ts from "typescript";
+
+test("Edge instrumentation bundle excludes the Node-only recovery dependency", async (t) => {
+  const webpack = createRequire(import.meta.url)("next/dist/compiled/webpack/webpack").webpack;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "proctorshield-edge-hook-"));
+  assert.ok(path.resolve(directory).startsWith(path.resolve(os.tmpdir()) + path.sep));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const source = fs.readFileSync("src/instrumentation.ts", "utf8");
+  fs.writeFileSync(path.join(directory, "instrumentation.js"), ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText);
+  fs.mkdirSync(path.join(directory, "lib"));
+  // Deliberately fail if the Edge bundler tries to include any Node recovery code.
+  fs.writeFileSync(path.join(directory, "lib/arena-recovery.js"), 'import "node:fs"; export function startArenaRecovery() {}');
+  const compiler = webpack({ mode: "development", target: "webworker", context: directory,
+    entry: "./instrumentation.js", output: { path: path.join(directory, "out"), filename: "edge.js" },
+    plugins: [new webpack.DefinePlugin({ "process.env.NEXT_RUNTIME": JSON.stringify("edge") })],
+  });
+  const stats = await new Promise<any>((resolve, reject) => compiler.run((error: Error | null, result: any) => {
+    compiler.close((closeError: Error | null) => error || closeError ? reject(error || closeError) : resolve(result));
+  }));
+  assert.equal(stats.hasErrors(), false, stats.toString({ all: false, errors: true }));
+  const emitted = fs.readFileSync(path.join(directory, "out/edge.js"), "utf8");
+  assert.doesNotMatch(emitted, /node:fs|lib\/arena-recovery/);
+});

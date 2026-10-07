@@ -1,3 +1,4 @@
+import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -32,7 +33,7 @@ function textOf(value: unknown): string {
 }
 
 function invoke(node: ElementNode, handler: "onClick" | "onChange", event?: unknown) {
-  (node.props[handler] as (event?: unknown) => void)(event);
+  return (node.props[handler] as (event?: unknown) => void)(event);
 }
 
 function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
@@ -51,13 +52,17 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
       }];
     },
     useEffect: (callback: () => void) => { if (collectEffects) effects.push(callback); },
-    useRef: () => ({ current: {} }),
+    useRef: (initial: unknown) => ({ current: initial }),
   };
-  const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
+  const jsx = (type: string, props: Record<string, unknown>) => {
+    if (type === "video" && props.ref) (props.ref as { current: unknown }).current = { readyState: 2, videoWidth: 1280, videoHeight: 720 };
+    return { type, props };
+  };
   const component: { default?: (props: Record<string, unknown>) => ElementNode } = {};
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/lib/quiz-scanner") return { ...quizScanner, prepareQuizScan: async () => ({ name: "Fixture image", dataUrl: "data:image/jpeg;base64,QUJD" }), captureQuizScan: () => ({ name: "Camera scan", dataUrl: "data:image/jpeg;base64,QUJD" }) };
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "next/navigation") return { useRouter: () => ({ push() {} }) };
@@ -86,7 +91,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
       onloadend?: () => void;
       readAsDataURL() { this.onloadend?.(); }
     },
-    document: { body: {}, createElement: () => ({ getContext: () => ({ drawImage() {} }), toDataURL: () => "data:image/jpeg;base64,QUJD" }) },
+    document: { body: {}, createElement: () => ({ getContext: () => ({ drawImage() {}, fillRect() {} }), toDataURL: () => "data:image/jpeg;base64,QUJD" }) },
     window: { location: { search: "" } },
     console: { error() {} },
   }, { filename: componentPath });
@@ -138,20 +143,22 @@ test("Prompt/Text defaults to five questions and rejects counts outside the API 
   assert.equal(setup.requests[0].body.numQuestions, 5);
 });
 
-test("Upload and webcam retain their existing image request fields", async () => {
+test("Upload and camera share the scanner payload and selected question count", async () => {
   const upload = fixture();
   upload.open();
-  upload.tab("Upload File/Image");
-  invoke(upload.node((entry) => entry.type === "input" && entry.props.type === "file"), "onChange", { target: { files: [{}] } });
+  upload.tab("Document Scanner");
+  await invoke(upload.node((entry) => entry.type === "input" && entry.props.type === "file"), "onChange", { target: { files: [{}] } });
+  await Promise.resolve();
   await upload.submit();
-  assert.deepEqual({ ...upload.requests[0].body }, { type: "upload", questionCount: 5, imageBase64: "QUJD", mimeType: "image/png" });
+  assert.deepEqual({ ...upload.requests[0].body }, { type: "scanner", numQuestions: 5, imageBase64: "QUJD", mimeType: "image/jpeg" });
 
   const webcam = fixture();
   webcam.open();
-  webcam.tab("Webcam Scan");
-  invoke(webcam.node((entry) => entry.type === "button" && textOf(entry) === " Capture Photo"), "onClick");
+  webcam.tab("Document Scanner");
+  invoke(webcam.node((entry) => entry.type === "button" && textOf(entry) === "Scan with Camera"), "onClick");
+  invoke(webcam.node((entry) => entry.type === "button" && textOf(entry) === "Capture Photo"), "onClick");
   await webcam.submit();
-  assert.deepEqual({ ...webcam.requests[0].body }, { type: "webcam", questionCount: 5, imageBase64: "QUJD", mimeType: "image/jpeg" });
+  assert.deepEqual({ ...webcam.requests[0].body }, { type: "scanner", numQuestions: 5, imageBase64: "QUJD", mimeType: "image/jpeg" });
 });
 
 test("non-OK AI response shows its error without opening Studio", async () => {

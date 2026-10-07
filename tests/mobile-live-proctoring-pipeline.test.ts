@@ -74,7 +74,7 @@ test("13 & 14: Video playback auto-resumes on foregrounding if paused on mobile"
 });
 
 test("15 & 16: Face-missing and multiple-faces continuous frames produce max one incident violation", () => {
-  assert.match(quizPageSrc, /noFaceViolationRecorded/);
+  assert.match(quizPageSrc, /mobileNoFaceIncidentRecordedRef/);
   assert.match(quizPageSrc, /multipleFacesViolationRecorded/);
   assert.match(quizPageSrc, /reportViolationRef\.current\("no_face",\s*100\)/);
   assert.match(quizPageSrc, /reportViolationRef\.current\("multiple_faces",\s*100\)/);

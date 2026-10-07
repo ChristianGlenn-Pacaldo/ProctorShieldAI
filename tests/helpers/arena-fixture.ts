@@ -1,7 +1,10 @@
+import * as questionWork from "../../src/lib/arena-question-work.ts";
 import fs from "node:fs";
 import vm from "node:vm";
 import crypto from "node:crypto";
 import ts from "typescript";
+import * as questionOrder from "../../src/lib/quiz-question-order.ts";
+import * as sessionTiming from "../../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import * as grading from "../../src/lib/quiz-submission.ts";
 import * as quizMode from "../../src/lib/quiz-mode.ts";
@@ -9,7 +12,7 @@ import * as quizMode from "../../src/lib/quiz-mode.ts";
 const compiled = new Map<string, string>();
 export function loadArenaModule(file: string, dependencies: Record<string, unknown>) {
   if (!compiled.has(file)) compiled.set(file, ts.transpileModule(fs.readFileSync(file, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
   }).outputText);
   const exports: any = {};
   vm.runInNewContext(compiled.get(file)!, {
@@ -18,6 +21,9 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
     process: dependencies.__process ?? { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn(...args: unknown[]) { (dependencies.__warnings as unknown[][] | undefined)?.push(args); }, info() {} },
     require: (name: string) => {
       if (name === "node:crypto") return crypto;
+      if (name === "@/lib/arena-question-work" && !(name in dependencies)) return questionWork;
+      if (name === "@/lib/quiz-question-order" && !(name in dependencies)) return questionOrder;
+      if (name === "@/lib/quiz-session-timing" && !(name in dependencies)) return sessionTiming;
       if (!(name in dependencies)) throw new Error(`Missing dependency ${name}`);
       return dependencies[name];
     },
@@ -99,6 +105,11 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
           },
         },
         studentQuiz: {
+          create: async ({ data: row }: any) => {
+            fail("attempt");
+            const created = { id: `attempt-${row.studentId}`, attemptNumber: 1, startTime: null, endTime: null, ...row };
+            ready().attempts.set(row.studentId, created); return structuredClone(created);
+          },
           count: async ({ where }: any) => [...ready().attempts.values()].filter((a) => matches(a, where)).length,
           findFirst: async ({ where }: any) => {
             const row = [...ready().attempts.values()].find((a) => matches(a, where));
@@ -173,7 +184,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
   const finalization = loadArenaModule("src/lib/arena-finalization.ts", {
     "./arena.ts": arena, "./arena-realtime.ts": realtime, "./student-progression.ts": progression,
   });
-  const load = (file: string, userId: string, role = "student") => loadArenaModule(`src/app/api/${file}/route.ts`, {
+  const load = (file: string, userId: string, role = "student", dependencies: Record<string, unknown> = {}) => loadArenaModule(`src/app/api/${file}/route.ts`, {
     __diagnostics: errors,
     "next/server": { NextResponse: { json: (body: any, options: any = {}) => ({ status: options.status ?? 200, body: structuredClone(body) }) } },
     "@/lib/auth": { getSession: async () => ({ userId, role, fullName: userId }) },
@@ -185,6 +196,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
     "@/lib/quiz-availability": { DELETED_QUIZ_STATUS: "deleted", isQuizAvailable: (s: string) => s !== "deleted", quizNotAvailableResponse: () => ({ error: "unavailable" }) },
     "@/lib/teacher-entitlements": { hasActiveProSubscription: async (_id: string, tx: unknown) => { assert.notEqual(tx, db); return true; } },
     "@/lib/backup-write-gate": { withBackupWriteGate: (handler: unknown) => handler, scheduleTrackedBackupWork: async (_schedule: unknown, work: () => Promise<void>) => { scheduled.push(work); } },
+    ...dependencies,
   });
   const request = (body: object) => ({ json: async () => body, headers: { get: () => null } });
   return {

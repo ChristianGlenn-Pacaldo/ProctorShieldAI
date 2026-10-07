@@ -61,7 +61,7 @@ async function POSTImpl(req: NextRequest) {
       quizTitle: enrollment.quiz.title,
       quizId: numericQuizId,
       teacherId: enrollment.quiz.teacherId,
-      deviceType: enrollment.deviceType === "mobile" ? "mobile" : "desktop",
+      deviceType: enrollment.deviceType === "tablet" ? "tablet" : enrollment.deviceType === "mobile" ? "mobile" : "desktop",
       monitoringLevel: enrollment.monitoringLevel === "strict" ? "strict" : "reduced",
       connectionStatus: "online",
       updatedAt: Date.now(),
@@ -92,9 +92,10 @@ export async function GET() {
       getSnapshotsForTeacher(session.userId),
       prisma.studentQuiz.findMany({
         where: { quizStatus: "in_progress", endTime: null, startTime: { not: null }, attemptMode: "proctored",
-          quiz: { teacherId: session.userId, quizMode: { not: "arena" } } },
+          quiz: { teacherId: session.userId, quizMode: { not: "arena" }, quizStatus: "in_progress" } },
         include: { student: { select: { fullName: true } }, quiz: { select: { title: true } }, _count: { select: { violations: true } } },
-        orderBy: { attemptNumber: "desc" },
+        // Attempt numbers restart per quiz; prefer the latest live start across quizzes.
+        orderBy: [{ startTime: "desc" }, { createdAt: "desc" }, { attemptNumber: "desc" }, { id: "desc" }],
       }),
     ]);
     const seen = new Set<string>();

@@ -1,4 +1,4 @@
-export const DEVICE_TYPES = ["desktop", "mobile"] as const;
+export const DEVICE_TYPES = ["desktop", "mobile", "tablet"] as const;
 export const MONITORING_LEVELS = ["strict", "reduced", "unsupported"] as const;
 
 export type DeviceType = (typeof DEVICE_TYPES)[number];
@@ -16,6 +16,8 @@ export interface DeviceCapabilities {
   visibilitySupported: boolean;
   viewportWidth: number;
   viewportHeight: number;
+  platform?: string;
+  maxTouchPoints?: number;
 }
 
 export interface ProctoringPerformanceProfile {
@@ -53,6 +55,13 @@ export function isMobileUserAgent(userAgent: string) {
   return MOBILE_USER_AGENT.test(userAgent.toLowerCase());
 }
 
+export function classifyDevice(userAgent: string, platform = "", maxTouchPoints = 0): DeviceType {
+  if (/ipad|tablet|playbook|kindle|silk/i.test(userAgent)
+    || (/android/i.test(userAgent) && !/mobile/i.test(userAgent))
+    || (/macintosh/i.test(userAgent) && platform === "MacIntel" && maxTouchPoints > 1)) return "tablet";
+  return isMobileUserAgent(userAgent) ? "mobile" : "desktop";
+}
+
 export function normalizeDeviceCapabilities(
   value: unknown,
   userAgent = "",
@@ -61,13 +70,13 @@ export function normalizeDeviceCapabilities(
     ? value as Record<string, unknown>
     : {};
   const viewportWidth = boundedDimension(input.viewportWidth);
-  const clientMobileHint = input.deviceType === "mobile" && viewportWidth > 0 && viewportWidth <= 1_200;
-  const deviceType: DeviceType = isMobileUserAgent(userAgent) || clientMobileHint
-    ? "mobile"
-    : "desktop";
+  const platform = typeof input.platform === "string" ? input.platform.slice(0, 80) : "";
+  const maxTouchPoints = boundedDimension(input.maxTouchPoints);
+  const deviceType: DeviceType = userAgent ? classifyDevice(userAgent, platform, maxTouchPoints)
+    : input.deviceType === "mobile" || input.deviceType === "tablet" ? input.deviceType : "desktop";
 
   return {
-    deviceType,
+    deviceType, platform, maxTouchPoints,
     secureContext: bool(input.secureContext),
     cameraSupported: bool(input.cameraSupported),
     cameraPermission: bool(input.cameraPermission),
@@ -170,15 +179,15 @@ export function getBrowserDeviceCapabilities(): DeviceCapabilities {
   const hasNavigator = typeof navigator !== "undefined";
   const userAgent = hasNavigator ? navigator.userAgent : "";
   const viewportWidth = hasWindow ? window.innerWidth : 0;
-  const deviceType: DeviceType = isMobileUserAgent(userAgent) || (viewportWidth > 0 && viewportWidth < 768)
-    ? "mobile"
-    : "desktop";
+  const platform = hasNavigator ? navigator.platform : "";
+  const maxTouchPoints = hasNavigator ? navigator.maxTouchPoints : 0;
+  const deviceType = classifyDevice(userAgent, platform, maxTouchPoints);
   const cameraSupported = Boolean(
     hasNavigator && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function",
   );
 
   return {
-    deviceType,
+    deviceType, platform, maxTouchPoints,
     secureContext: hasWindow ? window.isSecureContext : false,
     cameraSupported,
     cameraPermission: false,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { createProctoredSession, proctoredSessionKey, readProctoredSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 import {
   getMonitoringLevel,
   normalizeDeviceCapabilities,
@@ -27,31 +28,43 @@ async function POSTImpl(req: NextRequest) {
     }
 
     if (body.action === "start") {
-      const attempt = await prisma.studentQuiz.findFirst({
-        where: { id: String(body.studentQuizId || ""), studentId: session.userId, quizId },
-        include: { quiz: { include: { _count: { select: { questions: true } } } } },
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${quizId}`}))`;
+        const attempt = await tx.studentQuiz.findFirst({
+          where: { id: String(body.studentQuizId || ""), studentId: session.userId, quizId },
+          include: { quiz: { include: { _count: { select: { questions: true } } } } },
+        });
+        if (attempt && !isQuizAvailable(attempt.quiz.quizStatus)) {
+          return { body: quizNotAvailableResponse(), status: 410 };
+        }
+        if (!attempt || attempt.attemptMode === "arena" || attempt.quiz.quizMode === "arena"
+          || attempt.endTime || !["enrolled", "in_progress"].includes(attempt.quizStatus || "")
+          || !(attempt.quiz.quizStatus === "in_progress" || (attempt.quiz.quizStatus === "ended" && attempt.startTime && attempt.quizStatus === "in_progress"))
+          || !["strict", "reduced"].includes(attempt.monitoringLevel || "") || attempt.quiz._count.questions < 1) {
+          return { body: { error: "This attempt is not ready to start" }, status: 409 };
+        }
+        let timing = await readProctoredSession(tx, attempt.quiz);
+        if (!timing) {
+          // Only legacy running quizzes without any retained start may create
+          // their initial clock here. Subsequent attempts reuse this record.
+          timing = createProctoredSession(attempt.quiz, new Date());
+          await tx.setting.create({ data: { settingKey: proctoredSessionKey(quizId), settingValue: JSON.stringify(timing) } });
+        }
+        const clock = sessionTimingPayload(timing, attempt.quiz.quizStatus);
+        if (clock.remainingSeconds === 0 && attempt.quizStatus === "enrolled") {
+          return { body: { error: "This quiz session has expired", code: "SESSION_EXPIRED", ...clock }, status: 409 };
+        }
+        // Preserve the student's actual entry time for monitoring/evidence;
+        // it no longer defines or extends the shared session deadline.
+        await tx.studentQuiz.updateMany({ where: { id: attempt.id, endTime: null, startTime: null, quizStatus: "enrolled" },
+          data: { quizStatus: "in_progress", startTime: new Date() } });
+        const active = await tx.studentQuiz.findUnique({ where: { id: attempt.id } });
+        if (!active?.startTime || active.endTime || active.quizStatus !== "in_progress") {
+          return { body: { error: "Attempt is no longer active" }, status: 409 };
+        }
+        return { body: { success: true, startTime: active.startTime, ...sessionTimingPayload(timing, attempt.quiz.quizStatus) }, status: 200 };
       });
-      if (attempt && !isQuizAvailable(attempt.quiz.quizStatus)) {
-        return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
-      }
-      if (!attempt || attempt.attemptMode === "arena" || attempt.quiz.quizMode === "arena"
-        || attempt.endTime || !["enrolled", "in_progress"].includes(attempt.quizStatus || "")
-        || !(attempt.quiz.quizStatus === "in_progress" || (attempt.quiz.quizStatus === "ended" && (attempt.attemptNumber > 1 || attempt.startTime)))
-        || !["strict", "reduced"].includes(attempt.monitoringLevel || "")
-        || attempt.quiz._count.questions < 1) {
-        return NextResponse.json({ error: "This attempt is not ready to start" }, { status: 409 });
-      }
-      // Only the explicit student start may set the clock; retries preserve it.
-      await prisma.studentQuiz.updateMany({
-        where: { id: attempt.id, endTime: null, startTime: null, quizStatus: "enrolled" },
-        data: { quizStatus: "in_progress", startTime: new Date() },
-      });
-      const active = await prisma.studentQuiz.findUnique({ where: { id: attempt.id } });
-      if (!active?.startTime || active.endTime || active.quizStatus !== "in_progress") {
-        return NextResponse.json({ error: "Attempt is no longer active" }, { status: 409 });
-      }
-      return NextResponse.json({ success: true, startTime: active.startTime,
-        remainingSeconds: Math.max(0, Math.ceil((active.startTime.getTime() + (attempt.quiz.duration ?? 60) * 60_000 - Date.now()) / 1000)) });
+      return NextResponse.json(result.body, { status: result.status });
     }
 
     const quiz = await prisma.quiz.findUnique({

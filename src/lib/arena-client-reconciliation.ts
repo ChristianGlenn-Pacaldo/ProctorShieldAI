@@ -1,6 +1,8 @@
+import type { ArenaQuestionWork } from "./arena-question-work.ts";
 import type { ArenaParticipant, ArenaState } from "./arena.ts";
 
 export interface ArenaSnapshot {
+  questionWork?: ArenaQuestionWork;
   quizId?: number;
   arenaRevision?: number;
   arena?: ArenaState | null;

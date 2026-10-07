@@ -5,12 +5,9 @@ import {
   FileText,
   CheckCircle2,
   BarChart3,
-  Shield,
   Zap,
-  Flame,
   ArrowRight,
   Clock,
-  Sparkles,
   Volume2,
   VolumeX,
   Compass,
@@ -91,62 +88,14 @@ export default function StudentDashboardContent() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [soundActive, setSoundActive] = useState(true);
-  const [progression, setProgression] = useState<{
-    totalExp: number;
-    level: number;
-    currentLevelExp: number;
-    expToNextLevel: number;
-    progressPercent: number;
-    title: string;
-  } | null>(null);
-  const [progressionLoading, setProgressionLoading] = useState(true);
-  const [progressionError, setProgressionError] = useState("");
   const [, startTransition] = useTransition();
   const { work, loss } = useUserSessionWork(() => {
-    setStudentQuizzes([]); setProgression(null); setQuickCode("");
-    setHasLoadedQuizzes(false); setQuizLoadError(""); setProgressionError(""); setJoinError("");
-    setIsFetching(false); setProgressionLoading(false); setJoinLoading(false);
+    setStudentQuizzes([]); setQuickCode("");
+    setHasLoadedQuizzes(false); setQuizLoadError(""); setJoinError("");
+    setIsFetching(false); setJoinLoading(false);
   });
 
   const quizRequestSequence = useRef(0);
-  const progressionRequestSequence = useRef(0);
-
-  const loadProgression = useCallback(async () => {
-    const request = work.beginRequest();
-    if (!request) return;
-    const sequence = ++progressionRequestSequence.current;
-    const isCurrent = () => work.isCurrent(request.generation) && !request.controller.signal.aborted
-      && sequence === progressionRequestSequence.current;
-    setProgressionLoading(true);
-    try {
-      const res = await fetch("/api/student/progression", { signal: request.controller.signal });
-      // Authorization loss outranks request supersession, even for an older response.
-      if (!await work.acceptResponse(res, request)) return;
-      if (!isCurrent()) return;
-      if (!res.ok) throw new Error("Could not load your progression.");
-      const data = await res.json();
-      if (!isCurrent()) return;
-      if (data.success !== true || typeof data.totalExp !== "number" || typeof data.level !== "number") {
-        throw new Error("Could not load your progression.");
-      }
-      setProgression({
-        totalExp: data.totalExp,
-        level: data.level,
-        currentLevelExp: data.currentLevelExp,
-        expToNextLevel: data.expToNextLevel,
-        progressPercent: data.progressPercent,
-        title: data.title,
-      });
-      setProgressionError("");
-    } catch {
-      if (!isCurrent()) return;
-      setProgressionError("Could not load your progression.");
-    } finally {
-      if (isCurrent()) setProgressionLoading(false);
-      work.finishRequest(request.controller);
-    }
-  }, [work]);
-
   const fetchQuizzes = useCallback(async () => {
     const request = work.beginRequest();
     if (!request) return;
@@ -177,9 +126,8 @@ export default function StudentDashboardContent() {
 
   useEffect(() => {
     setSoundActive(isSoundEnabled());
-    void loadProgression();
     void fetchQuizzes();
-  }, [loadProgression, fetchQuizzes]);
+  }, [fetchQuizzes]);
 
   const handleQuickJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +189,6 @@ export default function StudentDashboardContent() {
   const upcoming = validQuizzes.filter((se) => se.quizStatus !== "completed");
 
   const completedCount = completed.length;
-  const upcomingCount = upcoming.filter((se) => getMissionState(se).actionable).length;
 
   let avgScore = 0;
   const recordedResults = completed.filter(
@@ -250,15 +197,6 @@ export default function StudentDashboardContent() {
   if (recordedResults.length > 0) {
     const totalScore = recordedResults.reduce((sum, se) => sum + Number(se.score), 0);
     avgScore = Math.round(totalScore / recordedResults.length);
-  }
-
-  let avgTrust = 100;
-  if (completedCount > 0) {
-    const totalCheatProb = completed.reduce(
-      (sum, se) => sum + (Number(se.cheatingProbability) || 0),
-      0
-    );
-    avgTrust = Math.max(0, 100 - Math.round(totalCheatProb / completedCount));
   }
 
   return (
@@ -277,45 +215,10 @@ export default function StudentDashboardContent() {
             </div>
 
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {progression && (
-                  <>
-                    <span className="text-xs uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-yellow-300" />
-                      Level {progression.level} • {progression.title}
-                    </span>
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-orange-400 animate-pulse" />
-                      {progression.totalExp.toLocaleString()} Total EXP
-                    </span>
-                  </>
-                )}
-
-              </div>
-
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1.5 font-[family-name:var(--font-display)]">
-                Student Arena Dashboard
+                Student Dashboard
               </h1>
 
-              {progression ? <div className="w-60 sm:w-80 mt-2">
-                <div className="flex justify-between text-[11px] font-bold text-white/70 mb-1">
-                  <span>{progression.totalExp.toLocaleString()} EXP</span>
-                  <span>
-                    {progression.expToNextLevel} EXP to Level {progression.level + 1}
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5 border border-white/10">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 rounded-full transition-all duration-500"
-                    style={{ width: `${progression.progressPercent}%` }}
-                  />
-                </div>
-              </div> : <p className="mt-2 text-xs text-white/70">{progressionLoading ? "Loading progression..." : "Progression unavailable"}</p>}
-              {progressionError && (
-                <p role="alert" className="mt-2 text-xs text-rose-300">
-                  {progressionError} <button type="button" onClick={() => void loadProgression()} className="font-bold underline">Retry</button>
-                </p>
-              )}
             </div>
           </div>
 
@@ -380,24 +283,7 @@ export default function StudentDashboardContent() {
       )}
 
       {/* ── VIBRANT GAMIFIED METRIC TILES ─────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[var(--surface)] rounded-2xl border-2 border-indigo-500/20 p-5 shadow-xs hover:border-indigo-500/40 transition-all group">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <FileText className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              Assigned
-            </span>
-          </div>
-          <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {hasLoadedQuizzes ? upcomingCount : "—"}
-          </div>
-          <div className="text-xs font-semibold text-[var(--muted)] mt-1">
-            Active Challenges
-          </div>
-        </div>
-
+      <div className="grid grid-cols-2 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border-2 border-emerald-500/20 p-5 shadow-xs hover:border-emerald-500/40 transition-all group">
           <div className="flex items-center justify-between mb-3">
             <div className="w-11 h-11 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -432,22 +318,6 @@ export default function StudentDashboardContent() {
           </div>
         </div>
 
-        <div className="bg-[var(--surface)] rounded-2xl border-2 border-violet-500/20 p-5 shadow-xs hover:border-violet-500/40 transition-all group">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 rounded-xl bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Shield className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400">
-              AI Verified
-            </span>
-          </div>
-          <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {hasLoadedQuizzes ? (completedCount > 0 ? `${avgTrust}%` : "100%") : "—"}
-          </div>
-          <div className="text-xs font-semibold text-[var(--muted)] mt-1">
-            Proctor Trust Index
-          </div>
-        </div>
       </div>
 
       {/* ── ACTIVE MISSIONS (UPCOMING QUIZZES) ────────────────────── */}
@@ -456,7 +326,7 @@ export default function StudentDashboardContent() {
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-indigo-500" />
             <h2 className="text-base font-extrabold text-[var(--ink)] font-[family-name:var(--font-display)]">
-              Live & Assigned Quiz Missions
+              Available & Live Quizzes
             </h2>
           </div>
           <Link
@@ -550,69 +420,7 @@ export default function StudentDashboardContent() {
       </div>
 
       {/* ── GAMIFIED PROGRESSION JOURNEY & RECENT TRIUMPHS ────────── */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Progression & Level Journey */}
-        <div className="bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-500" />
-                <h2 className="text-base font-extrabold text-[var(--ink)] font-[family-name:var(--font-display)]">
-                  Student Progression
-                </h2>
-              </div>
-              {progression && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                Level {progression.level} • {progression.title}
-              </span>}
-            </div>
-
-            {progression ? <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-transparent border border-indigo-500/20 mb-4">
-              <div className="flex items-center gap-4 mb-3">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-1 shadow-md flex items-center justify-center">
-                  <UserRound className="w-7 h-7 text-white" aria-hidden="true" />
-                </div>
-                <div>
-                  <div className="text-sm font-extrabold text-[var(--ink)]">
-                    EXP Progress
-                  </div>
-                  <div className="text-xs text-[var(--muted)]">
-                    {progression.totalExp.toLocaleString()} Total EXP
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-[var(--ink)]">Level {progression.level}</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">
-                    {progression.expToNextLevel} EXP to Level {progression.level + 1}
-                  </span>
-                </div>
-                <div className="h-3 w-full bg-black/10 dark:bg-white/10 rounded-full overflow-hidden p-0.5 border border-indigo-500/20">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500 rounded-full transition-all duration-500"
-                    style={{ width: `${progression.progressPercent}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-[var(--muted)]">
-                  <span>{progression.currentLevelExp} / 500 EXP in Current Tier</span>
-                  <span>{progression.progressPercent}% Complete</span>
-                </div>
-              </div>
-            </div> : <p className="mb-4 text-sm text-[var(--muted)]">{progressionLoading ? "Loading progression..." : "Progression unavailable"}</p>}
-            {progressionError && (
-              <p role="alert" className="mb-4 text-sm text-rose-500">
-                {progressionError} <button type="button" onClick={() => void loadProgression()} className="font-bold underline">Retry</button>
-              </p>
-            )}
-
-            <div className="p-3.5 rounded-xl bg-[var(--surface2)]/40 border border-[var(--border)] text-xs text-[var(--muted)] flex items-center gap-2.5">
-              <Flame className="w-4 h-4 text-amber-500 shrink-0" />
-              <span>Earn EXP by participating in Power Arena matches and completing proctored exams.</span>
-            </div>
-          </div>
-        </div>
-
+      <div className="grid gap-6">
         {/* Recent Triumphs (Quiz Results) */}
         <div className="bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-xs flex flex-col justify-between">
           <div>

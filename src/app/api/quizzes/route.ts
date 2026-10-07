@@ -196,6 +196,12 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Quiz metadata is too long" }, { status: 400 });
     }
 
+    const parsedDuration = duration === undefined ? 60 : Number(duration);
+    if ((duration !== undefined && typeof duration !== "number" && typeof duration !== "string")
+      || !Number.isInteger(parsedDuration) || parsedDuration < 1 || parsedDuration > 480) {
+      return NextResponse.json({ error: "Duration must be a whole number between 1 and 480 minutes" }, { status: 400 });
+    }
+
     // Verify the teacher actually exists in the database (catches stale JWT after db reset)
     const teacherExists = await prisma.user.findUnique({ where: { id: session.userId } });
     if (!teacherExists) {
@@ -293,7 +299,7 @@ async function POSTImpl(req: NextRequest) {
           accessCode,
           isAiGenerated: isAiQuiz,
           isGamified: isGamified !== false,
-          duration: Math.max(1, Math.min(480, Number(duration) || 60)),
+          duration: parsedDuration,
           totalQuestions: validQuestions.length > 0 ? validQuestions.length : (totalQuestions || 10),
           passingScore: Math.max(0, Math.min(100, Number(passingScore) || 50)),
           quizStatus: "draft",

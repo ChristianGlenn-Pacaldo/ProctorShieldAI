@@ -57,7 +57,6 @@ export default function PlaygroundContent({
     quizzes.length > 0 ? quizzes[0].id : null
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [matchDuration, setMatchDuration] = useState<1800 | 3600>(1800);
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchError, setLaunchError] = useState("");
   const [powers, setPowers] = useState({
@@ -75,6 +74,7 @@ export default function PlaygroundContent({
   );
 
   const selectedQuiz = quizzes.find((q) => q.id === selectedQuizId);
+  const matchDuration = (selectedQuiz?.duration ?? 30) * 60;
 
   const handleLaunchArena = async () => {
     if (!selectedQuizId || isLaunching) return;
@@ -103,7 +103,6 @@ export default function PlaygroundContent({
 
       const query = new URLSearchParams({
         mode: "score_arena",
-        duration: matchDuration.toString(),
         powers: Object.entries(powers)
           .filter(([, v]) => v)
           .map(([k]) => k)
@@ -475,30 +474,8 @@ export default function PlaygroundContent({
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
                   2. Arena Match Duration
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMatchDuration(1800)}
-                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      matchDuration === 1800
-                        ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                    }`}
-                  >
-                    30 Minutes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMatchDuration(3600)}
-                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      matchDuration === 3600
-                        ? "bg-amber-400 text-slate-950 border-amber-400 font-black"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800"
-                    }`}
-                  >
-                    1 Hour
-                  </button>
-                </div>
+                <p className="text-sm font-bold text-amber-300">{matchDuration / 60} Minutes</p>
+                <p className="text-xs text-slate-400">Saved quiz duration. Edit the quiz before launching to change it.</p>
               </div>
             </div>
 

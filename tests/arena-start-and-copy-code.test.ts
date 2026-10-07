@@ -126,3 +126,10 @@ test("Safety: Proctored live monitoring quiz runner is completely unaffected", (
   assert.equal(proctoredRunnerSrc.includes('"arena-start"'), false);
   assert.equal(proctoredRunnerSrc.includes('"private-arena-'), false);
 });
+
+test("Bug 7: lobby shows PIN without incomplete join-route instructions", () => {
+  assert.doesNotMatch(teacherHostSrc, /Go to\s*<strong[^>]*>\/join/);
+  assert.match(teacherHostSrc, /Enter PIN:.*?\{quiz\.accessCode\}/);
+  assert.match(teacherHostSrc, /navigator\.clipboard\.writeText\(quiz\.accessCode\)/);
+  assert.ok(fs.existsSync(path.resolve("src/app/join/page.tsx")));
+});

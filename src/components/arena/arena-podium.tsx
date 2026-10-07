@@ -175,7 +175,7 @@ export function ArenaPodium({
 
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-[#182035]/60 border border-slate-800 rounded-2xl p-3">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Score</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Points</div>
             <div className="text-lg sm:text-xl font-black text-white font-mono">{studentScore}</div>
           </div>
           <div className="bg-[#182035]/60 border border-slate-800 rounded-2xl p-3">

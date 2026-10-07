@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getRetakeRequestError } from "@/lib/retake-eligibility";
+import { readProctoredSession, readArenaSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 
 async function POSTImpl(req: NextRequest) {
   try {
@@ -34,6 +35,12 @@ async function POSTImpl(req: NextRequest) {
     const eligibilityError = getRetakeRequestError(studentQuiz, latestAttempt?.id);
     if (eligibilityError) {
       return NextResponse.json({ error: eligibilityError.error }, { status: eligibilityError.status });
+    }
+
+    const timing = studentQuiz.attemptMode === "arena" ? await readArenaSession(prisma, studentQuiz.quizId)
+      : await readProctoredSession(prisma, studentQuiz.quiz);
+    if (studentQuiz.quiz.quizStatus !== "in_progress" || !timing || sessionTimingPayload(timing, studentQuiz.quiz.quizStatus).remainingSeconds === 0) {
+      return NextResponse.json({ error: "This quiz session has ended or expired", code: "SESSION_EXPIRED" }, { status: 409 });
     }
 
     // Update status to pending_retake

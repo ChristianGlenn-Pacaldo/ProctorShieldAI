@@ -1,3 +1,4 @@
+import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -13,7 +14,7 @@ function compile(file: string) {
 
 function attempt(id: string, quizId: number, attemptNumber: number, quizStatus = "completed", endTime: string | null = "2026-09-01T12:00:00Z", allowRetake = true) {
   return { id, studentId: "student-1", quizId, attemptNumber, quizStatus, endTime, attemptMode: "proctored", createdAt: "2026-09-01T10:00:00Z",
-    quiz: { id: quizId, allowRetake, title: id, teacherId: "teacher-1" }, student: { fullName: "Student" }, _count: { violations: 0 } };
+    quiz: { id: quizId, allowRetake, title: id, teacherId: "teacher-1", quizStatus: "in_progress", duration: 30 }, student: { fullName: "Student" }, _count: { violations: 0 } };
 }
 
 // Deliberately not ordered by attempt number or completion: latest means highest attemptNumber.
@@ -47,6 +48,7 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
         getUserSession: async () => options.role === null ? null : ({ role: options.role ?? "student", userId: options.owner ?? "student-1" }),
       };
       if (name === "@/lib/retake-eligibility") return eligibility;
+      if (name === "@/lib/quiz-session-timing") return sessionTiming;
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: ["deleted"] };
       if (name === "@/lib/pusher") return { pusherServer: { trigger: async () => {} } };
       if (name === "@/lib/prisma") return { __esModule: true, default: {
@@ -59,7 +61,9 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
             return rows.filter((row) => row.quizId === query.where.quizId).sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
           },
           updateMany: async (query: unknown) => { writes.push(query); return { count: options.changed ? 0 : 1 }; },
-        }, notification: { create: async () => {} },
+        }, setting: { findUnique: async ({ where }: { where: { settingKey: string } }) => ({ settingValue: JSON.stringify(where.settingKey.startsWith("arena:")
+          ? { status: "active", sessionId: "arena-session", startedAt: new Date(Date.now()-300_000).toISOString(), matchEndsAt: new Date(Date.now()+1500_000).toISOString() }
+          : { sessionId: `proctored:${options.target?.quizId}`, startedAt: new Date(Date.now()-300_000).toISOString(), endsAt: new Date(Date.now()+1500_000).toISOString() }) }) }, notification: { create: async () => {} },
       } };
       return {};
     }, console, URL,

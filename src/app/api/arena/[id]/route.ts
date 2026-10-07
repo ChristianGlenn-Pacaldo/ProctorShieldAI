@@ -1,5 +1,6 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
+import { readArenaQuestionWork } from "@/lib/arena-question-work";
 import { getSession } from "@/lib/auth";
 import { hasActiveProSubscription } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
@@ -36,6 +37,7 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string, d
       teacherId: true,
       quizStatus: true,
       quizMode: true,
+      duration: true,
       questions: { select: { id: true }, orderBy: { id: "asc" } },
       _count: { select: { questions: true } },
     },
@@ -85,14 +87,16 @@ async function GETImpl(req: NextRequest, { params }: RouteParams) {
         const state: ArenaState | null = record?.settingValue ? JSON.parse(record.settingValue) : null;
         const resultReady = !!state?.finalizedAt && state.status === "ended";
         const payout = state?.payouts?.find((p) => p.studentId === session.userId);
-        const attempt = session.role === "student" && resultReady && payout
+        const attempt = session.role === "student"
           ? await tx.studentQuiz.findFirst({ where: { quizId, studentId: session.userId, attemptMode: "arena" }, orderBy: { attemptNumber: "desc" } }) : null;
+        const questionWork = attempt && state ? (await readArenaQuestionWork(tx, attempt.id, state.sessionId ?? "", quiz.questions,
+          state.status === "ended" || Boolean(state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)))).work : undefined;
         const result = attempt?.quizStatus === "completed" && attempt.endTime && attempt.score !== null && payout
           ? { score: Number(attempt.score), rank: payout.rank, expEarned: payout.amount } : null;
         return NextResponse.json({ success: true, quizId, serverTime: Date.now(), arena: state,
           status: state?.status ?? "lobby", sessionId: state?.sessionId,
           participants: state?.participants ? computeArenaRankings(state.participants) : [],
-          usedPowers: state?.usedPowers?.[session.userId] ?? {}, quizStatus: quiz.quizStatus, resultReady, result,
+          usedPowers: state?.usedPowers?.[session.userId] ?? {}, quizStatus: quiz.quizStatus, resultReady, result, questionWork,
         }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
       }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 10_000 });
     }
@@ -119,7 +123,10 @@ async function GETImpl(req: NextRequest, { params }: RouteParams) {
         const rankedParticipants = state?.participants
           ? computeArenaRankings(state.participants)
           : [];
+        const attempt = session.role === "student" ? await prisma.studentQuiz.findFirst({ where: { quizId, studentId: session.userId, attemptMode: "arena" }, orderBy: { attemptNumber: "desc" } }) : null;
+        const questionWork = attempt && state ? (await readArenaQuestionWork(prisma, attempt.id, state.sessionId ?? "", quiz.questions, state.status === "ended" || Boolean(state.matchEndsAt && Date.now() >= Date.parse(state.matchEndsAt)))).work : undefined;
         return jsonAfterCommit({
+          questionWork,
           success: true,
           serverTime: Date.now(),
           arena: state,
@@ -166,7 +173,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
       const quiz = await getAuthorizedQuiz(quizId, session.userId, session.role, prisma);
       if (!quiz)
         return jsonAfterCommit({ error: "Quiz not found or unauthorized" }, { status: 404 });
-      if (!isQuizAvailable(quiz.quizStatus)) {
+      if (!isQuizAvailable(quiz.quizStatus) || (quiz.quizStatus === "inactive" && ["start", "reset", "create_session"].includes(action))) {
         return jsonAfterCommit(quizNotAvailableResponse(), { status: 410 });
       }
       if (quiz.quizMode !== "arena") {
@@ -193,7 +200,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
         }
         let payouts: Awaited<ReturnType<typeof finalizeArena>> = [];
         // ─────────────────────────────────────────────────────────────
-        // ACTION: JOIN (Student explicitly joins current session lobby)
+        // ACTION: JOIN (Student explicitly joins the current lobby or active match)
         // ─────────────────────────────────────────────────────────────
         if (action === "join") {
           if (typeof record.sessionId === "string" && state?.sessionId !== record.sessionId) {
@@ -215,7 +222,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
               teacherId: quiz.teacherId,
               status: "lobby",
               totalQuestions: quiz.questions.length,
-              config: normalizeArenaConfig(payload),
+              config: { ...normalizeArenaConfig(payload), matchDuration: (quiz.duration ?? 30) * 60 },
             });
           }
           if (!state.participants)
@@ -223,6 +230,31 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           if (!state.usedPowers)
             state.usedPowers = {};
           const alreadyJoined = Boolean(state.participants[session.userId]);
+          if (state.status === "active") {
+            const endsAt = state.matchEndsAt ? Date.parse(state.matchEndsAt) : NaN;
+            const startedAt = state.startedAt ? Date.parse(state.startedAt) : NaN;
+            if (quiz.quizStatus !== "in_progress" || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || endsAt <= Date.now()) {
+              return jsonAfterCommit({ error: "Arena match is no longer active", code: "ARENA_ENDED" }, { status: 409 });
+            }
+            const attempt = await prisma.studentQuiz.findFirst({
+              where: { quizId, studentId: session.userId }, orderBy: { attemptNumber: "desc" },
+              select: { id: true, attemptMode: true, quizStatus: true, startTime: true, endTime: true },
+            });
+            if (endsAt <= Date.now()) return jsonAfterCommit({ error: "Arena match is no longer active", code: "ARENA_ENDED" }, { status: 409 });
+            const playable = attempt?.attemptMode === "arena" && !attempt.endTime && ["enrolled", "in_progress"].includes(attempt.quizStatus ?? "");
+            if (!alreadyJoined && !playable) {
+              return jsonAfterCommit({ error: "Active Arena attempt not found" }, { status: 409 });
+            }
+            // Activate an eligible enrollment once. Reconnect never resets answers,
+            // score or a completed attempt; all entrants retain the same match clock.
+            if (playable && (attempt.quizStatus === "enrolled" || !attempt.startTime)) {
+              const activated = await prisma.studentQuiz.updateMany({
+                where: { id: attempt.id, endTime: null, quizStatus: attempt.quizStatus },
+                data: { quizStatus: "in_progress", startTime: new Date(startedAt) },
+              });
+              if (activated.count !== 1) return jsonAfterCommit({ error: "Arena attempt is no longer eligible" }, { status: 409 });
+            }
+          }
           const participant = ensureArenaPlayer(state, {
             studentId: session.userId,
             studentName: session.fullName || "Student Fighter",
@@ -248,9 +280,11 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           return jsonAfterCommit({
             success: true,
             message: "Joined arena session",
+            serverTime: Date.now(),
             sessionId: state.sessionId,
             status: state.status,
             participantsCount: Object.keys(state.participants).length,
+            participants: rankedParticipants,
             arena: state,
           });
         }
@@ -278,6 +312,23 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
             code: "ARENA_QUIZ_ALREADY_COMPLETED",
           }, { status: 409 });
         }
+        // Quiz.duration is persisted in minutes; Arena state and deadlines use seconds.
+        // Stale launch settings must never replace the saved quiz configuration.
+        if (["reset", "create_session", "start"].includes(action)) {
+          for (const key of ["matchDuration", "duration"] as const) {
+            if (payload[key] !== undefined) {
+              const value = payload[key];
+              const seconds = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+              if (!Number.isInteger(seconds) || seconds < 60 || seconds > 480 * 60 || seconds % 60 !== 0) {
+                return jsonAfterCommit({ error: "Arena duration must be 1 to 480 whole minutes in seconds" }, { status: 400 });
+              }
+            }
+          }
+          if (quiz.duration != null && (!Number.isInteger(quiz.duration) || quiz.duration < 1 || quiz.duration > 480)) {
+            return jsonAfterCommit({ error: "Invalid saved quiz duration. Edit the quiz before starting." }, { status: 400 });
+          }
+        }
+        const configuredMatchDuration = (quiz.duration ?? 30) * 60;
         if (action === "reset" || action === "create_session") {
           const freshSessionId = crypto.randomUUID();
           state = {
@@ -286,7 +337,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
             teacherId: session.userId,
             status: "lobby",
             mode: "score_arena",
-            matchDuration: 1800,
+            matchDuration: configuredMatchDuration,
             matchEndsAt: null,
             enabledPowers: ["meteor", "earthquake", "blizzard", "shield"],
             totalQuestions: quiz.questions.length,
@@ -339,10 +390,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           if (!["draft", "active", "in_progress"].includes(quiz.quizStatus)) {
             return jsonAfterCommit({ error: "Quiz status cannot be started" }, { status: 409 });
           }
-          const rawDuration = payload.matchDuration ?? payload.duration;
-          const matchDuration = normalizeArenaConfig(payload).waveDuration === 0 ? 1800 : (typeof rawDuration === "number" || typeof rawDuration === "string"
-            ? (Number(rawDuration) === 3600 || Number(rawDuration) === 60 ? 3600 : 1800)
-            : 1800);
+          const matchDuration = configuredMatchDuration;
           const startedAt = new Date();
           {
             const tx = prisma;
@@ -384,6 +432,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           for (const p of Object.values(state.participants)) {
             p.score = 0;
             p.questionsAnswered = 0;
+            p.correctCount = 0; p.wrongCount = 0; p.retryCorrectCount = 0; p.retryWrongCount = 0;
             p.isFinished = false;
             p.hasShield = false;
             p.totalQuestions = quiz.questions.length;
@@ -432,6 +481,7 @@ async function POSTImpl(req: NextRequest, { params }: RouteParams) {
           mode: state.mode,
           matchDuration: state.matchDuration,
           matchEndsAt: state.matchEndsAt,
+          serverTime: Date.now(),
           waveDuration: state.matchDuration,
           enabledPowers: state.enabledPowers,
           totalQuestions: state.totalQuestions,

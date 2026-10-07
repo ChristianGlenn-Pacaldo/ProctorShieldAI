@@ -64,6 +64,7 @@ function client(kind: "teacher" | "student", completed = false) {
   const context: Record<string, any> = { ...refs, acceptArenaRevision, acceptArenaEventRevision, claimArenaJoinFeedback, getArenaJoinKey, isTerminalArenaSnapshot, startArenaReconciliation, fetchArenaSnapshot,
     beginArenaGameplayAction, clearGameplayTimers() {}, crypto, studentId: "a", quizId: 77, quiz: { id: 77, questions: [1, 2] }, isAlreadyEnded: completed,
     incomingAttackRef: { current: null }, serverTimeOffsetRef: { current: 0 }, lockedAnswers: new Map(),
+    questionWork: null, studentQuizId: "attempt-a", questions: [{ id: 1 }, { id: 2 }], setQuestionWork() {},
     getStudentInitials: () => "A", clearIncomingAttack() {}, showAttackFeedback() {}, playFanfareSound() {},
     setTotalParticipants() {}, setRivals() {}, setAllParticipants() {}, setCurrentSessionId() {},
     setPhase(value: string) { state.trace.push("phase"); state.phase = value; },
@@ -486,13 +487,16 @@ for (const reason of ["terminal", "timeout", "unmount"]) test("Student pending a
   assert.equal(f.state.score, reason === "terminal" ? 100 : 20);
   t.mock.timers.tick(60_000); assert.equal(aborted, 1);
 });
-test("Student dropped realtime, late answer and reconnect preserve persisted result and completion side effects", async (t) => {
+test("Student dropped realtime, late answer and reconnect preserve persisted result and completion side effects", { timeout: 10000 }, async (t) => {
   const fixture = arenaFixture(); await fixture.answer("a"); await fixture.action("end");
   const serialize = () => JSON.stringify(fixture.data, (_key, item) => item instanceof Map ? [...item] : item);
   const before = serialize(), events = fixture.events.length;
   const f = studentActions(); t.after(f.dispose); f.refs.arenaRevisionRef.current = 0; const pending = f.answer(1);
   const read = async () => (await fixture.load("arena/[id]", "a").GET({ nextUrl: { searchParams: new URLSearchParams({ view: "snapshot" }) } }, { params: Promise.resolve({ id: "77" }) })).body;
-  const worker = startArenaReconciliation({ read, apply: f.apply }); t.after(() => worker.stop()); await flush();
+  let resolveApplied!: () => void;
+  const applied = new Promise<void>(resolve => { resolveApplied = resolve; });
+  const worker = startArenaReconciliation({ read, apply: snapshot => { const terminal = f.apply(snapshot); resolveApplied(); return terminal; } });
+  t.after(() => worker.stop()); await applied;
   f.replies[0](studentCommit(1)); await pending; await worker.refresh(); await worker.refresh();
   assert.equal(f.state.score, 100); assert.equal(f.state.phase, "podium");
   assert.equal(serialize(), before); assert.equal(fixture.events.length, events);
@@ -955,4 +959,20 @@ test("all common Arena producers stamp canonical committed quiz/session/revision
   for (const event of f.events.filter(e => e.event.startsWith("arena-") || e.event.startsWith("attack-"))) {
     assert.equal(event.data.quizId, 77); assert.equal(event.data.sessionId, "session-1"); assert.ok(Number.isSafeInteger(event.data.arenaRevision));
   }
+});
+
+test("student reconnect applies pending retry work instead of completing after originals",async()=>{
+  const fixture=arenaFixture();const transaction=fixture.db.$transaction;
+  fixture.db.$transaction=(work:any,options:any)=>transaction(async(tx:any)=>{tx.choice.findFirst=async({where}:any)=>({id:where.id,isCorrect:where.questionId!==1,question:{points:100}});return work(tx);},options);
+  await fixture.answer("a",1);await fixture.answer("a",2);
+  const snapshot=(await fixture.load("arena/[id]","a").GET({nextUrl:{searchParams:new URLSearchParams("view=snapshot")}}, {params:Promise.resolve({id:"77"})})).body;
+  const f=client("student");f.refs.arenaRevisionRef.current=0;f.refs.snapshotSessionRef.current="session-1";
+  let progress:any;let completed=true;let index=-1;
+  Object.assign(f.context,{getServerAdjustedNow:()=>Date.now(),setQuestionWork:(work:any)=>{progress=work;},setQuestionsCompleted:(value:boolean)=>{completed=value;},setCurrentQuestionIndex:(value:number)=>{index=value;}});
+  const apply=callback("student","applyArenaSnapshot",f.context);apply(snapshot);
+  assert.equal(progress.wrongCount,1);assert.equal(progress.correctCount,1);assert.equal(progress.nextWork.kind,"retry");
+  assert.equal(completed,false);assert.equal(index,0);assert.equal(f.state.score,100);
+  const retried=await fixture.answer("a",1,{answerKind:"retry"});assert.equal(retried.status,200);
+  const restored=(await fixture.load("arena/[id]","a").GET({nextUrl:{searchParams:new URLSearchParams("view=snapshot")}}, {params:Promise.resolve({id:"77"})})).body;
+  apply(restored);assert.equal(completed,true);assert.equal(progress.wrongCount,1);assert.equal(progress.retryWrongCount,1);assert.equal(progress.nextWork,null);
 });

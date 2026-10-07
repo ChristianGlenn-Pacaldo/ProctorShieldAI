@@ -2,6 +2,8 @@ import { recoverArenaFinalization } from "@/lib/arena-finalization";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { readProctoredSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
+import { readArenaQuestionWork, saveArenaRetryState } from "@/lib/arena-question-work";
 import { arenaRealtime } from "@/lib/arena-realtime";
 import { computeArenaRankings, ensureArenaPlayer, mutateArena } from "@/lib/arena";
 class AnswerConflictError extends Error {
@@ -40,7 +42,7 @@ async function POSTImpl(req: NextRequest) {
           id: true,
           startTime: true,
           attemptMode: true,
-          quiz: { select: { duration: true, teacherId: true, quizStatus: true, quizMode: true } },
+          quiz: { select: { id: true, duration: true, teacherId: true, quizStatus: true, quizMode: true, questions: { select: { id: true } } } },
         },
         orderBy: { attemptNumber: "desc" },
       });
@@ -51,8 +53,8 @@ async function POSTImpl(req: NextRequest) {
         && (typeof body.sessionId !== "string" || body.sessionId === arena.sessionId)) {
         await recoverArenaFinalization(mutation);
       }
-      const deadline = attempt.startTime.getTime() + (attempt.quiz.duration ?? 60) * 60000 + 60000;
-      if (Date.now() > deadline) {
+      const timing = attempt.attemptMode === "arena" ? null : await readProctoredSession(prisma, attempt.quiz);
+      if (attempt.attemptMode !== "arena" && (!timing || sessionTimingPayload(timing, attempt.quiz.quizStatus).remainingSeconds === 0)) {
         return jsonAfterCommit({ error: "The answer deadline has passed" }, { status: 409 });
       }
       if (textAnswer !== null && attempt.attemptMode !== "arena") {
@@ -128,7 +130,42 @@ async function POSTImpl(req: NextRequest) {
         });
         return { choiceId, isCorrect: selectedChoice.isCorrect, alreadyAnswered: false };
       };
-      const result = await recordAnswer();
+      let questionWork: Awaited<ReturnType<typeof readArenaQuestionWork>>["work"] | undefined;
+      const answerKind = body.answerKind ?? "initial";
+      let result: { choiceId: number; isCorrect: boolean; alreadyAnswered: boolean };
+      if (attempt.attemptMode === "arena" && arena) {
+        if (!["initial", "retry"].includes(answerKind)) return jsonAfterCommit({ error: "Invalid Arena answer kind" }, { status: 400 });
+        if (body.studentQuizId !== undefined && body.studentQuizId !== attempt.id) return jsonAfterCommit({ error: "Stale attempt" }, { status: 409 });
+        const progress = await readArenaQuestionWork(prisma, attempt.id, arena.sessionId, attempt.quiz.questions);
+        if (arena.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt)) {
+          return jsonAfterCommit({ error: "Arena match is no longer active", code: "ARENA_ENDED" }, { status: 409 });
+        }
+        if (answerKind === "retry") {
+          const previous = progress.state.retryAnswers[questionId];
+          if (previous) result = { choiceId: previous.choiceId, isCorrect: previous.isCorrect, alreadyAnswered: true };
+          else {
+            if (progress.work.nextWork?.kind !== "retry" || progress.work.nextWork.questionId !== questionId) {
+              return jsonAfterCommit({ error: "This delayed retry is not available", code: "RETRY_NOT_READY" }, { status: 409 });
+            }
+            const active = await prisma.studentQuiz.updateMany({ where: { id: attempt.id, endTime: null, quizStatus: "in_progress" }, data: { lastHeartbeatAt: new Date() } });
+            if (active.count !== 1) throw new AnswerConflictError();
+            if (arena.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt)) {
+              return jsonAfterCommit({ error: "Arena match is no longer active", code: "ARENA_ENDED" }, { status: 409 });
+            }
+            progress.state.retryAnswers[questionId] = { questionId, choiceId, isCorrect: selectedChoice.isCorrect, answeredAt: new Date().toISOString() };
+            progress.state.lastQuestionId = questionId;
+            await saveArenaRetryState(prisma, progress.state);
+            result = { choiceId, isCorrect: selectedChoice.isCorrect, alreadyAnswered: false };
+          }
+        } else {
+          result = await recordAnswer();
+          if (!result.alreadyAnswered) {
+            progress.state.lastQuestionId = questionId;
+            await saveArenaRetryState(prisma, progress.state);
+          }
+        }
+        questionWork = (await readArenaQuestionWork(prisma, attempt.id, arena.sessionId, attempt.quiz.questions)).work;
+      } else result = await recordAnswer();
       let updatedScore = arena?.participants[session.userId]?.score ?? 0;
       let updatedRank = arena?.participants[session.userId]?.rank ?? 1;
       let totalCount = arena ? Object.keys(arena.participants).length : 1;
@@ -137,13 +174,13 @@ async function POSTImpl(req: NextRequest) {
           studentId: session.userId,
           studentName: session.fullName,
         });
-        const points = result.isCorrect ? (selectedChoice.question.points || 100) : 0;
+        const points = answerKind === "initial" && result.isCorrect ? (selectedChoice.question.points || 100) : 0;
         participant.score += points;
-        participant.questionsAnswered += 1;
-        if (arena.totalQuestions > 0 && participant.questionsAnswered >= arena.totalQuestions) {
-          participant.isFinished = true;
-          participant.finishedAt = new Date().toISOString();
-        }
+        participant.questionsAnswered = questionWork!.originalAnswered;
+        participant.correctCount = questionWork!.correctCount; participant.wrongCount = questionWork!.wrongCount;
+        participant.retryCorrectCount = questionWork!.retryCorrectCount; participant.retryWrongCount = questionWork!.retryWrongCount;
+        participant.isFinished = questionWork!.isFinished;
+        if (participant.isFinished) participant.finishedAt = new Date().toISOString();
         const ranked = computeArenaRankings(arena.participants);
         updatedScore = participant.score;
         updatedRank = participant.rank;
@@ -170,6 +207,9 @@ async function POSTImpl(req: NextRequest) {
             studentId: session.userId,
             studentName: session.fullName,
             questionId,
+            answerKind,
+            correctCount: participant.correctCount, wrongCount: participant.wrongCount,
+            retryCorrectCount: participant.retryCorrectCount, retryWrongCount: participant.retryWrongCount,
             choiceId: result.choiceId,
             isCorrect: result.isCorrect,
             score: participant.score,
@@ -186,6 +226,7 @@ async function POSTImpl(req: NextRequest) {
         score: updatedScore,
         rank: updatedRank,
         totalCount,
+        ...(questionWork ? { questionWork, answerKind } : {}),
       };
       return () => NextResponse.json({ ...response, ...(attempt.attemptMode === "arena" && arena ? {
         quizId, arenaRevision: arena.revision, sessionId: arena.sessionId, status: arena.status,

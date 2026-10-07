@@ -7,7 +7,7 @@ export type SnapshotRecord = {
   quizTitle: string;
   quizId: number;
   teacherId: string;
-  deviceType: "desktop" | "mobile";
+  deviceType: "desktop" | "mobile" | "tablet";
   monitoringLevel: "strict" | "reduced";
   connectionStatus: "online";
   updatedAt: number;

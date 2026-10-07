@@ -13,15 +13,12 @@ export type ArenaPowerId = (typeof ARENA_POWER_IDS)[number];
 export type ArenaAction = (typeof ARENA_ACTIONS)[number];
 export type ArenaStatus = "lobby" | "active" | "ended";
 
-export const VALID_MATCH_DURATIONS = [1800, 3600] as const;
+export const VALID_MATCH_DURATIONS = Array.from({ length: 480 }, (_, i) => (i + 1) * 60);
 export const DEFAULT_MATCH_DURATION = 1800; // 30 Minutes default
 
 export function normalizeMatchDuration(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (parsed === 1800 || parsed === 3600) return parsed;
-  // If legacy minutes provided: 30 min -> 1800s, 60 min -> 3600s
-  if (parsed === 30) return 1800;
-  if (parsed === 60) return 3600;
+  const parsed = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  if (Number.isInteger(parsed) && parsed >= 60 && parsed <= 480 * 60 && parsed % 60 === 0) return parsed;
   return DEFAULT_MATCH_DURATION;
 }
 
@@ -54,6 +51,10 @@ export interface ArenaParticipant {
   questionsAnswered: number;
   totalQuestions: number;
   isFinished: boolean;
+  correctCount?: number;
+  wrongCount?: number;
+  retryCorrectCount?: number;
+  retryWrongCount?: number;
   finishedAt?: string;
   hasShield?: boolean;
   isAi?: boolean;
@@ -82,7 +83,7 @@ export interface ArenaState {
   teacherId: string;
   status: ArenaStatus; // "lobby" | "active" | "ended"
   mode: ArenaMode;
-  matchDuration: number; // overall match duration in seconds (1800 or 3600)
+  matchDuration: number; // overall match duration in seconds (1–480 whole minutes)
   matchEndsAt?: string | null;
   enabledPowers: ArenaPowerId[];
   totalQuestions: number;
@@ -247,7 +248,8 @@ export function resolvePendingAttackInState(
     return { code: "wrong_target", attack };
   }
   if ((attack.sessionId && attack.sessionId !== state.sessionId) || !Number.isFinite(attack.expiresAt)
-    || !state.participants?.[attack.attackerId] || !state.participants?.[attack.targetStudentId]) {
+    || !state.participants?.[attack.attackerId] || !state.participants?.[attack.targetStudentId]
+    || !isArenaPowerId(attack.powerType) || attack.powerType === "shield") {
     return { code: "invalid_attack", attack };
   }
   if (attack.status !== "pending") return { code: "already_resolved", attack };
@@ -255,6 +257,13 @@ export function resolvePendingAttackInState(
 
   const target = state.participants[attack.targetStudentId];
   const penalty = getPowerPenalty(attack.powerType);
+  if (penalty > 0 && target.score > 0 && target.hasShield && state.usedPowers?.[target.studentId]?.shield) {
+    target.hasShield = false;
+    attack.status = "deflected";
+    attack.scorePenalty = 0;
+    attack.damage = 0;
+    return { code: "resolved", attack, target, participants: computeArenaRankings(state.participants), penalty: 0 };
+  }
   attack.scorePenalty = penalty;
   attack.damage = penalty;
   attack.status = "hit";
@@ -282,7 +291,8 @@ export function deflectPendingAttackInState(
   if (attack.targetStudentId !== options.defenderStudentId) {
     return { code: "wrong_student", attack };
   }
-  if (!state.participants?.[attack.attackerId]) {
+  if (!state.participants?.[attack.attackerId] || (attack.sessionId && attack.sessionId !== state.sessionId)
+    || !Number.isFinite(attack.expiresAt) || !isArenaPowerId(attack.powerType) || attack.powerType === "shield") {
     return { code: "invalid_attack", attack };
   }
   if (attack.status !== "pending") {
@@ -297,7 +307,7 @@ export function deflectPendingAttackInState(
     });
     if (hit.code === "resolved") {
       return {
-        code: "too_late",
+        code: hit.attack?.status === "deflected" ? "blocked" : "too_late",
         attack: hit.attack,
         target: hit.target,
         participants: hit.participants,
@@ -308,7 +318,7 @@ export function deflectPendingAttackInState(
     return { code: "already_resolved", attack, target: defender };
   }
 
-  if (state.usedPowers?.[options.defenderStudentId]?.shield) {
+  if (state.usedPowers?.[options.defenderStudentId]?.shield && !defender.hasShield) {
     return { code: "shield_already_used", attack, target: defender };
   }
 
@@ -316,6 +326,7 @@ export function deflectPendingAttackInState(
   if (!state.usedPowers[options.defenderStudentId]) state.usedPowers[options.defenderStudentId] = {};
   state.usedPowers[options.defenderStudentId].shield = true;
   attack.status = "deflected";
+  attack.scorePenalty = 0; attack.damage = 0;
   defender.hasShield = false;
 
   return {

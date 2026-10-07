@@ -3,7 +3,7 @@ import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import ArenaHostContent from "./content";
-import { normalizeArenaConfig, normalizeMatchDuration } from "@/lib/arena";
+import { normalizeArenaConfig } from "@/lib/arena";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -50,11 +50,10 @@ export default async function ArenaHostPage({ params, searchParams }: PageProps)
   }
 
   const sp = await searchParams;
-  const rawDuration = typeof sp.duration === "string" ? sp.duration : undefined;
-  const matchDuration = rawDuration ? normalizeMatchDuration(rawDuration) : 1800;
+  const matchDuration = (quiz.duration ?? 30) * 60;
   const config = normalizeArenaConfig({
     mode: typeof sp.mode === "string" ? sp.mode : undefined,
-    waveDuration: matchDuration === 3600 ? 3600 : 1800,
+    waveDuration: matchDuration,
     enabledPowers: typeof sp.powers === "string" ? sp.powers.split(",") : undefined,
   });
 

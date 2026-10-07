@@ -1,3 +1,5 @@
+import * as questionOrder from "../src/lib/quiz-question-order.ts";
+import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -57,14 +59,16 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
     } },
   };
   const prisma = {
-    quiz: { findUnique: async () => ({ ...quiz }) },
+    quiz: { findUnique: async () => ({ ...quiz, subject, questions: [] }) },
     studentQuiz: { count: async () => attemptCount },
     $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction),
   };
-  const exports: { PUT?: (request: unknown, context: unknown) => Promise<{ status: number; body: Record<string, unknown> }> } = {};
+  const exports: { PUT?: (request: unknown, context: unknown) => Promise<{ status: number; body: Record<string, unknown> }>; GET?: (request: unknown, context: unknown) => Promise<{ status: number; body: any }> } = {};
   vm.runInNewContext(transpile(routeSource), {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/quiz-session-timing") return sessionTiming;
+      if (name === "@/lib/quiz-question-order") return questionOrder;
       if (name === "next/server") return { NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
@@ -80,7 +84,8 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
   });
   assert.ok(exports.PUT);
   const update = (body: Record<string, unknown>) => exports.PUT!({ json: async () => body }, { params: Promise.resolve({ id: "7" }) });
-  return { update, writes, quiz, currentQuestions: () => questions, currentSubject: () => subject };
+  const reload = () => exports.GET!({}, { params: Promise.resolve({ id: "7" }) });
+  return { update, reload, writes, quiz, currentQuestions: () => questions, currentSubject: () => subject };
 }
 
 const replacementQuestions = [
@@ -103,13 +108,14 @@ test("post-attempt question edits are rejected without changing questions or tot
   assert.equal(fixture.currentQuestions().length, 1);
 });
 
-test("post-attempt subject edits are rejected without writes", async () => {
+test("post-attempt subject name edits persist without rewriting question history", async () => {
   const fixture = routeFixture(1);
   const response = await fixture.update({ subjectName: "Mathematics" });
-  assert.equal(response.status, 409);
-  assert.match(String(response.body.error), /Subject cannot be changed/);
-  assert.deepEqual(fixture.writes, []);
-  assert.equal(fixture.quiz.subjectId, 2);
+  assert.equal(response.status, 200);
+  assert.equal(fixture.currentSubject().subjectName, "Mathematics");
+  assert.equal(fixture.quiz.subjectId, 3);
+  assert.deepEqual(fixture.writes, ["subject.create", "quiz.update"]);
+  assert.equal(fixture.currentQuestions()[0].questionText, "Original question");
 });
 
 test("mixed metadata and forbidden content edits cannot partially apply", async () => {
@@ -226,6 +232,7 @@ test("post-attempt content lock still takes precedence over invalid edited quest
 
 function creationFixture() {
   let createdQuestions: unknown[] | undefined;
+  let createdQuiz: Record<string, unknown> | undefined;
   const entitlements = { manualQuizCount: 0, manualQuizLimit: 5 };
   const transaction = {
     $executeRaw: async () => {},
@@ -233,6 +240,7 @@ function creationFixture() {
     quiz: {
       findUnique: async () => null,
       create: async ({ data }: { data: { questions: { create: unknown[] } } }) => {
+        createdQuiz = data as unknown as Record<string, unknown>;
         createdQuestions = data.questions.create;
         return { id: 7 };
       },
@@ -247,12 +255,14 @@ function creationFixture() {
   vm.runInNewContext(transpile(creationSource), {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/quiz-session-timing") return sessionTiming;
+      if (name === "@/lib/quiz-question-order") return questionOrder;
       if (name === "next/server") return { after: () => {}, NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1" }) };
       if (name === "@/lib/teacher-entitlements") return { getTeacherEntitlements: async () => entitlements };
       if (name === "@/lib/subscription-rules") return { getQuizCreationDecision: () => ({ allowed: true }) };
-      if (name === "@/lib/quiz-mode") return { parseQuizMode: () => "proctored", InvalidQuizModeError: class extends Error {} };
+      if (name === "@/lib/quiz-mode") return { parseQuizMode: (mode: string) => mode || "proctored", InvalidQuizModeError: class extends Error {} };
       if (name === "@/lib/quiz-availability") return { UNAVAILABLE_QUIZ_STATUSES: [] };
       if (name === "@/lib/retake-eligibility") return retakeEligibility;
       if (name === "@/lib/ai-quiz-provenance") return { verifyAiQuizReceipt: () => false };
@@ -263,11 +273,11 @@ function creationFixture() {
     console: { error() {} },
   });
   assert.ok(exports.POST);
-  const create = (questions: unknown[]) => exports.POST!({
-    json: async () => ({ subjectName: "Computer Science", title: "Creation contract", questions }),
+  const create = (questions: unknown[], metadata: Record<string, unknown> = {}) => exports.POST!({
+    json: async () => ({ subjectName: "Computer Science", title: "Creation contract", questions, ...metadata }),
     headers: { get: () => null },
   });
-  return { create, getCreatedQuestions: () => createdQuestions };
+  return { create, getCreatedQuestions: () => createdQuestions, getCreatedQuiz: () => createdQuiz };
 }
 
 test("quiz creation still accepts fill-in-blank and normalizes points as before", async () => {
@@ -303,7 +313,7 @@ function editorSaveCallback() {
   return { code: transpile(`exports.save = ${callback};`), exports };
 }
 
-async function studioSave(isContentLocked: boolean, status = 200, quizStatus = "active") {
+async function studioSave(isContentLocked: boolean, status = 200, quizStatus = "active", duration = 30) {
   const { code, exports } = editorSaveCallback();
   let payload: Record<string, unknown> | undefined;
   let error: string | null = null;
@@ -312,7 +322,7 @@ async function studioSave(isContentLocked: boolean, status = 200, quizStatus = "
     exports,
     quizForm: {
       id: 7, title: "Updated title", subjectName: "Computer Science", description: "Updated",
-      duration: 30, passingScore: 70, shuffleQuestions: false, allowRetake: false,
+      duration, passingScore: 70, shuffleQuestions: false, allowRetake: false,
       isGamified: false, quizMode: "proctored", quizStatus, questions: replacementQuestions,
     },
     isContentLocked,
@@ -337,10 +347,10 @@ test("Studio sends only metadata after attempts and keeps content controls read-
   assert.ok(result.payload);
   assert.equal(result.payload.title, "Updated title");
   assert.equal("questions" in result.payload, false);
-  assert.equal("subjectName" in result.payload, false);
+  assert.equal(result.payload.subjectName, "Computer Science");
   assert.equal("totalQuestions" in result.payload, false);
   assert.equal("duration" in result.payload, false);
-  assert.match(editorSource, /Questions and subject are read-only after students have joined/);
+  assert.match(editorSource, /Questions are read-only after students have joined/);
   assert.match(editorSource, /disabled=\{isContentLocked\}/);
 });
 
@@ -357,4 +367,64 @@ test("Studio surfaces the server's content-lock error instead of a quiz-mode err
   assert.equal(result.saved, false);
   assert.match(result.error || "", /Questions cannot be changed/);
   assert.doesNotMatch(result.error || "", /Quiz mode/);
+});
+
+for (const quizMode of ["proctored", "arena"]) {
+  for (const duration of [1, 15, 45, 480, "25"]) {
+    test(`${quizMode} creation persists configured duration ${duration}`, async () => {
+      const f = creationFixture();
+      assert.equal((await f.create([validQuestion], { quizMode, duration })).status, 201);
+      assert.equal(f.getCreatedQuiz()?.duration, Number(duration));
+      assert.equal(f.getCreatedQuiz()?.quizMode, quizMode);
+    });
+  }
+  for (const duration of [0, -1, 1.5, 481, "bad", "", " ", null, true, [], [15], {}]) {
+    test(`${quizMode} creation rejects invalid duration ${JSON.stringify(duration)} before writes`, async () => {
+      const f = creationFixture();
+      assert.equal((await f.create([validQuestion], { quizMode, duration })).status, 400);
+      assert.equal(f.getCreatedQuiz(), undefined);
+    });
+  }
+}
+
+for (const duration of [1, 15, 45, 480]) {
+  test(`duration edit and reload preserve ${duration} minutes, including metadata-only saves`, async () => {
+    const f = routeFixture(0);
+    assert.equal((await f.update({ duration })).status, 200);
+    assert.equal((await f.reload()).body.quiz.duration, duration);
+    assert.equal((await f.update({ title: "Other edit" })).status, 200);
+    assert.equal((await f.reload()).body.quiz.duration, duration);
+    assert.equal((await studioSave(false, 200, "active", duration)).payload?.duration, duration);
+  });
+}
+for (const duration of [0, -1, 1.5, 481, "bad", "", null, true, [], [15], {}]) {
+  test(`duration edit rejects ${JSON.stringify(duration)} without writes`, async () => {
+    const f = routeFixture(0);
+    assert.equal((await f.update({ duration })).status, 400);
+    assert.deepEqual(f.writes, []);
+    assert.equal(f.quiz.duration, 30);
+  });
+}
+for (const duration of [NaN, 0, -1, 1.5, 481]) {
+  test(`Studio rejects invalid duration ${duration} before making a request`, async () => {
+    const result = await studioSave(false, 200, "active", duration);
+    assert.equal(result.payload, undefined);
+    assert.equal(result.saved, false);
+    assert.match(result.error || "", /Duration must/);
+  });
+}
+for (const status of ["in_progress", "ended"]) {
+  test(`duration remains locked for ${status} quiz`, async () => {
+    const f = routeFixture(0, status);
+    assert.equal((await f.update({ duration: 45 })).status, 409);
+    assert.deepEqual(f.writes, []);
+  });
+}
+
+test("edited subject name survives reload and invalid names cannot write", async () => {
+ const fixture=routeFixture(1,"in_progress");const before={...fixture.quiz};
+ assert.equal((await fixture.update({subjectName:"  Applied Mathematics  "})).status,200);
+ assert.equal((await fixture.reload()).body.quiz.subject.subjectName,"Applied Mathematics");
+ for(const name of ["", " ", "X".repeat(151), 123]) assert.equal((await fixture.update({subjectName:name})).status,400);
+ assert.equal(fixture.quiz.duration,before.duration);assert.equal(fixture.quiz.totalQuestions,before.totalQuestions);assert.equal(fixture.quiz.title,before.title);
 });

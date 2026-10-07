@@ -4,7 +4,6 @@ import { deferred, find, fixture, studentQuizzes, teacherDashboard, textOf, type
 
 const resources = [
   { name: "quizzes", url: "/api/quizzes", error: "Could not load your quizzes.", loading: "Scanning for active missions", body: (label: string) => ({ success: true, quizzes: [{ ...studentQuizzes.quizzes[0], quiz: { ...studentQuizzes.quizzes[0].quiz, title: label } }] }) },
-  { name: "progression", url: "/api/student/progression", error: "Could not load your progression.", loading: "Loading progression", body: (label: string) => ({ success: true, totalExp: 850, level: 2, currentLevelExp: 350, expToNextLevel: 150, progressPercent: 70, title: label }) },
 ] as const;
 
 async function prepare(resource: typeof resources[number]) {
@@ -142,16 +141,10 @@ test("Student latest empty quiz response remains authoritative over an older pop
   setup.unmount(); setup.assertDisposed();
 });
 
-test("Student quiz and progression Retry sequences remain independent", async () => {
-  const setup = fixture("student");
-  setup.queue("/api/quizzes", { status: 500 }); setup.queue("/api/quizzes", { status: 500 }); setup.queue("/api/student/progression", { status: 500 });
-  setup.render(); await setup.ready();
-  const retry = (resource: typeof resources[number]) => find(find(setup.render(), n => n.props.role === "alert" && textOf(n).includes(resource.error))!, n => n.type === "button" && textOf(n) === "Retry")!.props.onClick();
-  const quizzes = deferred<Reply>(), progression = deferred<Reply>();
-  setup.queue(resources[0].url, quizzes.promise); retry(resources[0]);
-  setup.queue(resources[1].url, progression.promise); retry(resources[1]); await setup.ready();
-  quizzes.resolve({ body: resources[0].body("Independent quiz") }); progression.resolve({ body: resources[1].body("Independent progression") }); await setup.ready();
-  assert.match(textOf(setup.render()), /Independent quiz/); assert.match(textOf(setup.render()), /Independent progression/);
+test("Student dashboard no longer requests the removed progression display", async () => {
+  const setup = fixture("student"); setup.render(); await setup.ready();
+  assert.equal(setup.requests.some(request => request.url === "/api/student/progression"), false);
+  assert.doesNotMatch(textOf(setup.render()), /Level \d|Total EXP|AI Verified|Proctor Trust Index/);
   setup.unmount(); setup.assertDisposed();
 });
 

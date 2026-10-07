@@ -1,3 +1,4 @@
+import * as quizScanner from "../../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -127,7 +128,8 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
-        if (name === "react") return react;
+        if (name === "@/lib/quiz-scanner") return quizScanner;
+      if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "lucide-react") return new Proxy({}, { get: () => () => null });
         if (name === "next/link") return { __esModule: true, default: "a" };

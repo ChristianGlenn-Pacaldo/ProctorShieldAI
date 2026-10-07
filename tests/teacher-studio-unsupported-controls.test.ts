@@ -39,7 +39,7 @@ test("Studio exposes no editable per-question timer, explanation, or false timer
 test("quiz-wide duration settings and save payload remain available", () => {
   assert.match(editorSource, /Exam Duration \(Minutes\)/);
   assert.match(editorSource, /Match Duration \(Minutes\)/);
-  assert.match(editorSource, /value=\{quizForm\.duration\}/);
+  assert.match(editorSource, /value=\{Number\.isNaN\(quizForm\.duration\) \? "" : quizForm\.duration\}/);
   assert.match(editorSource, /setQuizForm\(\{ \.\.\.quizForm, duration:/);
   assert.match(findCallback("handleSaveAndPublish"), /!isDurationLocked \? \{ duration: quizForm\.duration \}/);
 });

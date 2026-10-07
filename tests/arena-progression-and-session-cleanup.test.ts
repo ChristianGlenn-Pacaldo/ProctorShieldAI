@@ -237,11 +237,11 @@ test("X, Y, Z: Arena final EXP is awarded only once per sessionId/student and gu
 // ─────────────────────────────────────────────────────────────
 // AA, AB: TEACHER ARENA SETUP & RESULTS CLEANUP
 // ─────────────────────────────────────────────────────────────
-test("AA: Teacher Arena setup has no Coin Bounty UI and duration is strictly 30m or 1h", () => {
+test("AA: Teacher Arena setup has no Coin Bounty UI and duration comes from the saved quiz", () => {
   assert.equal(teacherPlaygroundSrc.includes("coinBounty"), false);
   assert.equal(teacherPlaygroundSrc.includes("Champion Coin Bounty"), false);
-  assert.match(teacherPlaygroundSrc, /setMatchDuration\(1800\)/);
-  assert.match(teacherPlaygroundSrc, /setMatchDuration\(3600\)/);
+  assert.match(teacherPlaygroundSrc, /selectedQuiz\?\.duration \?\? 30/);
+  assert.match(teacherPlaygroundSrc, /Saved quiz duration/);
 });
 
 test("AB: Arena results show EXP but no coins/badges", () => {

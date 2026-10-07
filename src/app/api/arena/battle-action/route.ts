@@ -170,6 +170,8 @@ async function POSTImpl(req: NextRequest) {
             targetName: resolution.attack.targetName,
             powerType: resolution.attack.powerType,
             status: "deflected",
+            scorePenalty: 0, damage: 0, targetCurrentScore: resolution.target?.score,
+            participants: resolution.participants,
             timestamp: new Date().toISOString(),
           };
           await Promise.allSettled([

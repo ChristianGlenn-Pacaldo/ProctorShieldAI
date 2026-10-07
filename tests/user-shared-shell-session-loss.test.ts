@@ -102,7 +102,7 @@ for (const failure of [{status:500},{status:503},new Error("network failure"),{s
 }
 
 test("Student content-detected 401 stops the independent retake listener and shell",async()=>{
-  const setup=fixture("student"); setup.queue("/api/student/progression",{status:401}); setup.render(); await setup.ready(); lost(setup);
+  const setup=fixture("student"); setup.queue("/api/quizzes",{status:401}); setup.queue("/api/quizzes",{status:401}); setup.render(); await setup.ready(); lost(setup);
   const count=setup.requests.length; await setup.advance(35_000); assert.equal(setup.requests.length,count);
   setup.unmount(); setup.assertDisposed();
 });
@@ -126,7 +126,7 @@ test("Student name-enforcement request is aborted and cannot refresh the new ses
 });
 
 for (const failure of [{status:500},{status:503},new Error("network failure")]) test(`Student ${failure instanceof Error?"network":failure.status} failure retains an authorized lifecycle`,async()=>{
-  const setup=fixture("student");setup.queue("/api/student/progression",failure);setup.render();await setup.ready();
+  const setup=fixture("student");setup.queue("/api/quizzes",failure);setup.queue("/api/quizzes",failure);setup.render();await setup.ready();
   assert.match(textOf(setup.render()),/Retry/);assert.equal(setup.bell().props.disabled,false);
   assert.equal(setup.resources().connected,2); setup.unmount();setup.assertDisposed();
 });

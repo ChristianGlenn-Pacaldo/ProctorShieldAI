@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { mutateArena } from "@/lib/arena";
 import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { createProctoredSession, proctoredSessionKey } from "@/lib/quiz-session-timing";
 
 async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -47,11 +48,17 @@ async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: st
 
     const startedAt = new Date();
     const startQuiz = async (tx: Prisma.TransactionClient) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${quizId}`}))`;
+      const currentQuiz = await tx.quiz.findUnique({ where: { id: quizId } });
       const claimed = await tx.quiz.updateMany({
         where: { id: quizId, teacherId: session.userId, quizStatus: "active" },
         data: { quizStatus: "in_progress" },
       });
       if (claimed.count !== 1) return false;
+      if (currentQuiz && currentQuiz.quizMode !== "arena") {
+        const timing = createProctoredSession(currentQuiz, new Date());
+        await tx.setting.create({ data: { settingKey: proctoredSessionKey(quizId), settingValue: JSON.stringify(timing) } });
+      }
       await tx.studentQuiz.updateMany({
         where: { quizId, quizStatus: "enrolled", attemptMode: "arena" },
         data: { quizStatus: "in_progress", startTime: startedAt },

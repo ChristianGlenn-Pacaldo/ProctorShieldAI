@@ -1,0 +1,53 @@
+.layer { position: fixed; inset: 0; z-index: 85; overflow: hidden; pointer-events: none; contain: layout paint; --tone: #fb923c; }
+.layer * { pointer-events: none; }
+.blizzard { --tone: #67e8f9; }
+.earthquake { --tone: #fbbf24; }
+.blocked { --tone: #6ee7b7; }
+.scene, .shake, .particles { position: absolute; inset: 0; width: 100%; height: 100%; }
+.shake { animation: rumble 3.8s ease-out both; }
+.meteorFlight { filter: drop-shadow(0 0 12px #f97316); animation: meteorEntry 3.8s cubic-bezier(.42,0,.88,.66) both; transform-origin: 500px 350px; }
+.flameTrail { animation: flame 160ms alternate 9; }
+.flash { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 58%, var(--tone), transparent 60%); animation: flash 3.8s ease-out both; }
+.shockwave { position: absolute; left: 50%; top: 58%; width: 30vw; height: 30vw; margin-left: -15vw; margin-top: -15vw; border: 3px solid var(--tone); border-radius: 50%; animation: shockwave 3.8s ease-out both; }
+.aftermath { position: absolute; left: 25%; top: 48%; width: 50%; height: 36%; border-radius: 50%; background: radial-gradient(ellipse, #57534e66, transparent 70%); animation: smoke 3.8s ease-out both; }
+.particle { position: absolute; left: 50%; top: 58%; width: 5px; height: 9px; background: var(--tone); border-radius: 1px; box-shadow: 0 0 7px var(--tone); animation: debris 3.8s ease-out both; animation-delay: var(--delay); }
+.particle:nth-child(3n) { width: 10px; height: 6px; background: #78350f; box-shadow: none; }
+.frost { position: absolute; inset: 0; box-shadow: inset 0 0 70px 18px #67e8f966; background: linear-gradient(130deg, #cffafe22, transparent 45%, #a5f3fc33); clip-path: polygon(0 0,100% 0,100% 100%,0 100%); animation: frost 3.8s ease-out both; }
+.iceBurst { transform-origin: 500px 350px; animation: iceBurst 3.8s ease-out both; }
+.wind { animation: wind 3.8s ease-out both; }
+.blizzard .particle { left: var(--x); top: 0; width: 7px; height: 18px; clip-path: polygon(50% 0,100% 70%,50% 100%,0 35%); background: #cffafe; box-shadow: none; animation-name: snow; }
+.blizzard .aftermath { background: radial-gradient(ellipse, #a5f3fc33, transparent 70%); }
+.earthquake .particle { width: 13px; height: 9px; background: #bca58c; box-shadow: none; border-radius: 50%; }
+.earthquake .aftermath { background: radial-gradient(ellipse, #d6b38a44, transparent 70%); }
+.cracks { stroke-dasharray: 700; animation: cracks 3.8s ease-out both; }
+.barrier { position: absolute; left: 50%; top: 52%; width: min(66vw,480px); aspect-ratio: 1; transform: translate(-50%,-50%); color: #6ee7b7; }
+.shield { width: 100%; height: 100%; filter: drop-shadow(0 0 10px #34d39988); }
+.armed { opacity: .2; animation: shieldPulse 3s ease-in-out infinite; }
+.shieldCrack { opacity: 0; }
+.consumed { animation: dissolve 3.8s ease-out both; }
+.consumed .shieldCrack { animation: crackShield 3.8s ease-out both; }
+.blockLabel { position: absolute; top: 46%; left: 10%; width: 80%; text-align: center; font: 900 clamp(12px,2vw,20px) system-ui; letter-spacing: .08em; color: #ecfdf5; text-shadow: 0 2px 8px #064e3b; }
+.blocked .meteorFlight { animation-name: meteorCollision; }
+@keyframes meteorEntry { 0% { transform: translate(-65vw,-95vh) rotate(-8deg); opacity: 0; } 6% { opacity: 1; } 34% { transform: translate(0,0) rotate(0); opacity: 1; } 38%,100% { transform: translate(0,0); opacity: 0; } }
+@keyframes meteorCollision { 0% { transform: translate(-65vw,-95vh); opacity: 0; } 6% { opacity: 1; } 34% { transform: translate(0,-7vh); opacity: 1; } 42% { transform: translate(-8vw,-12vh) rotate(-25deg); opacity: 0; } 100% { opacity: 0; } }
+@keyframes flame { from { opacity: .75; } to { opacity: 1; } }
+@keyframes flash { 0%,32% { opacity: 0; } 35% { opacity: .32; } 45%,100% { opacity: 0; } }
+@keyframes shockwave { 0%,32% { transform: scale(.05); opacity: 0; } 35% { opacity: .65; } 65%,100% { transform: scale(3.4); opacity: 0; } }
+@keyframes debris { 0%,34% { opacity: 0; transform: translate(0,0) rotate(0); } 38% { opacity: .9; } 80%,100% { opacity: 0; transform: translate(var(--dx),var(--dy)) rotate(220deg); } }
+@keyframes smoke { 0%,38% { opacity: 0; transform: scale(.4); } 55% { opacity: .6; } 100% { opacity: 0; transform: translateY(-8vh) scale(1.4); } }
+@keyframes rumble { 0%,65%,100% { transform: translate(0,0); } 18%,26% { transform: translate(1px,-1px); } 34%,42%,54% { transform: translate(-3px,2px); } 38%,46%,58% { transform: translate(3px,-2px); } }
+@keyframes iceBurst { 0%,30% { opacity: 0; transform: scale(.15); } 36% { opacity: .8; } 75%,100% { opacity: 0; transform: scale(2.2); } }
+@keyframes wind { 0% { transform: translateX(-35%); opacity: 0; } 20%,60% { opacity: .5; } 100% { transform: translateX(30%); opacity: 0; } }
+@keyframes snow { 0% { opacity: 0; transform: translate(-15vw,-4vh) rotate(0); } 15%,65% { opacity: .8; } 100% { transform: translate(25vw,95vh) rotate(220deg); opacity: 0; } }
+@keyframes frost { 0%,100% { opacity: 0; } 25%,65% { opacity: .7; } }
+@keyframes cracks { 0%,28% { opacity: 0; stroke-dashoffset: 700; } 50% { opacity: .65; stroke-dashoffset: 0; } 100% { opacity: 0; stroke-dashoffset: 0; } }
+@keyframes shieldPulse { 0%,100% { opacity: .12; } 50% { opacity: .24; } }
+@keyframes dissolve { 0% { opacity: .35; transform: translate(-50%,-50%) scale(.95); } 34% { opacity: .9; transform: translate(-50%,-50%) scale(1.05); } 55% { opacity: .65; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.15); } }
+@keyframes crackShield { 0%,42% { opacity: 0; } 55%,100% { opacity: .9; } }
+@media (max-width: 640px), (pointer: coarse) { .particle:nth-child(n+13) { display: none; } .meteorFlight, .shield { filter: none; } .frost { box-shadow: inset 0 0 35px 8px #67e8f944; } }
+@media (prefers-reduced-motion: reduce) {
+  .layer *, .layer *::before, .layer *::after { animation: none !important; }
+  .particles, .meteorFlight, .wind, .iceBurst, .cracks, .shockwave, .aftermath { display: none; }
+  .flash { opacity: .08; } .frost { opacity: .15; }
+  .barrier { opacity: .2; } .consumed { opacity: .5; } .consumed .shieldCrack { opacity: .5; }
+}

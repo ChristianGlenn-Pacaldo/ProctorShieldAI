@@ -1,42 +1,19 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { getAttemptQuestionOrder, shuffleArray } from "@/lib/quiz-question-order";
 import prisma from "@/lib/prisma";
 import { mutateArena } from "@/lib/arena";
 import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { canStudentEnterQuiz } from "@/lib/quiz-access";
+import { readProctoredSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 import { parseQuizMode, InvalidQuizModeError, canChangeQuizMode, type QuizMode } from "@/lib/quiz-mode";
 import {
   DELETED_QUIZ_STATUS,
   isQuizAvailable,
   quizNotAvailableResponse,
 } from "@/lib/quiz-availability";
-
-// Seeded random number generator (Mulberry32 variant)
-function seededRandom(seed: string) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  }
-  return function() {
-    let t = h += 0x6D2B79F5;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Seeded array shuffling helper
-function shuffleArray<T>(array: T[], seed: string): T[] {
-  const rand = seededRandom(seed);
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -113,10 +90,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         endTime: studentQuiz.endTime,
       });
 
+      // Every attempt gets its own stable server-owned question order.
+      questions = getAttemptQuestionOrder(questions, studentQuiz.id);
       if (quiz.shuffleQuestions) {
-        // Shuffle questions deterministically using the student's unique studentQuiz.id
-        questions = shuffleArray(questions, studentQuiz.id);
-        
+        // Preserve the existing opt-in choice shuffle without expanding it to Arena.
         // Also shuffle choices for each question deterministically
         questions = questions.map((q) => ({
           ...q,
@@ -135,7 +112,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       : true;
     const canStartProctored = session.role === "student" && quiz.quizMode !== "arena"
       && studentQuiz?.quizStatus === "enrolled" && !studentQuiz.endTime
-      && (quiz.quizStatus === "in_progress" || (quiz.quizStatus === "ended" && studentQuiz.attemptNumber > 1));
+      && quiz.quizStatus === "in_progress";
     const safeQuestions = session.role === "student" && !canEnterQuiz && !canStartProctored ? [] : questions;
     const savedAnswers = session.role === "student" && studentQuiz && canEnterQuiz
       ? await prisma.answer.findMany({
@@ -148,14 +125,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       : undefined;
     const teacherEnd = session.role === "student" && quiz.quizMode !== "arena" && quiz.quizStatus === "ended"
       ? await prisma.setting.findUnique({ where: { settingKey: `proctored:quiz-ended:${quiz.id}` } }) : null;
-    const remainingSeconds = session.role === "student" && studentQuiz?.startTime && studentQuiz.quizStatus === "in_progress"
-      ? Math.max(
-          0,
-          Math.ceil(
-            (studentQuiz.startTime.getTime() + (quiz.duration ?? 60) * 60_000 - Date.now()) / 1000,
-          ),
-        )
-      : undefined;
+    const timing = session.role === "student" && quiz.quizMode !== "arena"
+      ? await readProctoredSession(prisma, quiz) : null;
+    const clock = timing ? sessionTimingPayload(timing, quiz.quizStatus) : null;
+    const remainingSeconds = clock?.remainingSeconds;
 
     return NextResponse.json({
       success: true,
@@ -167,6 +140,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       startTime: studentQuiz?.startTime,
       endTime: studentQuiz?.endTime,
       attemptNumber: studentQuiz?.attemptNumber,
+      ...clock,
       remainingSeconds,
       teacherEndedAt: teacherEnd?.settingValue || null,
       deviceType: session.role === "student" ? studentQuiz?.deviceType : undefined,
@@ -320,7 +294,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
     let requestedDuration: number | undefined;
     if (body.duration !== undefined) {
       requestedDuration = Number(body.duration);
-      if (!Number.isInteger(requestedDuration) || requestedDuration < 1 || requestedDuration > 480) {
+      if ((typeof body.duration !== "number" && typeof body.duration !== "string") || !Number.isInteger(requestedDuration) || requestedDuration < 1 || requestedDuration > 480) {
         return NextResponse.json({ error: "Duration must be between 1 and 480 minutes" }, { status: 400 });
       }
       if (["in_progress", "ended"].includes(existingQuiz.quizStatus)) {
@@ -377,6 +351,10 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
 
     // Transactional update for quiz and optional questions
     const updateQuiz = async (tx: Prisma.TransactionClient) => {
+      if (requestedStatus === "ended" && existingQuiz.quizMode !== "arena") {
+        // Serialize End with entry/retake timing decisions for this session.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${quizId}`}))`;
+      }
       // Reject an obsolete edit instead of writing pre-End/reset metadata.
       if (existingQuiz.quizMode === "arena" || parsedQuizMode === "arena") {
         const currentQuiz = await tx.quiz.findUnique({ where: { id: quizId } });
@@ -393,12 +371,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
         if (body.questions !== undefined || (body.totalQuestions !== undefined && body.totalQuestions !== existingQuiz.totalQuestions)) {
           return { error: "Questions cannot be changed after students have joined or attempted this quiz.", code: "QUIZ_CONTENT_LOCKED", status: 409 };
         }
-        if (subjectName !== undefined) {
-          const currentSubject = await tx.subject.findUnique({ where: { id: existingQuiz.subjectId } });
-          if (currentSubject?.subjectName.toLowerCase() !== subjectName.toLowerCase()) {
-            return { error: "Subject cannot be changed after students have joined or attempted this quiz.", code: "QUIZ_CONTENT_LOCKED", status: 409 };
-          }
-        }
+
       }
 
       const editedQuestions = body.questions === undefined ? null : validateEditedQuestions(body.questions);
@@ -426,11 +399,11 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
       }
 
       let subjectId = existingQuiz.subjectId;
-      if (subjectName !== undefined && studentQuizCount === 0) {
+      if (subjectName !== undefined) {
         let subject = await tx.subject.findFirst({
           where: { teacherId: session.userId, subjectName: { equals: subjectName, mode: "insensitive" } },
         });
-        if (!subject) {
+        if (!subject || subject.subjectName !== subjectName) {
           subject = await tx.subject.create({
             data: { teacherId: session.userId, subjectName, subjectCode: `SUB-${crypto.randomBytes(5).toString("hex").toUpperCase()}` },
           });

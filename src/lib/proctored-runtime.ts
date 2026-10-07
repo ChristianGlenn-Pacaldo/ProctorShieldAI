@@ -40,3 +40,13 @@ export function resumeProctoredMedia(
   if (stream && video?.paused) void video.play().catch(() => {});
   return false;
 }
+
+// Convert a server-owned deadline to a monotonic local countdown. Changing the
+// device's wall clock cannot extend it. Server checks still decide expiry.
+export function examCountdownDeadline(clock: { remainingSeconds: number; sessionEndsAt?: string; serverTime?: number }, requestStartedAt: number, responseReceivedAt: number) {
+  const exactRemaining = typeof clock.sessionEndsAt === "string" && typeof clock.serverTime === "number"
+    ? Date.parse(clock.sessionEndsAt) - clock.serverTime : clock.remainingSeconds * 1000;
+  const remaining = Math.min(clock.remainingSeconds * 1000, Number.isFinite(exactRemaining) ? exactRemaining : 0);
+  const transit = Math.max(0, responseReceivedAt - requestStartedAt) / 2;
+  return responseReceivedAt + Math.max(0, remaining - transit);
+}

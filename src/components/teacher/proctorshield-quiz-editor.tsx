@@ -149,7 +149,7 @@ export default function ProctorShieldQuizEditor({
     title: initialQuiz?.title || (initialMode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
     subjectName: initialQuiz?.subjectName || "Computer Science",
     description: initialQuiz?.description || "",
-    duration: initialQuiz?.duration || (initialMode === "arena" ? 15 : 30),
+    duration: initialQuiz?.duration ?? (initialMode === "arena" ? 15 : 30),
     passingScore: initialQuiz?.passingScore || 70,
     shuffleQuestions: initialQuiz?.shuffleQuestions ?? true,
     allowRetake: initialQuiz?.allowRetake ?? false,
@@ -192,7 +192,7 @@ export default function ProctorShieldQuizEditor({
         title: initialQuiz.title || (mode === "arena" ? "Untitled Power Arena Match" : "Untitled Assessment"),
         subjectName: initialQuiz.subjectName || "Computer Science",
         description: initialQuiz.description || "",
-        duration: initialQuiz.duration || (mode === "arena" ? 15 : 30),
+        duration: initialQuiz.duration ?? (mode === "arena" ? 15 : 30),
         passingScore: initialQuiz.passingScore || 70,
         shuffleQuestions: initialQuiz.shuffleQuestions ?? true,
         allowRetake: initialQuiz.allowRetake ?? false,
@@ -424,6 +424,11 @@ export default function ProctorShieldQuizEditor({
       return;
     }
 
+    if (!isDurationLocked && (!Number.isInteger(quizForm.duration) || quizForm.duration < 1 || quizForm.duration > 480)) {
+      setSaveError("Duration must be a whole number between 1 and 480 minutes.");
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
 
@@ -442,8 +447,8 @@ export default function ProctorShieldQuizEditor({
         allowRetake: quizForm.quizMode === "arena" ? false : quizForm.allowRetake,
         isGamified: quizForm.quizMode === "arena" ? true : quizForm.isGamified,
         quizMode: quizForm.quizMode,
+        subjectName: quizForm.subjectName.trim(),
         ...(!isContentLocked ? {
-          subjectName: quizForm.subjectName.trim(),
           totalQuestions: quizForm.questions.length,
           questions: quizForm.questions.map((q) => {
             let choices = q.choices
@@ -784,7 +789,7 @@ export default function ProctorShieldQuizEditor({
                   </h2>
                   <p className="text-xs text-slate-400">
                     {isContentLocked
-                      ? "Questions and subject are read-only after students have joined or attempted this quiz. Other settings can still be saved."
+                      ? "Questions are read-only after students have joined or attempted this quiz. Subject name and other settings can still be saved."
                       : "Create questions or click on any question card to edit in the studio."}
                   </p>
                 </div>
@@ -1328,7 +1333,7 @@ export default function ProctorShieldQuizEditor({
                   type="text"
                   value={quizForm.subjectName}
                   onChange={(e) => setQuizForm({ ...quizForm, subjectName: e.target.value })}
-                  disabled={isContentLocked}
+                  maxLength={150}
                   className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
                 />
               </div>
@@ -1341,12 +1346,12 @@ export default function ProctorShieldQuizEditor({
                       <label className="block font-bold text-slate-300 mb-1">Exam Duration (Minutes)</label>
                       <input
                         type="number"
-                        min={5}
+                        min={1}
                         max={480}
-                        value={quizForm.duration}
+                        value={Number.isNaN(quizForm.duration) ? "" : quizForm.duration}
                         disabled={isDurationLocked}
                         onChange={(e) =>
-                          setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 30 })
+                          setQuizForm({ ...quizForm, duration: e.target.value === "" ? NaN : Number(e.target.value) })
                         }
                         className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-indigo-500"
                       />
@@ -1370,16 +1375,14 @@ export default function ProctorShieldQuizEditor({
                     <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={quizForm.shuffleQuestions}
-                        onChange={(e) =>
-                          setQuizForm({ ...quizForm, shuffleQuestions: e.target.checked })
-                        }
+                        checked={true}
+                        disabled
                         className="w-4 h-4 rounded text-indigo-600"
                       />
                       <div>
                         <div className="font-bold text-white">Shuffle Questions</div>
                         <div className="text-[11px] text-slate-400">
-                          Randomize question order for each student
+                          Every attempt has its own stable randomized question order
                         </div>
                       </div>
                     </label>
@@ -1418,11 +1421,11 @@ export default function ProctorShieldQuizEditor({
                     <input
                       type="number"
                       min={1}
-                      max={120}
-                      value={quizForm.duration}
+                      max={480}
+                      value={Number.isNaN(quizForm.duration) ? "" : quizForm.duration}
                       disabled={isDurationLocked}
                       onChange={(e) =>
-                        setQuizForm({ ...quizForm, duration: parseInt(e.target.value, 10) || 15 })
+                        setQuizForm({ ...quizForm, duration: e.target.value === "" ? NaN : Number(e.target.value) })
                       }
                       className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold outline-hidden focus:border-amber-500"
                     />
@@ -1432,16 +1435,14 @@ export default function ProctorShieldQuizEditor({
                     <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={quizForm.shuffleQuestions}
-                        onChange={(e) =>
-                          setQuizForm({ ...quizForm, shuffleQuestions: e.target.checked })
-                        }
+                        checked={true}
+                        disabled
                         className="w-4 h-4 rounded text-amber-500"
                       />
                       <div>
                         <div className="font-bold text-white">Shuffle Questions</div>
                         <div className="text-[11px] text-slate-400">
-                          Randomize question order for all arena combatants
+                          Every combatant has their own stable randomized question order
                         </div>
                       </div>
                     </label>

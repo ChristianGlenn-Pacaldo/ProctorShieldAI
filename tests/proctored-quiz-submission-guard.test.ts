@@ -281,13 +281,14 @@ test("13. authoritative violationCount 3 submits exactly once", () => {
   assert.match(quizPageSrc, /submitQuizRef\.current\("violation_limit"\)/);
 });
 
-test("14. lobby snapshots/joins do not set premature startTime or drain fresh attempt timer", () => {
+test("14. lobby snapshots/joins do not start monitoring attempts; timer reads use the shared session", () => {
   // Verifies live snapshot does not prematurely set startTime during lobby
   assert.doesNotMatch(snapshotRouteSrc, /data: \{ startTime:/);
   // Verifies live join does not prematurely set startTime during lobby
   assert.doesNotMatch(joinRouteSrc, /data: \{ startTime:/);
-  // Verifies quizzes/[id] remainingSeconds only calculates from startTime when in_progress
-  assert.match(quizDetailsRouteSrc, /studentQuiz\.quizStatus === "in_progress"/);
+  // Timer reads must use the shared deadline without starting an attempt.
+  assert.match(quizDetailsRouteSrc, /readProctoredSession\(prisma, quiz\)/);
+  assert.doesNotMatch(quizDetailsRouteSrc, /data: \{ startTime:/);
 });
 
 test("15. stale teacher-end event is ignored", () => {

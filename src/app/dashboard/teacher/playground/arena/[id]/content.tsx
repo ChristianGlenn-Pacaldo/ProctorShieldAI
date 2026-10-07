@@ -69,6 +69,9 @@ interface Battler {
   rank: number;
   questionsAnswered: number;
   totalQuestions: number;
+  correctCount?: number;
+  wrongCount?: number;
+  retryCorrectCount?: number;
   isFinished: boolean;
   hasShield: boolean;
   isAi: boolean;
@@ -105,9 +108,9 @@ export default function ArenaHostContent({
   const arenaRevisionRef = useRef(0);
   const [phase, setPhase] = useState<"lobby" | "wave" | "podium">("lobby");
 
-  // Overall Match Duration Config (Teacher can choose 30m or 1h in lobby)
-  const initialDuration = matchDuration === 3600 ? 3600 : 1800;
-  const [selectedMatchDuration, setSelectedMatchDuration] = useState<number>(initialDuration);
+  // Use the duration saved in the quiz editor.
+  const initialDuration = matchDuration;
+  const selectedMatchDuration = initialDuration;
   const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(initialDuration);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
@@ -255,6 +258,7 @@ export default function ArenaHostContent({
         rank: p.rank || idx + 1,
         questionsAnswered: p.questionsAnswered || 0,
         totalQuestions: p.totalQuestions || quiz.questions.length,
+        correctCount: p.correctCount, wrongCount: p.wrongCount, retryCorrectCount: p.retryCorrectCount,
         isFinished: Boolean(p.isFinished),
         hasShield: Boolean(p.hasShield),
         isAi: false,
@@ -424,6 +428,8 @@ export default function ArenaHostContent({
       questionId: number;
       choiceId: number;
       isCorrect: boolean;
+      answerKind?: "initial" | "retry";
+      correctCount?: number; wrongCount?: number; retryCorrectCount?: number;
       score: number;
       rank: number;
       questionsAnswered: number;
@@ -437,6 +443,7 @@ export default function ArenaHostContent({
             ...b,
             score: typeof data.score === "number" ? data.score : b.score,
             questionsAnswered: data.questionsAnswered ?? b.questionsAnswered + 1,
+            correctCount: data.correctCount ?? b.correctCount, wrongCount: data.wrongCount ?? b.wrongCount, retryCorrectCount: data.retryCorrectCount ?? b.retryCorrectCount,
             isFinished: Boolean(data.isFinished),
           };
         });
@@ -451,7 +458,7 @@ export default function ArenaHostContent({
         {
           id: `ev-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           timestamp: "Just now",
-          text: `${data.isCorrect ? "✅" : "❌"} ${data.studentName} answered ${data.isCorrect ? "correctly (+pts)" : "incorrectly"}. (Q: ${data.questionsAnswered || 1}/${quiz.questions.length})`,
+          text: `${data.isCorrect ? "✅" : "❌"} ${data.studentName} answered ${data.answerKind === "retry" ? (data.isCorrect ? "retry correctly (no extra points)" : "retry incorrectly") : data.isCorrect ? "correctly (+pts)" : "incorrectly"}. (Q: ${data.questionsAnswered || 1}/${quiz.questions.length})`,
           type: "info",
         },
         ...prev.slice(0, 25),
@@ -542,7 +549,8 @@ export default function ArenaHostContent({
     }) => {
       if (!claimArenaFeedback(displayedCombatFeedbackRef.current, data.attackId, "deflected")) return;
       if (acceptArenaEventRevision(arenaRevisionRef, data, readRealtimeIdentity())) {
-        setBattlers((prev) =>
+        if (Array.isArray(data.participants)) syncRankedBattlers(data.participants);
+        else setBattlers((prev) =>
           prev.map((b) => (b.id === data.targetStudentId ? { ...b, hasShield: false } : b))
         );
       }
@@ -855,9 +863,7 @@ export default function ArenaHostContent({
               Join the Power Arena
             </h1>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-base sm:text-xl text-slate-300 pt-2">
-              <span>1. Go to <strong className="text-white font-mono underline decoration-amber-400">/join</strong></span>
-              <span className="text-slate-600 hidden sm:inline">•</span>
-              <span>2. Enter PIN: <strong className="text-amber-400 font-mono text-2xl font-black">{quiz.accessCode}</strong></span>
+              <span>Enter PIN: <strong className="text-amber-400 font-mono text-2xl font-black">{quiz.accessCode}</strong></span>
             </div>
           </div>
 
@@ -867,27 +873,9 @@ export default function ArenaHostContent({
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               MATCH DURATION
             </span>
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              {[
-                { label: "30 Minutes", sec: 1800 },
-                { label: "1 Hour", sec: 3600 },
-              ].map((dur) => (
-                <button
-                  key={dur.sec}
-                  type="button"
-                  onClick={() => setSelectedMatchDuration(dur.sec)}
-                  className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
-                    selectedMatchDuration === dur.sec
-                      ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black"
-                      : "bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white"
-                  }`}
-                >
-                  {dur.label}
-                </button>
-              ))}
-            </div>
+            <div className="pt-1 text-lg font-black text-amber-400">{selectedMatchDuration / 60} Minutes</div>
             <p className="text-[10px] text-slate-500 pt-1">
-              One overall match duration. Questions progress continuously at each student&apos;s pace.
+              Saved quiz duration. Edit the quiz before starting to change it.
             </p>
           </div>
 
@@ -1045,6 +1033,7 @@ export default function ArenaHostContent({
                       <span className="text-xs font-mono font-bold text-slate-400 hidden sm:inline">
                         {b.questionsAnswered} / {quiz.questions.length} Qs
                       </span>
+                      {b.correctCount !== undefined && <span className="text-xs">Correct: {b.correctCount} · Wrong: {b.wrongCount ?? 0}</span>}
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           b.isFinished

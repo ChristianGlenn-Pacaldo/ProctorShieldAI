@@ -49,7 +49,7 @@ async function POSTImpl(req: NextRequest) {
       studentName: session.fullName,
       quizId: quiz.id,
       quizTitle: quiz.title,
-      deviceType: enrollment.deviceType === "mobile" ? "mobile" : "desktop",
+      deviceType: enrollment.deviceType === "tablet" ? "tablet" : enrollment.deviceType === "mobile" ? "mobile" : "desktop",
       monitoringLevel: enrollment.monitoringLevel === "strict" ? "strict" : "reduced",
       connectionStatus: "online",
       timestamp: new Date().toISOString(),

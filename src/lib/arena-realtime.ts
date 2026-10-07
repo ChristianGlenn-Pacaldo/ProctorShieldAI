@@ -29,7 +29,8 @@ export async function broadcastArenaAttackHit(quizId: number, arena: ArenaState,
 }, realtime: ReturnType<typeof arenaRealtime>) {
   const attack = resolution.attack;
   const target = resolution.target;
-  const penalty = resolution.penalty ?? getPowerPenalty(attack.powerType);
+  const blocked = attack.status === "deflected";
+  const penalty = blocked ? 0 : resolution.penalty ?? getPowerPenalty(attack.powerType);
   const updatedRankings = resolution.participants ?? computeArenaRankings(arena.participants);
   const hitEventData = {
     quizId,
@@ -48,11 +49,12 @@ export async function broadcastArenaAttackHit(quizId: number, arena: ArenaState,
     targetRank: target.rank,
     participants: updatedRankings,
     status: "hit",
+    ...(blocked ? { status: "deflected" } : {}),
     timestamp: new Date().toISOString(),
   };
   await Promise.allSettled([
-    realtime.trigger([`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`], "arena-attack-hit", hitEventData),
-    realtime.trigger(`private-arena-${quizId}`, "attack-hit", hitEventData),
+    realtime.trigger([`private-arena-${quizId}`, `private-teacher-${arena.teacherId}`], blocked ? "arena-attack-blocked" : "arena-attack-hit", hitEventData),
+    realtime.trigger(`private-arena-${quizId}`, blocked ? "attack-blocked" : "attack-hit", hitEventData),
     realtime.trigger(`private-arena-${quizId}`, "arena-score-updated", {
       quizId,
       arenaRevision: arena.revision,

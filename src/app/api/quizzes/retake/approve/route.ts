@@ -2,8 +2,12 @@ import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { mutateArena } from "@/lib/arena";
+import type { Prisma } from "@prisma/client";
+import { readProctoredSession, readArenaSession, sessionTimingPayload } from "@/lib/quiz-session-timing";
 
 class RetakeConflictError extends Error {}
+class SessionExpiredError extends Error {}
 
 async function POSTImpl(req: NextRequest) {
   try {
@@ -33,7 +37,14 @@ async function POSTImpl(req: NextRequest) {
     if (action === "accept") {
       // Preserve the completed attempt and its evidence. A retake is a new
       // attempt, not a destructive reset of academic history.
-      await prisma.$transaction(async (tx) => {
+      const approveRetake = async (tx: Prisma.TransactionClient) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-lifecycle:${studentQuiz.quizId}`}))`;
+        const currentQuiz = await tx.quiz.findUnique({ where: { id: studentQuiz.quizId } });
+        const timing = studentQuiz.attemptMode === "arena" ? await readArenaSession(tx, studentQuiz.quizId)
+          : currentQuiz ? await readProctoredSession(tx, currentQuiz) : null;
+        if (currentQuiz?.quizStatus !== "in_progress" || !timing || sessionTimingPayload(timing, currentQuiz.quizStatus).remainingSeconds === 0) {
+          throw new SessionExpiredError();
+        }
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`retake:${studentQuiz.studentId}:${studentQuiz.quizId}`}))`;
         const claimed = await tx.studentQuiz.updateMany({
           where: { id: studentQuiz.id, quizStatus: "pending_retake", endTime: { not: null } },
@@ -52,10 +63,12 @@ async function POSTImpl(req: NextRequest) {
             attemptNumber: (latest?.attemptNumber ?? studentQuiz.attemptNumber) + 1,
             quizStatus: studentQuiz.attemptMode === "arena" ? "in_progress" : "enrolled",
             attemptMode: studentQuiz.attemptMode,
-            startTime: studentQuiz.attemptMode === "arena" ? new Date() : null,
+            startTime: studentQuiz.attemptMode === "arena" ? new Date(timing.startedAt) : null,
           },
         });
-      });
+      };
+      if (studentQuiz.attemptMode === "arena") await mutateArena(studentQuiz.quizId, ({ tx }) => approveRetake(tx));
+      else await prisma.$transaction(approveRetake);
     } else {
       const rejected = await prisma.studentQuiz.updateMany({
         where: { id: studentQuizId, quizStatus: "pending_retake", endTime: { not: null } },
@@ -99,6 +112,9 @@ async function POSTImpl(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof SessionExpiredError) {
+      return NextResponse.json({ error: "This quiz session has ended or expired", code: "SESSION_EXPIRED" }, { status: 409 });
+    }
     if (error instanceof RetakeConflictError) {
       return NextResponse.json({ error: "This retake request is no longer pending" }, { status: 409 });
     }

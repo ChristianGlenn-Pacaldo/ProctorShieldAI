@@ -1,5 +1,7 @@
 "use client";
 
+import { createDesktopIncidentReporter, createDesktopHeadTracker, detectDesktopFacesWithFallback, getDesktopInferenceDimensions, measureDesktopLandmarkPose, prepareDesktopFaceFrame, requestDesktopCamera } from "@/lib/desktop-head-tracking";
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -10,7 +12,7 @@ import {
   isActionableDeviceDetection,
   isScreenshotShortcut,
 } from "@/lib/proctoring-detection";
-import { allQuestionsAnswered, remainingExamSeconds, isCurrentTeacherEnd, canSubmitProctored, resumeProctoredMedia } from "@/lib/proctored-runtime";
+import { allQuestionsAnswered, examCountdownDeadline, remainingExamSeconds, isCurrentTeacherEnd, canSubmitProctored, resumeProctoredMedia } from "@/lib/proctored-runtime";
 import { COCO_MODEL_BROWSER_URL } from "@/lib/coco-model";
 import { advanceMobileHeadPoseCalibration, advanceMobileNoFaceRecovery, classifyHeadPose, confirmMobileFaceMissing, detectMobileFacesWithFallback, getHeadPoseRadarPosition, getMobileInferenceDimensions, isTransientMobileFaceLoss, MOBILE_NO_FACE_RECOVERY_FRAMES, type HeadPoseBaseline } from "@/lib/head-pose";
 import {
@@ -368,7 +370,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   useEffect(() => {
     const capabilities = getBrowserDeviceCapabilities();
     setDeviceCapabilities(capabilities);
-    setIsMobile(capabilities.deviceType === "mobile");
+    setIsMobile(capabilities.deviceType !== "desktop");
     setIsOnline(navigator.onLine);
   }, []);
 
@@ -452,7 +454,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
     try {
       const capabilities = getBrowserDeviceCapabilities();
       setDeviceCapabilities(capabilities);
-      setIsMobile(capabilities.deviceType === "mobile");
+      setIsMobile(capabilities.deviceType !== "desktop");
       if (!capabilities.secureContext) {
         throw new Error("Camera monitoring requires HTTPS. Open the secure exam URL on this device.");
       }
@@ -531,7 +533,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
           setCanEnterQuiz(data.canEnterQuiz === true);
           setUserId(data.userId || "");
           restoreSavedAnswers(data);
-          if (data.deviceType) setIsMobile(data.deviceType === "mobile");
+          if (data.deviceType) setIsMobile(data.deviceType !== "desktop");
           if (data.monitoringLevel === "strict" || data.monitoringLevel === "reduced") {
             setMonitoringLevel(data.monitoringLevel);
           }
@@ -733,6 +735,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
         return;
       }
 
+      const timerRequestStartedAt = performance.now();
       const startResponse = await fetch("/api/quizzes/session", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizId: Number(quizId), studentQuizId: data.studentQuizId, action: "start" }),
@@ -742,7 +745,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
         setLobbyError(started.error || "Could not start this attempt."); return;
       }
       startedAtRef.current = Date.parse(started.startTime);
-      deadlineRef.current = Date.now() + started.remainingSeconds * 1000;
+      deadlineRef.current = examCountdownDeadline(started, timerRequestStartedAt, performance.now());
       timerInitializedRef.current = true;
       setTimeLeft(started.remainingSeconds);
       setStudentQuizStatus("in_progress");
@@ -887,7 +890,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
 
     if (!canSubmitProctored({ reason, active: hasStarted, questionCount: currentQuestions.length,
       answeredCount: currentQuestions.filter((q) => Number.isInteger(currentAnswers[q.id])).length,
-      remainingSeconds: timerInitializedRef.current && deadlineRef.current !== null ? remainingExamSeconds(deadlineRef.current) : Infinity,
+      remainingSeconds: timerInitializedRef.current && deadlineRef.current !== null ? remainingExamSeconds(deadlineRef.current, performance.now()) : Infinity,
       violationCount: Math.max(currentViolations, violationCountRef.current), teacherEnded: teacherEndedRef.current })) return;
     pendingSubmissionRef.current = reason;
     if (!navigator.onLine) {
@@ -1392,7 +1395,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       let audioOk = false;
 
       try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
+        videoStream = !isMobile
+          ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), true)
+          : await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
             width: { ideal: performanceProfile.captureWidth, max: 640 },
@@ -1404,7 +1409,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         audioOk = true;
       } catch (err) {
         try {
-          videoStream = await navigator.mediaDevices.getUserMedia({
+          videoStream = !isMobile
+            ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), false)
+            : await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "user",
               width: { ideal: performanceProfile.captureWidth, max: 640 },
@@ -1497,10 +1504,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           setDeviceStatus("Loading device AI...");
           setAiStatus("Face active · device loading");
 
+          const desktopHeadTracker = createDesktopHeadTracker();
+          const desktopNoFaceReporter = createDesktopIncidentReporter();
+          const desktopMultipleFacesReporter = createDesktopIncidentReporter();
+          const desktopDeviceReporter = createDesktopIncidentReporter();
           let lookingAwayFrames = 0;
           let lookingAwayViolationRecorded = false;
           let noFaceFrames = 0;
-          let noFaceViolationRecorded = false;
           let multipleFacesFrames = 0;
           let multipleFacesViolationRecorded = false;
           let phoneDetectedFrames = 0;
@@ -1517,6 +1527,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           let trackingGeneration = 0;
           resetDetectorIncidents = () => {
             trackingGeneration++;
+            if (!isMobile) desktopHeadTracker.reset();
             // Clear pending frame evidence across suspension, keeping already
             // penalized incidents latched until a clear frame is observed.
             noFaceFrames = 0; multipleFacesFrames = 0; lookingAwayFrames = 0;
@@ -1567,6 +1578,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           inferenceCanvas.height = performanceProfile.inferenceHeight;
           const inferenceContext = inferenceCanvas.getContext("2d", { alpha: false });
           if (!inferenceContext) throw new Error("Unable to initialize the AI frame buffer.");
+          const desktopFaceCanvas = isMobile ? null : document.createElement("canvas");
+          const desktopFaceContext = desktopFaceCanvas?.getContext("2d", { alpha: false, willReadFrequently: true }) ?? null;
+          if (!isMobile && !desktopFaceContext) throw new Error("Unable to initialize the desktop face buffer.");
           const drawInferenceFrame = (video: HTMLVideoElement) => {
             if (isMobile) {
               const dimensions = getMobileInferenceDimensions(
@@ -1580,7 +1594,14 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                 inferenceCanvas.height = dimensions.height;
                 resetDetectorIncidents?.();
               }
+            } else {
+              const dimensions = getDesktopInferenceDimensions(video.videoWidth, video.videoHeight, performanceProfile.inferenceWidth, performanceProfile.inferenceHeight);
+              if (inferenceCanvas.width !== dimensions.width || inferenceCanvas.height !== dimensions.height) {
+                inferenceCanvas.width = dimensions.width; inferenceCanvas.height = dimensions.height;
+                resetDetectorIncidents?.();
+              }
             }
+            // Raw intrinsic pixels: CSS preview mirroring never enters inference.
             inferenceContext.drawImage(video, 0, 0, inferenceCanvas.width, inferenceCanvas.height);
           };
 
@@ -1592,7 +1613,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               !examActiveRef.current ||
               violationCountRef.current >= 3 ||
               submissionInFlightRef.current ||
-              isReportingRef.current
+              (isMobile && isReportingRef.current)
             ) return;
 
             const activeVideo = isMobile ? mobileVideoRef.current : videoRef.current;
@@ -1628,19 +1649,31 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             if (tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
                 const detectionGeneration = trackingGeneration;
-                const detections = await detectMobileFacesWithFallback<{ landmarks: any }>(
-                  isMobile,
-                  performanceProfile.faceInputSize,
-                  (inputSize, scoreThreshold) => faceapi.detectAllFaces(
-                    inferenceCanvas,
-                    new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold }),
-                  ).withFaceLandmarks(performanceProfile.useTinyLandmarks),
-                );
+                const detections = isMobile
+                  ? await detectMobileFacesWithFallback<{ landmarks: any; detection?: { score: number } }>(
+                    isMobile,
+                    performanceProfile.faceInputSize,
+                    (inputSize, scoreThreshold) => faceapi.detectAllFaces(
+                      inferenceCanvas,
+                      new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold }),
+                    ).withFaceLandmarks(performanceProfile.useTinyLandmarks),
+                  )
+                  : await detectDesktopFacesWithFallback<{ landmarks: any; detection?: { score: number } }>(
+                    performanceProfile.faceInputSize,
+                    (inputSize, scoreThreshold) => faceapi.detectAllFaces(
+                      inputSize < 320 ? inferenceCanvas : prepareDesktopFaceFrame(
+                        inferenceCanvas, desktopFaceCanvas!, desktopFaceContext!,
+                      ),
+                      new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold }),
+                    ).withFaceLandmarks(performanceProfile.useTinyLandmarks),
+                  );
 
                 if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) { detectionBusy = false; return; }
                 if (detections.length === 0) {
+                  if (!isMobile) desktopHeadTracker.observe(null, performance.now());
                   if (isMobile && !mobileHeadPoseBaseline) mobileHeadPoseSamples = [];
                   multipleFacesFrames = 0; multipleFacesViolationRecorded = false;
+                  if (!isMobile) desktopMultipleFacesReporter.clear();
                   lookingAwayFrames = 0;
                   mobileFaceRecoveryFrames = 0;
                   mobileNoFaceRecoveryFrames = 0;
@@ -1659,7 +1692,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                       : null);
                     let faceRecoveredOnConfirmation = false;
                     if ((!isMobile || loadedCocoModel) && noFaceFrames >= (isMobile ? 4 : 5)
-                      && !(isMobile ? mobileNoFaceIncidentRecordedRef.current : noFaceViolationRecorded)) {
+                      && (!isMobile || !mobileNoFaceIncidentRecordedRef.current)) {
                       if (isMobile) {
                         faceRecoveredOnConfirmation = !(await confirmMobileFaceMissing(async (inputSize, scoreThreshold) => {
                           drawInferenceFrame(activeVideo);
@@ -1679,17 +1712,22 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                         mobileMissingSince = null;
                         setFaceTrackingWarning(null);
                       } else {
-                        const recorded = await reportViolationRef.current("no_face", 100);
-                        if (isMobile) mobileNoFaceIncidentRecordedRef.current = recorded;
-                        else noFaceViolationRecorded = recorded;
+                        if (isMobile) {
+                          mobileNoFaceIncidentRecordedRef.current = await reportViolationRef.current("no_face", 100);
+                        } else {
+                          void desktopNoFaceReporter.reportIncident(() => reportViolationRef.current("no_face", 100))
+                            .catch((error) => console.warn("Desktop No Face incident reporting failed:", error));
+                        }
                       }
                     }
                     setFaceStatus(faceRecoveredOnConfirmation ? "Reacquiring…" : "Not Detected ✗");
                     setGazeStatus(faceRecoveredOnConfirmation ? "Reacquiring…" : "Face not detected");
                   }
                 } else if (detections.length > 1) {
+                  if (!isMobile) desktopHeadTracker.observe(null, performance.now());
                   if (isMobile && !mobileHeadPoseBaseline) mobileHeadPoseSamples = [];
-                  noFaceFrames = 0; noFaceViolationRecorded = false;
+                  noFaceFrames = 0;
+                  if (!isMobile) desktopNoFaceReporter.clear();
                   lookingAwayFrames = 0;
                   mobileMissingSince = null;
                   mobileFaceRecoveryFrames = 0;
@@ -1698,8 +1736,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   setFaceTrackingWarning(multipleFacesFrames >= 2
                     ? "⚠️ Warning: Multiple faces detected in frame."
                     : null);
-                  if (multipleFacesFrames >= (isMobile ? 3 : 4) && !multipleFacesViolationRecorded) {
-                    multipleFacesViolationRecorded = await reportViolationRef.current("multiple_faces", 100);
+                  if (multipleFacesFrames >= (isMobile ? 3 : 4)) {
+                    if (isMobile) {
+                      if (!multipleFacesViolationRecorded) multipleFacesViolationRecorded = await reportViolationRef.current("multiple_faces", 100);
+                    } else {
+                      void desktopMultipleFacesReporter.reportIncident(() => reportViolationRef.current("multiple_faces", 100))
+                        .catch((error) => console.warn("Desktop multiple-face incident reporting failed:", error));
+                    }
                   }
                   setFaceStatus("Multiple ✗");
                   setGazeStatus("Multiple faces detected");
@@ -1709,10 +1752,11 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     noFaceFrames = 0;
                     mobileLastFaceSeenAt = performance.now();
                     mobileMissingSince = null;
-                    if (!isMobile) noFaceViolationRecorded = false;
+                    if (!isMobile) desktopNoFaceReporter.clear();
                   }
                   multipleFacesFrames = 0;
                   multipleFacesViolationRecorded = false;
+                  if (!isMobile) desktopMultipleFacesReporter.clear();
                   setFaceStatus("Detected ✓");
 
                   const landmarks = detections[0].landmarks;
@@ -1740,7 +1784,11 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                     mobileHeadPoseBaseline = calibration.baseline;
                   }
 
-                  const pose = classifyHeadPose(yawOffset, pitchRatio, {
+                  const desktopTracking = !isMobile ? desktopHeadTracker.observe(
+                    measureDesktopLandmarkPose({ x: leftEyeX, y: leftEyeY }, { x: rightEyeX, y: rightEyeY }, nosePoints),
+                    performance.now(), detections[0].detection?.score ?? 1,
+                  ) : null;
+                  const pose = desktopTracking?.pose ?? classifyHeadPose(yawOffset, pitchRatio, {
                     mobile: isMobile,
                     baseline: mobileHeadPoseBaseline || undefined,
                   });
@@ -1759,7 +1807,19 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
                   setGazeStatus(pose.calibrated ? direction : "Calibrating · face the screen");
 
-                  setHeadPos(getHeadPoseRadarPosition(pose, isMobile));
+                  setHeadPos(desktopTracking
+                    ? { x: Math.max(15, Math.min(85, 50 - pose.normalizedYaw * 100)), y: Math.max(15, Math.min(85, 50 + pose.normalizedPitch * 80)) }
+                    : getHeadPoseRadarPosition(pose, isMobile));
+
+                  if (desktopTracking) {
+                    setFaceTrackingWarning(!desktopTracking.reliable ? "Tracking unclear · face the camera"
+                      : !pose.calibrated ? "Calibrating · hold still and face the screen"
+                      : violationReason ? `Please look directly at the screen. (${direction.replace(' ✗', '')})` : null);
+                    if (desktopTracking.confirmed) {
+                      void desktopHeadTracker.reportIncident(() => reportViolationRef.current(violationReason, 90))
+                        .catch((error) => console.warn("Desktop head incident reporting failed:", error));
+                    }
+                  } else
 
                   if (!pose.calibrated) {
                     lookingAwayFrames = 0;
@@ -1798,11 +1858,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   );
                   if (phoneDetectedFrames === 2) setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
                   if (phoneDetectedFrames >= 2) {
-                    if (!phoneViolationRecorded) {
-                      phoneViolationRecorded = await reportViolationRef.current(
-                        "device_detected",
-                        Math.round(deviceConfidence * 100)
-                      );
+                    if (isMobile) {
+                      if (!phoneViolationRecorded) {
+                        phoneViolationRecorded = await reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100));
+                      }
+                    } else {
+                      void desktopDeviceReporter.reportIncident(() => reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100)))
+                        .catch((error) => console.warn("Desktop device incident reporting failed:", error));
                     }
                   }
                 } else {
@@ -1810,6 +1872,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   phoneAbsentFrames++;
                   if (phoneAbsentFrames >= 3) {
                     phoneViolationRecorded = false;
+                    if (!isMobile) desktopDeviceReporter.clear();
                     setDeviceStatus("None ✓");
                   }
                 }
@@ -1870,7 +1933,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       return;
     }
     const tick = () => {
-      if (deadlineRef.current !== null) setTimeLeft(remainingExamSeconds(deadlineRef.current));
+      if (deadlineRef.current !== null) setTimeLeft(remainingExamSeconds(deadlineRef.current, performance.now()));
     };
     tick();
     const timer = window.setInterval(tick, 1000);
@@ -1891,11 +1954,16 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (busy || submissionInFlightRef.current || !navigator.onLine) return;
       busy = true;
       try {
+        const timerRequestStartedAt = performance.now();
         const response = await fetch(`/api/quizzes/${quizId}`, { cache: "no-store" });
         const data = await response.json();
         if (cancelled || !response.ok || data.studentQuizId !== studentQuizIdRef.current) return;
         if (data.studentQuizStatus === "completed" || data.endTime) {
           setHasStarted(false); router.replace("/dashboard/student/results"); return;
+        }
+        if (Number.isInteger(data.remainingSeconds)) {
+          deadlineRef.current = examCountdownDeadline(data, timerRequestStartedAt, performance.now());
+          setTimeLeft(remainingExamSeconds(deadlineRef.current, performance.now()));
         }
         violationCountRef.current = Math.max(violationCountRef.current, Number(data.violationCount) || 0);
         setViolationCount(violationCountRef.current);
@@ -1903,7 +1971,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           ? Date.parse(data.teacherEndedAt) >= startedAtRef.current : data.attemptNumber === 1)) teacherEndedRef.current = true;
         const reason = violationCountRef.current >= 3 ? "violation_limit"
           : teacherEndedRef.current ? "teacher_ended"
-          : deadlineRef.current !== null && remainingExamSeconds(deadlineRef.current) === 0 ? "timer_expired"
+          : deadlineRef.current !== null && remainingExamSeconds(deadlineRef.current, performance.now()) === 0 ? "timer_expired"
           : pendingSubmissionRef.current || (allQuestionsAnswered(questionsRef.current, answersStateRef.current) ? "all_questions_completed" : null);
         if (reason) await submitQuizRef.current(reason);
       } catch {} finally { busy = false; }

@@ -101,7 +101,7 @@ test("Requirement 5: Overall timer is server-authoritative", () => {
 
   // Student client synchronizes timer with server matchEndsAt
   assert.match(studentArenaContentSrc, /data\.arena\.matchEndsAt/);
-  assert.match(studentArenaContentSrc, /Date\.parse\(matchEndsAt\)\s*-\s*Date\.now\(\)/);
+  assert.match(studentArenaContentSrc, /Date\.parse\(matchEndsAt\)\s*-\s*getServerAdjustedNow\(\)/);
 });
 
 test("Requirement 6: Timer does not reset for each question", () => {
@@ -464,21 +464,16 @@ test("Test Q: Strictly no HP / health bars / elimination / damage wording exists
   assert.doesNotMatch(studentArenaContentSrc, /100 HP/);
 });
 
-test("Test R: Match duration only accepts 1800 and 3600; 30 min -> 1800s, 1 hr -> 3600s; invalid values normalized", () => {
-  assert.deepEqual(VALID_MATCH_DURATIONS, [1800, 3600]);
-  assert.equal(normalizeMatchDuration(1800), 1800);
-  assert.equal(normalizeMatchDuration(3600), 3600);
-  assert.equal(normalizeMatchDuration(30), 1800);
-  assert.equal(normalizeMatchDuration(60), 3600);
-  assert.equal(normalizeMatchDuration(600), 1800); // legacy 10 min normalizes to 1800
-  assert.equal(normalizeMatchDuration(undefined), 1800); // default
+test("Test R: Match duration preserves configured whole minutes and setup displays the saved value", () => {
+  assert.equal(VALID_MATCH_DURATIONS.length, 480);
+  for (const seconds of [60, 600, 900, 1800, 2700, 3600, 28800]) {
+    assert.equal(normalizeMatchDuration(seconds), seconds);
+    assert.equal(normalizeMatchDuration(String(seconds)), seconds);
+  }
+  assert.equal(normalizeMatchDuration(undefined), 1800);
   assert.equal(normalizeMatchDuration("invalid"), 1800);
-
-  // Teacher UI offers only 30 Minutes and 1 Hour
-  assert.match(teacherArenaContentSrc, /30 Minutes/);
-  assert.match(teacherArenaContentSrc, /1 Hour/);
-  assert.match(teacherPlaygroundSrc, /30 Minutes/);
-  assert.match(teacherPlaygroundSrc, /1 Hour/);
+  assert.match(teacherArenaContentSrc, /Saved quiz duration/);
+  assert.match(teacherPlaygroundSrc, /Saved quiz duration/);
 });
 
 test("Test S: Proctored live monitoring is completely untouched", () => {

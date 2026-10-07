@@ -7,7 +7,7 @@ import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import { consumeRateLimitGroup, getClientIp } from "@/lib/security";
 import { createAiQuizReceipt } from "@/lib/ai-quiz-provenance";
 
-const AI_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const AI_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
 async function POSTImpl(req: NextRequest) {
   try {
@@ -51,6 +51,8 @@ async function POSTImpl(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const body = await req.json();
     const { imageBase64, mimeType, topic, numQuestions } = body;
+    const sourceText = typeof body.sourceText === "string" ? body.sourceText.trim() : "";
+    if (sourceText.length > 60_000) return NextResponse.json({ error: "Source text is too long" }, { status: 413 });
     const requestedQuestions = Number(numQuestions ?? 5);
     const normalizedTopic = typeof topic === "string" ? topic.trim() : "";
     const hasImage = typeof imageBase64 === "string" && imageBase64.length > 0;
@@ -68,15 +70,18 @@ async function POSTImpl(req: NextRequest) {
     )) {
       return NextResponse.json({ error: "Invalid or oversized source image" }, { status: 413 });
     }
-    if (!hasImage && !normalizedTopic) {
+    if (hasImage && mimeType === "application/pdf" && !Buffer.from(imageBase64, "base64").subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+      return NextResponse.json({ error: "Invalid PDF document" }, { status: 400 });
+    }
+    if (!hasImage && !normalizedTopic && !sourceText) {
       return NextResponse.json({ error: "Provide a topic or source image" }, { status: 400 });
     }
 
     let prompt = `You are an expert quiz creator. `;
     if (hasImage) {
-      prompt += `Analyze this image (which could be syllabus, notes, or a past quiz) and extract the key concepts. `;
+      prompt += `Analyze this source document or image (which could be syllabus, notes, or a past quiz) and extract the key concepts. `;
     } else {
-      prompt += `The topic is: "${normalizedTopic}". `;
+      prompt += `The topic or source text is: "${sourceText || normalizedTopic}". `;
     }
 
     prompt += `Generate ${requestedQuestions} multiple-choice questions based on the material.
@@ -118,12 +123,15 @@ async function POSTImpl(req: NextRequest) {
     try {
       aiData = JSON.parse(response.text);
     } catch (parseError) {
-      console.error("Failed to parse Gemini output:", response.text);
+      console.error("Failed to parse Gemini output");
       return NextResponse.json({ error: "Invalid format returned by AI" }, { status: 500 });
     }
 
     const generatedQuestions = Array.isArray(aiData.questions) ? aiData.questions.slice(0, 50) : [];
-    if (generatedQuestions.length === 0) {
+    if (generatedQuestions.length === 0 || generatedQuestions.some((q: any) => !q || typeof q.questionText !== "string" || !q.questionText.trim()
+      || q.questionText.length > 5000 || !Array.isArray(q.choices) || (q.choices.length < 2 || q.choices.length > 6)
+      || q.choices.some((c: any) => !c || typeof c.choiceText !== "string" || !c.choiceText.trim() || c.choiceText.length > 2000 || typeof c.isCorrect !== "boolean")
+      || q.choices.filter((c: any) => c.isCorrect).length !== 1)) {
       return NextResponse.json({ error: "AI did not return usable questions" }, { status: 502 });
     }
     const detectedTitle = aiData.detectedTitle || "";
@@ -140,7 +148,7 @@ async function POSTImpl(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error("AI Create error:", error);
+    console.error("AI Create request failed");
     return NextResponse.json({ error: "Failed to generate questions. Please try again." }, { status: 500 });
   }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { ArenaEffects } from "@/components/arena/arena-effects";
+
 import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel, hasTerminalArenaFeedback } from "@/lib/arena-feedback";
 import { beginArenaGameplayAction, fetchArenaSnapshot, isTerminalArenaSnapshot, startArenaReconciliation, type ArenaSnapshot } from "@/lib/arena-client-reconciliation";
 
@@ -39,6 +41,7 @@ import {
 import { ArenaBattleDock } from "@/components/arena/arena-battle-dock";
 import { ArenaPodium, type PodiumParticipant } from "@/components/arena/arena-podium";
 import { ArenaIdentity } from "@/components/arena/arena-identity";
+import type { ArenaQuestionWork } from "@/lib/arena-question-work";
 import type { ArenaParticipant, ArenaState } from "@/lib/arena";
 import { getStudentInitials } from "@/lib/student-identity";
 import { claimArenaFeedback, getShieldTerminalOutcome, type ArenaFeedbackOutcome } from "@/lib/arena-feedback";
@@ -79,6 +82,7 @@ interface ArenaContentProps {
   studentQuizId: string;
   initialQuizStatus: string;
   initialStudentStatus: string;
+  initialQuestionWork?: ArenaQuestionWork;
   savedAnswers: SavedAnswer[];
 }
 
@@ -112,6 +116,7 @@ export function ArenaContent({
   initialQuizStatus,
   initialStudentStatus,
   savedAnswers,
+  initialQuestionWork,
 }: ArenaContentProps) {
   const arenaRevisionRef = useRef(0);
   const router = useRouter();
@@ -186,9 +191,11 @@ export function ArenaContent({
       ? initialUnansweredIndex
       : Math.max(0, questions.length - 1);
 
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(startingQuestionIndex);
+  const [questionWork, setQuestionWork] = useState<ArenaQuestionWork | null>(initialQuestionWork ?? null);
+  const initialWorkIndex = initialQuestionWork?.nextWork ? questions.findIndex(q => q.id === initialQuestionWork.nextWork!.questionId) : startingQuestionIndex;
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(Math.max(0, initialWorkIndex));
   const [questionsCompleted, setQuestionsCompleted] = useState(
-    (savedAnswers.length >= questions.length && questions.length > 0) || isAlreadyEnded
+    (initialQuestionWork?.isFinished ?? (savedAnswers.length >= questions.length && questions.length > 0)) || isAlreadyEnded
   );
   const [isSpectating, setIsSpectating] = useState(false);
   const [battleLogs, setBattleLogs] = useState<string[]>([]);
@@ -257,6 +264,8 @@ export function ArenaContent({
   const [activeAttackEffect, setActiveAttackEffect] = useState<{
     type: "meteor" | "earthquake" | "blizzard" | "deflected";
     attackerName: string;
+    visualId?: string;
+    blockedPower?: "meteor" | "earthquake" | "blizzard";
     penalty: number;
     message: string;
   } | null>(null);
@@ -276,7 +285,7 @@ export function ArenaContent({
   ) => {
     if (!claimAttackFeedback(attackId, outcome)) return false;
     if (attackFeedbackTimerRef.current) clearTimeout(attackFeedbackTimerRef.current);
-    setActiveAttackEffect(effect);
+    setActiveAttackEffect({ ...effect, visualId: attackId });
     setScoreDeductionPopup(scoreDeduction ?? null);
     attackFeedbackTimerRef.current = setTimeout(() => {
       setActiveAttackEffect(null);
@@ -469,6 +478,7 @@ export function ArenaContent({
     let isMounted = true;
     async function joinArena() {
       try {
+        const timerRequestStartedAt = Date.now();
         const res = await fetch(`/api/arena/${quizId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -490,6 +500,9 @@ export function ArenaContent({
         if (!isMounted) return;
         if (finalizationAttemptedRef.current) return;
 
+        if (typeof data.serverTime === "number") {
+          serverTimeOffsetRef.current = data.serverTime - ((timerRequestStartedAt + Date.now()) / 2);
+        }
         const sessId = data?.sessionId || data?.arena?.sessionId;
         if (sessId) {
           snapshotSessionRef.current = sessId;
@@ -503,7 +516,7 @@ export function ArenaContent({
             setMatchEndsAt(data.arena.matchEndsAt);
             const endsAt = Date.parse(data.arena.matchEndsAt);
             if (Number.isFinite(endsAt)) {
-              setMatchTimeLeft(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+              setMatchTimeLeft(Math.max(0, Math.ceil((endsAt - getServerAdjustedNow()) / 1000)));
             }
           }
         } else if (currentStatus === "ended" || data?.quizStatus === "ended") {
@@ -526,7 +539,7 @@ export function ArenaContent({
     return () => {
       isMounted = false;
     };
-  }, [quizId, isAlreadyEnded, updateRankingsFromParticipants]);
+  }, [quizId, isAlreadyEnded, updateRankingsFromParticipants, getServerAdjustedNow]);
 
   // ── Fetch Initial / Reconciled Arena State ─────────────────────
   const applyArenaSnapshot = useCallback((data: ArenaSnapshot) => {
@@ -549,6 +562,10 @@ export function ArenaContent({
         setIsSubmittingAnswer(false); setIsLaunchingPower(null); setBattleLogs([]);
       }
       if (snapshotSession) { snapshotSessionRef.current = snapshotSession; setCurrentSessionId(snapshotSession); }
+      if (data.questionWork && data.questionWork.attemptId === studentQuizId) {
+        setQuestionWork(data.questionWork); setQuestionsCompleted(data.questionWork.isFinished);
+        if (data.questionWork.nextWork) setCurrentQuestionIndex(Math.max(0, questions.findIndex(q => q.id === data.questionWork!.nextWork!.questionId)));
+      }
       if (isTerminalArenaSnapshot(data) && data.result && Number.isFinite(data.result.score)
         && data.participants?.some((p) => p.studentId === studentId)) {
         clearGameplayTimers();
@@ -596,7 +613,7 @@ export function ArenaContent({
           setMatchEndsAt(data.arena.matchEndsAt);
           const endsAt = Date.parse(data.arena.matchEndsAt);
           if (Number.isFinite(endsAt)) {
-            const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+            const remaining = Math.max(0, Math.ceil((endsAt - getServerAdjustedNow()) / 1000));
             setMatchTimeLeft(remaining);
           }
         }
@@ -624,6 +641,7 @@ export function ArenaContent({
           if (authoritativeAttack?.status === "deflected") {
             showAttackFeedback(activeIncomingAttack.attackId, "deflected", {
               type: "deflected",
+              blockedPower: activeIncomingAttack.powerType as "meteor" | "earthquake" | "blizzard",
               attackerName: activeIncomingAttack.attackerName,
               penalty: 0,
               message: `DEFLECTED! Guardian Shield protected your score from ${activeIncomingAttack.attackerName}'s ${activeIncomingAttack.powerType.toUpperCase()}! (0 PTS lost)`,
@@ -642,7 +660,7 @@ export function ArenaContent({
         }
       }
       return false;
-  }, [quizId, studentId, updateRankingsFromParticipants, clearIncomingAttack, showAttackFeedback, clearGameplayTimers]);
+  }, [quizId, studentId, studentQuizId, questions, updateRankingsFromParticipants, clearIncomingAttack, showAttackFeedback, clearGameplayTimers, getServerAdjustedNow]);
 
   const refreshArenaState = useCallback(async () => { await reconciliationRef.current?.refresh(); }, []);
 
@@ -696,9 +714,11 @@ export function ArenaContent({
         sessionId?: string;
         matchEndsAt?: string;
         matchDuration?: number;
+        serverTime?: number;
         participants?: ArenaParticipant[];
       }) => {
         if (finalizationAttemptedRef.current || arenaCompletedRef.current) return;
+        if (typeof data?.serverTime === "number") serverTimeOffsetRef.current = data.serverTime - Date.now();
         setPhase("in_wave");
         if (data?.sessionId || data?.arena?.sessionId) {
           setCurrentSessionId(data.sessionId || data?.arena?.sessionId || null);
@@ -709,7 +729,7 @@ export function ArenaContent({
           setMatchEndsAt(ends);
           const endsAtMs = Date.parse(ends);
           if (Number.isFinite(endsAtMs)) {
-            setMatchTimeLeft(Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000)));
+            setMatchTimeLeft(Math.max(0, Math.ceil((endsAtMs - getServerAdjustedNow()) / 1000)));
           }
         } else if (data?.matchDuration) {
           setMatchTimeLeft(data.matchDuration);
@@ -851,6 +871,7 @@ export function ArenaContent({
       }) => {
         if (arenaCompletedRef.current || terminalResultReconciledRef.current) return;
         if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) return;
+        applyGameplayState(data);
         // This event describes the outcome, not the full current protection state.
         // Read committed state instead of inferring a Shield mutation from it.
         void refreshArenaState();
@@ -862,6 +883,7 @@ export function ArenaContent({
           clearIncomingAttack(data.attackId);
           const feedbackShown = showAttackFeedback(data.attackId, "deflected", {
             type: "deflected",
+            blockedPower: data.powerType as "meteor" | "earthquake" | "blizzard",
             attackerName: data.attackerName,
             penalty: 0,
             message: `DEFLECTED! Guardian Shield protected your score from ${data.attackerName}'s ${data.powerType.toUpperCase()}! (0 PTS lost)`,
@@ -969,7 +991,7 @@ export function ArenaContent({
 
     const timer = setInterval(() => {
       if (matchEndsAt) {
-        const remaining = Math.max(0, Math.ceil((Date.parse(matchEndsAt) - Date.now()) / 1000));
+        const remaining = Math.max(0, Math.ceil((Date.parse(matchEndsAt) - getServerAdjustedNow()) / 1000));
         setMatchTimeLeft(remaining);
         if (remaining <= 0) {
           void finalizeMatch();
@@ -986,14 +1008,15 @@ export function ArenaContent({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [phase, matchEndsAt, finalizeMatch]);
+  }, [phase, matchEndsAt, finalizeMatch, getServerAdjustedNow]);
 
   // ── Automatic Student Question Progression ────────────────────
   const handleSelectChoice = async (choiceId: number) => {
     const action = captureGameplayAction();
     if (!action.isSameView()) return;
     const currentQ = questions[currentQuestionIndex];
-    if (!currentQ || lockedAnswers.has(currentQ.id) || isSubmittingAnswer) return;
+    const isRetry = questionWork?.nextWork?.kind === "retry" && questionWork.nextWork.questionId === currentQ?.id;
+    if (!currentQ || (!isRetry && lockedAnswers.has(currentQ.id)) || isSubmittingAnswer) return;
 
     setSelectedChoice(choiceId);
     setIsSubmittingAnswer(true);
@@ -1005,6 +1028,8 @@ export function ArenaContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quizId,
+          studentQuizId,
+          answerKind: isRetry ? "retry" : "initial",
           questionId: currentQ.id,
           sessionId: currentSessionId,
           choiceId,
@@ -1020,7 +1045,7 @@ export function ArenaContent({
 
       const isCorrect = Boolean(data.isCorrect);
       applyGameplayState(data);
-      setLockedAnswers((prev) => new Map(prev).set(currentQ.id, { choiceId, isCorrect }));
+      if (!isRetry) setLockedAnswers((prev) => new Map(prev).set(currentQ.id, { choiceId, isCorrect }));
       setAnswerFeedback({ isCorrect, choiceId });
       playFeedbackChime(isCorrect);
 
@@ -1041,7 +1066,10 @@ export function ArenaContent({
         setAnswerFeedback(null);
         setIsSubmittingAnswer(false);
 
-        if (currentQuestionIndex + 1 < questions.length) {
+        if (data.questionWork) {
+          setQuestionWork(data.questionWork); setQuestionsCompleted(data.questionWork.isFinished);
+          if (data.questionWork.nextWork) setCurrentQuestionIndex(() => Math.max(0, questions.findIndex(q => q.id === data.questionWork.nextWork.questionId)));
+        } else if (currentQuestionIndex + 1 < questions.length) {
           setCurrentQuestionIndex((prev) => prev + 1);
         } else {
           setQuestionsCompleted(true);
@@ -1083,17 +1111,6 @@ export function ArenaContent({
     const targetRival = rivals.find((r) => r.studentId === targetStudentId);
     const targetLabel = targetRival?.studentName || "Rival";
 
-    // Immediate optimistic launch feedback & sound
-    if (powerType === "shield") {
-      if (soundEnabled) playShieldDeflectSound();
-      setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
-      setBattleLogs((prev) => ["🛡️ You armed Guardian Shield!", ...prev].slice(0, 15));
-    } else {
-      setCelebrationMessage(`🚀 Attack Launched! ${names[powerType]} targeting ${targetLabel.toUpperCase()}!`);
-      if (soundEnabled) playAttackSound(powerType);
-      setBattleLogs((prev) => [`🚀 Launched ${names[powerType]} at ${targetLabel}!`, ...prev].slice(0, 15));
-    }
-
     setIsLaunchingPower(powerType);
 
     try {
@@ -1120,6 +1137,17 @@ export function ArenaContent({
         setErrorMessage(data.error || "Failed to cast battle power.");
         setCelebrationMessage(null);
         return;
+      }
+
+      // Visual and sound feedback follows the accepted server action.
+      if (powerType === "shield") {
+        if (soundEnabled) playShieldDeflectSound();
+        setCelebrationMessage("🛡️ GUARDIAN SHIELD ARMED! Defense ready against incoming attacks!");
+        setBattleLogs((prev) => ["🛡️ You armed Guardian Shield!", ...prev].slice(0, 15));
+      } else {
+        setCelebrationMessage(`🚀 Attack Launched! ${names[powerType]} targeting ${targetLabel.toUpperCase()}!`);
+        if (soundEnabled) playAttackSound(powerType);
+        setBattleLogs((prev) => [`🚀 Launched ${names[powerType]} at ${targetLabel}!`, ...prev].slice(0, 15));
       }
 
       scheduleGameplayCallback(captureGameplayAction(), () => setCelebrationMessage(null), 3000);
@@ -1174,6 +1202,7 @@ export function ArenaContent({
         setErrorMessage(null);
         const feedbackShown = showAttackFeedback(attackToDefend.attackId, "deflected", {
           type: "deflected",
+          blockedPower: attackToDefend.powerType as "meteor" | "earthquake" | "blizzard",
           attackerName: attackToDefend.attackerName,
           penalty: 0,
           message: `GUARDIAN SHIELD DEFLECTED ${attackToDefend.attackerName}'s ${attackToDefend.powerType.toUpperCase()}! 0 PTS LOST!`,
@@ -1223,6 +1252,10 @@ export function ArenaContent({
   if (phase === "podium") {
     return (
       <div className="min-h-screen bg-[#070a14] text-white flex flex-col justify-center py-10">
+        {questionWork && <div className="flex flex-wrap justify-center gap-4 px-4 pb-4" aria-label="Arena result summary">
+          <span>Your Points: {score}</span><span>Correct: {questionWork.correctCount}</span><span>Wrong: {questionWork.wrongCount}</span>
+          <span>Retries corrected: {questionWork.retryCorrectCount}</span>
+        </div>}
         <ArenaPodium
           quizTitle={quizTitle}
           subjectName={subjectName}
@@ -1376,30 +1409,15 @@ export function ArenaContent({
 
   // ── Render: Active Gameplay Screen ────────────────────────────
   const currentQ = questions[currentQuestionIndex];
-  const currentAnswer = currentQ ? lockedAnswers.get(currentQ.id) : undefined;
+  const isRetryQuestion = questionWork?.nextWork?.kind === "retry" && questionWork.nextWork.questionId === currentQ?.id;
+  const currentAnswer = currentQ ? isRetryQuestion ? undefined : lockedAnswers.get(currentQ.id) : undefined;
   const isQuestionAnswered = Boolean(currentAnswer);
 
   return (
     <div
-      className={`min-h-screen bg-[#070a14] text-white flex flex-col justify-between p-3 sm:p-6 overflow-x-hidden ${
-        activeAttackEffect?.type === "earthquake" ? "animate-[earthquake-rumble_0.5s_infinite]" : ""
-      }`}
+      className="min-h-screen bg-[#070a14] text-white flex flex-col justify-between p-3 sm:p-6 overflow-x-hidden"
     >
-      <style jsx global>{`
-        @keyframes earthquake-rumble {
-          0% { transform: translate(0px, 0px) rotate(0deg); }
-          20% { transform: translate(-6px, 5px) rotate(-0.5deg); }
-          40% { transform: translate(6px, -4px) rotate(0.5deg); }
-          60% { transform: translate(-5px, 3px) rotate(-0.5deg); }
-          80% { transform: translate(5px, -3px) rotate(0.5deg); }
-          100% { transform: translate(0px, 0px) rotate(0deg); }
-        }
-        @keyframes meteor-fall {
-          0% { transform: translateY(-80px) translateX(-40px); opacity: 0; }
-          30% { opacity: 1; }
-          100% { transform: translateY(700px) translateX(350px); opacity: 0; }
-        }
-      `}</style>
+      <ArenaEffects key={activeAttackEffect?.visualId ?? "armed"} effect={activeAttackEffect} shieldArmed={hasGuardianShield} />
 
       {/* Incoming Attack Warning Dialog with Reaction Bar & Shield Button */}
       {incomingAttack && (
@@ -1544,7 +1562,8 @@ export function ArenaContent({
       {/* Hit / Deflection Alert Banner */}
       {activeAttackEffect && (
         <div
-          className="fixed top-6 left-1/2 -translate-x-1/2 z-[90] px-6 py-3.5 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-bounce max-w-lg w-[92%] text-center justify-center pointer-events-none"
+          role="status"
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[90] px-6 py-3.5 rounded-2xl shadow-2xl border-2 flex items-center gap-3 max-w-lg w-[92%] text-center justify-center pointer-events-none"
           style={{
             backgroundColor:
               activeAttackEffect.type === "deflected"
@@ -1593,30 +1612,6 @@ export function ArenaContent({
         </div>
       )}
 
-      {/* Meteor Visual Overlay */}
-      {activeAttackEffect?.type === "meteor" && (
-        <div className="fixed inset-0 z-[85] pointer-events-none overflow-hidden">
-          <div className="absolute top-10 left-1/4 w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-rose-600 blur-xs animate-ping" />
-          <div
-            className="absolute top-0 left-1/3 w-8 h-8 rounded-full bg-rose-500 shadow-[0_0_50px_#ef4444]"
-            style={{ animation: "meteor-fall 1.5s infinite linear" }}
-          />
-          <div
-            className="absolute top-0 left-2/3 w-10 h-10 rounded-full bg-amber-500 shadow-[0_0_60px_#f59e0b]"
-            style={{ animation: "meteor-fall 1.8s infinite linear 0.4s" }}
-          />
-        </div>
-      )}
-
-      {/* Blizzard Frost Visual Overlay */}
-      {activeAttackEffect?.type === "blizzard" && (
-        <div className="fixed inset-0 z-[85] pointer-events-none bg-cyan-400/15 backdrop-blur-[2px] border-8 border-cyan-400/40 flex items-center justify-center">
-          <div className="text-center font-black text-cyan-200 text-xl sm:text-2xl animate-pulse">
-            ❄️ SCREEN FROZEN BY BLIZZARD! ❄️
-          </div>
-        </div>
-      )}
-
       {/* Top Game Station HUD */}
       <header className="max-w-4xl w-full mx-auto flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -1627,7 +1622,7 @@ export function ArenaContent({
             <div className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">
               {questionsCompleted
                 ? `Completed (${questions.length}/${questions.length})`
-                : `Question ${currentQuestionIndex + 1} of ${questions.length}`}
+                : `${isRetryQuestion ? "Retry" : "Question"} ${currentQuestionIndex + 1} of ${questions.length}`}
             </div>
             <div className="text-xs sm:text-sm font-black text-white truncate max-w-[140px] sm:max-w-xs">
               {quizTitle}
@@ -1855,18 +1850,22 @@ export function ArenaContent({
                   All Questions Completed!
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                  Your questions are finished and your final score is locked in. Waiting for match to conclude — enter the spectator view to watch live standings, battle activity, and countdown!
+                  Your questions and eligible retries are finished. Waiting for match to conclude — enter the spectator view to watch live standings, battle activity, and countdown!
                 </p>
               </div>
 
-              {/* Stats Grid: Questions Completed, Your Score, Current Rank, Total Players */}
+              {questionWork && <div className="flex flex-wrap justify-center gap-4 py-2" aria-label="Original answer summary">
+              <span>Correct: {questionWork.correctCount}</span><span>Wrong: {questionWork.wrongCount}</span>
+              <span>Retries corrected: {questionWork.retryCorrectCount}</span>
+            </div>}
+            {/* Stats Grid: Questions Completed, Your Points, Current Rank, Total Players */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg mx-auto">
                 <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Questions Completed</div>
                   <div className="text-lg font-black text-white font-mono mt-0.5">{questions.length} / {questions.length}</div>
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Your Score</div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Your Points</div>
                   <div className="text-lg font-black text-amber-300 font-mono mt-0.5">{score} PTS</div>
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-center">
@@ -1921,10 +1920,10 @@ export function ArenaContent({
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[11px] font-mono font-black px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Question {currentQuestionIndex + 1} of {questions.length}
+                  {isRetryQuestion ? "Retry" : "Question"} {currentQuestionIndex + 1} of {questions.length}
                 </span>
                 <span className="text-[11px] font-mono font-bold text-slate-400">
-                  {currentQ.points} Points
+                  {isRetryQuestion ? "Practice retry • no extra points" : `${currentQ.points} Points`}
                 </span>
               </div>
               <h2 className="text-lg sm:text-2xl font-black text-white leading-snug">
