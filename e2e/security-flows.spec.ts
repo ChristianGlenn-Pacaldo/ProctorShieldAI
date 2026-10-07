@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { expect, test } from "@playwright/test";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "node:crypto";
 
 test("public homepage and student login render", async ({ page }) => {
   await page.goto("/");
@@ -87,8 +88,10 @@ test("security headers are present on browser pages", async ({ request }) => {
   expect(response.headers()["content-security-policy"]).toContain("object-src 'none'");
 });
 
-test("weak registrations are rejected before persistence", async ({ request }) => {
+test("weak registrations are rejected before persistence", async ({ request, baseURL }) => {
   const response = await request.post("/api/auth/register", {
+    // CI serves the configured public app origin through a loopback server.
+    headers: { Origin: new URL(process.env.NEXT_PUBLIC_APP_URL || baseURL!).origin },
     data: {
       fullName: "TEST USER",
       email: "weak-password@example.test",
@@ -98,7 +101,21 @@ test("weak registrations are rejected before persistence", async ({ request }) =
     },
   });
   expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toMatchObject({ success: false });
+  await expect(response.json()).resolves.toMatchObject({
+    success: false, message: "Password must be 10-128 characters and contain letters and numbers",
+  });
+});
+
+test("registration rejects missing and cross-site Origin before password validation", async ({ request }) => {
+  const originHeaders: Record<string, string>[] = [{}, { Origin: "https://untrusted.example" }];
+  for (const headers of originHeaders) {
+    const response = await request.post("/api/auth/register", {
+      headers,
+      data: { fullName: "TEST USER", email: "weak-password@example.test", password: "weak", role: "student" },
+    });
+    expect(response.status()).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "Forbidden origin" });
+  }
 });
 
 test("unsigned payment webhooks are rejected", async ({ request }) => {
@@ -112,6 +129,10 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
   if (!secret || secret.length < 32) throw new Error("NEXTAUTH_SECRET is required for this regression test");
 
   const baseURL = process.env.E2E_BASE_URL || "http://localhost:3000";
+  // This UI regression mocks the authenticated service responses below. Keep
+  // its signed session and browser cookie consistent with the current contract.
+  const browserId = randomUUID();
+  const authGeneration = randomUUID();
   const token = jwt.sign({
     userId: "e2e-mobile-student",
     email: "mobile-student@example.test",
@@ -119,6 +140,8 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
     fullName: "Mobile Student",
     sessionVersion: 0,
     sessionClass: "user",
+    browserId,
+    authGeneration,
   }, secret, { algorithm: "HS256", expiresIn: "10m", audience: "proctorshield:user" });
   await context.addCookies([{
     name: "ps_session_user",
@@ -127,6 +150,9 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
     httpOnly: true,
     secure: baseURL.startsWith("https:"),
     sameSite: "Lax",
+  }, {
+    name: "ps_browser_auth", value: browserId, url: baseURL,
+    httpOnly: true, secure: baseURL.startsWith("https:"), sameSite: "Lax",
   }]);
 
   await page.addInitScript(() => {

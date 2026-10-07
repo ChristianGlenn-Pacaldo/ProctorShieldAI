@@ -86,7 +86,12 @@ export async function readArenaQuestionWork(
   sessionId: string,
   questions: readonly { id: number }[],
   closed = false,
+  timing?: { matchEndsAt?: string | null; now?: number },
 ) {
+  // Snapshot the server deadline before the reads. Rendering consumes the
+  // resulting work; it does not read a clock or advance gameplay state.
+  const closedAtRead = closed || Boolean(timing?.matchEndsAt
+    && (timing.now ?? Date.now()) >= Date.parse(timing.matchEndsAt));
   const [record, initials] = await Promise.all([
     db.setting.findUnique({ where: { settingKey: arenaRetryKey(attemptId, sessionId) } }),
     db.answer.findMany({
@@ -106,7 +111,7 @@ export async function readArenaQuestionWork(
       throw new Error("Invalid persisted Arena retry state");
     }
   }
-  return { state, work: buildArenaQuestionWork(questions, initials, state, closed) };
+  return { state, work: buildArenaQuestionWork(questions, initials, state, closedAtRead) };
 }
 
 export async function saveArenaRetryState(db: Pick<WorkDatabase, "setting">, state: ArenaRetryState) {

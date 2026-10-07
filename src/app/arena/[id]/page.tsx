@@ -74,7 +74,7 @@ export default async function ArenaPage({ params }: ArenaPageProps) {
   const arenaRecord = await prisma.setting.findUnique({ where: { settingKey: `arena:state:${quizId}` } });
   const arena = arenaRecord?.settingValue ? JSON.parse(arenaRecord.settingValue) : null;
   const initialQuestionWork = (await readArenaQuestionWork(prisma, studentQuiz.id, arena?.sessionId ?? "", quiz.questions,
-    quiz.quizStatus === "ended" || studentQuiz.quizStatus === "completed" || (arena?.matchEndsAt && Date.now() >= Date.parse(arena.matchEndsAt)))).work;
+    quiz.quizStatus === "ended" || studentQuiz.quizStatus === "completed", { matchEndsAt: arena?.matchEndsAt })).work;
   return (
     <ArenaContent
       initialQuestionWork={initialQuestionWork}

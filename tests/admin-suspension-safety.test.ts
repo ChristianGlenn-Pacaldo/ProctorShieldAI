@@ -114,9 +114,10 @@ async function invoke(routeFile: string, setup: ReturnType<typeof fixture>, targ
     require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : setup.dependencies[name],
     console: { error() {} },
   }, { filename: absolutePath });
-  return route.PUT!(new Request(`http://localhost/api/users/${targetId}`, {
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost").origin;
+  return route.PUT!(new Request(`${origin}/api/users/${targetId}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+    headers: { "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify({ status }),
   }), { params: Promise.resolve({ id: targetId }) });
 }

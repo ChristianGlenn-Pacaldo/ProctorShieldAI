@@ -84,9 +84,10 @@ function routeFixture(file: string, role = "teacher", planAvailability: PlanAvai
     require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : dependencies[name],
     console: { error() {} },
   }, { filename });
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost").origin;
   return {
-    invoke: (body: unknown) => route.PUT!(new Request("http://localhost/api/users/target", {
-      method: "PUT", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body),
+    invoke: (body: unknown) => route.PUT!(new Request(`${origin}/api/users/target`, {
+      method: "PUT", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify(body),
     }), { params: Promise.resolve({ id: "target" }) }),
     getState: () => state,
     getWrites: () => writes,

@@ -162,9 +162,10 @@ async function invoke(routeFile: string, setup: ReturnType<typeof fixture>, body
     require: (name: string) => name === "@/lib/backup-write-gate" ? { withBackupWriteGate: (handler: unknown) => handler } : setup.dependencies[name],
     console: { error() {} },
   }, { filename: routePath });
-  return route.PUT!(new Request("http://localhost/api/users/teacher-1", {
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost").origin;
+  return route.PUT!(new Request(`${origin}/api/users/teacher-1`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+    headers: { "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify(body),
   }), { params: Promise.resolve({ id: "teacher-1" }) });
 }
