@@ -1,5 +1,6 @@
 import { reportAttempt, reportEvent, reportsRoute } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
+import { fixture, find, textOf } from "./helpers/dashboard-lifecycle-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -100,4 +101,73 @@ test("Teacher AI reports retain actual counts across completed and pending-retak
   assert.equal(body.totalViolations, 11);
   assert.deepEqual(body.reports.map((report: { violationCount: number }) => report.violationCount).sort((a: number, b: number) => a - b), [0, 1, 1, 2, 3, 4]);
   assert.match(reportsContent, /<AIReports role="teacher"/);
+});
+
+const scoreAttempt = (score: number | null, attemptMode: string, quizMode = attemptMode, aiVerdict = "clean") => ({
+  studentId: "score-student", attemptMode, score, aiVerdict, cheatingProbability: 15,
+  quizStatus: "completed", createdAt: new Date("2026-01-01"), endTime: new Date("2026-01-02"),
+  student: { fullName: "Score Student" }, quiz: { title: "Score Fixture", quizMode },
+  violations: [{ violationType: "tab_switch", timestamp: new Date("2026-01-02") }],
+});
+
+async function scoreDashboard(attempts: ReturnType<typeof scoreAttempt>[]) {
+  const get = loadRoute(dashboardRoutePath, {
+    quiz: { count: async () => 1 },
+    studentQuiz: { findMany: async (query: { where: { quiz: { teacherId: string } } }) => {
+      assert.equal(query.where.quiz.teacherId, "teacher-1");
+      return attempts;
+    } },
+  });
+  const response = await get(new Request("http://localhost/api/dashboard/teacher"));
+  assert.equal(response.status, 200);
+  return response.json();
+}
+
+for (const scenario of [
+  { name: "Arena 213", score: 213, mode: "arena", expected: "213 pts" },
+  { name: "proctored 85", score: 85, mode: "proctored", expected: "85%" },
+  { name: "proctored zero", score: 0, mode: "proctored", expected: "0%" },
+  { name: "Arena zero", score: 0, mode: "arena", expected: "0 pts" },
+  { name: "missing proctored score", score: null, mode: "proctored", expected: "N/A" },
+  { name: "missing Arena score", score: null, mode: "arena", expected: "N/A" },
+  { name: "invalidated proctored score", score: 85, mode: "proctored", verdict: "cheated", expected: "Invalidated" },
+  { name: "invalidated Arena score", score: 213, mode: "arena", verdict: "cheated", expected: "Invalidated" },
+  { name: "invalidated missing score", score: null, mode: "proctored", verdict: "cheated", expected: "Invalidated" },
+  { name: "historical Arena after quiz changes to proctored", score: 213, mode: "arena", currentMode: "proctored", expected: "213 pts" },
+  { name: "historical proctored after quiz changes to Arena", score: 85, mode: "proctored", currentMode: "arena", expected: "85%" },
+]) {
+  test(`Teacher verdict score label: ${scenario.name}`, async () => {
+    const attempt = scoreAttempt(scenario.score, scenario.mode, scenario.currentMode ?? scenario.mode, scenario.verdict);
+    const body = await scoreDashboard([attempt]);
+    assert.equal(body.recentVerdicts[0].score, scenario.expected);
+    assert.equal(attempt.score, scenario.score, "formatting does not mutate the stored numeric score");
+    assert.equal(attempt.attemptMode, scenario.mode);
+    assert.deepEqual(body.recentVerdicts[0].violations, ["Tab ×1"]);
+    assert.equal(body.stats.totalViolations, 1);
+    assert.equal(body.recentVerdicts[0].verdict, scenario.verdict === "cheated" ? "🚫 Cheated (15%)" : "✓ Clean (15%)");
+    assert.equal(body.recentVerdicts[0].verdictClass, scenario.verdict === "cheated" ? "bg-red-500/15 text-red-500" : "bg-emerald-500/15 text-emerald-600");
+  });
+}
+
+test("Teacher mixed verdict scores retain their units through the actual Dashboard table", async () => {
+  const attempts = [scoreAttempt(213, "arena", "proctored"), scoreAttempt(85, "proctored", "arena"),
+    scoreAttempt(0, "arena"), scoreAttempt(0, "proctored"), scoreAttempt(null, "arena"),
+    scoreAttempt(99, "proctored", "proctored", "cheated")];
+  attempts[1].aiVerdict = "suspicious";
+  const scoresBefore = attempts.map(attempt => attempt.score);
+  const body = await scoreDashboard(attempts);
+  const expected = ["213 pts", "85%", "0 pts", "0%", "N/A", "Invalidated"];
+  assert.deepEqual(body.recentVerdicts.map((row: { score: string }) => row.score), expected);
+  assert.equal(body.recentVerdicts[1].verdict, "⚠ Suspicious (15%)");
+  assert.equal(body.recentVerdicts[1].verdictClass, "bg-amber-500/15 text-amber-500");
+  assert.deepEqual(attempts.map(attempt => attempt.score), scoresBefore);
+  const screen = fixture("teacher");
+  screen.queue("/api/dashboard/teacher", { body });
+  try {
+    screen.render(); await screen.ready();
+    const tree = screen.render();
+    for (const label of expected) assert.ok(find(tree, node => node.type === "td" && textOf(node) === label), `table preserves ${label}`);
+    assert.ok(!find(tree, node => node.type === "td" && textOf(node) === "213%"));
+    assert.deepEqual(screen.errors, []);
+  } finally { screen.unmount(); }
 });
