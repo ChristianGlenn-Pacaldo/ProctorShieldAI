@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { visibleStudentNotifications } from "@/lib/notification-presentation";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -183,8 +184,9 @@ export default function DashboardShell({
       if (res.ok) {
         const data = await res.json();
         if (isNotificationActive(request.generation) && !request.controller.signal.aborted && refresh === notificationRefresh.current && data.success) {
-          setNotifications(data.notifications || []);
-          setUnreadCount(data.unreadCount || 0);
+          const visible = visibleStudentNotifications<Notification>(data.notifications || []);
+          setNotifications(visible);
+          setUnreadCount(visible.filter((notification) => !notification.isRead).length);
         }
       }
     } catch (e) {

@@ -159,7 +159,7 @@ export default function PlaygroundContent({
         </div>
 
         {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4 hover:border-amber-400/40 transition-all">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500/20 to-amber-500/20 border border-amber-400/30 flex items-center justify-center text-2xl">
               ⚔️
@@ -186,18 +186,6 @@ export default function PlaygroundContent({
             </div>
           </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4 hover:border-indigo-400/40 transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400/30 flex items-center justify-center text-2xl">
-              ⚡
-            </div>
-            <h3 className="text-lg font-bold text-white">Classroom EXP Progression</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Top Arena podium winners and all participants earn authoritative EXP to level up their student rank.
-            </p>
-            <div className="inline-flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
-              <Lock className="w-3.5 h-3.5" /> Requires Pro Subscription
-            </div>
-          </div>
         </div>
 
         {/* Preview Teaser Banner */}
@@ -233,7 +221,7 @@ export default function PlaygroundContent({
             Playground & Live Game Studio
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Host live interactive game modes to engage students and boost active participation with real-time progression.
+            Host live interactive game modes to engage students and boost active participation with live scores and rankings.
           </p>
         </div>
 
@@ -279,10 +267,6 @@ export default function PlaygroundContent({
               <div className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
                 <Tv className="w-3.5 h-3.5 text-purple-400" />
                 Projector & Smartboard Ready
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                EXP & Level Progression
               </div>
             </div>
           </div>

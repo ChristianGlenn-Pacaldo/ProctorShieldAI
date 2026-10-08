@@ -50,7 +50,6 @@ type QuizSubmittedResult = {
   violations: number;
   integrityInvalidated: boolean;
   aiVerdict: "clean" | "suspicious" | "cheated";
-  expEarned?: number;
 };
 
 export type SubmissionReason =
@@ -956,7 +955,6 @@ function QuizAttempt({ quizId }: { quizId: string }) {
           violations: serverViolationCount,
           integrityInvalidated,
           aiVerdict: integrityInvalidated ? "cheated" : serverVerdict,
-          expEarned: typeof data.result?.expEarned === "number" ? data.result.expEarned : 0,
         });
       } else {
         if (res.status === 409 && /already (?:been )?(?:submitted|completed)|already being submitted/i.test(data.error || "")) {
@@ -2349,31 +2347,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               </p>
             </div>
           </div>
-
-          {/* EXP Earned Banner (Student Progression) */}
-          {!resultInvalidated && (quizSubmittedResult.expEarned ?? 100) > 0 && (
-            <div className="p-4 rounded-2xl border text-left flex items-center justify-between gap-3 bg-indigo-500/15 border-indigo-500/30">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-6 h-6 text-indigo-300" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase text-indigo-400">
-                      Student Progression
-                    </span>
-                  </div>
-                  <div className="text-base font-black text-white mt-0.5">
-                    +{quizSubmittedResult.expEarned ?? 100} EXP Earned!
-                  </div>
-                  <div className="text-[11px] text-slate-300">
-                    Your EXP and Level are securely saved to your student profile.
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

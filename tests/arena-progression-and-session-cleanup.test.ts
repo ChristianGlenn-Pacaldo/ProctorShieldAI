@@ -158,7 +158,7 @@ test("O: Coins are absent from student-facing UI dashboard", () => {
 });
 
 test("P: Arena does not award or show coins on podium or setup", () => {
-  assert.match(arenaPodiumSrc, /EXP Earned/);
+  assert.doesNotMatch(arenaPodiumSrc, /EXP Earned/);
   assert.equal(arenaPodiumSrc.includes("Coins Earned"), false);
 });
 
@@ -244,8 +244,8 @@ test("AA: Teacher Arena setup has no Coin Bounty UI and duration comes from the 
   assert.match(teacherPlaygroundSrc, /Saved quiz duration/);
 });
 
-test("AB: Arena results show EXP but no coins/badges", () => {
-  assert.match(arenaPodiumSrc, /EXP Earned/);
+test("AB: Arena results retain gameplay points without EXP, coins or badges", () => {
+  assert.doesNotMatch(arenaPodiumSrc, /EXP Earned/);
   assert.equal(arenaPodiumSrc.includes("Coins Earned"), false);
 });
 

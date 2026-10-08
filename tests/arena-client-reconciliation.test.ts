@@ -49,7 +49,7 @@ const terminal = (revision = 11, score = 150): ArenaSnapshot => ({ success: true
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
 function client(kind: "teacher" | "student", completed = false) {
-  const state = { phase: completed ? "finalizing" : "in_wave", score: 20, rank: 2, exp: 0,
+  const state = { phase: completed ? "finalizing" : "in_wave", score: 20, rank: 2,
     participants: people(20) as any[], podium: [] as any[], trace: [] as string[], error: null as string | null };
   const refs = {
     arenaRevisionRef: { current: 10 }, arenaSessionRef: { current: "session" }, snapshotSessionRef: { current: "session" },
@@ -68,7 +68,7 @@ function client(kind: "teacher" | "student", completed = false) {
     getStudentInitials: () => "A", clearIncomingAttack() {}, showAttackFeedback() {}, playFanfareSound() {},
     setTotalParticipants() {}, setRivals() {}, setAllParticipants() {}, setCurrentSessionId() {},
     setPhase(value: string) { state.trace.push("phase"); state.phase = value; },
-    setScore(value: number) { state.score = value; }, setStudentRank(value: number) { state.rank = value; }, setExpEarned(value: number) { state.exp = value; },
+    setScore(value: number) { state.score = value; }, setStudentRank(value: number) { state.rank = value; },
     setPodium(value: any[]) { state.podium = value; state.trace.push("participants"); },
     setBattlers(update: (prev: any[]) => any[]) { state.participants = update(state.participants); state.trace.push("participants"); },
     setFinalizationError(value: string | null) { state.error = value; },
@@ -112,7 +112,7 @@ for (const kind of ["teacher", "student"] as const) test(`${kind} first terminal
   t.after(() => worker.stop()); await flush();
   assert.equal(f.refs.arenaCompletedRef.current, true); assert.equal(f.refs.terminalResultReconciledRef.current, false);
   t.mock.timers.tick(1_000); await flush(); assert.equal(reads, 2); assert.equal(f.state.phase, "podium");
-  if (kind === "student") { assert.equal(f.state.score, 150); assert.equal(f.state.rank, 1); assert.equal(f.state.exp, 200); }
+  if (kind === "student") { assert.equal(f.state.score, 150); assert.equal(f.state.rank, 1); }
   else assert.equal(f.state.participants[0].score, 150);
 });
 

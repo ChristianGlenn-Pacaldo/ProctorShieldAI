@@ -110,6 +110,7 @@ function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnT
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
+        if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "lucide-react") return new Proxy({}, { get: () => () => null });
