@@ -75,15 +75,15 @@ test("Teacher dashboard counts distinct flagged students, not flagged attempts",
   assert.equal(body.recentVerdicts.length, 4);
 });
 
-test("Teacher dashboard labels lifetime distinct students and leaves live feed separate", () => {
+test("Teacher dashboard retains lifetime distinct counts without the redundant telemetry card", () => {
   assert.match(dashboardContent, /label: "Unique Quiz Students"/);
   assert.match(dashboardContent, /sub: "All-time across your quizzes"/);
   assert.match(dashboardContent, /badge: "ALL-TIME"/);
   assert.doesNotMatch(dashboardContent, /sub: "Live Proctored Sessions"/);
-  assert.match(dashboardContent, /channel\.bind\("student-joined", \(data: any\) => \{\s*if \(!work\.isCurrent\(generation\)\) return;\s*fetchDashboardData\(\)/);
+  assert.match(dashboardContent, /channel\.bind\("student-joined", \(\) => \{\s*if \(!work\.isCurrent\(generation\)\) return;\s*fetchDashboardData\(\)/);
   assert.doesNotMatch(dashboardContent, /studentsMonitored: curr\.studentsMonitored \+ 1/);
   assert.doesNotMatch(dashboardContent, /flaggedStudents: curr\.flaggedStudents \+ 1/);
-  assert.match(dashboardContent, /setLiveStudents\(\(prev\) => \{/);
+  assert.doesNotMatch(dashboardContent, /Live Biometric Telemetry|RADAR ACTIVE|liveStudents|setLiveStudents/);
 });
 
 test("Teacher AI reports retain actual counts across completed and pending-retake proctored attempts", async () => {

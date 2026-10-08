@@ -897,7 +897,7 @@ export default function TeacherQuizzesPage({
       ───────────────────────────────────────────────────────────── */}
       {manageQuiz && portalMounted && createPortal(
         <div
-          className="app-modal-backdrop bg-black/80 backdrop-blur-md"
+          className="teacher-content app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) setManageQuiz(null);
           }}
@@ -1132,7 +1132,7 @@ export default function TeacherQuizzesPage({
       ───────────────────────────────────────────────────────────── */}
       {isAiModalOpen && portalMounted && createPortal(
         <div
-          className="app-modal-backdrop bg-black/80 backdrop-blur-md"
+          className="teacher-content app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsAiModalOpen(false);
@@ -1221,7 +1221,7 @@ export default function TeacherQuizzesPage({
                   <p className="text-xs text-[var(--muted)]">Images up to 10 MB, PDF up to 4 MB, or plain text up to 60 KB.</p>
                   {scannerError && <p role="alert" className="text-sm text-rose-500">{scannerError}</p>}
                   {isPreparingScan && <p role="status">Preparing scan…</p>}
-                  {cameraOpen && !scanSource && <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+                  {cameraOpen && !scanSource && <div className="teacher-media relative rounded-xl overflow-hidden bg-black aspect-video">
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
                     <button type="button" onClick={handleCapture} className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-purple-600 text-white rounded-xl">Capture Photo</button>
                   </div>}
@@ -1276,7 +1276,7 @@ export default function TeacherQuizzesPage({
       ───────────────────────────────────────────────────────────── */}
       {showBillingModal && portalMounted && createPortal(
         <div
-          className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in"
+          className="teacher-content app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowBillingModal(false);
           }}

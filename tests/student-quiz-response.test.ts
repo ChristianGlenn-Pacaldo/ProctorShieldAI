@@ -11,6 +11,7 @@ type StudentQuizResponse = {
     quizStatus: string;
     attemptNumber: number;
     aiAnalysis: { finalVerdict: string };
+    _count: { violations: number };
     quiz: {
       id: number;
       title: string;
@@ -42,6 +43,7 @@ test("Student quiz list serializes only the teacher name", async () => {
     include: {
       quiz: { include: { subject: boolean; teacher: { select: Record<string, boolean> } | true } };
       aiAnalysis: boolean;
+      _count: { select: { violations: boolean } };
     };
     orderBy: { createdAt: string };
   } | undefined;
@@ -59,6 +61,7 @@ test("Student quiz list serializes only the teacher name", async () => {
           quizStatus: "pending_retake",
           attemptNumber: 2,
           aiAnalysis: { finalVerdict: "clean" },
+          _count: { violations: 3 },
           quiz: {
             id: 42,
             title: "Power Arena Match",
@@ -108,6 +111,8 @@ test("Student quiz list serializes only the teacher name", async () => {
   assert.deepEqual(Array.from(studentQuizQuery?.where.quiz.quizStatus.notIn ?? []), ["deleted"]);
   assert.equal(studentQuizQuery?.include.quiz.include.subject, true);
   assert.equal(studentQuizQuery?.include.aiAnalysis, true);
+  assert.equal(studentQuizQuery?.include._count.select.violations, true);
+  assert.equal(body.quizzes[0]._count.violations, 3);
   assert.equal(studentQuizQuery?.orderBy.createdAt, "desc");
   assert.equal(teacherSelection === true, false);
   assert.deepEqual(Object.keys((teacherSelection as { select: Record<string, boolean> }).select), ["fullName"]);

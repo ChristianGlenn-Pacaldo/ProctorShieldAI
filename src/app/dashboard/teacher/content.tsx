@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Radio, ShieldCheck, Activity, Zap } from "lucide-react";
+import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Zap } from "lucide-react";
 import PusherClient from "pusher-js";
 import Link from "next/link";
 import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
@@ -12,18 +12,6 @@ interface StatCard {
   value: number;
   icon: React.ReactNode;
   color: string;
-}
-
-interface LiveStudent {
-  name: string;
-  status: string;
-  trust: number;
-  trustColor: string;
-  badge: string;
-  flagged?: boolean;
-  warning?: boolean;
-  joinedAt: Date;
-  lastSeen: Date;
 }
 
 interface ViolationBreakdownItem {
@@ -57,8 +45,6 @@ export default function TeacherDashboardContent({
     totalViolations: 0,
     flaggedStudents: 0,
   });
-
-  const [liveStudents, setLiveStudents] = useState<LiveStudent[]>([]);
   const [violationsBreakdown, setViolationsBreakdown] = useState<ViolationBreakdownItem[]>([
     { type: "Tab Switching", count: 0, pct: 0, color: "bg-red-500" },
     { type: "No Face Detected", count: 0, pct: 0, color: "bg-amber-500" },
@@ -77,7 +63,6 @@ export default function TeacherDashboardContent({
   const [loadError, setLoadError] = useState<string | null>(null);
   const { work, loss } = useUserSessionWork(() => {
     setStats({ totalQuizzes: 0, studentsMonitored: 0, totalViolations: 0, flaggedStudents: 0 });
-    setLiveStudents([]);
     setRecentVerdicts([]);
     setViolationsBreakdown([]);
     setSearchQuery("");
@@ -86,12 +71,6 @@ export default function TeacherDashboardContent({
     setIsLoading(false);
   });
   const refreshSequence = useRef(0);
-
-  // Keep refs in sync for websocket handlers
-  const liveStudentsRef = useRef<LiveStudent[]>([]);
-  useEffect(() => {
-    liveStudentsRef.current = loss ? [] : liveStudents;
-  }, [liveStudents, loss]);
 
   const fetchDashboardData = useCallback(async () => {
     const request = work.beginRequest();
@@ -141,27 +120,9 @@ export default function TeacherDashboardContent({
     });
 
     // Student Joined Event
-    channel.bind("student-joined", (data: any) => {
+    channel.bind("student-joined", () => {
       if (!work.isCurrent(generation)) return;
       fetchDashboardData();
-      setLiveStudents((prev) => {
-        if (!work.isCurrent(generation)) return prev;
-        const exists = prev.some((s) => s.name === data.studentName);
-        if (exists) return prev;
-
-        return [
-          ...prev,
-          {
-            name: data.studentName,
-            status: "✓ Active",
-            trust: 100,
-            trustColor: "text-emerald-500",
-            badge: "bg-emerald-500/15 text-emerald-600",
-            joinedAt: new Date(),
-            lastSeen: new Date(),
-          },
-        ];
-      });
     });
 
     // New Violation Event
@@ -204,58 +165,11 @@ export default function TeacherDashboardContent({
           pct: Math.round((item.count / maxCount) * 100),
         }));
       });
-
-      // Update student feed state
-      setLiveStudents((prev) => {
-        if (!work.isCurrent(generation)) return prev;
-        return prev.map((student) => {
-          if (student.name === data.studentName) {
-            const newTrust = Math.max(0, student.trust - 15);
-            let statusText = "⚠ Alert";
-            if (data.violationType === "multiple_faces") statusText = "⚠ Multiple Faces";
-            if (data.violationType === "no_face") statusText = "⚠ No Face";
-            if (data.violationType === "looking_away") statusText = "⚠ Looking Away";
-            if (data.violationType === "tab_switch") statusText = "⚠ Tab Switch";
-            if (data.violationType === "device_detected") statusText = "📱 Device Detected";
-            if (data.violationType === "attempted_screenshot") statusText = "📸 Screenshot/Copy";
-            if (data.violationType === "audio_anomaly") statusText = "🎙 Audio Anomaly";
-            if (data.violationType === "window_resize") statusText = "📐 Window Resized";
-
-            const trustColor =
-              newTrust > 75
-                ? "text-emerald-500"
-                : newTrust > 50
-                ? "text-amber-500"
-                : "text-red-500";
-            const badge =
-              newTrust > 75
-                ? "bg-emerald-500/15 text-emerald-600"
-                : newTrust > 50
-                ? "bg-amber-500/15 text-amber-600"
-                : "bg-red-500/15 text-red-500";
-
-            return {
-              ...student,
-              status: statusText,
-              trust: newTrust,
-              trustColor,
-              badge,
-              flagged: newTrust <= 50,
-              warning: newTrust <= 75 && newTrust > 50,
-              lastSeen: new Date(),
-            };
-          }
-          return student;
-        });
-      });
     });
 
     // Student Submitted / Quiz Complete Event
-    channel.bind("student-submitted", (data: any) => {
+    channel.bind("student-submitted", () => {
       if (!work.isCurrent(generation)) return;
-
-      // Remove from live view list
-      setLiveStudents((prev) => work.isCurrent(generation) ? prev.filter((s) => s.name !== data.studentName) : prev);
 
       // Re-fetch all dynamic table history and stats from database
       fetchDashboardData();
@@ -412,77 +326,8 @@ export default function TeacherDashboardContent({
         ))}
       </div>
 
-      {/* Live Monitor + Violations Breakdown */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Live Monitor Widget */}
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-[var(--surface2)]/30">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">
-                Live Biometric Telemetry
-              </h3>
-            </div>
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isSubscribed ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}>
-              {isSubscribed ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              ) : (
-                <Crown className="w-3 h-3 text-amber-500" />
-              )}
-              <span className={`text-[10px] font-black font-mono ${isSubscribed ? "text-emerald-500" : "text-amber-500"}`}>
-                {isSubscribed ? "RADAR ACTIVE" : "PRO ONLY"}
-              </span>
-            </div>
-          </div>
-          <div className="divide-y divide-[var(--border)] min-h-[160px]">
-            {!isSubscribed ? (
-              <div className="flex flex-col items-center justify-center p-6 text-center h-[160px]">
-                <Crown className="w-7 h-7 text-amber-500 mb-2" />
-                <p className="text-xs font-bold text-[var(--ink)]">Live Monitoring requires Pro</p>
-                <Link href="/dashboard/teacher/billing" className="mt-2 text-xs font-bold text-indigo-500 hover:text-indigo-400">
-                  View plans and upgrade
-                </Link>
-              </div>
-            ) : liveStudents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-8 text-[var(--muted)] text-center h-[160px]">
-                <span className="text-xl mb-1">📹</span>
-                <p className="text-xs font-semibold">No active proctored sessions</p>
-                <p className="text-[10px] text-[var(--muted2)] mt-0.5">
-                  Students taking an quiz will appear here in real-time
-                </p>
-              </div>
-            ) : (
-              liveStudents.map((s) => (
-                <div
-                  key={s.name}
-                  className={`flex items-center justify-between px-5 py-3.5 transition-all ${
-                    s.flagged
-                      ? "bg-rose-500/5 border-l-2 border-rose-500"
-                      : s.warning
-                      ? "bg-amber-500/5 border-l-2 border-amber-500"
-                      : ""
-                  }`}
-                >
-                  <span className="text-sm font-semibold text-[var(--ink)]">{s.name}</span>
-                  <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${s.badge}`}>
-                    {s.status}
-                  </span>
-                  <strong className={`text-sm ${s.trustColor}`}>{s.trust}% Trust</strong>
-                  <Link
-                    href="/dashboard/teacher/monitor"
-                    className="text-xs font-bold px-3 py-1.5 bg-[var(--surface2)] text-[var(--ink)] hover:text-blue-600 border border-[var(--border)] rounded-lg transition-all"
-                  >
-                    View
-                  </Link>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
+      {/* Violations Breakdown */}
+      <div className="grid gap-4">
         {/* Violations Breakdown */}
         <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)]">

@@ -1,0 +1,199 @@
+/* Teacher-only compatibility for legacy dark utility surfaces. New surfaces
+   can use the shared --surface/--ink tokens directly. Portals opt into this
+   same scope so selection follows html.dark, rather than the OS preference. */
+.teacher-content {
+  --teacher-text: var(--ink);
+  --teacher-body: var(--ink2);
+  --teacher-muted: var(--ink3);
+  --teacher-border: var(--border2);
+  --teacher-blue: #1d4ed8;
+  --teacher-indigo: #4338ca;
+  --teacher-violet: #6d28d9;
+  --teacher-purple: #7e22ce;
+  --teacher-amber: #92400e;
+  --teacher-emerald: #047857;
+  --teacher-cyan: #0e7490;
+  --teacher-rose: #be123c;
+  --teacher-red: #b91c1c;
+  --teacher-orange: #9a3412;
+  --teacher-pink: #be185d;
+  --muted2: var(--ink3);
+  color: var(--ink);
+  color-scheme: light;
+}
+
+.dark .teacher-content {
+  --teacher-blue: #93c5fd;
+  --teacher-indigo: #a5b4fc;
+  --teacher-violet: #c4b5fd;
+  --teacher-purple: #d8b4fe;
+  --teacher-amber: #fcd34d;
+  --teacher-emerald: #6ee7b7;
+  --teacher-cyan: #67e8f9;
+  --teacher-rose: #fda4af;
+  --teacher-red: #fca5a5;
+  --teacher-orange: #fdba74;
+  --teacher-pink: #f9a8d4;
+  color-scheme: dark;
+}
+
+/* Footage and photographic overlays stay dark for readable image captions. */
+.teacher-media {
+  --surface: #0f172a;
+  --surface2: #1e293b;
+  --ink: #ffffff;
+  --ink2: #e2e8f0;
+  --ink3: #cbd5e1;
+  --muted: #cbd5e1;
+  --muted2: #cbd5e1;
+  --teacher-text: #ffffff;
+  --teacher-body: #e2e8f0;
+  --teacher-muted: #cbd5e1;
+  --teacher-border: #334155;
+  --teacher-blue: #93c5fd;
+  --teacher-indigo: #a5b4fc;
+  --teacher-amber: #fcd34d;
+  --teacher-emerald: #6ee7b7;
+  --teacher-violet: #c4b5fd;
+  --teacher-purple: #d8b4fe;
+  --teacher-cyan: #67e8f9;
+  --teacher-rose: #fda4af;
+  --teacher-red: #fca5a5;
+  --teacher-orange: #fdba74;
+  --teacher-pink: #f9a8d4;
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+/* Preserve white labels on intentionally saturated actions and brand blocks. */
+.teacher-content :where(.bg-blue-600, .bg-indigo-600, .bg-purple-600,
+  .bg-violet-600, .bg-emerald-600, .bg-rose-600, .bg-red-600, .bg-amber-700,
+  .from-indigo-600, .from-violet-600, .from-purple-600, .from-pink-500,
+  .from-emerald-500, .from-amber-400, .from-amber-500, .teacher-on-accent) {
+  --teacher-text: #ffffff;
+  --teacher-body: #e2e8f0;
+  --teacher-muted: #e2e8f0;
+}
+
+:root:not(.dark) .teacher-content :where(.text-white) { color: var(--teacher-text); }
+:root:not(.dark) .teacher-content.bg-slate-950 { background-color: var(--surface2); }
+:root:not(.dark) .teacher-content :where(.text-slate-300, .text-gray-300) { color: var(--teacher-body); }
+:root:not(.dark) .teacher-content :where(.text-slate-400, .text-slate-500, .text-slate-600,
+  .text-gray-400, .text-gray-500) { color: var(--teacher-muted); }
+:root:not(.dark) .teacher-content :where([class~="hover:text-white"]):hover { color: var(--teacher-text); }
+:root:not(.dark) .teacher-content :where([class~="placeholder:text-slate-500"],
+  [class~="placeholder:text-slate-600"])::placeholder { color: var(--teacher-muted); }
+
+:root:not(.dark) .teacher-content :where(.bg-slate-900, [class~="bg-slate-900/95"],
+  [class~="bg-slate-900/90"], [class~="bg-slate-900/80"], [class~="bg-slate-900/60"],
+  [class~="bg-slate-900/40"], .bg-gray-900, [class~="bg-[#111]"]) {
+  background-color: var(--surface);
+}
+:root:not(.dark) .teacher-content :where(.bg-slate-950, [class~="bg-slate-950/80"],
+  [class~="bg-slate-950/60"], [class~="bg-slate-950/40"], .bg-slate-800,
+  [class~="bg-slate-800/80"], [class~="bg-slate-800/60"], [class~="bg-slate-800/30"],
+  .bg-slate-700, .bg-slate-600, [class~="bg-[#0a0a0a]"], [class~="bg-[#222]"] ) {
+  background-color: var(--surface2);
+}
+:root:not(.dark) .teacher-content :where(.border-slate-950, .border-slate-800,
+  [class~="border-slate-800/80"], .border-slate-700, .border-slate-600,
+  .border-slate-500, .border-gray-800, .border-gray-700,
+  [class~="border-white/10"], [class~="border-white/[0.06]"]) {
+  border-color: var(--teacher-border);
+}
+:root:not(.dark) .teacher-content :where([class~="divide-slate-800/80"]) > :not(:last-child) {
+  border-color: var(--teacher-border);
+}
+:root:not(.dark) .teacher-content :where([class~="bg-white/[0.04]"]) { background-color: var(--surface2); }
+:root:not(.dark) .teacher-content :where([class~="bg-black/40"]) { background-color: var(--surface2); }
+:root:not(.dark) .teacher-content :where([class~="border-white/30"]) {
+  border-color: color-mix(in srgb, var(--teacher-text) 30%, transparent);
+}
+:root:not(.dark) .teacher-content :where(.border-t-white) { border-top-color: var(--teacher-text); }
+:root:not(.dark) .teacher-content :where(.text-indigo-100, .text-indigo-200, [class~="text-indigo-200/60"],
+  [class~="text-indigo-200/80"], [class~="text-indigo-300/60"]) { color: var(--teacher-indigo); }
+:root:not(.dark) .teacher-content :where(.text-rose-100, .text-rose-200) { color: var(--teacher-rose); }
+:root:not(.dark) .teacher-content :where(.text-emerald-200, [class~="text-emerald-400/80"]) { color: var(--teacher-emerald); }
+:root:not(.dark) .teacher-content :where([class~="text-amber-200/80"], [class~="text-amber-400/90"]) { color: var(--teacher-amber); }
+/* Gold gradient lettering is legible on dark banners; light banners need ink. */
+:root:not(.dark) .teacher-content :where(.bg-clip-text.text-transparent) {
+  background-image: none;
+  color: var(--teacher-amber);
+}
+:root:not(.dark) .teacher-content :where([class~="hover:bg-slate-900"],
+  [class~="hover:bg-slate-900/80"], [class~="hover:bg-slate-800"],
+  [class~="hover:bg-slate-800/80"], [class~="hover:bg-slate-800/50"],
+  [class~="hover:bg-slate-700"], [class~="hover:bg-slate-600"],
+  [class~="hover:bg-[#333]"]):hover {
+  background-color: color-mix(in srgb, var(--surface2) 80%, var(--teacher-border));
+}
+:root:not(.dark) .teacher-content :where([class~="focus:bg-slate-900"]):focus { background-color: var(--surface); }
+
+:root:not(.dark) .teacher-content :where(.from-slate-950, .from-slate-900, .from-slate-700) {
+  --tw-gradient-from: var(--surface2);
+}
+:root:not(.dark) .teacher-content :where(.via-slate-950, .via-slate-900) {
+  --tw-gradient-via: var(--surface);
+}
+:root:not(.dark) .teacher-content :where(.to-slate-950, .to-slate-900) {
+  --tw-gradient-to: var(--surface2);
+}
+:root:not(.dark) .teacher-content :where(.to-indigo-950) { --tw-gradient-to: #e0e7ff; }
+:root:not(.dark) .teacher-content :where([class~="bg-indigo-950/20"], [class~="bg-indigo-950/60"]) {
+  background-color: color-mix(in srgb, var(--teacher-indigo) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where([class~="bg-emerald-950/25"], [class~="bg-emerald-950/30"],
+  [class~="bg-emerald-950/40"], [class~="bg-emerald-950/50"], [class~="bg-emerald-950/90"]) {
+  background-color: color-mix(in srgb, var(--teacher-emerald) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where([class~="bg-rose-950/80"], [class~="bg-rose-950/90"]) {
+  background-color: color-mix(in srgb, var(--teacher-rose) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where([class~="bg-blue-950/20"], [class~="bg-blue-950/25"]) {
+  background-color: color-mix(in srgb, var(--teacher-blue) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where([class~="bg-amber-950/25"]) {
+  background-color: color-mix(in srgb, var(--teacher-amber) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where([class~="bg-cyan-950/25"]) {
+  background-color: color-mix(in srgb, var(--teacher-cyan) 8%, var(--surface));
+}
+:root:not(.dark) .teacher-content :where(.from-indigo-900, [class~="from-purple-900/40"]) { --tw-gradient-from: #eef2ff; }
+:root:not(.dark) .teacher-content :where(.via-purple-900, [class~="via-indigo-900/40"],
+  [class~="via-indigo-950/90"]) { --tw-gradient-via: var(--surface); }
+:root:not(.dark) .teacher-content :where(.to-purple-950) { --tw-gradient-to: #f3e8ff; }
+:root:not(.dark) .teacher-content :where(.from-amber-800) { --tw-gradient-from: #fef3c7; }
+:root:not(.dark) .teacher-content :where(.to-amber-950) { --tw-gradient-to: #fffbeb; }
+
+/* Semantic accent inks keep badges, links and icons readable in both themes. */
+.teacher-content :where(.text-blue-300, .text-blue-400, .text-blue-500, .text-blue-600) { color: var(--teacher-blue); }
+.teacher-content :where(.text-indigo-300, .text-indigo-400, .text-indigo-500, .text-indigo-600) { color: var(--teacher-indigo); }
+.teacher-content :where(.text-violet-300, .text-violet-400, .text-violet-500, .text-violet-600) { color: var(--teacher-violet); }
+.teacher-content :where(.text-purple-300, .text-purple-400, .text-purple-500, .text-purple-600) { color: var(--teacher-purple); }
+.teacher-content :where(.text-amber-200, .text-amber-300, .text-amber-400, .text-amber-500, .text-amber-600,
+  .text-yellow-300, .text-yellow-400, .text-yellow-500, .text-yellow-600) { color: var(--teacher-amber); }
+.teacher-content :where(.text-emerald-300, .text-emerald-400, .text-emerald-500, .text-emerald-600,
+  .text-green-400, .text-green-500) { color: var(--teacher-emerald); }
+.teacher-content :where(.text-cyan-300, .text-cyan-400, .text-cyan-500, .text-cyan-600) { color: var(--teacher-cyan); }
+.teacher-content :where(.text-rose-300, .text-rose-400, .text-rose-500, .text-rose-600) { color: var(--teacher-rose); }
+.teacher-content :where(.text-red-300, .text-red-400, .text-red-500, .text-red-600) { color: var(--teacher-red); }
+.teacher-content :where(.text-orange-300, .text-orange-400, .text-orange-500, .text-orange-600) { color: var(--teacher-orange); }
+.teacher-content :where(.text-pink-300, .text-pink-400, .text-pink-500, .text-pink-600) { color: var(--teacher-pink); }
+.teacher-content .group:hover :where([class~="group-hover:text-amber-300"]) { color: var(--teacher-amber); }
+.teacher-content .group:hover :where([class~="group-hover:text-amber-400"], [class~="group-hover:text-amber-500"]) { color: var(--teacher-amber); }
+.teacher-content .group:hover :where([class~="group-hover:text-indigo-200"]) { color: var(--teacher-indigo); }
+.teacher-content .group:hover :where([class~="group-hover:text-emerald-500"]) { color: var(--teacher-emerald); }
+.teacher-content .group:hover :where([class~="group-hover:text-purple-500"]) { color: var(--teacher-purple); }
+.teacher-content :where([class~="hover:text-indigo-500"]):hover { color: var(--teacher-indigo); }
+.teacher-content :where([class~="hover:text-blue-600"]):hover { color: var(--teacher-blue); }
+.teacher-content :where([class~="hover:text-rose-500"]):hover { color: var(--teacher-rose); }
+.teacher-content :where([class~="hover:text-rose-400"]):hover { color: var(--teacher-rose); }
+
+.teacher-content :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--teacher-blue);
+  outline-offset: 2px;
+}
+
+.dark .teacher-content :where(.text-slate-500, .text-slate-600, .text-gray-500) { color: var(--muted); }
+.teacher-content input.border-rose-500 { border-color: var(--teacher-rose) !important; }
+.teacher-content input.border-rose-500:focus-visible { outline-color: var(--teacher-rose); }

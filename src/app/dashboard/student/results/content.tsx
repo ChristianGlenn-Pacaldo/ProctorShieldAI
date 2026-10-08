@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, BarChart3 } from "lucide-react";
 import ResultModal from "@/components/student/ResultModal";
+import { averageExamScore } from "@/lib/student-result-summary";
 
 export default function ResultsContent() {
   const [results, setResults] = useState<any[]>([]);
@@ -33,16 +34,6 @@ export default function ResultsContent() {
     fetchResults();
   }, []);
 
-  const calculateAverage = () => {
-    const recordedResults = results.filter((result) => {
-      const isArena = result.attemptMode === "arena" || result.effectiveMode === "arena";
-      return result.isCompleted && !isArena && result.score != null && !result.integrityInvalidated;
-    });
-    if (recordedResults.length === 0) return 0;
-    const total = recordedResults.reduce((sum, result) => sum + Number(result.score), 0);
-    return Math.round(total / recordedResults.length);
-  };
-
   return (
     <div className="space-y-4">
       {loadError && (
@@ -63,7 +54,7 @@ export default function ResultsContent() {
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? `${calculateAverage()}%` : "—"}</div>
+          <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? `${averageExamScore(results)}%` : "—"}</div>
           <div className="text-xs text-[var(--muted)]">Average Exam Score</div>
         </div>
       </div>
