@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
             include: { subject: true, teacher: { select: { fullName: true } } },
           },
           aiAnalysis: true,
+          _count: { select: { violations: true } },
         },
         orderBy: { createdAt: "desc" },
       });

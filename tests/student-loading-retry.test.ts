@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as studentResultSummary from "../src/lib/student-result-summary.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 type Reply = { ok: boolean; body?: Record<string, unknown> } | Error;
@@ -64,6 +65,7 @@ function fixture(relativePath: string, responses: Record<string, Reply[]>) {
     exports: component,
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
+      if (name === "@/lib/student-result-summary") return studentResultSummary;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
@@ -198,7 +200,7 @@ for (const entry of cases) {
 
 test("Bug 10: simplified dashboard retains quiz/results navigation without trust, assigned, or progression cards", async () => {
   const setup = fixture(cases[0].path, {
-    "/api/quizzes": [{ok:true,body:{success:true,quizzes:[{...quiz,quizStatus:"completed",score:80,aiVerdict:"clean",quiz:{...quiz.quiz,title:"Saved Result"}}]}}],
+    "/api/quizzes": [{ok:true,body:{success:true,quizzes:[{...quiz,quizStatus:"completed",endTime:"2026-10-08T10:00:00Z",attemptMode:"proctored",_count:{violations:0},score:80,aiVerdict:"clean",quiz:{...quiz.quiz,title:"Saved Result"}}]}}],
     "/api/student/progression": [{ok:true,body:progression}],
   });
   await setup.mount();

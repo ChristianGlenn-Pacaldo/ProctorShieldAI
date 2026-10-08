@@ -516,7 +516,7 @@ export default function ProctorShieldQuizEditor({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[900] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden animate-in fade-in duration-200">
+    <div className="teacher-content fixed inset-0 z-[900] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden animate-in fade-in duration-200">
       {/* ─────────────────────────────────────────────────────────────
           1. TOP APP HEADER (PROCTORSHIELD ACTIVITY BAR)
       ───────────────────────────────────────────────────────────── */}

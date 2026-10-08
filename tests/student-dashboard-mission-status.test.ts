@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as studentResultSummary from "../src/lib/student-result-summary.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 
@@ -62,6 +63,7 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
     exports: component,
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
+      if (name === "@/lib/student-result-summary") return studentResultSummary;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
@@ -130,5 +132,5 @@ test("pending, rejected, completed, and unsupported attempts never claim an open
     assert.equal(actionLinks(card).length, 0);
   }
   assert.equal(nodesOf(tree, (node) => node.type === "div" && String(node.props.className).includes("rounded-2xl border-2 border-indigo-500/20") && textOf(node).includes("Quiz 8")).length, 0);
-  assert.match(textOf(tree), /Recent Exam Results.*Quiz 8/);
+  assert.match(textOf(tree), /Recent Results.*Quiz 8/);
 });

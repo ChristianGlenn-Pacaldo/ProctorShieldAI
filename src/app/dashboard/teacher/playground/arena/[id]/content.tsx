@@ -772,8 +772,8 @@ export default function ArenaHostContent({
       {/* ─────────────────────────────────────────────────────────────
           ARENA PROJECTOR TOPBAR
       ───────────────────────────────────────────────────────────── */}
-      <header className="h-16 px-4 sm:px-8 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0 z-30">
-        <div className="flex items-center gap-4">
+      <header className="min-h-16 px-4 sm:px-8 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 z-30">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
           <Link
             href="/dashboard/teacher/playground"
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
@@ -781,13 +781,13 @@ export default function ArenaHostContent({
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black shadow-sm">
               <Swords className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-sm font-black tracking-tight text-white flex items-center gap-2">
-                <span>{quiz.title}</span>
+            <div className="min-w-0">
+              <div className="text-sm font-black tracking-tight text-white flex flex-wrap items-center gap-2">
+                <span className="break-words">{quiz.title}</span>
                 <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-extrabold uppercase">
                   POWER ARENA HOST
                 </span>
@@ -800,7 +800,7 @@ export default function ArenaHostContent({
         </div>
 
         {/* Join PIN Pill for Classroom Projector */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700">
             <span className="text-[11px] font-bold text-slate-400">JOIN CODE:</span>
             <span className="text-sm font-mono font-black text-amber-400 tracking-wider">
@@ -955,7 +955,7 @@ export default function ArenaHostContent({
           {/* Left: Full Live Leaderboard (#1 through #N) */}
           <div className="flex-1 flex flex-col justify-between space-y-4">
             {/* Overall Match Timer & Header Bar */}
-            <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
               <div className="space-y-1">
                 <span className="px-2.5 py-1 rounded-md bg-amber-400/20 text-amber-300 text-xs font-black uppercase tracking-wider">
                   POWER ARENA IN PROGRESS

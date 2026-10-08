@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import styles from "./not-found.module.css";
 
 export default function NotFound() {
@@ -26,9 +26,6 @@ export default function NotFound() {
           <nav className={styles.actions} aria-label="Page recovery">
             <Link href="/" className={`${styles.button} ${styles.primary}`}>
               <ArrowLeft size={18} aria-hidden="true" /> Back to Home
-            </Link>
-            <Link href="/login" className={`${styles.button} ${styles.secondary}`}>
-              Go to Sign In <ArrowRight size={18} aria-hidden="true" />
             </Link>
           </nav>
         </div>

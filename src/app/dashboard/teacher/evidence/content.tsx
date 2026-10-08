@@ -285,7 +285,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
           {selectedEvidence ? (
             <div className="space-y-4">
               <div 
-                className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden border border-[var(--border)] flex items-center justify-center text-white text-sm cursor-pointer group"
+                className="teacher-media relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden border border-[var(--border)] flex items-center justify-center text-white text-sm cursor-pointer group"
                 onClick={() => {
                   openReplay(selectedEvidence);
                 }}
@@ -376,7 +376,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
       {/* FULLSCREEN REPLAY MODAL */}
       {isFullscreen && selectedEvidence && typeof document !== "undefined" && createPortal((
         <div 
-          className="fixed inset-0 z-[2000] flex items-center justify-center overflow-y-auto bg-black/90 p-2 backdrop-blur-md sm:p-6"
+          className="teacher-content fixed inset-0 z-[2000] flex items-center justify-center overflow-y-auto bg-black/90 p-2 backdrop-blur-md sm:p-6"
           onClick={() => setIsFullscreen(false)}
           role="dialog"
           aria-modal="true"
@@ -403,7 +403,7 @@ export default function EvidenceContent({ teacherId }: { teacherId: string }) {
               </button>
             </div>
             
-            <div className="relative flex min-h-[35vh] min-w-0 flex-1 items-center justify-center overflow-auto bg-black p-2 sm:min-h-[50vh] sm:p-4">
+            <div className="teacher-media relative flex min-h-[35vh] min-w-0 flex-1 items-center justify-center overflow-auto bg-black p-2 sm:min-h-[50vh] sm:p-4">
               {selectedEvidence.screenshotPath ? (
                 mediaStatus === "error" ? (
                   <div className="flex max-w-sm flex-col items-center gap-3 text-center text-gray-300">

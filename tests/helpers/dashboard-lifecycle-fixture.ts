@@ -130,6 +130,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
       require(name: string) {
         if (name === "@/lib/quiz-scanner") return quizScanner;
         if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
+        if (name === "@/lib/student-result-summary") return load("src/lib/student-result-summary.ts");
       if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "lucide-react") return new Proxy({}, { get: () => () => null });

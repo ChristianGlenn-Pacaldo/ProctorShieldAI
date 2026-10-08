@@ -70,9 +70,9 @@ test("visible content, accessible attributes and route metadata disclose no priv
   assert.equal(page.metadata.title, "Page Not Found | ProctorShieldAI");
 });
 
-test("recovery links lead to home and the unchanged unified sign-in route", () => {
+test("the custom 404 retains Home as its only recovery link", () => {
   assert.match(markup, /<a href="\/"[^>]*>.*?Back to Home<\/a>/);
-  assert.match(markup, /<a href="\/login"[^>]*>Go to Sign In.*?<\/a>/);
+  assert.doesNotMatch(markup, /Go to Sign In|href="\/login"/);
   assert.match(markup, /<nav[^>]*aria-label="Page recovery"/);
 });
 

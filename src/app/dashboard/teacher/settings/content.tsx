@@ -107,10 +107,10 @@ export default function SettingsContent() {
     <div className="animate-fade-in space-y-4">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
+        <div role="status" className={`fixed top-6 inset-x-4 sm:left-auto sm:right-6 sm:max-w-md z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
           ${toast.type === "success" ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-300" : "bg-rose-950/90 border-rose-500/30 text-rose-300"}`}>
           {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
-          {toast.msg}
+          <span className="min-w-0 break-words">{toast.msg}</span>
         </div>
       )}
 

@@ -98,29 +98,31 @@ export default function SettingsContent() {
     <div className="animate-fade-in space-y-8 pb-16">
       {toast && (
         <div
-          className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-bold animate-fade-in ${
+          role={toast.type === "error" ? "alert" : "status"}
+          className={`fixed top-6 inset-x-4 sm:left-auto sm:right-6 sm:max-w-md z-[200] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border bg-[var(--surface)] text-sm font-bold animate-fade-in ${
             toast.type === "success"
-              ? "bg-emerald-950/95 border-emerald-500/40 text-emerald-200"
-              : "bg-rose-950/95 border-rose-500/40 text-rose-200"
+              ? "[.dark_&]:bg-emerald-950/95 border-emerald-500/40 text-emerald-700 [.dark_&]:text-emerald-200"
+              : "[.dark_&]:bg-rose-950/95 border-rose-500/40 text-rose-700 [.dark_&]:text-rose-200"
           }`}
         >
           {toast.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
           ) : (
-            <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <XCircle className="w-5 h-5 shrink-0" />
           )}
-          {toast.msg}
+          <span className="min-w-0 break-words">{toast.msg}</span>
         </div>
       )}
 
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c1229] via-[#0e1638] to-[#070b1c] border-2 border-indigo-500/30 p-6 sm:p-8 text-white shadow-2xl shadow-indigo-950/50">
+      {/* Match the shell's selected .dark class without changing shared variants. */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--surface)] via-[var(--surface2)] to-[var(--surface)] [.dark_&]:from-[#0c1229] [.dark_&]:via-[#0e1638] [.dark_&]:to-[#070b1c] border-2 border-indigo-500/30 p-6 sm:p-8 text-[var(--ink)] shadow-2xl shadow-indigo-950/10 [.dark_&]:shadow-indigo-950/50">
         <div className="absolute -top-16 -right-16 w-80 h-80 bg-cyan-500/15 blur-[100px] rounded-full pointer-events-none" />
         <div className="absolute bottom-0 left-10 w-72 h-72 bg-indigo-500/20 blur-[90px] rounded-full pointer-events-none" />
         <div className="relative z-10">
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white font-[family-name:var(--font-display)]">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-[var(--ink)] font-[family-name:var(--font-display)]">
             Account Settings
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
+          <p className="text-xs sm:text-sm text-[var(--ink2)] mt-1 max-w-xl">
             Keep your student information and account security up to date.
           </p>
         </div>
@@ -129,7 +131,7 @@ export default function SettingsContent() {
       <div className="grid lg:grid-cols-2 gap-6 pt-4">
         <div className="bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-sm">
           <div className="px-1 pb-4 border-b border-[var(--border)] mb-5 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-indigo-500" />
+            <Shield className="w-5 h-5 text-indigo-600 [.dark_&]:text-indigo-300" />
             <h3 className="text-base font-extrabold text-[var(--ink)] font-[family-name:var(--font-display)]">
               Student Information
             </h3>
@@ -137,10 +139,11 @@ export default function SettingsContent() {
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
+              <label htmlFor="student-full-name" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 Full Name
               </label>
               <input
+                id="student-full-name"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500 font-semibold transition-colors"
@@ -148,10 +151,11 @@ export default function SettingsContent() {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
+              <label htmlFor="student-email" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 Email Address
               </label>
               <input
+                id="student-email"
                 value={user?.email || ""}
                 disabled
                 className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] cursor-not-allowed font-medium"
@@ -162,7 +166,7 @@ export default function SettingsContent() {
               type="button"
               disabled={isSaving}
               onClick={handleSaveProfile}
-              className="w-full py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSaving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               {isSaving ? "Saving..." : "Save Profile Details"}
@@ -171,9 +175,9 @@ export default function SettingsContent() {
         </div>
 
         <div className="bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-sm">
-          <div className="px-1 pb-4 border-b border-[var(--border)] mb-5 flex items-center justify-between">
+          <div className="px-1 pb-4 border-b border-[var(--border)] mb-5 flex flex-wrap gap-2 items-center justify-between">
             <div className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-indigo-500" />
+              <Lock className="w-5 h-5 shrink-0 text-indigo-600 [.dark_&]:text-indigo-300" />
               <h3 className="text-base font-extrabold text-[var(--ink)] font-[family-name:var(--font-display)]">
                 Security & Password
               </h3>
@@ -183,51 +187,54 @@ export default function SettingsContent() {
 
           <div className="space-y-3.5">
             <div>
-              <label className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
+              <label htmlFor="student-current-password" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 Current Password
               </label>
               <div className="relative">
                 <input
+                  id="student-current-password"
                   type={showCurrent ? "text" : "password"}
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
                   placeholder="Enter current password"
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-indigo-500 transition-colors"
                 />
-                <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
+                <button type="button" aria-label={showCurrent ? "Hide current password" : "Show current password"} onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink3)] hover:text-[var(--ink)]">
                   {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
+              <label htmlFor="student-new-password" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 New Password
               </label>
               <div className="relative">
                 <input
+                  id="student-new-password"
                   type={showNew ? "text" : "password"}
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
                   placeholder="Min. 10 characters with numbers"
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-indigo-500 transition-colors"
                 />
-                <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
+                <button type="button" aria-label={showNew ? "Hide new password" : "Show new password"} onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink3)] hover:text-[var(--ink)]">
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
+              <label htmlFor="student-confirm-password" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 Confirm Password
               </label>
               <input
+                id="student-confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 placeholder="Re-type new password"
-                className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
 
@@ -235,7 +242,7 @@ export default function SettingsContent() {
               type="button"
               disabled={isChangingPassword || !newPassword}
               onClick={handleChangePassword}
-              className="w-full py-3 text-sm font-bold text-white bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-all disabled:opacity-40 flex items-center justify-center gap-2 mt-2 cursor-pointer"
+              className="w-full py-3 text-sm font-bold text-white bg-slate-800 hover:bg-slate-700 [.dark_&]:bg-slate-700 [.dark_&]:hover:bg-slate-600 rounded-xl transition-all disabled:opacity-40 flex items-center justify-center gap-2 mt-2 cursor-pointer"
             >
               {isChangingPassword && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               {isChangingPassword ? "Updating..." : "Update Password"}

@@ -6,6 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
+import * as studentResultSummary from "../src/lib/student-result-summary.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 
@@ -88,6 +89,7 @@ function pageFixture(relativePath: string, results: Array<Record<string, unknown
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
       if (name === "@/components/student/ResultModal") return { __esModule: true, default: "result-modal" };
+      if (name === "@/lib/student-result-summary") return studentResultSummary;
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
