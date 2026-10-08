@@ -31,7 +31,7 @@ type SubmitResponse = { ok: boolean; body: Record<string, unknown> } | "network-
 
 function arenaFixture(responses: SubmitResponse[]) {
   const state = { phase: "in_wave", error: null as string | null, finalizing: false,
-    submits: 0, rankings: 0, expEarned: null as number | null };
+    submits: 0, rankings: 0, score: null as number | null, rank: null as number | null };
   const refs = {
     finalizationAttemptedRef: { current: false },
     finalizationInFlightRef: { current: false },
@@ -65,8 +65,8 @@ function arenaFixture(responses: SubmitResponse[]) {
     setIsFinalizing(value: boolean) { state.finalizing = value; },
     setFinalizationError(value: string | null) { state.error = value; },
     setPhase(value: string) { state.phase = value; },
-    setExpEarned(value: number) { state.expEarned = value; }, setStudentRank() {},
-    setScore() {},
+    setStudentRank(value: number) { state.rank = value; },
+    setScore(value: number) { state.score = value; },
     setArenaCompleted() {},
     updateRankingsFromParticipants() { state.rankings++; },
   });
@@ -95,7 +95,7 @@ test("a non-JSON submit failure still shows a useful retry error", async () => {
 });
 
 test("network failure keeps local answers and a retry succeeds once", async () => {
-  const fixture = arenaFixture(["network-error", { ok: true, body: { success: true, arenaRevision: 11, result: { expEarned: 160 } } }]);
+  const fixture = arenaFixture(["network-error", { ok: true, body: { success: true, arenaRevision: 11, rank: 2, result: { score: 340, expEarned: 160 } } }]);
   await fixture.finalize();
   assert.equal(fixture.state.phase, "finalizing");
   assert.equal(fixture.state.error, "connection lost");
@@ -103,18 +103,20 @@ test("network failure keeps local answers and a retry succeeds once", async () =
   assert.equal(fixture.state.phase, "podium");
   assert.equal(fixture.state.error, null);
   assert.equal(fixture.state.submits, 2);
-  assert.equal(fixture.state.expEarned, 160);
+  assert.equal(fixture.state.score, 340);
+  assert.equal(fixture.state.rank, 2);
   await fixture.finalize(true);
   assert.equal(fixture.state.submits, 2);
 });
 
 test("normal successful submit shows podium after confirmation", async () => {
-  const fixture = arenaFixture([{ ok: true, body: { success: true, arenaRevision: 11, result: { expEarned: 200 } } }]);
+  const fixture = arenaFixture([{ ok: true, body: { success: true, arenaRevision: 11, rank: 1, result: { score: 920, expEarned: 200 } } }]);
   await fixture.finalize();
   assert.equal(fixture.state.phase, "podium");
   assert.equal(fixture.refs.finalizationConfirmedRef.current, true);
   assert.equal(fixture.state.submits, 1);
-  assert.equal(fixture.state.expEarned, 200);
+  assert.equal(fixture.state.score, 920);
+  assert.equal(fixture.state.rank, 1);
 });
 
 test("simultaneous finalization calls issue one submit", async () => {

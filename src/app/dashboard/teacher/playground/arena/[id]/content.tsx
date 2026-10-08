@@ -961,7 +961,7 @@ export default function ArenaHostContent({
                   POWER ARENA IN PROGRESS
                 </span>
                 <div className="text-xs text-slate-400">
-                  Total Questions: {quiz.questions.length} • Automatic Student Progression
+                  Total Questions: {quiz.questions.length} • Automatic Question Advancement
                 </div>
               </div>
 

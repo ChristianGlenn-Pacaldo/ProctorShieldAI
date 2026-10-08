@@ -199,7 +199,6 @@ export function ArenaContent({
   );
   const [isSpectating, setIsSpectating] = useState(false);
   const [battleLogs, setBattleLogs] = useState<string[]>([]);
-  const [expEarned, setExpEarned] = useState(100);
 
   // ── Overall Server-Authoritative Match Timer ──────────────────
   const [matchEndsAt, setMatchEndsAt] = useState<string | null>(null);
@@ -444,11 +443,6 @@ export function ArenaContent({
       if (accepted && typeof submitData.result?.score === "number" && Number.isFinite(submitData.result.score)) {
         setScore(submitData.result.score);
       }
-      if (accepted && typeof submitData.expEarned === "number") {
-        setExpEarned(submitData.expEarned);
-      } else if (accepted && typeof submitData.result?.expEarned === "number") {
-        setExpEarned(submitData.result.expEarned);
-      }
       if (accepted && typeof submitData.rank === "number") {
         setStudentRank(submitData.rank);
       }
@@ -570,7 +564,7 @@ export function ArenaContent({
         && data.participants?.some((p) => p.studentId === studentId)) {
         clearGameplayTimers();
         updateRankingsFromParticipants(data.participants);
-        setScore(data.result.score); setStudentRank(data.result.rank); setExpEarned(data.result.expEarned);
+        setScore(data.result.score); setStudentRank(data.result.rank);
         setHasGuardianShield(Boolean(data.participants.find((p) => p.studentId === studentId)?.hasShield));
         setUsedPowers({ ...(data.usedPowers ?? data.arena?.usedPowers?.[studentId] ?? {}) });
         arenaCompletedRef.current = true; terminalResultReconciledRef.current = true;
@@ -1264,7 +1258,6 @@ export function ArenaContent({
           currentStudentId={studentId}
           studentScore={score}
           studentRank={studentRank}
-          expEarned={expEarned}
           highestStreak={highestStreak}
           onExit={() => router.push("/dashboard/student")}
         />

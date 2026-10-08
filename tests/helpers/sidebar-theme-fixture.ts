@@ -75,6 +75,7 @@ export function sidebarFixture(role: SidebarRole, options: {
       fetch: async (url: string, init?: RequestInit) => { requests.push({ url, method: init?.method ?? "GET" });
         return { ok: true, status: 200, json: async () => ({ success: true, unreadCount: 0, notifications: [] }) }; },
       require(name: string) {
+        if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "next/link") return { __esModule: true, default: "a" };

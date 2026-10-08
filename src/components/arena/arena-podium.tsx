@@ -22,7 +22,6 @@ interface ArenaPodiumProps {
   currentStudentId: string;
   studentScore: number;
   studentRank: number;
-  expEarned?: number;
   highestStreak: number;
   onExit?: () => void;
 }
@@ -35,7 +34,6 @@ export function ArenaPodium({
   currentStudentId,
   studentScore,
   studentRank,
-  expEarned = 100,
   highestStreak,
   onExit,
 }: ArenaPodiumProps) {
@@ -173,7 +171,7 @@ export function ArenaPodium({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="grid grid-cols-2 gap-3 text-center">
           <div className="bg-[#182035]/60 border border-slate-800 rounded-2xl p-3">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Points</div>
             <div className="text-lg sm:text-xl font-black text-white font-mono">{studentScore}</div>
@@ -184,13 +182,6 @@ export function ArenaPodium({
               <span>Max Streak</span>
             </div>
             <div className="text-lg sm:text-xl font-black text-orange-400 font-mono">{highestStreak}X</div>
-          </div>
-          <div className="bg-[#182035]/60 border border-slate-800 rounded-2xl p-3">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>EXP Earned</span>
-            </div>
-            <div className="text-lg sm:text-xl font-black text-indigo-300 font-mono">+{expEarned}</div>
           </div>
         </div>
       </div>
