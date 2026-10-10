@@ -380,7 +380,7 @@ export default function AdminDashboardContent() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="ps-admin-overview ps-admin-glass-canvas space-y-6 animate-fade-in">
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
           <span>{loadError} Previously loaded data is stale.</span>
@@ -399,7 +399,7 @@ export default function AdminDashboardContent() {
         {statCards.map((s) => (
           <div
             key={s.label}
-            className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
+            className="ps-admin-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
@@ -425,7 +425,7 @@ export default function AdminDashboardContent() {
       {/* Platform Analytics + Recent Activity */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Platform Analytics */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="ps-admin-demographics ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📈 Platform Demographics</h3>
           </div>
@@ -440,7 +440,7 @@ export default function AdminDashboardContent() {
               <div className="text-xs text-[var(--muted)] py-4 text-center">No online sessions active</div>
             ) : (
               platformBars.map((b) => (
-                <div key={b.label} className="flex items-center gap-3 animate-fade-in">
+                <div key={b.label} className="ps-admin-demographic-row flex items-center gap-3 animate-fade-in">
                   <span className="text-xs text-[var(--muted)] w-24 shrink-0">{b.label}</span>
                   <div className="flex-1 h-2.5 bg-[var(--surface2)] rounded-full overflow-hidden">
                     <div className={`h-full ${b.color} rounded-full transition-all duration-500`} style={{ width: `${b.pct}%` }} />
@@ -458,7 +458,7 @@ export default function AdminDashboardContent() {
                 </div>
               ) : (
                 activityBars.map((b) => (
-                  <div key={b.label} className="flex items-center gap-3 animate-fade-in">
+                  <div key={b.label} className="ps-admin-demographic-row flex items-center gap-3 animate-fade-in">
                     <span className="text-xs text-[var(--muted)] w-28 shrink-0">{b.label}</span>
                     <div className="flex-1 h-2.5 bg-[var(--surface2)] rounded-full overflow-hidden">
                       <div className={`h-full ${b.color} rounded-full transition-all duration-500`} style={{ width: `${b.pct}%` }} />
@@ -472,12 +472,12 @@ export default function AdminDashboardContent() {
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🕐 Recent Activity Feed</h3>
             <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600/15 text-blue-600 dark:text-blue-400 rounded-full">{loadError ? "STALE" : "REAL-TIME"}</span>
           </div>
-          <div className="p-5 space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="ps-admin-glass-dense p-5 space-y-2 max-h-[300px] overflow-y-auto">
             {activities.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-[var(--muted)] text-center h-[160px]">
                 <span className="text-xl mb-1">📋</span>
@@ -502,7 +502,7 @@ export default function AdminDashboardContent() {
       </div>
 
       {/* All Platform Users */}
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">👥 Platform Users</h3>
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-600/15 text-blue-600 dark:text-blue-400">
@@ -510,7 +510,7 @@ export default function AdminDashboardContent() {
           </span>
         </div>
         {statusError && <p role="alert" className="px-5 py-3 text-xs font-semibold text-rose-500">{statusError}</p>}
-        <div className="overflow-x-auto">
+        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin platform users" tabIndex={0}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
@@ -577,14 +577,15 @@ export default function AdminDashboardContent() {
       {/* Edit User Modal */}
       {editingUser && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-4 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto sm:p-6">
-            <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-plan-heading" className="ps-admin-glass-card ps-admin-glass-dialog app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-4 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto sm:p-6">
+            <h2 id="admin-plan-heading" className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
             <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
             
             <form onSubmit={handleSavePlan}>
               <div className="mb-4">
-                <label className="text-xs font-semibold text-[var(--muted)] block mb-1.5">Subscription Plan</label>
-                <select 
+                <label htmlFor="admin-subscription-plan" className="text-xs font-semibold text-[var(--muted)] block mb-1.5">Subscription Plan</label>
+                <select id="admin-subscription-plan"
+
                   className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500/50"
                   value={editingUser.plan}
                   onChange={(e) => setEditingUser({ ...editingUser, plan: e.target.value })}

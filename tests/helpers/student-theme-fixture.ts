@@ -31,7 +31,11 @@ export function studentThemeFixture(scene: StudentScene, variant = "default") {
       effectiveMode: row.attemptMode === "arena" ? "arena" : "proctored" })),
     hasLoaded: true, loading: false,
   };
-  if (variant === "empty") state.studentQuizzes = [];
+  if (variant === "empty") { state.studentQuizzes = []; state.results = []; }
+  if (scene === "results" && (variant === "loading" || variant === "load-error")) {
+    state.results = []; state.hasLoaded = false; state.loading = variant === "loading";
+    state.loadError = variant === "load-error" ? "Could not load your results." : "";
+  }
   if (variant === "loading") { state.hasLoadedQuizzes = false; state.isFetching = true; }
   if (variant === "join-error") state.joinError = "Could not join this quiz. Please check your access code and try again.";
   if (variant === "error" || variant === "success") state.toast = { type: variant,

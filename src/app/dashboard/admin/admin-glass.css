@@ -1,0 +1,87 @@
+/* Stage 2 Admin rollout: approved Student material values, independently scoped. Every material is explicitly opted in; cached
+   App Router CSS cannot change another role or assessment/media surface. */
+[data-portal="admin"].ps-admin-glass-shell {
+  --ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 68%,transparent);
+  --ps-admin-glass-dense-fill:color-mix(in srgb,var(--ps-surface) 95%,transparent);
+  --ps-admin-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 76%,transparent);
+  --ps-admin-glass-edge:color-mix(in srgb,var(--ps-border-control) 40%,transparent);
+  --ps-admin-glass-reflection:color-mix(in srgb,var(--ps-surface) 65%,transparent);
+  --ps-admin-glass-mint:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-admin-glass-blur:10px;
+  --ps-admin-glass-card-glow:color-mix(in srgb,var(--ps-accent-soft) 70%,transparent);
+  --ps-admin-glass-card-sheen:color-mix(in srgb,var(--ps-surface) 75%,transparent);
+  --ps-admin-glass-card-edge:color-mix(in srgb,var(--ps-border-control) 48%,transparent);
+  --ps-admin-glass-ambient-near:color-mix(in srgb,var(--ps-accent) 14%,transparent);
+  --ps-admin-glass-ambient-far:color-mix(in srgb,var(--ps-primary) 12%,transparent);
+  --ps-admin-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-surface) 85%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 10%,transparent);
+}
+html.dark [data-portal="admin"].ps-admin-glass-shell {
+  --ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 66%,transparent);
+  --ps-admin-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 72%,transparent);
+  --ps-admin-glass-edge:color-mix(in srgb,var(--ps-primary) 28%,transparent);
+  --ps-admin-glass-reflection:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-admin-glass-mint:color-mix(in srgb,var(--ps-accent) 6%,transparent);
+  --ps-admin-glass-card-glow:color-mix(in srgb,var(--ps-primary) 22%,transparent);
+  --ps-admin-glass-card-sheen:color-mix(in srgb,var(--ps-primary) 14%,transparent);
+  --ps-admin-glass-card-edge:color-mix(in srgb,var(--ps-primary) 36%,transparent);
+  --ps-admin-glass-ambient-near:color-mix(in srgb,var(--ps-primary) 24%,transparent);
+  --ps-admin-glass-ambient-far:color-mix(in srgb,var(--ps-accent) 16%,transparent);
+  --ps-admin-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-primary) 20%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 8%,transparent);
+}
+/* Only explicitly opted-in pages get the new static canvas; other Admin
+   content retains its approved background and receives navigation chrome. */
+[data-portal="admin"].ps-admin-glass-shell:has(.ps-admin-glass-canvas) {
+  background:radial-gradient(ellipse at 4% 4%,color-mix(in srgb,var(--ps-accent) 26%,transparent),transparent 52%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),var(--ps-accent-soft)) !important;
+}
+html.dark [data-portal="admin"].ps-admin-glass-shell:has(.ps-admin-glass-canvas) {
+  background:radial-gradient(ellipse at 6% 6%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 50%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-accent) 9%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),color-mix(in srgb,var(--ps-canvas) 75%,var(--ps-media))) !important;
+}
+/* Static light lives behind the opted-in Admin cards. It neither creates
+   an overlay nor changes sizing, hit targets, or other Admin routes. */
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-canvas {
+  background:radial-gradient(ellipse at 12% 36%,var(--ps-admin-glass-ambient-near),transparent 52%),radial-gradient(ellipse at 88% 75%,var(--ps-admin-glass-ambient-far),transparent 58%);
+}
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-card {
+  background:radial-gradient(ellipse at 0% 0%,var(--ps-admin-glass-card-glow),transparent 68%),linear-gradient(125deg,var(--ps-admin-glass-card-sheen),transparent 48%,var(--ps-admin-glass-mint)),var(--ps-admin-glass-card-fill) !important;
+  border-color:var(--ps-admin-glass-card-edge) !important;
+  box-shadow:var(--ps-admin-glass-material-shadow),inset 0 1px 1px var(--ps-admin-glass-card-sheen) !important;
+  backdrop-filter:blur(var(--ps-admin-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-admin-glass-blur));
+}
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-chrome {
+  background:linear-gradient(130deg,var(--ps-admin-glass-reflection),transparent 45%),var(--ps-admin-glass-chrome-fill) !important;
+  border-color:var(--ps-admin-glass-edge) !important;
+  box-shadow:var(--ps-admin-glass-material-shadow) !important;
+  backdrop-filter:blur(var(--ps-admin-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-admin-glass-blur));
+}
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-dense {
+  background:var(--ps-admin-glass-dense-fill) !important;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+@media(max-width:767px) {
+  [data-portal="admin"].ps-admin-glass-shell {--ps-admin-glass-blur:4px;--ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 82%,transparent);}
+  html.dark [data-portal="admin"].ps-admin-glass-shell {--ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 80%,transparent);}
+}
+@supports not (backdrop-filter:blur(1px)) {
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-card,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-chrome {background:var(--ps-surface) !important;}
+}
+
+
+/* Dialogs retain a denser backing over their existing scrim. Controls keep
+   their existing opaque fills; only the surrounding panel reflects light. */
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-dialog {--ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 92%,transparent);}
+html.dark [data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-dialog {--ps-admin-glass-card-fill:color-mix(in srgb,var(--ps-surface) 90%,transparent);}
+
+/* Small count captions cross the brightest reflection: use the existing
+   stronger semantic text token, without changing font size or spacing. */
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-caption {color:var(--ps-text) !important;}
+
+/* Dense content keeps its readable backing inside the approved rounded
+   frame; these radii change paint only, never the layout or scroll region. */
+[data-portal="admin"].ps-admin-glass-shell .ps-admin-glass-card > .ps-admin-glass-dense:last-child {
+  border-bottom-left-radius:inherit;
+  border-bottom-right-radius:inherit;
+}

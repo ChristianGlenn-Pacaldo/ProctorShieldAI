@@ -2,6 +2,7 @@ import DashboardShell from "@/components/dashboard-shell";
 import { getUserSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import "./teacher-theme.css";
+import "./teacher-glass.css";
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const session = await getUserSession();
@@ -26,7 +27,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
       userInitials={initials || "TR"}
       identityColor="from-violet-600 to-indigo-600"
     >
-      <div className="teacher-content">{children}</div>
+      <div className="teacher-content ps-teacher-page">{children}</div>
     </DashboardShell>
   );
 }

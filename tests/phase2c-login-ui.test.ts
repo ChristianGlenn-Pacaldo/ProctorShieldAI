@@ -1,6 +1,8 @@
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import { fetchAuth } from "../src/lib/auth-request.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { clsx } from "clsx";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
@@ -35,11 +37,22 @@ function ui(path: string, fetcher: Fetcher, clientId = "fixture-client") {
     exports, URL, AbortController, process: { env: { NEXT_PUBLIC_GOOGLE_CLIENT_ID: clientId } },
     window: { location: { origin: "https://app.example.test", assign: (url: string) => destinations.push(url) } },
     fetch: async (url: string, init: RequestInit) => { calls.push({ url, init }); return fetcher(url, init); },
-    require(name: string) {
+    require: function resolveUiDependency(name: string) {
+        if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
       if (name === "react") return { useState: state, useRef: (value: unknown) => state({ current: value })[0],
         useEffect: (effect: () => void | (() => void)) => { if (!mounted) effects.push(effect); } };
       if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Node["props"]) => ({ type, props }),
         jsxs: (type: unknown, props: Node["props"]) => ({ type, props }), Fragment: "fragment" };
+      if (name === "@/components/velaris") {
+        const gradientExports: Record<string, unknown> = {};
+        const gradientCode = ts.transpileModule(fs.readFileSync("src/components/velaris.tsx", "utf8"), {
+          compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+        }).outputText;
+        vm.runInNewContext(gradientCode, { exports: gradientExports, require: resolveUiDependency });
+        return gradientExports;
+      }
+      if (name === "clsx") return { clsx };
+      if (name === "./landing.module.css") return { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) };
       if (name === "next/link") return { __esModule: true, default: "a" };
       if (name === "next/navigation") return { useRouter: () => ({ push: (url: string) => destinations.push(url) }) };
       if (name === "lucide-react") return new Proxy({}, { get: (_target, name) => String(name) });
@@ -242,14 +255,14 @@ test("missing Google configuration keeps a single unavailable action and passwor
 
 test("homepage bottom CTA has one unified sign-in link and preserves surrounding content and responsive styling", () => {
   const page = ui("src/app/page.tsx", async () => { throw new Error("No auth on homepage render"); });
-  const section = page.find(n => n.type === "section" && text(n.props.children).includes("Ready to secure your next examination?"));
+  const section = page.find(n => n.type === "section" && text(n.props.children).includes("A brighter classroom"));
   const links = nodes(section).filter(n => n.type === "a");
   assert.equal(links.length, 1); assert.equal(links[0].props.href, "/login");
-  assert.equal(text(links[0].props.children), "Sign In to ProctorShield");
+  assert.equal(text(links[0].props.children), "Sign in to ProctorShieldAI");
   assert.doesNotMatch(text(section), /Enter Room as Student|Launch Quiz as Teacher|Admin/);
-  assert.match(String(links[0].props.className), /md:text-base/);
-  assert.match(page.content(), /Join thousands of educators/);
-  assert.match(page.content(), /Real-Time AI Face & Gaze Detection/);
+  assert.match(String(links[0].props.className), /primaryButton/);
+  assert.match(page.content(), /better learning/);
+  assert.match(page.content(), /Face and head-position monitoring/);
   assert.equal(page.calls.length, 0); assert.deepEqual(page.destinations, []);
 });
 

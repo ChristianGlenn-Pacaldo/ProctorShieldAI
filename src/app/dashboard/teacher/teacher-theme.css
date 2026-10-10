@@ -138,7 +138,7 @@
 :root:not(.dark) .teacher-content :where(.to-slate-950, .to-slate-900) {
   --tw-gradient-to: var(--surface2);
 }
-:root:not(.dark) .teacher-content :where(.to-indigo-950) { --tw-gradient-to: #e0e7ff; }
+:root:not(.dark) .teacher-content :where(.to-indigo-950) { --tw-gradient-to: var(--ps-accent-soft); }
 :root:not(.dark) .teacher-content :where([class~="bg-indigo-950/20"], [class~="bg-indigo-950/60"]) {
   background-color: color-mix(in srgb, var(--teacher-indigo) 8%, var(--surface));
 }
@@ -158,12 +158,12 @@
 :root:not(.dark) .teacher-content :where([class~="bg-cyan-950/25"]) {
   background-color: color-mix(in srgb, var(--teacher-cyan) 8%, var(--surface));
 }
-:root:not(.dark) .teacher-content :where(.from-indigo-900, [class~="from-purple-900/40"]) { --tw-gradient-from: #eef2ff; }
+:root:not(.dark) .teacher-content :where(.from-indigo-900, [class~="from-purple-900/40"]) { --tw-gradient-from: var(--ps-surface-inset); }
 :root:not(.dark) .teacher-content :where(.via-purple-900, [class~="via-indigo-900/40"],
   [class~="via-indigo-950/90"]) { --tw-gradient-via: var(--surface); }
-:root:not(.dark) .teacher-content :where(.to-purple-950) { --tw-gradient-to: #f3e8ff; }
-:root:not(.dark) .teacher-content :where(.from-amber-800) { --tw-gradient-from: #fef3c7; }
-:root:not(.dark) .teacher-content :where(.to-amber-950) { --tw-gradient-to: #fffbeb; }
+:root:not(.dark) .teacher-content :where(.to-purple-950) { --tw-gradient-to: var(--ps-accent-soft); }
+:root:not(.dark) .teacher-content :where(.from-amber-800) { --tw-gradient-from: var(--ps-gold-soft); }
+:root:not(.dark) .teacher-content :where(.to-amber-950) { --tw-gradient-to: var(--ps-gold-soft); }
 
 /* Semantic accent inks keep badges, links and icons readable in both themes. */
 .teacher-content :where(.text-blue-300, .text-blue-400, .text-blue-500, .text-blue-600) { color: var(--teacher-blue); }
@@ -197,3 +197,361 @@
 .dark .teacher-content :where(.text-slate-500, .text-slate-600, .text-gray-500) { color: var(--muted); }
 .teacher-content input.border-rose-500 { border-color: var(--teacher-rose) !important; }
 .teacher-content input.border-rose-500:focus-visible { outline-color: var(--teacher-rose); }
+
+
+/* Phase D: approved semantic palette, scoped to Teacher layouts and portals.
+   No new provider, body styling, media geometry, or gameplay animation. */
+[data-portal="teacher"], :root .teacher-content {
+ --background:var(--ps-canvas); --foreground:var(--ps-text); --surface:var(--ps-surface); --surface2:var(--ps-surface-inset);
+ --surface-glass:var(--ps-glass); --ink:var(--ps-text); --ink2:var(--ps-text-secondary); --ink3:var(--ps-text-muted);
+ --muted:var(--ps-text-secondary); --muted2:var(--ps-text-muted); --border:var(--ps-border); --border2:var(--ps-border-control);
+ --font-display:var(--ps-font-display); --dashboard-accent:var(--ps-accent); --dashboard-danger:var(--ps-error);
+ --teacher-text:var(--ink); --teacher-body:var(--ink2); --teacher-muted:var(--muted); --teacher-border:var(--border2);
+ --teacher-blue:var(--ps-accent); --teacher-indigo:var(--ps-accent); --teacher-violet:var(--ps-accent); --teacher-purple:var(--ps-accent);
+ --teacher-cyan:var(--ps-accent); --teacher-pink:var(--ps-accent); --teacher-emerald:var(--ps-success);
+ --teacher-amber:var(--ps-warning); --teacher-orange:var(--ps-warning); --teacher-rose:var(--ps-error); --teacher-red:var(--ps-error);
+ color:var(--ps-text); color-scheme:var(--ps-color-scheme); font-family:var(--ps-font-body); min-width:0;
+}
+[data-portal="teacher"] {height:100dvh; background:var(--ps-canvas);}
+[data-portal="teacher"] :is(.dashboard-sidebar,.dashboard-topbar) {background:var(--ps-glass); box-shadow:var(--ps-shadow); backdrop-filter:blur(8px);}
+[data-portal="teacher"] .dashboard-sidebar {background:var(--ps-surface);}
+[data-portal="teacher"] .dashboard-main {min-width:0; scrollbar-color:var(--ps-border-control) var(--ps-canvas);}
+[data-portal="teacher"] .dashboard-nav-active {background:var(--ps-primary); color:var(--ps-on-primary); box-shadow:var(--ps-shadow);}
+[data-portal="teacher"] .dashboard-nav-active::before {background:var(--ps-gold); box-shadow:none;}
+[data-portal="teacher"] .dashboard-identity {background:var(--ps-primary); color:var(--ps-on-primary);}
+[data-portal="teacher"] .dashboard-dropdown {background:var(--ps-surface-elevated); box-shadow:var(--ps-shadow-overlay); backdrop-filter:none;}
+[data-portal="teacher"] .dashboard-dropdown p {font-size:var(--ps-text-caption-size);}
+[data-portal="teacher"] .dashboard-nav-item {min-height:var(--ps-control-min-height);}
+[data-portal="teacher"] .dashboard-icon-button {min-width:var(--ps-control-min-height); min-height:var(--ps-control-min-height);}
+[data-portal="teacher"] .dashboard-icon-button > span {background:var(--ps-primary); color:var(--ps-on-primary);}
+.teacher-content.ps-teacher-page {width:100%; max-width:88rem; margin-inline:auto;}
+.teacher-content :is(h1,h2,h3,h4) {font-family:var(--ps-font-display);}
+.teacher-content :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea) {min-width:0; max-width:100%; font-size:1rem; min-height:var(--ps-control-min-height);}
+.teacher-content :is(button,a,input,select,textarea,[tabindex="0"]):focus-visible,
+[data-portal="teacher"] :is(button,a,input,select,textarea,[tabindex="0"]):focus-visible {outline:var(--ps-focus-width) solid var(--ps-focus); outline-offset:var(--ps-focus-offset);}
+.teacher-content :is(input,select,textarea):focus {border-color:var(--ps-focus) !important;}
+.teacher-content :is(button,a)[class*="rounded"] {min-height:var(--ps-control-min-height);}
+.teacher-content :is(p,h1,h2,h3,h4,th,td) {overflow-wrap:anywhere;}
+.teacher-content :where([class~="bg-[var(--surface)]"])[class*="rounded"] {background:var(--ps-glass); border-color:var(--ps-border); box-shadow:var(--ps-shadow); border-radius:var(--ps-radius-card);}
+.teacher-content .ps-teacher-hub {padding:1.5rem; border:1px solid var(--ps-border); border-radius:var(--ps-radius-card); background:linear-gradient(125deg,var(--surface),var(--ps-accent-soft)); box-shadow:var(--ps-shadow);}
+.teacher-content .ps-teacher-arena-banner {background:linear-gradient(110deg,var(--surface),var(--ps-gold-soft)); border-color:color-mix(in srgb,var(--ps-gold) 30%,var(--border));}
+.teacher-content .ps-teacher-primary {background:var(--ps-primary) !important; color:var(--ps-on-primary);}
+.teacher-content .ps-teacher-primary:hover:not(:disabled) {background:var(--ps-primary-hover) !important;}
+.teacher-content.ps-teacher-editor {height:100dvh; background:var(--ps-canvas); color:var(--ps-text);}
+.teacher-content .ps-teacher-editor-header {gap:.75rem;}
+.teacher-content .ps-teacher-editor-title {flex-wrap:wrap;}
+.teacher-content .ps-teacher-editor-actions {flex-wrap:wrap; gap:.5rem;}
+/* Footage descendants keep their existing teacher-media alias overrides. */
+.teacher-content :where(.text-white) {color:var(--teacher-text);}
+.teacher-content :where(.text-slate-300,.text-gray-300) {color:var(--teacher-body);}
+.teacher-content :where(.text-slate-400,.text-slate-500,.text-slate-600,.text-gray-400,.text-gray-500) {color:var(--teacher-muted);}
+.teacher-content :where(.text-slate-950) {color:var(--teacher-text);}
+.teacher-content :where([class~="bg-clip-text"][class~="text-transparent"]) {background-image:none; color:var(--teacher-amber);}
+.teacher-content :where([class~="bg-[#111]"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-[#0a0a0a]"],[class~="bg-[#222]"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:text-white"]):hover {color:var(--teacher-text);}
+.teacher-content :where([class~="bg-white/[0.04]"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="border-white/10"],[class~="border-white/[0.06]"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="bg-amber-400"]) {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-amber-400/10"]) {background-color:color-mix(in srgb,var(--teacher-amber) 10%,transparent);}
+.teacher-content :where([class~="bg-amber-400/15"]) {background-color:color-mix(in srgb,var(--teacher-amber) 15%,transparent);}
+.teacher-content :where([class~="bg-amber-400/20"]) {background-color:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="bg-amber-500"]) {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-amber-500/10"]) {background-color:color-mix(in srgb,var(--teacher-amber) 10%,transparent);}
+.teacher-content :where([class~="bg-amber-500/15"]) {background-color:color-mix(in srgb,var(--teacher-amber) 15%,transparent);}
+.teacher-content :where([class~="bg-amber-500/20"]) {background-color:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="bg-amber-600"]) {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-amber-600/10"]) {background-color:color-mix(in srgb,var(--teacher-amber) 10%,transparent);}
+.teacher-content :where([class~="bg-amber-700"]) {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-amber-700/10"]) {background-color:color-mix(in srgb,var(--teacher-amber) 10%,transparent);}
+.teacher-content :where([class~="bg-amber-950/25"]) {background-color:color-mix(in srgb,var(--teacher-amber) 25%,transparent);}
+.teacher-content :where([class~="bg-blue-500/10"]) {background-color:color-mix(in srgb,var(--teacher-blue) 10%,transparent);}
+.teacher-content :where([class~="bg-blue-500/15"]) {background-color:color-mix(in srgb,var(--teacher-blue) 15%,transparent);}
+.teacher-content :where([class~="bg-blue-500/20"]) {background-color:color-mix(in srgb,var(--teacher-blue) 20%,transparent);}
+.teacher-content :where([class~="bg-blue-600"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-blue-600/10"]) {background-color:color-mix(in srgb,var(--teacher-blue) 10%,transparent);}
+.teacher-content :where([class~="bg-blue-950/20"]) {background-color:color-mix(in srgb,var(--teacher-blue) 20%,transparent);}
+.teacher-content :where([class~="bg-blue-950/25"]) {background-color:color-mix(in srgb,var(--teacher-blue) 25%,transparent);}
+.teacher-content :where([class~="bg-cyan-500"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-cyan-500/20"]) {background-color:color-mix(in srgb,var(--teacher-cyan) 20%,transparent);}
+.teacher-content :where([class~="bg-cyan-600"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-cyan-950/25"]) {background-color:color-mix(in srgb,var(--teacher-cyan) 25%,transparent);}
+.teacher-content :where([class~="bg-emerald-400"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-emerald-500"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-emerald-500/10"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 10%,transparent);}
+.teacher-content :where([class~="bg-emerald-500/15"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 15%,transparent);}
+.teacher-content :where([class~="bg-emerald-500/20"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 20%,transparent);}
+.teacher-content :where([class~="bg-emerald-600"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-emerald-600/10"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 10%,transparent);}
+.teacher-content :where([class~="bg-emerald-950/25"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 25%,transparent);}
+.teacher-content :where([class~="bg-emerald-950/30"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 30%,transparent);}
+.teacher-content :where([class~="bg-emerald-950/40"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 40%,transparent);}
+.teacher-content :where([class~="bg-emerald-950/50"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 50%,transparent);}
+.teacher-content :where([class~="bg-emerald-950/90"]) {background-color:color-mix(in srgb,var(--teacher-emerald) 90%,transparent);}
+.teacher-content :where([class~="bg-indigo-500"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-indigo-500/10"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 10%,transparent);}
+.teacher-content :where([class~="bg-indigo-500/15"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 15%,transparent);}
+.teacher-content :where([class~="bg-indigo-500/20"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 20%,transparent);}
+.teacher-content :where([class~="bg-indigo-500/5"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 5%,transparent);}
+.teacher-content :where([class~="bg-indigo-600"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-indigo-600/10"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 10%,transparent);}
+.teacher-content :where([class~="bg-indigo-950/20"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 20%,transparent);}
+.teacher-content :where([class~="bg-indigo-950/60"]) {background-color:color-mix(in srgb,var(--teacher-indigo) 60%,transparent);}
+.teacher-content :where([class~="bg-orange-500"]) {background-color:var(--teacher-orange); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-pink-500/10"]) {background-color:color-mix(in srgb,var(--teacher-pink) 10%,transparent);}
+.teacher-content :where([class~="bg-pink-500/20"]) {background-color:color-mix(in srgb,var(--teacher-pink) 20%,transparent);}
+.teacher-content :where([class~="bg-purple-400/20"]) {background-color:color-mix(in srgb,var(--teacher-purple) 20%,transparent);}
+.teacher-content :where([class~="bg-purple-500/15"]) {background-color:color-mix(in srgb,var(--teacher-purple) 15%,transparent);}
+.teacher-content :where([class~="bg-purple-600"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-red-500"]) {background-color:var(--teacher-red); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-red-500/10"]) {background-color:color-mix(in srgb,var(--teacher-red) 10%,transparent);}
+.teacher-content :where([class~="bg-red-500/15"]) {background-color:color-mix(in srgb,var(--teacher-red) 15%,transparent);}
+.teacher-content :where([class~="bg-red-600"]) {background-color:var(--teacher-red); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-rose-500"]) {background-color:var(--teacher-rose); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-rose-500/10"]) {background-color:color-mix(in srgb,var(--teacher-rose) 10%,transparent);}
+.teacher-content :where([class~="bg-rose-500/15"]) {background-color:color-mix(in srgb,var(--teacher-rose) 15%,transparent);}
+.teacher-content :where([class~="bg-rose-500/20"]) {background-color:color-mix(in srgb,var(--teacher-rose) 20%,transparent);}
+.teacher-content :where([class~="bg-rose-600"]) {background-color:var(--teacher-rose); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-rose-600/10"]) {background-color:color-mix(in srgb,var(--teacher-rose) 10%,transparent);}
+.teacher-content :where([class~="bg-rose-950/80"]) {background-color:color-mix(in srgb,var(--teacher-rose) 80%,transparent);}
+.teacher-content :where([class~="bg-rose-950/90"]) {background-color:color-mix(in srgb,var(--teacher-rose) 90%,transparent);}
+.teacher-content :where([class~="bg-slate-300"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-500/10"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-500/15"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-600"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-700"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-800"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-800/30"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-800/60"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-800/80"]) {background-color:var(--surface2);}
+.teacher-content :where([class~="bg-slate-900"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-900/40"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-900/60"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-900/80"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-900/90"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-900/95"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-950"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-950/40"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-950/60"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-950/80"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-slate-950/85"]) {background-color:var(--surface);}
+.teacher-content :where([class~="bg-violet-500"]) {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="bg-violet-500/10"]) {background-color:color-mix(in srgb,var(--teacher-violet) 10%,transparent);}
+.teacher-content :where([class~="bg-yellow-500"]) {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="border-amber-300"]) {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="border-amber-400"]) {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="border-amber-400/30"]) {border-color:color-mix(in srgb,var(--teacher-amber) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-400/40"]) {border-color:color-mix(in srgb,var(--teacher-amber) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-400/50"]) {border-color:color-mix(in srgb,var(--teacher-amber) 50%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-500/20"]) {border-color:color-mix(in srgb,var(--teacher-amber) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-500/25"]) {border-color:color-mix(in srgb,var(--teacher-amber) 25%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-500/30"]) {border-color:color-mix(in srgb,var(--teacher-amber) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-500/40"]) {border-color:color-mix(in srgb,var(--teacher-amber) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-500/50"]) {border-color:color-mix(in srgb,var(--teacher-amber) 50%,var(--teacher-border));}
+.teacher-content :where([class~="border-amber-700"]) {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="border-blue-400"]) {border-color:var(--teacher-blue);}
+.teacher-content :where([class~="border-blue-500/20"]) {border-color:color-mix(in srgb,var(--teacher-blue) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-blue-500/30"]) {border-color:color-mix(in srgb,var(--teacher-blue) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-blue-500/40"]) {border-color:color-mix(in srgb,var(--teacher-blue) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-blue-600"]) {border-color:var(--teacher-blue);}
+.teacher-content :where([class~="border-cyan-400"]) {border-color:var(--teacher-cyan);}
+.teacher-content :where([class~="border-cyan-400/30"]) {border-color:color-mix(in srgb,var(--teacher-cyan) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-cyan-500/40"]) {border-color:color-mix(in srgb,var(--teacher-cyan) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-emerald-400"]) {border-color:var(--teacher-emerald);}
+.teacher-content :where([class~="border-emerald-500"]) {border-color:var(--teacher-emerald);}
+.teacher-content :where([class~="border-emerald-500/20"]) {border-color:color-mix(in srgb,var(--teacher-emerald) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-emerald-500/30"]) {border-color:color-mix(in srgb,var(--teacher-emerald) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-emerald-500/40"]) {border-color:color-mix(in srgb,var(--teacher-emerald) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-emerald-500/50"]) {border-color:color-mix(in srgb,var(--teacher-emerald) 50%,var(--teacher-border));}
+.teacher-content :where([class~="border-emerald-500/60"]) {border-color:color-mix(in srgb,var(--teacher-emerald) 60%,var(--teacher-border));}
+.teacher-content :where([class~="border-gray-700"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-gray-800"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-indigo-500"]) {border-color:var(--teacher-indigo);}
+.teacher-content :where([class~="border-indigo-500/15"]) {border-color:color-mix(in srgb,var(--teacher-indigo) 15%,var(--teacher-border));}
+.teacher-content :where([class~="border-indigo-500/20"]) {border-color:color-mix(in srgb,var(--teacher-indigo) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-indigo-500/30"]) {border-color:color-mix(in srgb,var(--teacher-indigo) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-indigo-500/40"]) {border-color:color-mix(in srgb,var(--teacher-indigo) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-indigo-500/50"]) {border-color:color-mix(in srgb,var(--teacher-indigo) 50%,var(--teacher-border));}
+.teacher-content :where([class~="border-purple-400"]) {border-color:var(--teacher-purple);}
+.teacher-content :where([class~="border-purple-400/40"]) {border-color:color-mix(in srgb,var(--teacher-purple) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-purple-500"]) {border-color:var(--teacher-purple);}
+.teacher-content :where([class~="border-purple-500/30"]) {border-color:color-mix(in srgb,var(--teacher-purple) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-purple-500/40"]) {border-color:color-mix(in srgb,var(--teacher-purple) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-red-400/40"]) {border-color:color-mix(in srgb,var(--teacher-red) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-red-500"]) {border-color:var(--teacher-red);}
+.teacher-content :where([class~="border-red-500/20"]) {border-color:color-mix(in srgb,var(--teacher-red) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-red-500/30"]) {border-color:color-mix(in srgb,var(--teacher-red) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-red-500/40"]) {border-color:color-mix(in srgb,var(--teacher-red) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-rose-500"]) {border-color:var(--teacher-rose);}
+.teacher-content :where([class~="border-rose-500/20"]) {border-color:color-mix(in srgb,var(--teacher-rose) 20%,var(--teacher-border));}
+.teacher-content :where([class~="border-rose-500/30"]) {border-color:color-mix(in srgb,var(--teacher-rose) 30%,var(--teacher-border));}
+.teacher-content :where([class~="border-rose-500/40"]) {border-color:color-mix(in srgb,var(--teacher-rose) 40%,var(--teacher-border));}
+.teacher-content :where([class~="border-rose-500/50"]) {border-color:color-mix(in srgb,var(--teacher-rose) 50%,var(--teacher-border));}
+.teacher-content :where([class~="border-slate-500"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-slate-600"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-slate-700"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-slate-800"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-slate-800/80"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-slate-950"]) {border-color:var(--teacher-border);}
+.teacher-content :where([class~="border-violet-500/30"]) {border-color:color-mix(in srgb,var(--teacher-violet) 30%,var(--teacher-border));}
+.teacher-content :where([class~="focus:bg-slate-900"]):focus {background-color:var(--surface);}
+.teacher-content :where([class~="focus:border-amber-400/60"]):focus {border-color:color-mix(in srgb,var(--teacher-amber) 60%,var(--teacher-border));}
+.teacher-content :where([class~="focus:border-amber-500"]):focus {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="focus:border-blue-500"]):focus {border-color:var(--teacher-blue);}
+.teacher-content :where([class~="focus:border-emerald-500"]):focus {border-color:var(--teacher-emerald);}
+.teacher-content :where([class~="focus:border-indigo-500"]):focus {border-color:var(--teacher-indigo);}
+.teacher-content :where([class~="focus:border-indigo-500/50"]):focus {border-color:color-mix(in srgb,var(--teacher-indigo) 50%,var(--teacher-border));}
+.teacher-content :where([class~="focus:border-indigo-500/70"]):focus {border-color:color-mix(in srgb,var(--teacher-indigo) 70%,var(--teacher-border));}
+.teacher-content :where([class~="focus:border-purple-500"]):focus {border-color:var(--teacher-purple);}
+.teacher-content :where([class~="focus:border-rose-500"]):focus {border-color:var(--teacher-rose);}
+.teacher-content :where([class~="from-amber-300"]) {--tw-gradient-from:var(--teacher-amber);}
+.teacher-content :where([class~="from-amber-400"]) {--tw-gradient-from:var(--teacher-amber);}
+.teacher-content :where([class~="from-amber-400"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-amber-400/20"]) {--tw-gradient-from:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="from-amber-500"]) {--tw-gradient-from:var(--teacher-amber);}
+.teacher-content :where([class~="from-amber-500"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-amber-500/10"]) {--tw-gradient-from:color-mix(in srgb,var(--teacher-amber) 10%,transparent);}
+.teacher-content :where([class~="from-amber-800"]) {--tw-gradient-from:var(--surface2);}
+.teacher-content :where([class~="from-blue-500/20"]) {--tw-gradient-from:color-mix(in srgb,var(--teacher-blue) 20%,transparent);}
+.teacher-content :where([class~="from-emerald-500"]) {--tw-gradient-from:var(--teacher-emerald);}
+.teacher-content :where([class~="from-emerald-500"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-indigo-600"]) {--tw-gradient-from:var(--ps-primary);}
+.teacher-content :where([class~="from-indigo-600"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-indigo-600/10"]) {--tw-gradient-from:color-mix(in srgb,var(--ps-primary) 10%,transparent);}
+.teacher-content :where([class~="from-indigo-900"]) {--tw-gradient-from:var(--surface2);}
+.teacher-content :where([class~="from-pink-500"]) {--tw-gradient-from:var(--teacher-pink);}
+.teacher-content :where([class~="from-pink-500"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-purple-500/10"]) {--tw-gradient-from:color-mix(in srgb,var(--teacher-purple) 10%,transparent);}
+.teacher-content :where([class~="from-purple-600"]) {--tw-gradient-from:var(--ps-primary);}
+.teacher-content :where([class~="from-purple-600"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-purple-900/40"]) {--tw-gradient-from:color-mix(in srgb,var(--surface2) 40%,transparent);}
+.teacher-content :where([class~="from-rose-500"]) {--tw-gradient-from:var(--teacher-rose);}
+.teacher-content :where([class~="from-rose-500"]) {--teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="from-rose-500/20"]) {--tw-gradient-from:color-mix(in srgb,var(--teacher-rose) 20%,transparent);}
+.teacher-content :where([class~="from-slate-700"]) {--tw-gradient-from:var(--surface2);}
+.teacher-content :where([class~="from-slate-900"]) {--tw-gradient-from:var(--surface2);}
+.teacher-content :where([class~="from-slate-950"]) {--tw-gradient-from:var(--surface2);}
+.teacher-content :where([class~="hover:bg-amber-400"]):hover {background-color:var(--teacher-amber); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-amber-400/20"]):hover {background-color:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-amber-500/20"]):hover {background-color:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-amber-500/25"]):hover {background-color:color-mix(in srgb,var(--teacher-amber) 25%,transparent);}
+.teacher-content :where([class~="hover:bg-blue-500"]):hover {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-blue-700"]):hover {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-emerald-500"]):hover {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-emerald-500/10"]):hover {background-color:color-mix(in srgb,var(--teacher-emerald) 10%,transparent);}
+.teacher-content :where([class~="hover:bg-emerald-500/20"]):hover {background-color:color-mix(in srgb,var(--teacher-emerald) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-indigo-500"]):hover {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-indigo-500/20"]):hover {background-color:color-mix(in srgb,var(--teacher-indigo) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-indigo-500/5"]):hover {background-color:color-mix(in srgb,var(--teacher-indigo) 5%,transparent);}
+.teacher-content :where([class~="hover:bg-purple-500"]):hover {background-color:var(--ps-primary); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-purple-500/25"]):hover {background-color:color-mix(in srgb,var(--teacher-purple) 25%,transparent);}
+.teacher-content :where([class~="hover:bg-red-500"]):hover {background-color:var(--teacher-red); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-red-500/10"]):hover {background-color:color-mix(in srgb,var(--teacher-red) 10%,transparent);}
+.teacher-content :where([class~="hover:bg-red-500/20"]):hover {background-color:color-mix(in srgb,var(--teacher-red) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-rose-500"]):hover {background-color:var(--teacher-rose); --teacher-text:var(--ps-on-primary); --teacher-body:var(--ps-on-primary); --teacher-muted:var(--ps-on-primary); color:var(--teacher-text);}
+.teacher-content :where([class~="hover:bg-rose-500/10"]):hover {background-color:color-mix(in srgb,var(--teacher-rose) 10%,transparent);}
+.teacher-content :where([class~="hover:bg-rose-500/20"]):hover {background-color:color-mix(in srgb,var(--teacher-rose) 20%,transparent);}
+.teacher-content :where([class~="hover:bg-slate-500"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-600"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-700"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-800"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-800/50"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-800/80"]):hover {background-color:var(--surface2);}
+.teacher-content :where([class~="hover:bg-slate-900"]):hover {background-color:var(--surface);}
+.teacher-content :where([class~="hover:bg-slate-900/80"]):hover {background-color:var(--surface);}
+.teacher-content :where([class~="hover:bg-violet-500/10"]):hover {background-color:color-mix(in srgb,var(--teacher-violet) 10%,transparent);}
+.teacher-content :where([class~="hover:border-amber-400"]):hover {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="hover:border-amber-400/40"]):hover {border-color:color-mix(in srgb,var(--teacher-amber) 40%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-amber-500"]):hover {border-color:var(--teacher-amber);}
+.teacher-content :where([class~="hover:border-amber-500/50"]):hover {border-color:color-mix(in srgb,var(--teacher-amber) 50%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-blue-500/40"]):hover {border-color:color-mix(in srgb,var(--teacher-blue) 40%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-emerald-400"]):hover {border-color:var(--teacher-emerald);}
+.teacher-content :where([class~="hover:border-emerald-500"]):hover {border-color:var(--teacher-emerald);}
+.teacher-content :where([class~="hover:border-emerald-500/80"]):hover {border-color:color-mix(in srgb,var(--teacher-emerald) 80%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-indigo-500/50"]):hover {border-color:color-mix(in srgb,var(--teacher-indigo) 50%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-pink-500/50"]):hover {border-color:color-mix(in srgb,var(--teacher-pink) 50%,var(--teacher-border));}
+.teacher-content :where([class~="hover:border-purple-400"]):hover {border-color:var(--teacher-purple);}
+.teacher-content :where([class~="hover:border-purple-500"]):hover {border-color:var(--teacher-purple);}
+.teacher-content :where([class~="to-amber-400"]) {--tw-gradient-to:var(--teacher-amber);}
+.teacher-content :where([class~="to-amber-500"]) {--tw-gradient-to:var(--teacher-amber);}
+.teacher-content :where([class~="to-amber-500/20"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="to-amber-500/5"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-amber) 5%,transparent);}
+.teacher-content :where([class~="to-amber-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-amber-950"]) {--tw-gradient-to:var(--surface2);}
+.teacher-content :where([class~="to-blue-500/10"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-blue) 10%,transparent);}
+.teacher-content :where([class~="to-cyan-500/20"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-cyan) 20%,transparent);}
+.teacher-content :where([class~="to-indigo-500/10"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-indigo) 10%,transparent);}
+.teacher-content :where([class~="to-indigo-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-indigo-950"]) {--tw-gradient-to:var(--surface2);}
+.teacher-content :where([class~="to-orange-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-pink-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-purple-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-purple-950"]) {--tw-gradient-to:var(--surface2);}
+.teacher-content :where([class~="to-rose-500"]) {--tw-gradient-to:var(--teacher-rose);}
+.teacher-content :where([class~="to-slate-900"]) {--tw-gradient-to:var(--surface2);}
+.teacher-content :where([class~="to-slate-950"]) {--tw-gradient-to:var(--surface2);}
+.teacher-content :where([class~="to-violet-600"]) {--tw-gradient-to:var(--ps-primary);}
+.teacher-content :where([class~="to-yellow-400"]) {--tw-gradient-to:var(--teacher-amber);}
+.teacher-content :where([class~="to-yellow-500"]) {--tw-gradient-to:var(--teacher-amber);}
+.teacher-content :where([class~="to-yellow-500/20"]) {--tw-gradient-to:color-mix(in srgb,var(--teacher-amber) 20%,transparent);}
+.teacher-content :where([class~="via-amber-500"]) {--tw-gradient-via:var(--teacher-amber);}
+.teacher-content :where([class~="via-emerald-400"]) {--tw-gradient-via:var(--teacher-emerald);}
+.teacher-content :where([class~="via-indigo-500/10"]) {--tw-gradient-via:color-mix(in srgb,var(--teacher-indigo) 10%,transparent);}
+.teacher-content :where([class~="via-indigo-900/40"]) {--tw-gradient-via:color-mix(in srgb,var(--surface2) 40%,transparent);}
+.teacher-content :where([class~="via-indigo-950/90"]) {--tw-gradient-via:color-mix(in srgb,var(--surface2) 90%,transparent);}
+.teacher-content :where([class~="via-pink-500"]) {--tw-gradient-via:var(--teacher-pink);}
+.teacher-content :where([class~="via-purple-900"]) {--tw-gradient-via:var(--surface2);}
+.teacher-content :where([class~="via-slate-900"]) {--tw-gradient-via:var(--surface2);}
+.teacher-content :where([class~="via-slate-950"]) {--tw-gradient-via:var(--surface2);}
+.teacher-content :where([class~="via-violet-600"]) {--tw-gradient-via:var(--ps-primary);}
+.teacher-content :where([class~="via-violet-600/10"]) {--tw-gradient-via:color-mix(in srgb,var(--ps-primary) 10%,transparent);}
+.teacher-content :where([class~="via-violet-600/5"]) {--tw-gradient-via:color-mix(in srgb,var(--ps-primary) 5%,transparent);}
+.teacher-content :where([class~="via-yellow-200"]) {--tw-gradient-via:var(--teacher-amber);}
+.teacher-content :where([class~="via-yellow-400"]) {--tw-gradient-via:var(--teacher-amber);}
+.teacher-content :where([class~="via-yellow-500"]) {--tw-gradient-via:var(--teacher-amber);}
+
+.teacher-content :where([class~="placeholder:text-slate-500"],[class~="placeholder:text-slate-600"])::placeholder {color:var(--teacher-muted);}
+.teacher-content :where([class~="divide-slate-800/80"]) > :not(:last-child) {border-color:var(--teacher-border);}
+.teacher-content .ps-teacher-settings input.border-rose-500 {border-color:var(--ps-error) !important;}
+@media (max-width:1023px) {
+ .teacher-content .ps-teacher-editor-header {height:auto; min-height:4rem; flex-wrap:wrap; padding-block:.75rem; align-items:flex-start;}
+ .teacher-content .ps-teacher-editor-heading {width:100%; flex:1 1 100%; align-items:flex-start;}
+ .teacher-content .ps-teacher-editor-title {gap:.5rem;}
+ .teacher-content .ps-teacher-editor-title > .inline-flex {flex-wrap:wrap; max-width:100%;}
+ .teacher-content .ps-teacher-editor-actions {width:100%; justify-content:flex-end;}
+ .teacher-content .ps-teacher-hub {padding:1rem;}
+}
+@media (max-width:639px) {
+ [data-portal="teacher"] .dashboard-main {padding:1rem;}
+ [data-portal="teacher"] .dashboard-topbar, [data-portal="teacher"] .dashboard-topbar > div {gap:.5rem;}
+}
+@media (prefers-reduced-motion:reduce) {
+ .teacher-content :is(button,a,[class*="animate-fade"],[class*="animate-in"]),
+ [data-portal="teacher"] :is(.dashboard-sidebar,.dashboard-nav-item,.dashboard-icon-button) {animation:none !important; transition:none !important; scroll-behavior:auto !important;}
+}
+[data-portal="teacher"] .dashboard-topbar .text-blue-500 { color: var(--ps-accent); }
+[data-portal="teacher"] .dashboard-topbar :is(.bg-blue-500\/5,.bg-blue-500\/10) { background: var(--ps-accent-soft); }
+[data-portal="teacher"] .dashboard-topbar .hover\:bg-blue-500\/10:hover { background: var(--ps-accent-soft); }
+.teacher-content .ps-teacher-question-toolbar > div { flex-wrap: wrap; min-width: 0; }
+/* Override legacy global blue action gradients only inside the Teacher shell. */
+[data-portal="teacher"] .dashboard-main :where(button,a)[class*="bg-blue-600"],
+[data-portal="teacher"] .dashboard-main :where(button,a)[class*="bg-indigo-600"] {
+  background: var(--ps-primary) !important; color: var(--ps-on-primary);
+  --teacher-text: var(--ps-on-primary); --teacher-body: var(--ps-on-primary);
+}
+/* Creation tabs and operational gradients use the same primary treatment. */
+.teacher-content :where(button,a):is([class*="from-indigo-600"],[class*="from-violet-600"],[class*="from-purple-600"],[class*="from-pink-500"]) {
+  background: var(--ps-primary) !important; color: var(--ps-on-primary);
+  --teacher-text: var(--ps-on-primary); --teacher-body: var(--ps-on-primary);
+  box-shadow: var(--ps-shadow);
+}
+.teacher-content :where(button,a):is([class*="shadow-blue-"],[class*="shadow-indigo-"],[class*="shadow-violet-"],[class*="shadow-purple-"],[class*="shadow-pink-"]) { --tw-shadow-color: color-mix(in srgb,var(--ps-accent) 16%,transparent); }
+/* Dark footage keeps visible signal dots; strike badges use a matched pair. */
+.teacher-content .teacher-media :where(.bg-red-600) {
+  background-color: var(--ps-error); color: var(--ps-on-primary);
+  --teacher-text: var(--ps-on-primary); --teacher-body: var(--ps-on-primary);
+}
+.teacher-content .teacher-media :where(.bg-emerald-500) { background-color: var(--teacher-emerald); }
+@media (prefers-reduced-motion: reduce) {
+  .teacher-content .teacher-media :where(.animate-pulse,.animate-ping) { animation: none !important; }
+}

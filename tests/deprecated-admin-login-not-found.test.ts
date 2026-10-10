@@ -1,3 +1,4 @@
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -37,6 +38,7 @@ const fallback = load<{ default: () => ReactElement }>(`${directory}/not-found.t
   "react/jsx-runtime": requireNode("react/jsx-runtime"),
   "next/link": { __esModule: true, default: "a" },
   "next/image": { __esModule: true, default: "img" },
+  "@/components/brand-image": officialBrandModule,
   "lucide-react": requireNode("lucide-react"),
   "./not-found.module.css": { __esModule: true, default: new Proxy({}, { get: (_target, name) => name }) },
 });

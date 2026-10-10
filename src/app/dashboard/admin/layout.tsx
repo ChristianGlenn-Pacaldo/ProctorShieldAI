@@ -1,3 +1,5 @@
+import "./admin.css";
+import "./admin-glass.css";
 import DashboardShell from "@/components/dashboard-shell";
 import { getAdminSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -24,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       userInitials={initials || "AD"}
       identityColor="from-red-500 to-rose-500"
     >
-      {children}
+      <div className="ps-admin-page">{children}</div>
     </DashboardShell>
   );
 }

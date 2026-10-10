@@ -1,5 +1,7 @@
 "use client";
 
+import AssessmentThemeControl from "@/components/assessment-theme-control";
+
 import { ArenaEffects } from "@/components/arena/arena-effects";
 
 import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel, hasTerminalArenaFeedback } from "@/lib/arena-feedback";
@@ -1300,6 +1302,7 @@ export function ArenaContent({
             </div>
           </div>
 
+          <AssessmentThemeControl />
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
@@ -1624,6 +1627,7 @@ export function ArenaContent({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
+          <AssessmentThemeControl />
           <ArenaIdentity studentName={studentName} className="w-9 h-9 text-[10px]" />
           {/* PERSONAL RANK BADGE (#X of N) */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141828] border border-slate-800 shadow-md">

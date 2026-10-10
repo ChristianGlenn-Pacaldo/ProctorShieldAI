@@ -1,0 +1,56 @@
+/* Opt-in authentication material only. Form controls and status messages
+   retain the opaque, accessible surfaces from the approved auth.css. */
+.ps-auth.ps-auth-glass {
+  --ps-auth-glass-fill:color-mix(in srgb,var(--ps-surface) 78%,transparent);
+  --ps-auth-glass-chrome:color-mix(in srgb,var(--ps-surface) 76%,transparent);
+  --ps-auth-glass-edge:color-mix(in srgb,var(--ps-border-control) 48%,transparent);
+  --ps-auth-glass-glow:color-mix(in srgb,var(--ps-accent-soft) 65%,transparent);
+  --ps-auth-glass-reflection:color-mix(in srgb,var(--ps-surface) 45%,transparent);
+  --ps-auth-glass-mint:color-mix(in srgb,var(--ps-primary) 7%,transparent);
+  --ps-auth-glass-blur:10px;
+  --ps-auth-glass-shadow:var(--ps-shadow-overlay),inset 0 1px 0 color-mix(in srgb,var(--ps-surface) 80%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 10%,transparent);
+}
+html.dark .ps-auth.ps-auth-glass {
+  --ps-auth-glass-fill:color-mix(in srgb,var(--ps-surface) 76%,transparent);
+  --ps-auth-glass-chrome:color-mix(in srgb,var(--ps-surface) 72%,transparent);
+  --ps-auth-glass-edge:color-mix(in srgb,var(--ps-primary) 32%,transparent);
+  --ps-auth-glass-glow:color-mix(in srgb,var(--ps-primary) 18%,transparent);
+  --ps-auth-glass-reflection:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-auth-glass-mint:color-mix(in srgb,var(--ps-accent) 5%,transparent);
+  --ps-auth-glass-shadow:var(--ps-shadow-overlay),inset 0 1px 0 color-mix(in srgb,var(--ps-primary) 20%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 8%,transparent);
+}
+.ps-auth.ps-auth-glass .auth-shell {
+  background:radial-gradient(ellipse at 12% 18%,color-mix(in srgb,var(--ps-accent) 24%,transparent),transparent 52%),radial-gradient(ellipse at 88% 70%,color-mix(in srgb,var(--ps-primary) 14%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),var(--ps-accent-soft)) !important;
+}
+html.dark .ps-auth.ps-auth-glass .auth-shell {
+  background:radial-gradient(ellipse at 12% 18%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 52%),radial-gradient(ellipse at 88% 70%,color-mix(in srgb,var(--ps-accent) 9%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),color-mix(in srgb,var(--ps-canvas) 75%,var(--ps-media))) !important;
+}
+/* The last background layer is translucent: no opaque surface behind glass. */
+.ps-auth.ps-auth-glass .auth-panel,
+.ps-auth.ps-auth-glass .ps-auth-card {
+  background:radial-gradient(ellipse at 0% 0%,var(--ps-auth-glass-glow),transparent 68%),linear-gradient(125deg,var(--ps-auth-glass-reflection),transparent 48%,var(--ps-auth-glass-mint)),var(--ps-auth-glass-fill) !important;
+  border-color:var(--ps-auth-glass-edge) !important;
+  box-shadow:var(--ps-auth-glass-shadow),inset 0 1px 1px var(--ps-auth-glass-reflection) !important;
+  backdrop-filter:blur(var(--ps-auth-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-auth-glass-blur));
+}
+.ps-auth.ps-auth-glass .ps-auth-theme {
+  background:linear-gradient(130deg,var(--ps-auth-glass-reflection),transparent 45%),var(--ps-auth-glass-chrome);
+  border-color:var(--ps-auth-glass-edge);
+  box-shadow:var(--ps-auth-glass-shadow);
+  backdrop-filter:blur(var(--ps-auth-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-auth-glass-blur));
+}
+.ps-auth.ps-auth-glass .ps-auth-theme:hover {
+  background:var(--ps-surface-inset);
+}
+/* Keep small-screen form cards denser and reduce the rendering cost. */
+@media(max-width:767px) {
+  .ps-auth.ps-auth-glass {--ps-auth-glass-blur:4px;--ps-auth-glass-fill:color-mix(in srgb,var(--ps-surface) 86%,transparent);}
+  html.dark .ps-auth.ps-auth-glass {--ps-auth-glass-fill:color-mix(in srgb,var(--ps-surface) 84%,transparent);}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  .ps-auth.ps-auth-glass .auth-panel,
+  .ps-auth.ps-auth-glass .ps-auth-card,
+  .ps-auth.ps-auth-glass .ps-auth-theme {background:var(--ps-surface) !important;}
+}

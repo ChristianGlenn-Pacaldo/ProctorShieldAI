@@ -12,7 +12,7 @@ interface AnalyticsData {
 
 function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; color: string }) {
   return (
-    <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5">
+    <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5">
       <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center mb-3`}>
         {icon}
       </div>
@@ -25,7 +25,7 @@ function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; l
 
 function Bar({ label, value, pct, color }: { label: string; value: number | string; pct: number; color: string }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="ps-admin-bar flex items-center gap-3">
       <span className="text-xs text-[var(--muted)] w-36 shrink-0 truncate">{label}</span>
       <div className="flex-1 h-2.5 bg-[var(--surface2)] rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${Math.max(1, pct)}%` }} />
@@ -62,7 +62,7 @@ export default function AnalyticsContent() {
   const totalUsersSafe = Math.max(1, data.userStats.totalUsers);
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="ps-admin-glass-canvas animate-fade-in space-y-4">
       {/* Top Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -97,12 +97,12 @@ export default function AnalyticsContent() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Platform Distribution */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📊 Platform Distribution</h3>
             <p className="text-xs text-[var(--muted)] mt-0.5">User breakdown by role</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="ps-admin-glass-dense p-5 space-y-4">
             <Bar label="Students" value={data.userStats.totalStudents} pct={Math.round((data.userStats.totalStudents / totalUsersSafe) * 100)} color="bg-blue-500" />
             <Bar label="Teachers" value={data.userStats.totalTeachers} pct={Math.round((data.userStats.totalTeachers / totalUsersSafe) * 100)} color="bg-violet-500" />
             <Bar label="Admins" value={data.userStats.totalAdmins} pct={Math.round((data.userStats.totalAdmins / totalUsersSafe) * 100)} color="bg-rose-500" />
@@ -110,12 +110,12 @@ export default function AnalyticsContent() {
         </div>
 
         {/* AI Verdict Distribution */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🛡️ AI Verdict Distribution</h3>
             <p className="text-xs text-[var(--muted)] mt-0.5">{data.aiStats.totalVerdicts} total verdicts analyzed</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="ps-admin-glass-dense p-5 space-y-4">
             {data.aiStats.totalVerdicts === 0 ? (
               <div className="text-center text-sm text-[var(--muted)] py-4">No AI verdicts have been issued yet.</div>
             ) : (
@@ -129,12 +129,12 @@ export default function AnalyticsContent() {
         </div>
 
         {/* Subscription Breakdown */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">💳 Subscription Breakdown</h3>
             <p className="text-xs text-[var(--muted)] mt-0.5">Teacher plan adoption</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="ps-admin-glass-dense p-5 space-y-4">
             <Bar label="PRO (Active)" value={data.subscriptionStats.proTeachers} pct={data.subscriptionStats.conversionPct} color="bg-emerald-500" />
             <Bar label="Free Plan" value={data.subscriptionStats.freeTeachers} pct={100 - data.subscriptionStats.conversionPct} color="bg-slate-400" />
             <div className="pt-3 border-t border-[var(--border)]">
@@ -145,12 +145,12 @@ export default function AnalyticsContent() {
         </div>
 
         {/* Quiz Activity */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📝 Quiz Activity</h3>
             <p className="text-xs text-[var(--muted)] mt-0.5">Platform-wide exam statistics</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="ps-admin-glass-dense p-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-extrabold text-[var(--ink)]">{data.quizStats.totalQuizzes}</div>

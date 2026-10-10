@@ -1,5 +1,8 @@
 "use client";
 
+import "@/styles/assessment-theme.css";
+import AssessmentThemeControl from "@/components/assessment-theme-control";
+
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -516,12 +519,12 @@ export default function ProctorShieldQuizEditor({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="teacher-content fixed inset-0 z-[900] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden animate-in fade-in duration-200">
+    <div className="teacher-content ps-teacher-editor fixed inset-0 z-[900] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden animate-in fade-in duration-200">
       {/* ─────────────────────────────────────────────────────────────
           1. TOP APP HEADER (PROCTORSHIELD ACTIVITY BAR)
       ───────────────────────────────────────────────────────────── */}
-      <header className="h-16 px-4 sm:px-6 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between shrink-0 z-40">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="ps-teacher-editor-header h-16 px-4 sm:px-6 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between shrink-0 z-40">
+        <div className="ps-teacher-editor-heading flex items-center gap-3 min-w-0">
           <button
             onClick={() => {
               if (studioMode === "question_studio") {
@@ -537,7 +540,7 @@ export default function ProctorShieldQuizEditor({
           </button>
 
           {/* Editable Quiz Title & Subject Pill */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="ps-teacher-editor-title flex items-center gap-2 min-w-0">
             <div className="relative flex items-center group min-w-0">
               <input
                 type="text"
@@ -545,6 +548,7 @@ export default function ProctorShieldQuizEditor({
                 onChange={(e) => setQuizForm({ ...quizForm, title: e.target.value })}
                 className="bg-transparent text-xs sm:text-base font-black text-white px-2 py-1 rounded-lg hover:bg-slate-800/80 focus:bg-slate-900 border border-transparent focus:border-indigo-500/50 outline-hidden transition-all truncate max-w-[120px] xs:max-w-[180px] sm:max-w-xs md:max-w-md font-[family-name:var(--font-display)]"
                 placeholder="Enter quiz title..."
+                aria-label="Quiz title"
               />
               <Pencil className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 transition-colors pointer-events-none -ml-5 shrink-0" />
             </div>
@@ -600,7 +604,7 @@ export default function ProctorShieldQuizEditor({
         </div>
 
         {/* Header Actions */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="ps-teacher-editor-actions flex items-center gap-2.5 shrink-0">
           {studioMode === "quiz_overview" && (
             <>
               {onOpenAiGenerator && (
@@ -647,7 +651,7 @@ export default function ProctorShieldQuizEditor({
                 type="button"
                 disabled={isSaving}
                 onClick={handleSaveAndPublish}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 hover:opacity-95 text-white font-black text-xs sm:text-sm shadow-md shadow-pink-500/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                className="ps-teacher-primary inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 hover:opacity-95 text-white font-black text-xs sm:text-sm shadow-md shadow-pink-500/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
               >
                 {isSaving ? (
                   <>
@@ -934,7 +938,7 @@ export default function ProctorShieldQuizEditor({
           {/* Main Question Editor Workspace */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-8 space-y-6 max-w-4xl mx-auto w-full">
             {/* Studio Toolbar (Question Type, Time Limit, Points) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-sm">
+            <div className="ps-teacher-question-toolbar flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1 rounded-xl bg-pink-500/20 text-pink-300 text-xs font-black uppercase tracking-wider">
                   QUESTION #{activeQuestionIndex + 1}
@@ -943,6 +947,7 @@ export default function ProctorShieldQuizEditor({
                 {/* Question Type Selector */}
                 <div className="relative">
                   <select
+                    aria-label="Question type"
                     value={draftQuestion.questionType || "multiple_choice"}
                     onChange={(e) => handleQuestionTypeChange(e.target.value)}
                     className="appearance-none bg-slate-950 border border-slate-800 text-xs font-bold text-white py-1.5 pl-3 pr-8 rounded-xl focus:border-indigo-500 outline-hidden cursor-pointer"
@@ -962,6 +967,7 @@ export default function ProctorShieldQuizEditor({
                 <div className="flex items-center gap-1 text-xs">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
                   <select
+                    aria-label="Question points"
                     value={draftQuestion.points || 1}
                     onChange={(e) =>
                       setDraftQuestion({ ...draftQuestion, points: parseInt(e.target.value, 10) })
@@ -1518,7 +1524,7 @@ export default function ProctorShieldQuizEditor({
           }}
         >
           <div
-            className="relative w-full max-w-3xl max-h-[calc(100dvh-2rem)] rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl p-5 sm:p-8 space-y-6 overflow-y-auto my-auto flex flex-col"
+            className="ps-assessment-theme ps-quiz-preview relative w-full max-w-3xl max-h-[calc(100dvh-2rem)] rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl p-5 sm:p-8 space-y-6 overflow-y-auto my-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between pb-3 border-b border-slate-800">
@@ -1566,7 +1572,8 @@ export default function ProctorShieldQuizEditor({
               ))}
             </div>
 
-            <div className="pt-4 border-t border-slate-800 flex justify-end">
+            <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <AssessmentThemeControl />
               <button
                 type="button"
                 onClick={() => setIsPreviewOpen(false)}

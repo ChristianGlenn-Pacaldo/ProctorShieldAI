@@ -8,12 +8,12 @@ import {
   Loader2,
   Volume2,
   VolumeX,
-  Shield,
   Zap,
   CheckCircle,
   HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
+import BrandImage from "@/components/brand-image";
 import { normalizeQuizAccessCode } from "@/lib/quiz-access-code";
 import {
   playBloop,
@@ -239,15 +239,7 @@ function JoinContent() {
         }}
       >
         <Link href="/dashboard/student" className="flex items-center gap-3 group">
-          <div
-            className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
-            style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #4f46e5 50%, #7c3aed 100%)",
-              boxShadow: "0 8px 20px rgba(79, 70, 229, 0.3)",
-            }}
-          >
-            <Shield className="w-5 h-5 text-white" />
-          </div>
+          <BrandImage width={35} decorative />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-xl tracking-tight font-[family-name:var(--font-display)] text-white">
@@ -316,14 +308,7 @@ function JoinContent() {
         {/* Join Guidance */}
         <div className="flex flex-col items-center mb-5 text-center">
           <div className="relative mb-3">
-            <div
-              className="w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 p-1 shadow-2xl flex items-center justify-center"
-              style={{
-                boxShadow: "0 10px 30px rgba(79, 70, 229, 0.45)",
-              }}
-            >
-              <Shield className="w-10 h-10 text-white drop-shadow-md" aria-hidden="true" />
-            </div>
+            <BrandImage width={70} decorative />
             <div
               className="absolute -bottom-1 -right-1 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 text-white"
               style={{

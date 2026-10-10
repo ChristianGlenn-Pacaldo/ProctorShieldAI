@@ -1,5 +1,7 @@
 "use client";
 
+import AssessmentThemeControl from "@/components/assessment-theme-control";
+
 import { acceptArenaRevision, acceptArenaEventRevision, guardArenaChannel } from "@/lib/arena-feedback";
 import { fetchArenaSnapshot, isTerminalArenaSnapshot, startArenaReconciliation, type ArenaSnapshot } from "@/lib/arena-client-reconciliation";
 
@@ -824,6 +826,7 @@ export default function ArenaHostContent({
             </button>
           </div>
 
+          <AssessmentThemeControl />
           <button
             onClick={() => setSfxEnabled(!sfxEnabled)}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"

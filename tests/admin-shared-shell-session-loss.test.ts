@@ -1,3 +1,4 @@
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -110,6 +111,7 @@ function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: ReturnT
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
+        if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
         if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };

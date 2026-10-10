@@ -1,3 +1,4 @@
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import { fetchAuth } from "../src/lib/auth-request.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -55,6 +56,7 @@ function ui(fetcher: Fetcher, path = "src/app/login/content.tsx", search = "") {
       set href(url: string) { destinations.push(url); } } },
     fetch: async (url: string, init: RequestInit) => { calls.push({ url, init }); return fetcher(url, init); },
     require(name: string) {
+        if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
       if (name === "react") return { useState: state, useRef: (value: unknown) => state({ current: value })[0],
         useEffect: (effect: () => void) => { if (!mounted) effects.push(effect); } };
       if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Node["props"]) => ({ type, props }),

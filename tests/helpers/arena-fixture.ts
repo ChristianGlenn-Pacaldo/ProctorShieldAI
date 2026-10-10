@@ -24,6 +24,7 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
       if (name === "@/lib/arena-question-work" && !(name in dependencies)) return questionWork;
       if (name === "@/lib/quiz-question-order" && !(name in dependencies)) return questionOrder;
       if (name === "@/lib/quiz-session-timing" && !(name in dependencies)) return sessionTiming;
+      if (name === "@/components/assessment-theme-control" && !(name in dependencies)) return { __esModule: true, default: () => null }; // UI omitted in controller fixtures.
       if (!(name in dependencies)) throw new Error(`Missing dependency ${name}`);
       return dependencies[name];
     },

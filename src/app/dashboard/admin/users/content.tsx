@@ -101,10 +101,10 @@ export default function UsersContent() {
   );
 
   return (
-    <div>
+    <div className="ps-admin-glass-canvas">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
+        <div role="status" className={`ps-admin-toast fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
           ${toast.type === "success"
             ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-300"
             : "bg-rose-950/90 border-rose-500/30 text-rose-300"
@@ -114,19 +114,20 @@ export default function UsersContent() {
         </div>
       )}
 
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">👥 Platform Users</h3>
-            <p className="text-[10px] text-[var(--muted)] mt-0.5">{users.length} registered users</p>
+            <p className="ps-admin-glass-caption text-[10px] text-[var(--muted)] mt-0.5">{users.length} registered users</p>
           </div>
-          <div className="relative">
+          <div className="ps-admin-search relative w-full sm:w-auto">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search users"
               placeholder="Search users..."
-              className="pl-8 pr-3 py-1.5 w-48 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-blue-500"
+              className="pl-8 pr-3 py-1.5 w-full sm:w-64 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>
@@ -138,7 +139,7 @@ export default function UsersContent() {
             </button>
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin user management" tabIndex={0}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
@@ -216,10 +217,10 @@ export default function UsersContent() {
       {/* EDIT USER MODAL */}
       {editUser && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-user-heading" className="ps-admin-glass-card ps-admin-glass-dialog app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
-              <h3 className="font-bold text-[var(--ink)]">{editUser.role.toLowerCase() === "teacher" ? "Edit User" : "User Details"}</h3>
-              <button onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>
+              <h3 id="admin-user-heading" className="font-bold text-[var(--ink)]">{editUser.role.toLowerCase() === "teacher" ? "Edit User" : "User Details"}</h3>
+              <button aria-label="Close user details" onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               <div className="space-y-1">
@@ -243,7 +244,7 @@ export default function UsersContent() {
                       <p className="text-xs text-[var(--muted)] mt-0.5">Manually grant or revoke Pro access</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={editSubStatus} onChange={(e) => setEditSubStatus(e.target.checked)} />
+                      <input aria-label="AI Pro Subscription" type="checkbox" className="sr-only peer" checked={editSubStatus} onChange={(e) => setEditSubStatus(e.target.checked)} />
                       <div className="w-11 h-6 bg-[var(--border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </label>
                   </div>

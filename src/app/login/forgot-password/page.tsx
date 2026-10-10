@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import BrandImage from "@/components/brand-image";
 import { Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 type Step = "email" | "reset" | "done";
@@ -75,15 +76,13 @@ function ForgotPasswordContent() {
   };
 
   return (
-    <div className="auth-shell app-gradient-shell min-h-screen flex items-center justify-center px-4">
+    <div className="auth-shell ps-auth-recovery app-gradient-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg shadow-blue-600/20">
-            🛡️
-          </div>
-          <h1 className="text-2xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">ProctorShield AI</h1>
-          <p className="text-xs text-[var(--muted)] mt-1 uppercase tracking-widest font-semibold">
+          <BrandImage width={50} className="mx-auto mb-4" decorative />
+          <h1 className="text-2xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">ProctorShieldAI</h1>
+          <p className="text-sm text-[var(--muted)] mt-1 uppercase tracking-widest font-semibold">
             {portalName ? `${portalName} Password Recovery` : "Password Recovery"}
           </p>
         </div>
@@ -92,7 +91,7 @@ function ForgotPasswordContent() {
           {/* Progress bar */}
           <div className="h-1 bg-[var(--surface2)]">
             <div
-              className="h-full bg-blue-600 transition-all duration-500"
+              className="h-full bg-[var(--ps-primary)] transition-all duration-500"
               style={{ width: step === "email" ? "33%" : step === "reset" ? "66%" : "100%" }}
             />
           </div>
@@ -100,13 +99,13 @@ function ForgotPasswordContent() {
           <div className="p-8">
             {/* Step 1: Email */}
             {step === "email" && (
-              <form onSubmit={handleRequestReset} className="space-y-5">
+              <form onSubmit={handleRequestReset} aria-busy={isLoading} className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">Forgot your password?</h2>
-                  <p className="text-sm text-[var(--muted)] mt-1">Enter your account email and we'll send you a verification code.</p>
+                  <p className="text-base text-[var(--muted)] mt-1">Enter your account email and we'll send you a verification code.</p>
                 </div>
                 <div>
-                  <label htmlFor="recovery-email" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Email Address</label>
+                  <label htmlFor="recovery-email" className="text-sm font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Email Address</label>
                   <div className="relative">
                     <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
@@ -116,21 +115,21 @@ function ForgotPasswordContent() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your@email.com"
                       autoComplete="email"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-base text-[var(--ink)] focus:outline-none focus:border-[var(--ps-focus)] transition-colors"
                       required
                     />
                   </div>
                 </div>
-                {error && <p role="alert" className="text-xs text-rose-500 font-semibold">{error}</p>}
+                {error && <p role="alert" className="ps-auth-alert text-sm text-[var(--ps-error)] font-semibold">{error}</p>}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3 ps-auth-primary bg-[var(--ps-primary)] hover:bg-[var(--ps-primary-hover)] text-[var(--ps-text)] font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                   {isLoading ? "Sending code..." : "Send Verification Code"}
                 </button>
-                <Link href={loginHref} className="flex items-center justify-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)] transition-colors mt-2">
+                <Link href={loginHref} className="flex items-center justify-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors mt-2">
                   <ArrowLeft className="w-3.5 h-3.5" /> Back to {portalName ? `${portalName} Login` : "Login"}
                 </Link>
               </form>
@@ -138,15 +137,15 @@ function ForgotPasswordContent() {
 
             {/* Step 2: OTP + New Password */}
             {step === "reset" && (
-              <form onSubmit={handleResetPassword} className="space-y-5">
+              <form onSubmit={handleResetPassword} aria-busy={isLoading} className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">Enter verification code</h2>
-                  <p className="text-sm text-[var(--muted)] mt-1">
+                  <p className="text-base text-[var(--muted)] mt-1">
                     We sent a 6-digit code to <span className="font-semibold text-[var(--ink)]">{email}</span>. Check your inbox and spam folder.
                   </p>
                 </div>
                 <div>
-                  <label htmlFor="recovery-code" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Verification Code</label>
+                  <label htmlFor="recovery-code" className="text-sm font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Verification Code</label>
                   <div className="relative">
                     <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
@@ -158,12 +157,12 @@ function ForgotPasswordContent() {
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                       placeholder="000000"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors tracking-[0.4em] font-mono text-center"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-base text-[var(--ink)] focus:outline-none focus:border-[var(--ps-focus)] transition-colors tracking-[0.4em] font-mono text-center"
                     />
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="new-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">New Password</label>
+                  <label htmlFor="new-password" className="text-sm font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">New Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
@@ -171,17 +170,19 @@ function ForgotPasswordContent() {
                       type={showPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Min. 10 characters with letters and numbers"
+                      placeholder="New password"
+                      aria-describedby="new-password-help"
                       autoComplete="new-password"
-                      className="w-full pl-10 pr-10 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full pl-10 pr-10 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-base text-[var(--ink)] focus:outline-none focus:border-[var(--ps-focus)] transition-colors"
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
+                    <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-controls="new-password confirm-new-password" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  <p id="new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">10–128 characters, including letters and numbers.</p>
                 </div>
                 <div>
-                  <label htmlFor="confirm-new-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Confirm New Password</label>
+                  <label htmlFor="confirm-new-password" className="text-sm font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Confirm New Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                     <input
@@ -191,27 +192,27 @@ function ForgotPasswordContent() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter new password"
                       autoComplete="new-password"
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--surface2)] border text-base text-[var(--ink)] focus:outline-none transition-colors ${
                         confirmPassword && confirmPassword !== newPassword
-                          ? "border-rose-500"
-                          : "border-[var(--border)] focus:border-blue-500"
+                          ? "ps-auth-invalid border-[var(--ps-error)]"
+                          : "border-[var(--border)] focus:border-[var(--ps-focus)]"
                       }`}
                     />
                   </div>
                   {confirmPassword && confirmPassword !== newPassword && (
-                    <p className="text-xs text-rose-500 mt-1">Passwords do not match.</p>
+                    <p className="text-sm text-[var(--ps-error)] mt-1">Passwords do not match.</p>
                   )}
                 </div>
-                {error && <p role="alert" className="text-xs text-rose-500 font-semibold">{error}</p>}
+                {error && <p role="alert" className="ps-auth-alert text-sm text-[var(--ps-error)] font-semibold">{error}</p>}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3 ps-auth-primary bg-[var(--ps-primary)] hover:bg-[var(--ps-primary-hover)] text-[var(--ps-text)] font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isLoading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isLoading ? "Resetting password..." : "Reset Password"}
                 </button>
-                <button type="button" onClick={() => { setStep("email"); setError(""); }} className="flex items-center justify-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)] transition-colors w-full mt-1">
+                <button type="button" onClick={() => { setStep("email"); setError(""); }} className="flex items-center justify-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors w-full mt-1">
                   <ArrowLeft className="w-3.5 h-3.5" /> Use a different email
                 </button>
               </form>
@@ -220,16 +221,16 @@ function ForgotPasswordContent() {
             {/* Step 3: Done */}
             {step === "done" && (
               <div className="text-center space-y-5">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+                <div className="w-16 h-16 rounded-full bg-[var(--ps-success-soft)] flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-9 h-9 text-[var(--ps-success)]" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">Password Reset!</h2>
-                  <p className="text-sm text-[var(--muted)] mt-1">Your password has been changed successfully. You can now log in with your new password.</p>
+                  <p className="text-base text-[var(--muted)] mt-1">Your password has been changed successfully. You can now log in with your new password.</p>
                 </div>
                 <Link
                   href={loginHref}
-                  className="w-full inline-block py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-xs text-center"
+                  className="w-full inline-block py-3 ps-auth-primary bg-[var(--ps-primary)] hover:bg-[var(--ps-primary-hover)] text-[var(--ps-text)] font-bold rounded-xl transition-all shadow-xs text-center"
                 >
                   Go to {portalName ? `${portalName} Login` : "Login"}
                 </Link>

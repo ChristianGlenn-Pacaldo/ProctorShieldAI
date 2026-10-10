@@ -107,30 +107,30 @@ export default function UnifiedGoogleSignIn() {
   };
 
   return <div className="mt-6">
-    <div className="mb-5 flex items-center gap-3"><span aria-hidden="true" className="h-px flex-1 bg-slate-700/60" /><p className="text-xs font-medium text-slate-400">OR</p><span aria-hidden="true" className="h-px flex-1 bg-slate-700/60" /></div>
-    {error && <p role="alert" className="text-sm text-rose-400 mb-3">{error}</p>}
+    <div className="mb-5 flex items-center gap-3"><span aria-hidden="true" className="h-px flex-1 bg-[var(--ps-border)]" /><p className="text-sm font-medium text-[var(--ps-text-muted)]">OR</p><span aria-hidden="true" className="h-px flex-1 bg-[var(--ps-border)]" /></div>
+    {error && <p role="alert" className="ps-auth-alert text-base text-[var(--ps-error)] mb-3">{error}</p>}
     {pending ? <form onSubmit={verify} aria-busy={busy} className="space-y-3">
-      <p className="text-sm text-slate-300">Enter the code emailed to {pending.email}.</p>
-      <label htmlFor="google-otp" className="text-xs font-semibold text-slate-300 block">Verification Code</label>
+      <p className="text-base text-[var(--ps-text-secondary)]">Enter the code emailed to {pending.email}.</p>
+      <label htmlFor="google-otp" className="text-sm font-semibold text-[var(--ps-text-secondary)] block">Verification Code</label>
       <input id="google-otp" name="otpCode" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
         value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, ""))} disabled={busy} required
-        className="w-full min-h-12 px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-700 text-base text-white focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
-      <button type="submit" disabled={busy || otp.length !== 6} className="w-full min-h-12 py-3 rounded-xl bg-blue-600 text-white font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-4 focus-visible:ring-offset-[#0b1830] disabled:opacity-50 disabled:cursor-not-allowed">
+        className="w-full min-h-12 px-4 py-3 rounded-xl bg-[var(--ps-surface-inset)] border border-[var(--ps-border-control)] text-base text-[var(--ps-text)] focus:outline-none focus:ring-2 focus:ring-[var(--ps-focus)]" />
+      <button type="submit" disabled={busy || otp.length !== 6} className="w-full min-h-12 py-3 rounded-xl ps-auth-primary bg-[var(--ps-primary)] text-[var(--ps-text)] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--ps-surface)] disabled:opacity-50 disabled:cursor-not-allowed">
         {busy ? "Verifying..." : "Verify & Sign In"}
       </button>
-      <button type="button" onClick={cancel} className="min-h-11 rounded px-2 text-xs font-semibold text-blue-300 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Start again</button>
+      <button type="button" onClick={cancel} className="min-h-11 rounded px-2 text-sm font-semibold text-[var(--ps-accent)] hover:text-[var(--ps-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)]">Start again</button>
     </form> : clientId ? <GoogleOAuthProvider clientId={clientId} onScriptLoadSuccess={() => setScript("ready")} onScriptLoadError={() => setScript("error")}>
       <div className="flex min-h-11 min-w-0 justify-center">
         {intent && script === "ready" && !busy ? <GoogleLogin onSuccess={googleSuccess}
           onError={() => setError("Google sign-in failed. Please retry or use email and password.")}
           text="continue_with" size="large" shape="rectangular" theme="outline" nonce={intent.nonce} auto_select={false} useOneTap={false} />
-          : <button type="button" disabled className="w-full min-h-11 py-3 rounded-xl border border-slate-600 text-sm font-semibold text-slate-300 disabled:cursor-not-allowed">Continue with Google</button>}
+          : <button type="button" disabled className="w-full min-h-11 py-3 rounded-xl border border-[var(--ps-border-control)] text-base font-semibold text-[var(--ps-text-secondary)] disabled:cursor-not-allowed">Continue with Google</button>}
       </div>
-      {script === "error" && <p role="alert" className="text-sm text-rose-400 mt-3">Google sign-in could not load. Use email and password or reload to retry.</p>}
+      {script === "error" && <p role="alert" className="ps-auth-alert text-base text-[var(--ps-error)] mt-3">Google sign-in could not load. Use email and password or reload to retry.</p>}
     </GoogleOAuthProvider> : <>
-      <button type="button" disabled className="w-full min-h-11 py-3 rounded-xl border border-slate-600 text-sm font-semibold text-slate-300 disabled:cursor-not-allowed">Continue with Google</button>
-      <p className="text-xs text-slate-400 mt-3">Google sign-in is unavailable. Use email and password.</p>
+      <button type="button" disabled className="w-full min-h-11 py-3 rounded-xl border border-[var(--ps-border-control)] text-base font-semibold text-[var(--ps-text-secondary)] disabled:cursor-not-allowed">Continue with Google</button>
+      <p className="text-sm text-[var(--ps-text-muted)] mt-3">Google sign-in is unavailable. Use email and password.</p>
     </>}
-    <p className="text-center text-xs leading-5 text-slate-300 mt-3">For existing Student and Teacher accounts only.</p>
+    <p className="text-center text-sm leading-5 text-[var(--ps-text-secondary)] mt-3">For existing Student and Teacher accounts only.</p>
   </div>;
 }

@@ -57,7 +57,7 @@ export default function ProctorShieldCreateHub({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ps-teacher-hub ps-teacher-glass-card space-y-6">
       {/* ProctorShield Top Greeting & Mode Selector */}
       <div className="text-center space-y-4 pt-2">
         <h2 className="text-xl sm:text-2xl font-black text-[var(--ink)] font-[family-name:var(--font-display)] tracking-tight">
@@ -113,7 +113,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={() => onOpenCreateQuiz("proctored")}
-          className="group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 border-emerald-500/30 hover:border-emerald-500 shadow-xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer"
+          className="ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 border-emerald-500/30 hover:border-emerald-500 shadow-xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer"
         >
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
             <ClipboardCheck className="w-8 h-8" />
@@ -135,7 +135,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={handleArenaClick}
-          className={`group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
+          className={`ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
             isSubscribed
               ? "border-amber-500/40 hover:border-amber-500 hover:shadow-xl hover:shadow-amber-500/10"
               : "border-amber-500/30 hover:border-amber-400 hover:shadow-lg"
@@ -170,7 +170,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={handleAiClick}
-          className={`group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
+          className={`ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
             isSubscribed
               ? "border-purple-500/40 hover:border-purple-500 hover:shadow-xl hover:shadow-purple-500/10"
               : "border-purple-500/30 hover:border-purple-400 hover:shadow-lg"

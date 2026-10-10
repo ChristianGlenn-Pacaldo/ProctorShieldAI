@@ -36,6 +36,7 @@ export function arenaHeaderFixture(state: Record<string, any> = {}, props: Recor
   };
   const Arena = loadArenaModule(file, {
     react, "react/jsx-runtime": jsxRuntime, "lucide-react": icons,
+    "@/components/assessment-theme-control": { __esModule: true, default: () => jsxRuntime.jsx("button", { type: "button", children: "Theme" }) },
     "next/navigation": { useRouter: () => ({ push: (url: string) => navigation.push(url) }) },
     "pusher-js": { __esModule: true, default: class {} },
     "@/lib/arena-feedback": {}, "@/lib/arena-client-reconciliation": {}, "@/lib/student-battle": {},

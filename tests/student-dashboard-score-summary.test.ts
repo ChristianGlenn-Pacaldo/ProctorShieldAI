@@ -39,7 +39,7 @@ test("Dashboard renders exam averages and Arena points in separate units without
       String(node.props.className).includes("p-3.5") && textOf(node).includes("QA Invalidated"))!;
     const invalidatedBadge = find(invalidated, node => node.type === "span" && textOf(node) === "Invalidated")!;
     assert.ok(invalidatedBadge);
-    assert.ok(String(invalidatedBadge.props.className).includes("text-rose-600"));
+    assert.ok(String(invalidatedBadge.props.className).includes("text-[var(--ps-error)]"));
     assert.match(textOf(invalidated), /Voided/);
     assert.doesNotMatch(textOf(invalidated), /100%/);
     assert.match(textOf(tree), /Retake Pending/);
@@ -55,10 +55,10 @@ test("Dashboard hero and Quick Join use theme tokens with dark overrides and a n
     setup.render(); await setup.ready();
     const tree = setup.render();
     const hero = find(tree, node => node.type === "div" &&
-      String(node.props.className).includes("[.dark_&]:from-indigo-950"))!;
+      String(node.props.className).includes("ps-student-hero"))!;
     assert.ok(hero);
     const heroClass = String(hero.props.className);
-    for (const token of ["from-[var(--surface)]", "via-[var(--surface2)]", "text-[var(--ink)]"]) {
+    for (const token of ["ps-student-hero", "border", "text-[var(--ink)]"]) {
       assert.ok(heroClass.split(" ").includes(token));
     }
     const input = find(tree, node => node.props["aria-label"] === "Quiz access code")!;

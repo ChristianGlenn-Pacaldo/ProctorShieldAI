@@ -32,7 +32,7 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
     feeds: [{ id: "student", name: "Fixture Student", quizTitle: quiz.title, status: "Connected", statusColor: "text-emerald-500",
       border: "border-emerald-500/30", joinedAt: new Date(), lastSeen: new Date(), violationCount: 1, snapshot: null, connectionStatus: "online" }],
     monitorCounters: { activeStudents: 1, totalViolations: 1 },
-    data: { isSubscribed: true, reports: [], totalReports: 0, totalViolations: 0, page: 1, pageSize: 12, totalPages: 1, types: [], filters: { search: "", type: "" } },
+    data: { isSubscribed: true, reports: [], totalReports: 0, totalViolations: 0, page: 1, pageSize: 12, pageCount: 1, types: [], filters: { search: "", type: "" } },
   };
   if (variant === "dialog") {
     if (scene === "playground") state.isModalOpen = true;
@@ -91,6 +91,7 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
     vm.runInNewContext(output, { exports, console, process: { env: {} }, URL, URLSearchParams, AbortController,
       window: { location: { search: "", origin: "https://example.test" } }, document: { body: {} },
       require(name: string) {
+        if (name.endsWith(".css")) return {}; // Presentation-only route stylesheet.
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "react-dom") return { createPortal: (node: Element) => { portals.push(node); return null; } };
@@ -132,7 +133,7 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
       && !key.startsWith("on") && typeof value !== "function" && value != null && value !== false)
       .map(([key, value]) => {
         if (key === "style") value = Object.entries(value as object).map(([property, setting]) => property.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase()) + ":" + setting).join(";");
-        return `${key === "className" ? "class" : key}="${escape(value)}"`;
+        return `${key === "className" ? "class" : key === "htmlFor" ? "for" : key}="${escape(value)}"`;
       }).join(" ");
     return `<${node.type} ${attributes}>${html(node.props.children)}${["input", "img", "br"].includes(node.type) ? "" : `</${node.type}>`}`;
   }

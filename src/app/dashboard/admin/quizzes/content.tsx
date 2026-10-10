@@ -96,9 +96,9 @@ export default function QuizzesContent() {
   );
 
   return (
-    <div className="animate-fade-in">
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+    <div className="ps-admin-glass-canvas animate-fade-in">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-sm font-bold text-[var(--ink)]">📝 All System Quizzes</h3>
             <p className="text-[10px] text-[var(--muted)] mt-0.5">List of all scheduled and active proctored assessments</p>
@@ -106,8 +106,9 @@ export default function QuizzesContent() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search quizzes"
             placeholder="Search quizzes..."
-            className="w-48 px-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
+            className="w-full sm:w-64 px-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
           />
         </div>
         {loadError && (
@@ -118,7 +119,7 @@ export default function QuizzesContent() {
             </button>
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin quiz directory" tabIndex={0}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">

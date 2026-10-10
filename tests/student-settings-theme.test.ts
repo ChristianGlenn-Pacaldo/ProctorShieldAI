@@ -55,9 +55,9 @@ function settingsFixture() {
 test("Settings keeps theme-aware surfaces, associated input labels and password reveal controls", async () => {
   const setup = settingsFixture(); await setup.mount();
   const tree = setup.render();
-  const hero = find(tree, node => String(node.props.className).includes("[.dark_&]:from-[#0c1229]"))!;
+  const hero = find(tree, node => String(node.props.className).includes("ps-student-hero"))!;
   assert.ok(hero);
-  assert.ok(String(hero.props.className).includes("from-[var(--surface)]"));
+  assert.ok(String(hero.props.className).includes("ps-student-hero"));
   assert.ok(String(hero.props.className).includes("text-[var(--ink)]"));
   for (const id of ["student-full-name", "student-email", "student-current-password", "student-new-password", "student-confirm-password"]) {
     const input = find(tree, node => node.type === "input" && node.props.id === id)!;
@@ -76,12 +76,12 @@ test("Settings keeps theme-aware surfaces, associated input labels and password 
 test("Settings validation and successful profile feedback retain readable light/dark toast classes", async () => {
   const setup = settingsFixture(); await setup.mount();
   const save = () => find(setup.render(), node => node.type === "button" &&
-    String(node.props.className).includes("bg-indigo-600"))!;
+    String(node.props.className).includes("bg-[var(--ps-primary)]"))!;
   find(setup.render(), node => node.props.id === "student-full-name")!.props.onChange({ target: { value: "" } });
   await save().props.onClick();
   const error = find(setup.render(), node => node.props.role === "alert")!;
   assert.ok(error);
-  for (const token of ["bg-[var(--surface)]", "text-rose-700", "[.dark_&]:text-rose-200", "inset-x-4", "sm:max-w-md"]) {
+  for (const token of ["bg-[var(--surface)]", "text-[var(--ps-error)]", "[.dark_&]:text-[var(--ps-error)]", "inset-x-4", "sm:max-w-md"]) {
     assert.ok(String(error.props.className).split(" ").includes(token));
   }
   assert.equal(setup.requests.filter(request => request.init?.method === "PUT").length, 0);
@@ -89,7 +89,7 @@ test("Settings validation and successful profile feedback retain readable light/
   await save().props.onClick();
   const success = find(setup.render(), node => node.props.role === "status")!;
   assert.ok(success);
-  assert.ok(String(success.props.className).includes("text-emerald-700 [.dark_&]:text-emerald-200"));
+  assert.ok(String(success.props.className).includes("text-[var(--ps-success)] [.dark_&]:text-[var(--ps-success)]"));
   const put = setup.requests.find(request => request.init?.method === "PUT")!;
   assert.equal(put.url, "/api/auth/profile?scope=user&role=student");
   assert.deepEqual(JSON.parse(String(put.init?.body)), { fullName: "Updated QA Student" });

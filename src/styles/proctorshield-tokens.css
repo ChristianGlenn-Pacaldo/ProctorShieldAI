@@ -1,0 +1,84 @@
+/* Phase A foundation: semantic variables only. No legacy token overrides.
+   Adopt these in scoped page/component styles after each visual approval. */
+:root {
+  --ps-canvas: #f3f8f1;
+  --ps-surface: #ffffff;
+  --ps-surface-inset: #e8f2ec;
+  --ps-surface-elevated: #ffffff;
+  --ps-glass: rgba(255, 255, 255, 0.88);
+  --ps-text: #10251e;
+  --ps-text-secondary: #345449;
+  --ps-text-muted: #516b5e;
+  --ps-border: #c7d9cd;
+  --ps-border-control: #638478;
+  --ps-primary: #17664d;
+  --ps-primary-hover: #104c39;
+  --ps-on-primary: #ffffff;
+  --ps-accent: #14675f;
+  --ps-accent-soft: #dff4e9;
+  --ps-gold: #89651c;
+  --ps-gold-soft: #fff4d6;
+  --ps-focus: #147356;
+  --ps-success: #17664d;
+  --ps-success-soft: #e4f4eb;
+  --ps-warning: #82520c;
+  --ps-warning-soft: #fff5df;
+  --ps-error: #9e2939;
+  --ps-error-soft: #fff0f0;
+  --ps-info: #145970;
+  --ps-info-soft: #eaf5fb;
+  --ps-media: #081c16;
+  --ps-on-media: #eefaf2;
+  --ps-shadow: 0 12px 32px -16px rgba(16, 70, 49, 0.18);
+  --ps-shadow-overlay: 0 24px 64px -20px rgba(16, 37, 30, 0.24);
+  --ps-color-scheme: light;
+  --ps-font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --ps-font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --ps-text-body-size: 1rem;
+  --ps-text-caption-size: 0.875rem;
+  --ps-line-height-body: 1.6;
+  --ps-radius-control: 0.75rem;
+  --ps-radius-card: 1.25rem;
+  --ps-radius-dialog: 1.5rem;
+  --ps-space-1: 0.25rem;
+  --ps-space-2: 0.5rem;
+  --ps-space-3: 0.75rem;
+  --ps-space-4: 1rem;
+  --ps-space-6: 1.5rem;
+  --ps-space-8: 2rem;
+  --ps-control-min-height: 2.75rem;
+  --ps-focus-width: 2px;
+  --ps-focus-offset: 3px;
+}
+
+html.dark {
+  --ps-canvas: #012620;
+  --ps-surface: #10352b;
+  --ps-surface-inset: #183c31;
+  --ps-surface-elevated: #194637;
+  --ps-glass: rgba(16, 53, 43, 0.92);
+  --ps-text: #eefaf2;
+  --ps-text-secondary: #c7e5d5;
+  --ps-text-muted: #afd0c2;
+  --ps-border: #345c4c;
+  --ps-border-control: #739a89;
+  --ps-primary: #91eacb;
+  --ps-primary-hover: #b5f4dc;
+  --ps-on-primary: #062b21;
+  --ps-accent: #9de7dc;
+  --ps-accent-soft: #164a3b;
+  --ps-gold: #e5c77f;
+  --ps-gold-soft: #3a321f;
+  --ps-focus: #91eacb;
+  --ps-success: #a2edc5;
+  --ps-success-soft: #163e2f;
+  --ps-warning: #f2d18a;
+  --ps-warning-soft: #3a321f;
+  --ps-error: #ffb5ba;
+  --ps-error-soft: #40252c;
+  --ps-info: #9eddeb;
+  --ps-info-soft: #163640;
+  --ps-shadow: 0 16px 40px -20px rgba(0, 0, 0, 0.45);
+  --ps-shadow-overlay: 0 24px 64px -16px rgba(0, 0, 0, 0.55);
+  --ps-color-scheme: dark;
+}

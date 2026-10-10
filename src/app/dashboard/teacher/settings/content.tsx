@@ -104,7 +104,7 @@ export default function SettingsContent() {
   };
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="ps-teacher-settings ps-teacher-glass-canvas animate-fade-in space-y-4">
       {/* Toast */}
       {toast && (
         <div role="status" className={`fixed top-6 inset-x-4 sm:left-auto sm:right-6 sm:max-w-md z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border text-sm font-semibold animate-fade-in
@@ -116,7 +116,7 @@ export default function SettingsContent() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Profile Card */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-teacher-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">👤 Instructor Profile</h3>
           </div>
@@ -130,19 +130,21 @@ export default function SettingsContent() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Full Name</label>
+                <label htmlFor="teacher-full-name" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Full Name</label>
                 <input
+                  id="teacher-full-name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                  className="ps-teacher-glass-dense w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Email Address</label>
+                <label htmlFor="teacher-email" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Email Address</label>
                 <input
+                  id="teacher-email"
                   value={user?.email || ""}
                   disabled
-                  className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] cursor-not-allowed"
+                  className="ps-teacher-glass-dense w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] cursor-not-allowed"
                 />
               </div>
               <button
@@ -158,7 +160,7 @@ export default function SettingsContent() {
         </div>
 
         {/* Password Change Card */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="ps-teacher-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🔒 Change Password</h3>
             <p className="text-xs text-[var(--muted)] mt-0.5">Leave blank to keep your current password</p>
@@ -166,19 +168,22 @@ export default function SettingsContent() {
           <div className="p-6 space-y-3">
             {/* Current Password */}
             <div>
-              <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Current Password</label>
+              <label htmlFor="teacher-current-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Current Password</label>
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                 <input
+                  id="teacher-current-password"
                   type={showCurrent ? "text" : "password"}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Enter current password"
-                  className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                  className="ps-teacher-glass-dense w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent(!showCurrent)}
+                  aria-controls="teacher-current-password"
+                  aria-label={showCurrent ? "Hide current password" : "Show current password"}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]"
                 >
                   {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -187,36 +192,42 @@ export default function SettingsContent() {
             </div>
             {/* New Password */}
             <div>
-              <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">New Password</label>
+              <label htmlFor="teacher-new-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">New Password</label>
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                 <input
+                  id="teacher-new-password"
                   type={showNew ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min. 10 characters with letters and numbers"
-                  className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="New password"
+                  aria-describedby="teacher-new-password-help"
+                  className="ps-teacher-glass-dense w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew(!showNew)}
+                  aria-controls="teacher-new-password"
+                  aria-label={showNew ? "Hide new password" : "Show new password"}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]"
                 >
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
+            <p id="teacher-new-password-help" className="text-xs text-[var(--muted)]">10–128 characters, including letters and numbers.</p>
             {/* Confirm Password */}
             <div>
-              <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Confirm New Password</label>
+              <label htmlFor="teacher-confirm-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Confirm New Password</label>
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                 <input
                   type="password"
+                  id="teacher-confirm-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password"
-                  className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
+                  className={`ps-teacher-glass-dense w-full pl-9 pr-4 py-2.5 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
                     confirmPassword && confirmPassword !== newPassword
                       ? "border-rose-500 focus:border-rose-500"
                       : "border-[var(--border)] focus:border-blue-500"

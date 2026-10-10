@@ -1,0 +1,90 @@
+/* Stage 1 Teacher rollout: approved Student material values, independently scoped. Every material is explicitly opted in; cached
+   App Router CSS cannot change another role or assessment/media surface. */
+[data-portal="teacher"].ps-teacher-glass-shell,
+.teacher-content.ps-teacher-glass-dialog {
+  --ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 68%,transparent);
+  --ps-teacher-glass-dense-fill:color-mix(in srgb,var(--ps-surface) 95%,transparent);
+  --ps-teacher-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 76%,transparent);
+  --ps-teacher-glass-edge:color-mix(in srgb,var(--ps-border-control) 40%,transparent);
+  --ps-teacher-glass-reflection:color-mix(in srgb,var(--ps-surface) 65%,transparent);
+  --ps-teacher-glass-mint:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-teacher-glass-blur:10px;
+  --ps-teacher-glass-card-glow:color-mix(in srgb,var(--ps-accent-soft) 70%,transparent);
+  --ps-teacher-glass-card-sheen:color-mix(in srgb,var(--ps-surface) 75%,transparent);
+  --ps-teacher-glass-card-edge:color-mix(in srgb,var(--ps-border-control) 48%,transparent);
+  --ps-teacher-glass-ambient-near:color-mix(in srgb,var(--ps-accent) 14%,transparent);
+  --ps-teacher-glass-ambient-far:color-mix(in srgb,var(--ps-primary) 12%,transparent);
+  --ps-teacher-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-surface) 85%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 10%,transparent);
+}
+html.dark [data-portal="teacher"].ps-teacher-glass-shell,
+html.dark .teacher-content.ps-teacher-glass-dialog {
+  --ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 66%,transparent);
+  --ps-teacher-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 72%,transparent);
+  --ps-teacher-glass-edge:color-mix(in srgb,var(--ps-primary) 28%,transparent);
+  --ps-teacher-glass-reflection:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-teacher-glass-mint:color-mix(in srgb,var(--ps-accent) 6%,transparent);
+  --ps-teacher-glass-card-glow:color-mix(in srgb,var(--ps-primary) 22%,transparent);
+  --ps-teacher-glass-card-sheen:color-mix(in srgb,var(--ps-primary) 14%,transparent);
+  --ps-teacher-glass-card-edge:color-mix(in srgb,var(--ps-primary) 36%,transparent);
+  --ps-teacher-glass-ambient-near:color-mix(in srgb,var(--ps-primary) 24%,transparent);
+  --ps-teacher-glass-ambient-far:color-mix(in srgb,var(--ps-accent) 16%,transparent);
+  --ps-teacher-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-primary) 20%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 8%,transparent);
+}
+/* Only the opted-in overview gets the new static canvas; other Teacher
+   content retains its approved background and receives navigation chrome. */
+[data-portal="teacher"].ps-teacher-glass-shell:has(.ps-teacher-glass-canvas) {
+  background:radial-gradient(ellipse at 4% 4%,color-mix(in srgb,var(--ps-accent) 26%,transparent),transparent 52%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),var(--ps-accent-soft)) !important;
+}
+html.dark [data-portal="teacher"].ps-teacher-glass-shell:has(.ps-teacher-glass-canvas) {
+  background:radial-gradient(ellipse at 6% 6%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 50%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-accent) 9%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),color-mix(in srgb,var(--ps-canvas) 75%,var(--ps-media))) !important;
+}
+/* Static light lives behind the opted-in overview cards. It neither creates
+   an overlay nor changes sizing, hit targets, or other Teacher routes. */
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-canvas {
+  background:radial-gradient(ellipse at 12% 36%,var(--ps-teacher-glass-ambient-near),transparent 52%),radial-gradient(ellipse at 88% 75%,var(--ps-teacher-glass-ambient-far),transparent 58%);
+}
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-card,
+.teacher-content.ps-teacher-glass-dialog .ps-teacher-glass-card {
+  background:radial-gradient(ellipse at 0% 0%,var(--ps-teacher-glass-card-glow),transparent 68%),linear-gradient(125deg,var(--ps-teacher-glass-card-sheen),transparent 48%,var(--ps-teacher-glass-mint)),var(--ps-teacher-glass-card-fill) !important;
+  border-color:var(--ps-teacher-glass-card-edge) !important;
+  box-shadow:var(--ps-teacher-glass-material-shadow),inset 0 1px 1px var(--ps-teacher-glass-card-sheen) !important;
+  backdrop-filter:blur(var(--ps-teacher-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-teacher-glass-blur));
+}
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-chrome {
+  background:linear-gradient(130deg,var(--ps-teacher-glass-reflection),transparent 45%),var(--ps-teacher-glass-chrome-fill) !important;
+  border-color:var(--ps-teacher-glass-edge) !important;
+  box-shadow:var(--ps-teacher-glass-material-shadow) !important;
+  backdrop-filter:blur(var(--ps-teacher-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-teacher-glass-blur));
+}
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-dense,
+.teacher-content.ps-teacher-glass-dialog .ps-teacher-glass-dense {
+  background:var(--ps-teacher-glass-dense-fill) !important;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-frame {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--ps-teacher-glass-reflection) 30%,transparent),transparent 55%),color-mix(in srgb,var(--ps-surface) 24%,transparent) !important;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+@media(max-width:767px) {
+  [data-portal="teacher"].ps-teacher-glass-shell,
+.teacher-content.ps-teacher-glass-dialog {--ps-teacher-glass-blur:4px;--ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 82%,transparent);}
+  html.dark [data-portal="teacher"].ps-teacher-glass-shell,
+html.dark .teacher-content.ps-teacher-glass-dialog {--ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 80%,transparent);}
+}
+@supports not (backdrop-filter:blur(1px)) {
+  [data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-card,
+.teacher-content.ps-teacher-glass-dialog .ps-teacher-glass-card,
+  [data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-chrome {background:var(--ps-surface) !important;}
+}
+
+/* Small gold status text uses its existing matched opaque semantic pair. */
+[data-portal="teacher"].ps-teacher-glass-shell .ps-teacher-glass-status {background:var(--ps-warning-soft) !important;}
+
+/* The selected portal sits over a dark scrim: protect fine-print contrast
+   with a denser fill while retaining the same corner reflections and blur. */
+.teacher-content.ps-teacher-glass-dialog {--ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 88%,transparent);}
+html.dark .teacher-content.ps-teacher-glass-dialog {--ps-teacher-glass-card-fill:color-mix(in srgb,var(--ps-surface) 84%,transparent);}
