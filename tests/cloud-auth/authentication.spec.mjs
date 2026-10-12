@@ -378,12 +378,17 @@ test('AUTH28 password replacement racing login never accepts old credentials at 
   check((await call(racing, sessionPath(user), undefined, 'GET')).status === 401, 'Old credentials authorized new stored version');
 });
 
-test('AUTH29 actual Origin-protected handlers reject missing or cross-site headers before auth mutation', async () => {
+test('AUTH29 actual Origin-protected handlers reject missing or cross-site headers before auth mutation', async ({ browser }) => {
+  const user = await account(pool, { role: 'teacher' });
+  const authenticated = await browserContext(browser); await login(authenticated, user);
+  const cookieHeader = (await authenticated.cookies(ORIGIN)).map(cookie => cookie.name + '=' + cookie.value).join('; ');
   for (const origin of [null, 'https://untrusted.example']) for (const [route, method] of [['/api/auth/login', 'POST'], ['/api/auth/register', 'POST'], ['/api/auth/profile', 'PUT'], ['/api/quizzes/1/start', 'POST']]) {
     // Raw HTTPS ensures the "missing" case has no implicit browser/client Origin.
     const status = await new Promise((resolve, reject) => {
       const payload = JSON.stringify({ email: 'synthetic-origin@example.invalid', password: 'SyntheticOrigin12!' });
-      const request = https.request(ORIGIN + route, { method, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...(origin ? { Origin: origin } : {}) } }, response => {
+      // Actual authenticated cookies let protected API requests reach the
+      // Origin guard instead of only testing the proxy's anonymous401.
+      const request = https.request(ORIGIN + route, { method, headers: { Cookie: cookieHeader, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...(origin ? { Origin: origin } : {}) } }, response => {
         response.resume(); response.once('end', () => resolve(response.statusCode));
       });
       request.once('error', reject); request.end(payload);
