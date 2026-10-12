@@ -72,7 +72,7 @@ export async function verifyIsolatedDatabaseIdentity(client: IdentityClient, con
     ({ rows } = await client.query(`SELECT current_database() AS "databaseName", current_user AS "userName",
       d.datistemplate AS "isTemplate", r.rolsuper AS "isSuperuser", r.rolcreatedb AS "canCreateDatabase",
       r.rolcreaterole AS "canCreateRole", r.rolbypassrls AS "bypassRls", r.rolreplication AS "canReplicate",
-      inet_server_addr()::text AS "serverAddress", inet_server_port() AS "serverPort",
+      host(inet_server_addr()) AS "serverAddress", inet_server_port() AS "serverPort",
       shobj_description(d.oid, 'pg_database') AS marker
       FROM pg_database d JOIN pg_roles r ON r.rolname = current_user WHERE d.datname = current_database()`));
   } catch { throw new Error("Disposable database identity could not be verified"); }

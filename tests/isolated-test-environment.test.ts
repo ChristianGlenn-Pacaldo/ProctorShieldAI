@@ -9,6 +9,20 @@ import { Client } from "pg";
 import { assertIsolatedNetwork, assertNoTestEnvFiles, authenticatedTestEnvironment, isolatedBrowserOrigin, isolatedPostgresConfig, verifyIsolatedDatabaseIdentity, type TestDatabaseKind } from "./helpers/isolated-test-environment.ts";
 
 const instance = "2ac08227-4677-4bdb-b1a0-cb916e0345ef";
+
+test("identity query extracts the PostgreSQL host without its inet netmask and rejects another address", async () => {
+  const config = isolatedPostgresConfig("arena", fixture());
+  const client = (address: string) => ({ query: async (sql: string) => {
+    assert.match(sql, /host\(inet_server_addr\(\)\) AS "serverAddress"/);
+    return { rows: [{ databaseName: config.database, userName: config.user, isTemplate: false,
+      isSuperuser: false, canCreateDatabase: false, canCreateRole: false, bypassRls: false,
+      canReplicate: false, serverAddress: address, serverPort: 55432,
+      marker: `proctorshield:disposable:${config.instanceId}` }] };
+  } });
+  await verifyIsolatedDatabaseIdentity(client("127.0.0.1"), config);
+  await assert.rejects(verifyIsolatedDatabaseIdentity(client("127.0.0.2"), config));
+  await assert.rejects(verifyIsolatedDatabaseIdentity(client("127.0.0.1/32"), config));
+});
 const policy = { arena: ["ARENA_CONCURRENCY_TEST_DATABASE_URL", "ARENA_CONCURRENCY_TEST_DATABASE_APPROVED", "proctorshield_arena_atomic_test", "psai_arena_test"],
   paymongo: ["PAYMONGO_CONCURRENCY_TEST_DATABASE_URL", "PAYMONGO_CONCURRENCY_TEST_DATABASE_APPROVED", "proctorshield_paymongo_atomic_test", "psai_paymongo_test"],
   auth: ["E2E_DATABASE_URL", "RUN_AUTHENTICATED_E2E", "proctorshield_auth_v1_test", "psai_auth_test"] } as const;
