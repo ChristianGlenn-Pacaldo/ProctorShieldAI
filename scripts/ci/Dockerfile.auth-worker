@@ -1,0 +1,24 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/psai-browsers
+ARG PSAI_SOURCE_SHA
+ENV PSAI_SOURCE_SHA=${PSAI_SOURCE_SHA}
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci && npx prisma generate
+COPY next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs ./
+COPY prisma.config.ts ./
+COPY src ./src
+COPY public ./public
+COPY tests ./tests
+COPY e2e ./e2e
+COPY scripts ./scripts
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_APP_URL=https://127.0.0.1:3443 \
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID=synthetic-cloud.apps.googleusercontent.com \
+    NEXT_PUBLIC_PUSHER_KEY=synthetic-public-key \
+    NEXT_PUBLIC_PUSHER_CLUSTER=mt1
+RUN npm run build && npm run prepare:standalone && npx playwright install --with-deps chromium
+USER node
+CMD ["node", "scripts/ci/auth-worker.mjs"]
