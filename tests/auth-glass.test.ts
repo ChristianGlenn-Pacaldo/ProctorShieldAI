@@ -25,12 +25,22 @@ test("authentication glass is explicitly opted in and changes paint properties o
   assert.match(layout, /<AuthThemeControl \/>\{children\}/);
 });
 
+test("auth glass blur survives the installed CSS optimizer", () => {
+  const { code } = (require("@tailwindcss/node") as typeof import("@tailwindcss/node")).optimize(css, { minify: false });
+  const standard: string[] = [];
+  postcss.parse(code).walkDecls("backdrop-filter", decl => {
+    if (decl.parent?.type === "rule" && decl.parent.selector.includes(".ps-auth.ps-auth-glass")) standard.push(decl.value);
+  });
+  assert.equal(standard.length, 2, "cards and theme control need standard blur after compilation");
+  assert.ok(standard.every(value => value === "blur(var(--ps-auth-glass-blur))"));
+});
+
 test("auth glass removes the opaque card backing while keeping form and status surfaces", () => {
   const ast = postcss.parse(css);
   const cards: string[] = [];
   ast.walkRules(rule => {
     if (rule.selector.includes(".auth-panel") && rule.selector.includes(".ps-auth-card") && !rule.selector.includes(".ps-auth-theme")) {
-      rule.walkDecls("background", decl => cards.push(decl.value));
+      rule.walkDecls("background", decl => { cards.push(decl.value); });
     }
   });
   assert.equal(cards.length, 1);

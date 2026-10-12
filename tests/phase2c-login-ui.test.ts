@@ -29,6 +29,7 @@ function ui(path: string, fetcher: Fetcher, clientId = "fixture-client") {
     const slot = index++; if (!(slot in states)) states[slot] = initial;
     return [states[slot], (next: unknown) => { states[slot] = typeof next === "function" ? next(states[slot]) : next; }];
   };
+  let productFeatures: { default?: (props: Node["props"]) => unknown } | undefined;
   const exports: { default?: () => unknown } = {};
   const code = ts.transpileModule(fs.readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
@@ -39,10 +40,27 @@ function ui(path: string, fetcher: Fetcher, clientId = "fixture-client") {
     fetch: async (url: string, init: RequestInit) => { calls.push({ url, init }); return fetcher(url, init); },
     require: function resolveUiDependency(name: string) {
         if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
+      if (name === "@/components/product-features") {
+        productFeatures = {};
+        const featureCode = ts.transpileModule(fs.readFileSync("src/components/product-features.tsx", "utf8"), {
+          compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+        }).outputText;
+        vm.runInNewContext(featureCode, { exports: productFeatures, require: resolveUiDependency });
+        return productFeatures;
+      }
+      if (name === "next/image") return { __esModule: true, default: "img" };
+      if (name === "./product-features.module.css") return { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) };
+      if (name === "@/components/landing-how-it-works") return { __esModule: true, default: "LandingHowItWorks" };
+      if (name === "@/components/auth-theme-control") return { __esModule: true, default: "AuthThemeControl" };
+      if (name === "@/components/hero-logo-intro") return { __esModule: true, default: "HeroLogoIntro" };
+      if (name === "@/components/scroll-expansion-hero") return { __esModule: true, default: "ScrollExpandMedia" };
+      if (name === "@/components/landing-navigation") return { setupLandingNavigation: () => undefined };
       if (name === "react") return { useState: state, useRef: (value: unknown) => state({ current: value })[0],
         useEffect: (effect: () => void | (() => void)) => { if (!mounted) effects.push(effect); } };
-      if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Node["props"]) => ({ type, props }),
-        jsxs: (type: unknown, props: Node["props"]) => ({ type, props }), Fragment: "fragment" };
+      if (name === "react/jsx-runtime") {
+        const jsx = (type: unknown, props: Node["props"]) => type === productFeatures?.default ? productFeatures!.default!(props) : ({ type, props });
+        return { jsx, jsxs: jsx, Fragment: "fragment" };
+      }
       if (name === "@/components/velaris") {
         const gradientExports: Record<string, unknown> = {};
         const gradientCode = ts.transpileModule(fs.readFileSync("src/components/velaris.tsx", "utf8"), {
@@ -286,4 +304,34 @@ test("Google bootstrap does not loop when cookies cannot be retained", async () 
   await page.ready(); assert.equal(page.calls.length, 2);
   assert.equal(page.render().filter(n => n.type === "GoogleLogin").length, 0);
   assert.match(page.content(), /Google sign-in is unavailable/); page.unmount();
+});
+
+
+test("native OTP POST safety preserves synchronous cancellation and JSON verification", async () => {
+  let prevented = false;
+  const page = await readyGoogle(async (url, init) => {
+    if (url.endsWith("/google")) {
+      const body = JSON.parse(String(init.body));
+      return body.mode === "begin"
+        ? Response.json({ intent: "fixture-intent", nonce: "fixture-nonce" })
+        : Response.json({ success: true, requiresMfa: true, role: "student", userId: "fixture-user", email: "student@example.test", challenge: "fixture-challenge" });
+    }
+    assert.equal(prevented, true, "native submission is cancelled before verification fetch");
+    assert.equal(url, "/api/auth/verify-otp");
+    assert.equal(init.method, "POST");
+    assert.equal((init.headers as Record<string, string>)["Content-Type"], "application/json");
+    assert.deepEqual(JSON.parse(String(init.body)), { userId: "fixture-user", challenge: "fixture-challenge", otpCode: "123456" });
+    return Response.json({}, { status: 401 });
+  });
+  await success(page)({ credential: "fixture-credential" });
+  const input = page.find(n => n.props.id === "google-otp");
+  (input.props.onChange as (e: unknown) => void)({ target: { value: "123456" } });
+  const form = page.find(n => n.type === "form");
+  assert.equal(form.props.method, "post");
+  assert.equal(form.props.action, undefined);
+  await (form.props.onSubmit as (event: { preventDefault: () => void }) => Promise<void>)({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(page.calls.filter(call => call.url.endsWith("/verify-otp")).length, 1);
+  assert.deepEqual(page.destinations, []);
+  page.unmount();
 });

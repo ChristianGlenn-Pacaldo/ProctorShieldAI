@@ -1,72 +1,43 @@
-import "dotenv/config";
+import crypto from "node:crypto";
 import type { BrowserContext } from "@playwright/test";
-import jwt from "jsonwebtoken";
 import { Pool } from "pg";
+import { hashPassword } from "../../src/lib/password-hash.ts";
+import { assertIsolatedNetwork, assertNoTestEnvFiles, authenticatedTestEnvironment, verifyIsolatedDatabaseIdentity } from "../../tests/helpers/isolated-test-environment.ts";
+import { loginSyntheticAccount, type SyntheticAccount, type TestRole } from "./login.ts";
 
-type Role = "student" | "teacher";
-
-interface AuthenticatedUser {
-  id: string;
-  email: string;
-  fullName: string;
-  sessionVersion: number;
+export async function createAuthenticatedTestPool() {
+  assertNoTestEnvFiles();
+  const { database } = authenticatedTestEnvironment();
+  assertIsolatedNetwork();
+  const pool = new Pool({ ...database.connection, max: 2 });
+  try { await verifyIsolatedDatabaseIdentity(pool, database); return pool; }
+  catch { await pool.end(); throw new Error("Isolated authenticated database identity verification failed"); }
 }
 
-async function findExistingUser(role: Role): Promise<AuthenticatedUser | null> {
-  const configuredUrl = process.env.E2E_DATABASE_URL;
-  if (!configuredUrl) {
-    throw new Error("E2E_DATABASE_URL is required for authenticated E2E tests; DATABASE_URL fallback is intentionally disabled");
-  }
+export async function createSyntheticAccount(pool: Pool, role: TestRole): Promise<SyntheticAccount> {
+  if (!["student", "teacher", "admin"].includes(role)) throw new Error("Unsupported synthetic role");
+  // Verify again before the first write; never select or replace a prior account.
+  await verifyIsolatedDatabaseIdentity(pool, authenticatedTestEnvironment().database);
+  const id = crypto.randomUUID(), password = crypto.randomBytes(24).toString("base64url") + "A1";
+  const email = `psai-e2e-${id}@example.invalid`;
+  const result = await pool.query<Omit<SyntheticAccount, "password">>(
+    `INSERT INTO users (id, full_name, email, password, role_id, status, session_version)
+     SELECT $1, $2, $3, $4, r.id, 'active', 0 FROM roles r WHERE r.role_name = $5
+     RETURNING id, email, full_name AS "fullName", session_version AS "sessionVersion"`,
+    [id, `Synthetic ${role} ${id.slice(0,8)}`, email, await hashPassword(password), role],
+  );
+  if (result.rowCount !== 1) throw new Error("The isolated database lacks a required test role");
+  return { ...result.rows[0], password };
+}
 
-  const databaseUrl = new URL(configuredUrl);
-  const productionUrl = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : null;
-  const normalizeNeonHost = (host: string) => host.toLowerCase().replace("-pooler.", ".");
-  if (productionUrl && normalizeNeonHost(databaseUrl.hostname) === normalizeNeonHost(productionUrl.hostname)) {
-    throw new Error("E2E_DATABASE_URL resolves to the production database endpoint; use a separate disposable Neon branch");
-  }
-  if (databaseUrl.searchParams.get("sslmode") === "require") {
-    databaseUrl.searchParams.set("sslmode", "verify-full");
-  }
-  const connectionString = databaseUrl.toString();
-
-  const pool = new Pool({ connectionString, max: 1 });
+export async function authenticateAsSyntheticRole(context: BrowserContext, role: TestRole) {
+  const pool = await createAuthenticatedTestPool();
   try {
-    const result = await pool.query<AuthenticatedUser>(
-      `SELECT u.id, u.email, u.full_name AS "fullName", u.session_version AS "sessionVersion"
-       FROM users u
-       INNER JOIN roles r ON r.id = u.role_id
-       WHERE r.role_name = $1 AND u.status = 'active'
-       ORDER BY u.created_at ASC
-       LIMIT 1`,
-      [role],
-    );
-    return result.rows[0] ?? null;
+    const account = await createSyntheticAccount(pool, role);
+    return await loginSyntheticAccount(context, account, role, authenticatedTestEnvironment().origin);
   } finally {
     await pool.end();
+    // Owned synthetic rows are retained until separately approved disposable
+    // database disposal. Never delete historical dummy accounts or quizzes.
   }
-}
-
-export async function authenticateAsExistingRole(context: BrowserContext, role: Role) {
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret || secret.length < 32) throw new Error("NEXTAUTH_SECRET must contain at least 32 characters");
-
-  const user = await findExistingUser(role);
-  if (!user) throw new Error(`No active ${role} account exists for authenticated E2E testing`);
-
-  const token = jwt.sign(
-    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion, sessionClass: "user" },
-    secret,
-    { algorithm: "HS256", expiresIn: "15m", audience: "proctorshield:user" },
-  );
-
-  const baseUrl = new URL(process.env.E2E_BASE_URL ?? "http://localhost:3100");
-
-  await context.addCookies([{
-    name: "ps_session_user",
-    value: token,
-    url: baseUrl.origin,
-    httpOnly: true,
-    secure: baseUrl.protocol === "https:",
-    sameSite: "Lax",
-  }]);
 }

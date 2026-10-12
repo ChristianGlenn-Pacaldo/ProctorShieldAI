@@ -21,7 +21,7 @@ async function POSTImpl(req: NextRequest) {
 
     if (!isStrongPassword(password)) {
       return NextResponse.json(
-        { success: false, message: "Password must be 10-128 characters and contain letters and numbers" },
+        { success: false, message: "Password must be at least 10 characters, contain letters and numbers, and fit within 72 UTF-8 bytes" },
         { status: 400 }
       );
     }

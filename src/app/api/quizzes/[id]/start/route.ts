@@ -4,9 +4,11 @@ import prisma from "@/lib/prisma";
 import { mutateArena } from "@/lib/arena";
 import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { isTrustedAuthOrigin } from "@/lib/auth-origin";
 import { createProctoredSession, proctoredSessionKey } from "@/lib/quiz-session-timing";
 
 async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isTrustedAuthOrigin(req)) return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {

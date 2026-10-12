@@ -8,6 +8,7 @@ RUN npm ci
 RUN npx prisma generate
 COPY prisma.config.ts ./
 COPY src/lib/prisma.ts ./src/lib/prisma.ts
+COPY src/lib/password-hash.ts ./src/lib/password-hash.ts
 COPY scripts/bootstrap.ts ./scripts/bootstrap.ts
 COPY scripts/railway-staging-migrate.mjs ./scripts/railway-staging-migrate.mjs
 

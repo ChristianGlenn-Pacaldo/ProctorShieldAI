@@ -92,7 +92,7 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
             </div>
             {sessionUnavailable && <p role="alert" className="ps-auth-alert ps-auth-warning mb-4 p-3 rounded-xl bg-[var(--ps-warning-soft)] border border-[var(--ps-warning)] text-base text-[var(--ps-warning)]">Sign-in status is temporarily unavailable. Please try again.</p>}
             {error && <p role="alert" className="ps-auth-alert mb-4 p-3 rounded-xl bg-[var(--ps-error-soft)] border border-[var(--ps-error)] text-base text-[var(--ps-error)]">{error}</p>}
-            <form onSubmit={handleLogin} aria-busy={isLoading} aria-labelledby="login-heading" className="space-y-5">
+            <form method="post" onSubmit={handleLogin} aria-busy={isLoading} aria-labelledby="login-heading" className="space-y-5">
               <div>
                 <label htmlFor="login-email" className="text-base font-medium text-[var(--ps-text-secondary)] mb-2 block">Email Address</label>
                 <input id="login-email" name="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isLoading} required className="w-full min-h-12 px-4 py-3 rounded-xl bg-[var(--ps-surface-inset)] border border-[var(--ps-border-control)] text-base text-[var(--ps-text)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-2 focus:ring-[var(--ps-focus)] disabled:opacity-60" />

@@ -86,7 +86,7 @@ export function quizSessionFixture(duration = 30) {
   return { db, timing, deps, get state() { return state; }, now: () => now, advance: (minutes: number) => { now += minutes * 60_000; },
     add: (studentId: string, quizId=7) => db.studentQuiz.create({ data: { studentId, quizId, quizStatus: "enrolled" } }),
     end: (quizId=7) => load("quizzes/[id]", "teacher", "teacher").PUT(request({ quizStatus: "ended" }), { params: Promise.resolve({ id: String(quizId) }) }),
-    teacherStart: (quizId=7) => load("quizzes/[id]/start", "teacher", "teacher").POST(request({}), { params: Promise.resolve({ id: String(quizId) }) }),
+    teacherStart: (quizId=7) => load("quizzes/[id]/start", "teacher", "teacher").POST(new Request(`https://app.example.test/api/quizzes/${quizId}/start`, { method: "POST", headers: { Origin: "https://app.example.test" } }), { params: Promise.resolve({ id: String(quizId) }) }),
     start: (id: string) => { const a=state.attempts.get(id); return load("quizzes/session", a.studentId).POST(request({ action: "start", quizId: a.quizId, studentQuizId: id })); },
     get: (studentId: string, quizId=7) => load("quizzes/[id]", studentId).GET(request({}), { params: Promise.resolve({ id: String(quizId) }) }),
     submit: (id: string, reason: string) => { const a=state.attempts.get(id); return load("quizzes/submit", a.studentId).POST(request({ quizId: a.quizId, studentQuizId: id, reason, answers: [] })); },

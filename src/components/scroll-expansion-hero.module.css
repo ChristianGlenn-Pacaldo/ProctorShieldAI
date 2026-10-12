@@ -1,0 +1,36 @@
+.root {
+  position: relative;
+  width: 470px;
+  max-width: 100%;
+  aspect-ratio: 1015 / 807;
+  z-index: 3;
+}
+.media {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--media-width, 100%);
+  height: var(--media-height, 100%);
+  transform: translate(var(--media-x, 0px), var(--media-y, 0px));
+}
+.media > :global([data-hero-video]) {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  aspect-ratio: auto;
+}
+.media :global(video) { object-fit: contain; }
+.media :global([data-hero-video]) > div { display: grid; place-items: center; }
+@media (max-width: 850px) {
+  .media {
+    width: var(--media-width, 88%);
+    height: var(--media-height, 88%);
+    transform: translate(var(--media-x, 6%), 0px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media { width: 100%; height: 100%; transform: none; }
+}
+
+/* Keep the accessible control clear of the original video wordmark. */
+.media :global([data-hero-video]) > button { top: var(--control-top, calc(100% - 44px)); bottom: auto; }

@@ -126,11 +126,29 @@
 .bottomCard .eyebrow { margin-top: 20px; }
 .bottomCard h2 { font-size: 49px; line-height: 1.12; margin-top: 13px; color: #e4f5e7; }
 .bottomCard p { font-size: 12px; color: #b5d3bf; line-height: 1.8; margin: 20px 0 26px; }
-.footer { padding-block: 27px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.footer .brand { font-size: 17px; }
-.footer p { font-size: 9px; color: #a9c5b4; }
-.footer > div { display: flex; gap: 23px; }
-.footer > div > a { color: #c0d7c7; font-size: 10px; }
+.footer { background: #032b23; border-top: 1px solid #b6eac92b; padding-block: 3.5rem 1.25rem; }
+.footerGrid { display: grid; grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1fr)); gap: 2rem; }
+.footerGrid > *, .footerContext > *, .footerBottom > * { min-width: 0; }
+.footerBrand { display: inline-flex; align-items: center; gap: .875rem; max-width: 100%; min-height: 44px; color: #eefaf2; font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; letter-spacing: -.04em; line-height: 1.2; }
+.footerBrand > img { flex-shrink: 0; }
+.footerBrand > span { min-width: 0; overflow-wrap: anywhere; }
+.footerAccent { color: #e4d5a8; }
+.footerTagline { margin: 1.25rem 0 .625rem; color: #e4d5a8; font-size: .9375rem; font-weight: 600; line-height: 1.7; }
+.footerDescription { max-width: 24rem; margin: 0; color: #afd0c2; font-size: .875rem; line-height: 1.9; }
+.footer .footerColumn h2 { margin: .25rem 0 .75rem; color: #e4d5a8; font-family: var(--font-sans); font-size: .875rem; font-weight: 700; line-height: 1.7; letter-spacing: .02em; }
+.footerColumn ul { list-style: none; margin: 0; padding: 0; }
+.footerColumn a, .footerContext a, .footerBottom a { display: inline-flex; align-items: center; gap: .5rem; max-width: 100%; min-height: 44px; padding-block: .5rem; color: #c7e5d5; font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: .3em; transition: color .15s, text-decoration-color .15s; }
+.footer a:hover { color: #91eacb; text-decoration-color: currentColor; }
+.footer a:focus-visible { outline: 3px solid #91eacb; outline-offset: 4px; border-radius: 3px; }
+.footer a > svg { flex-shrink: 0; }
+.footerContext { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 2rem; margin-top: 2.5rem; padding: 1.25rem 1.5rem; background: #d3f8e508; border: 1px solid #b6eac91f; border-radius: 1rem; }
+.footerContext p { flex: 1 1 26rem; margin: 0; color: #afd0c2; font-size: .875rem; line-height: 1.8; overflow-wrap: anywhere; }
+.footerContext strong { color: #eefaf2; font-weight: 600; }
+.footerBottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1.5rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #b6eac92b; }
+.footerBottom p { margin: 0; color: #afd0c2; font-size: .8125rem; line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .footerGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .footerIdentity { grid-column: 1 / -1; } .footerDescription { max-width: 36rem; } }
+@media (max-width: 700px) { .footerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.75rem; } .footer { padding-top: 2.5rem; } .footerContext { padding: 1rem; } }
+@media (max-width: 420px) { .footerGrid { grid-template-columns: minmax(0, 1fr); } .footerIdentity { grid-column: auto; } .footerBottom { align-items: flex-start; flex-direction: column; } }
 @media (min-width: 1600px) { .hero { padding-block: 105px 90px; } }
 @media (max-width: 1100px) {
   .container { width: calc(100% - 64px); }
@@ -169,8 +187,6 @@
   .arenaBanner > div:nth-child(2) { flex: 1; min-width: 220px; }
   .arenaBanner .secondaryButton { margin-left: 0; }
   .faqSection { grid-template-columns: 1fr; gap: 30px; }
-  .footer { flex-wrap: wrap; }
-  .footer p { display: none; }
 }
 @media (max-width: 550px) {
   .container { width: calc(100% - 40px); }
@@ -238,7 +254,135 @@
   .bottomCard { padding-block: 50px; }
   .bottomCard h2 { font-size: 39px; }
   .bottomCard p { font-size: 11px; max-width: 275px; }
-  .footer { justify-content: center; padding-block: 24px; }
-  .footer > div { gap: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+
+/* Landing-only theme presentation. Existing dark palette and media stay intact. */
+.themeControl { display: flex; justify-content: flex-end; padding-top: 12px; }
+.themeControl :global(.ps-auth-theme) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 14px; border: 1px solid var(--ps-border-control); border-radius: 10px; background: var(--ps-glass); color: var(--ps-text); font-size: .8125rem; font-weight: 600; cursor: pointer; }
+.themeControl :global(.ps-theme-when-light), .themeControl :global(.ps-theme-when-dark) { align-items: center; gap: 8px; }
+.themeControl :global(.ps-theme-when-light) { display: inline-flex; }
+.themeControl :global(.ps-theme-when-dark) { display: none; }
+:global(html.dark) .themeControl :global(.ps-theme-when-light) { display: none; }
+:global(html.dark) .themeControl :global(.ps-theme-when-dark) { display: inline-flex; }
+:global(html:not(.dark)) .page { --green: var(--ps-primary); --green-dark: #003328; --text: var(--ps-text); --muted: var(--ps-text-muted); background: radial-gradient(ellipse at 78% 6%, #91eacb26, transparent 29%), radial-gradient(ellipse at 12% 43%, #e5c77f12, transparent 28%), var(--ps-canvas); }
+:global(html:not(.dark)) .background { opacity: .04; }
+:global(html:not(.dark)) .header { background: #f3f8f1ed; border-color: var(--ps-border); }
+:global(html:not(.dark)) .page :is(a, button, summary, input):focus-visible { outline-color: var(--ps-focus); }
+:global(html:not(.dark)) .brand,
+:global(html:not(.dark)) .loginLink,
+:global(html:not(.dark)) .menuButton,
+:global(html:not(.dark)) .mobileNav a,
+:global(html:not(.dark)) .joinHeading > span:first-child,
+:global(html:not(.dark)) .floatingCard strong,
+:global(html:not(.dark)) .price,
+:global(html:not(.dark)) .faqList summary,
+:global(html:not(.dark)) .bottomCard h2,
+:global(html:not(.dark)) .footerBrand,
+:global(html:not(.dark)) .footerContext strong { color: var(--ps-text); }
+:global(html:not(.dark)) .brandAccent,
+:global(html:not(.dark)) .eyebrow,
+:global(html:not(.dark)) .planLabel,
+:global(html:not(.dark)) .footerAccent,
+:global(html:not(.dark)) .footerTagline,
+:global(html:not(.dark)) .footer .footerColumn h2 { color: var(--ps-gold); }
+:global(html:not(.dark)) .brand small,
+:global(html:not(.dark)) .desktopNav a,
+:global(html:not(.dark)) .textButton,
+:global(html:not(.dark)) .stageTop,
+:global(html:not(.dark)) .stageBottom,
+:global(html:not(.dark)) .floatingCard small,
+:global(html:not(.dark)) .visualCaption,
+:global(html:not(.dark)) .capabilityStrip span,
+:global(html:not(.dark)) .price small,
+:global(html:not(.dark)) .priceCard li,
+:global(html:not(.dark)) .bottomCard p,
+:global(html:not(.dark)) .footerDescription,
+:global(html:not(.dark)) .footerContext p,
+:global(html:not(.dark)) .footerBottom p { color: var(--ps-text-secondary); }
+:global(html:not(.dark)) .hero h1 > span,
+:global(html:not(.dark)) .page h2 > span,
+:global(html:not(.dark)) .capabilityStrip svg,
+:global(html:not(.dark)) .priceCard li svg,
+:global(html:not(.dark)) .footer a,
+:global(html:not(.dark)) .floatingCard > svg { color: var(--ps-primary); }
+:global(html:not(.dark)) .desktopNav a:hover,
+:global(html:not(.dark)) .footer a:hover { color: var(--ps-primary-hover); }
+:global(html:not(.dark)) .quickJoin,
+:global(html:not(.dark)) .floatingCard,
+:global(html:not(.dark)) .priceCard,
+:global(html:not(.dark)) .footerContext { background: var(--ps-glass); border-color: var(--ps-border); box-shadow: 0 8px 26px #10352b0d; }
+:global(html:not(.dark)) .joinInputRow input { color: var(--ps-text); background: var(--ps-surface); border-color: var(--ps-border-control); }
+:global(html:not(.dark)) .joinInputRow input::placeholder { color: var(--ps-text-muted); }
+:global(html:not(.dark)) .studentTag,
+:global(html:not(.dark)) .arenaBadge,
+:global(html:not(.dark)) .floatingIcon { color: var(--ps-gold); background: var(--ps-gold-soft); border-color: #89651c40; }
+:global(html:not(.dark)) .secondaryButton,
+:global(html:not(.dark)) .playIcon { color: var(--ps-primary); background: var(--ps-accent-soft); border-color: var(--ps-border-control); }
+:global(html:not(.dark)) .secondaryButton:hover { background: var(--ps-surface-inset); }
+:global(html:not(.dark)) .capabilityStrip,
+:global(html:not(.dark)) .arenaBanner,
+:global(html:not(.dark)) .bottomSection,
+:global(html:not(.dark)) .footer { background: #e8f2ec; border-color: var(--ps-border); }
+:global(html:not(.dark)) .proCard { background: linear-gradient(130deg, #dff4e9, #fff4d6); border-color: #89651c66; }
+:global(html:not(.dark)) .howSection,
+:global(html:not(.dark)) .mobileNav,
+:global(html:not(.dark)) .stageBottom,
+:global(html:not(.dark)) .priceCard ul,
+:global(html:not(.dark)) .faqList details,
+:global(html:not(.dark)) .footerBottom { border-color: var(--ps-border); }
+:global(html:not(.dark)) .faqList summary svg { color: var(--ps-gold); }
+
+:global(html:not(.dark)) .heroNote { color: var(--ps-text-secondary); }
+:global(html:not(.dark)) .heroNote > svg, :global(html:not(.dark)) .heroNote > span { color: var(--ps-primary); }
+
+
+/* Mobile text enlargement: reflow content rather than conceal or shrink it. */
+@media (max-width: 850px) {
+  .navbar { flex-wrap: wrap; padding-block: 12px; row-gap: 8px; }
+  .brand { min-width: 0; max-width: 100%; min-height: 44px; flex-shrink: 1; }
+  .brand > img { flex-shrink: 0; }
+  .brand > span { min-width: 0; overflow-wrap: anywhere; }
+  .navActions { max-width: 100%; flex-wrap: wrap; }
+  .navActions a { min-height: 44px; }
+  .navButton { max-width: 100%; overflow-wrap: anywhere; }
+  .menuButton { min-width: 44px; min-height: 44px; flex-shrink: 0; align-items: center; justify-content: center; }
+  .mobileNav a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; }
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .heroCopy { min-width: 0; }
+  .hero h1, .page h2 { overflow-wrap: anywhere; hyphens: auto; }
+  .heroActions > a { min-height: 44px; max-width: 100%; overflow-wrap: anywhere; }
+  .heroActions > a svg { flex-shrink: 0; }
+  .joinInputRow input, .joinInputRow button { min-height: 44px; }
+}
+
+/* Space for the single existing hero player to expand in normal document flow. */
+.heroExpansionSpace { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; }
+@media (max-width: 850px), (prefers-reduced-motion: reduce) { .heroExpansionSpace { display: none; } }
+
+/* Navigation interaction only; all existing brand/layout measurements are retained. */
+.desktopNav { position: relative; }
+.navIndicator {
+  position: absolute; left: 0; top: var(--nav-y, 100%);
+  width: var(--nav-width, 0px); height: 2px; border-radius: 2px;
+  background: var(--ps-gold); pointer-events: none; opacity: 0;
+  transform: translateX(var(--nav-x, 0px));
+  transition: transform 240ms ease, width 240ms ease, opacity 160ms ease;
+}
+.desktopNav[data-has-active="true"] .navIndicator { opacity: 1; }
+.mobileNav a { position: relative; transition: color 180ms ease; }
+.mobileNav a[href^="#"]::after {
+  content: ''; position: absolute; inset-inline: 0; bottom: 3px;
+  height: 2px; border-radius: 2px; background: var(--ps-gold);
+  opacity: 0; transform: scaleX(.8); transition: opacity 160ms ease, transform 180ms ease;
+}
+.mobileNav a[aria-current="location"]::after { opacity: 1; transform: scaleX(1); }
+.header :is(.desktopNav, .mobileNav) a:is(:hover, [aria-current="location"]) { color: var(--ps-gold); }
+.page :is(:global(#features), :global(#how), :global(#pricing), :global(#faq)) { scroll-margin-top: var(--landing-nav-offset, 113px); }
+.page :is(:global(#features-title), :global(#how-title), :global(#pricing-title), :global(#faq-title)):focus-visible { outline: 3px solid var(--ps-focus); outline-offset: 6px; }
+@media (max-width: 850px) {
+  .page :is(:global(#features), :global(#how), :global(#pricing), :global(#faq)) { scroll-margin-top: var(--landing-nav-offset, 150px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navIndicator, .mobileNav a::after { transition: none !important; }
+}

@@ -230,7 +230,7 @@ export function proxy(request: NextRequest) {
     }
 
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = targetRole === "admin" ? "/admin/login" : "/login";
+    loginUrl.pathname = "/login";
     const response = NextResponse.redirect(loginUrl);
     if (tokenName) response.cookies.delete(tokenName);
     return addSecurityHeaders(response);

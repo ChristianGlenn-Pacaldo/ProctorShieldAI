@@ -16,11 +16,12 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
   }).outputText);
   const exports: any = {};
   vm.runInNewContext(compiled.get(file)!, {
-    exports, Date: dependencies.__Date ?? Date, Map, Set, Promise, Buffer, crypto, structuredClone,
+    exports, Date: dependencies.__Date ?? Date, URL, Map, Set, Promise, Buffer, crypto, structuredClone,
     setTimeout, clearTimeout, AbortController, AbortSignal,
     process: dependencies.__process ?? { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn(...args: unknown[]) { (dependencies.__warnings as unknown[][] | undefined)?.push(args); }, info() {} },
     require: (name: string) => {
       if (name === "node:crypto") return crypto;
+      if (name === "@/lib/auth-origin" && !(name in dependencies)) return loadArenaModule("src/lib/auth-origin.ts", { __process: { env: { NEXT_PUBLIC_APP_URL: "https://app.example.test" } } });
       if (name === "@/lib/arena-question-work" && !(name in dependencies)) return questionWork;
       if (name === "@/lib/quiz-question-order" && !(name in dependencies)) return questionOrder;
       if (name === "@/lib/quiz-session-timing" && !(name in dependencies)) return sessionTiming;
@@ -230,7 +231,7 @@ export function arenaFixture(status: "active" | "lobby" = "active") {
     autosave: (userId: string) => load("quizzes/autosave", userId).POST(request({ quizId: 77, answers: [{ questionId: 1, choiceId: 10 }], sessionId: "session-1" })),
     editQuiz: (body = { title: "Edited" }) => load("quizzes/[id]", "teacher", "teacher").PUT(request(body), { params: Promise.resolve({ id: "77" }) }),
     deleteQuiz: () => load("quizzes/[id]", "teacher", "teacher").DELETE(request({}), { params: Promise.resolve({ id: "77" }) }),
-    legacyStart: () => load("quizzes/[id]/start", "teacher", "teacher").POST(request({}), { params: Promise.resolve({ id: "77" }) }),
+    legacyStart: () => load("quizzes/[id]/start", "teacher", "teacher").POST(new Request("https://app.example.test/api/quizzes/77/start", { method: "POST", headers: { Origin: "https://app.example.test" } }), { params: Promise.resolve({ id: "77" }) }),
     action: (action: string, userId = "teacher", extra = {}) => load("arena/[id]", userId, userId === "teacher" ? "teacher" : "student").POST(request({ action, ...extra }), { params: Promise.resolve({ id: "77" }) }),
     get: () => load("arena/[id]", "teacher", "teacher").GET(request({}), { params: Promise.resolve({ id: "77" }) }),
   };

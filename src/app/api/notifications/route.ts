@@ -19,7 +19,10 @@ export async function GET(req: NextRequest) {
       take: 20,
     });
 
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    // Count all owned unread records, independently of the bounded recent list.
+    const unreadCount = await prisma.notification.count({
+      where: { userId: session.userId, isRead: false },
+    });
 
     return NextResponse.json({
       success: true,

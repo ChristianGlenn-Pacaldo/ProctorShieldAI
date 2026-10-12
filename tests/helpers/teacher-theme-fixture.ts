@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -92,6 +93,7 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
       window: { location: { search: "", origin: "https://example.test" } }, document: { body: {} },
       require(name: string) {
         if (name.endsWith(".css")) return {}; // Presentation-only route stylesheet.
+        if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "react-dom") return { createPortal: (node: Element) => { portals.push(node); return null; } };

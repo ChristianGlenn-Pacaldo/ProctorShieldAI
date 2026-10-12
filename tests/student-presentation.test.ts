@@ -41,7 +41,7 @@ test("Student settings has associated existing-policy help without altering pass
   const html = studentThemeFixture("settings");
   assert.match(html, /aria-describedby="student-new-password-help"/);
   assert.match(html, /id="student-new-password-help"/);
-  assert.match(html, /10–128 characters, including letters and numbers/);
+  assert.match(html, /At least 10 characters with letters and numbers/);
   assert.match(html, /placeholder="New password"/);
   assert.match(html, /Show current password/); assert.match(html, /Show new password/);
 });

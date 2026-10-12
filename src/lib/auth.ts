@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
@@ -24,16 +23,7 @@ const ALL_SESSION_COOKIES = [...Object.values(SESSION_COOKIES), "ps_session_teac
 
 // ── PASSWORD HASHING ────────────────────────────────────
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
-}
-
-export async function verifyPassword(
-  password: string,
-  hashed: string
-): Promise<boolean> {
-  return bcrypt.compare(password, hashed);
-}
+export { hashPassword, verifyPassword } from "./password-hash.ts";
 
 // ── JWT TOKEN ───────────────────────────────────────────
 

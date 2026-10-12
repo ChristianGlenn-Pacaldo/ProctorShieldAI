@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { createRequire } from "node:module";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { browserAuthStore } from "./browser-auth-store.ts";
+import { isStrongPassword } from "../../src/lib/security.ts";
 
 const requireNode = createRequire(import.meta.url);
 export type AuthUser = {
@@ -105,9 +106,10 @@ export function authFixture(shared?: Backend) {
       create: async () => ({}), deleteMany: async () => ({ count: 1 }) },
     $queryRaw: async () => [],
     $transaction: async (work: (tx: any) => Promise<any>) => {
-      const previous = structuredClone(users), previousLogs = logs.length;
+      const previous = structuredClone(users), previousOtps = structuredClone(otps), previousLogs = logs.length;
       try { return await work(prisma); } catch (error) {
         users.clear(); for (const [id, u] of previous) users.set(id, u);
+        otps.splice(0, otps.length, ...previousOtps);
         logs.splice(previousLogs); throw error;
       }
     },
@@ -145,6 +147,7 @@ export function authFixture(shared?: Backend) {
         if (name === "server-only") return {};
         if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
         if (name === "@/lib/auth") return load("src/lib/auth.ts");
+        if (name === "./password-hash.ts") return load("src/lib/password-hash.ts");
         if (name === "@/lib/browser-auth" || name === "./browser-auth") return load("src/lib/browser-auth.ts");
         if (name === "./redis.ts") return generations.module;
         if (name === "@/lib/auth-origin") return load("src/lib/auth-origin.ts");
@@ -153,7 +156,7 @@ export function authFixture(shared?: Backend) {
         if (name === "./prisma") return { __esModule: true, default: prisma };
         if (name === "@/lib/logout-realtime") return { sendLogoutActivity: (payload: unknown) => realtime(payload) };
         if (name === "@/lib/security" || name === "./security") return { consumeRateLimitGroup,
-          getClientIp: () => "fixture", generateOtp: () => "123456", isStrongPassword: () => true,
+          getClientIp: () => "fixture", generateOtp: () => "123456", isStrongPassword,
           hashOtp: (id: string, code: string, purpose: string) => `${purpose}:${id}:${code}` };
         if (name === "@/lib/google-identity") return { hasVerifiedGoogleEmail: (p: any) => p.email_verified === true };
         if (name === "@/lib/google-signin-challenge") return load("src/lib/google-signin-challenge.ts");

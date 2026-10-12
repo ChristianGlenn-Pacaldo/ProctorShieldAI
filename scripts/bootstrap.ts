@@ -1,12 +1,12 @@
 import "dotenv/config";
-import bcrypt from "bcryptjs";
+import { hashPassword, isStrictPasswordInput } from "../src/lib/password-hash.ts";
 import prisma from "../src/lib/prisma";
 
 async function main() {
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || "";
-  if (!adminEmail || adminPassword.length < 14 || !/[A-Za-z]/.test(adminPassword) || !/\d/.test(adminPassword)) {
-    throw new Error("ADMIN_EMAIL and an ADMIN_PASSWORD of at least 14 characters containing letters and numbers are required");
+  if (!adminEmail || adminPassword.length < 14 || !isStrictPasswordInput(adminPassword) || !/[A-Za-z]/.test(adminPassword) || !/\d/.test(adminPassword)) {
+    throw new Error("ADMIN_EMAIL and an ADMIN_PASSWORD of at least 14 characters containing letters and numbers, within 72 UTF-8 bytes, are required");
   }
 
   const roles = await Promise.all([
@@ -14,14 +14,14 @@ async function main() {
     prisma.role.upsert({ where: { roleName: "teacher" }, update: {}, create: { roleName: "teacher", description: "Teacher account" } }),
     prisma.role.upsert({ where: { roleName: "admin" }, update: {}, create: { roleName: "admin", description: "System administrator" } }),
   ]);
-  const passwordHash = await bcrypt.hash(adminPassword, 12);
+  const passwordHash = await hashPassword(adminPassword);
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail }, include: { role: true } });
   if (existingAdmin && existingAdmin.role.roleName !== "admin") {
     throw new Error("ADMIN_EMAIL already belongs to a non-admin account; choose a different address");
   }
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { password: passwordHash, roleId: roles[2].id, status: "active" },
+    update: { password: passwordHash, sessionVersion: { increment: 1 }, roleId: roles[2].id, status: "active" },
     create: { fullName: "System Admin", email: adminEmail, password: passwordHash, roleId: roles[2].id, status: "active" },
   });
 

@@ -63,7 +63,7 @@ for (const role of ["student", "teacher"]) {
     assert.ok(html.includes('aria-describedby="' + id + '"'));
     assert.ok(html.includes('id="' + id + '"'));
     assert.match(html, /placeholder="Create a password"/);
-    assert.match(html, /10–128 characters, including letters and numbers./);
+    assert.match(html, /At least 10 characters with letters and numbers./);
     assert.doesNotMatch(html, /placeholder="Min. 10/);
   });
 }
@@ -72,7 +72,7 @@ test("reset password uses a concise placeholder and accessible existing-policy g
   assert.match(html, /placeholder="New password"/);
   assert.match(html, /aria-describedby="new-password-help"/);
   assert.match(html, /id="new-password-help"/);
-  assert.match(html, /10–128 characters, including letters and numbers./);
+  assert.match(html, /At least 10 characters with letters and numbers./);
   assert.match(html, /ProctorShieldAI/);
   assert.doesNotMatch(html, /ProctorShield AI|placeholder="Min. 10/);
 });

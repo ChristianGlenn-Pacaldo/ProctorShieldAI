@@ -186,7 +186,7 @@ export default function DashboardShell({
         if (isNotificationActive(request.generation) && !request.controller.signal.aborted && refresh === notificationRefresh.current && data.success) {
           const visible = visibleStudentNotifications<Notification>(data.notifications || []);
           setNotifications(visible);
-          setUnreadCount(visible.filter((notification) => !notification.isRead).length);
+          setUnreadCount(data.unreadCount);
         }
       }
     } catch (e) {

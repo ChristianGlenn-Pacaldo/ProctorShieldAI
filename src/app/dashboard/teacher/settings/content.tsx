@@ -215,7 +215,7 @@ export default function SettingsContent() {
                 </button>
               </div>
             </div>
-            <p id="teacher-new-password-help" className="text-xs text-[var(--muted)]">10–128 characters, including letters and numbers.</p>
+            <p id="teacher-new-password-help" className="text-xs text-[var(--muted)]">At least 10 characters with letters and numbers. Maximum 72 UTF-8 bytes; some characters use more than one byte.</p>
             {/* Confirm Password */}
             <div>
               <label htmlFor="teacher-confirm-password" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Confirm New Password</label>

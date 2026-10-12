@@ -77,7 +77,7 @@ function ForgotPasswordContent() {
 
   return (
     <div className="auth-shell ps-auth-recovery app-gradient-shell min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md [overflow-wrap:anywhere]">
         {/* Brand */}
         <div className="text-center mb-8">
           <BrandImage width={50} className="mx-auto mb-4" decorative />
@@ -173,13 +173,13 @@ function ForgotPasswordContent() {
                       placeholder="New password"
                       aria-describedby="new-password-help"
                       autoComplete="new-password"
-                      className="w-full pl-10 pr-10 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-base text-[var(--ink)] focus:outline-none focus:border-[var(--ps-focus)] transition-colors"
+                      className="w-full pl-10 pr-12 py-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-base text-[var(--ink)] focus:outline-none focus:border-[var(--ps-focus)] transition-colors"
                     />
-                    <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-controls="new-password confirm-new-password" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]">
+                    <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-controls="new-password confirm-new-password" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-4 text-[var(--muted2)] hover:text-[var(--ink)]">
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p id="new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">10–128 characters, including letters and numbers.</p>
+                  <p id="new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 72 UTF-8 bytes; some characters use more than one byte.</p>
                 </div>
                 <div>
                   <label htmlFor="confirm-new-password" className="text-sm font-semibold text-[var(--muted)] mb-1.5 block uppercase tracking-wide">Confirm New Password</label>

@@ -1,8 +1,9 @@
-import "dotenv/config";
 import crypto from "node:crypto";
 import { expect, test, type Browser, type BrowserContext } from "@playwright/test";
-import jwt from "jsonwebtoken";
-import { Pool } from "pg";
+import type { Pool } from "pg";
+import { createAuthenticatedTestPool, createSyntheticAccount } from "./helpers/auth.ts";
+import { loginSyntheticAccount } from "./helpers/login.ts";
+import { authenticatedTestEnvironment } from "../tests/helpers/isolated-test-environment.ts";
 
 type Role = "student" | "teacher";
 
@@ -11,6 +12,7 @@ interface TestUser {
   email: string;
   fullName: string;
   sessionVersion: number;
+  password: string;
 }
 
 interface QuizFixture {
@@ -23,41 +25,8 @@ interface QuizFixture {
   firstCorrectChoiceId: number;
 }
 
-function e2eDatabaseUrl() {
-  const value = process.env.E2E_DATABASE_URL?.trim();
-  if (!value) throw new Error("E2E_DATABASE_URL is required");
-  const url = new URL(value);
-  const productionUrl = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : null;
-  const normalizeHost = (host: string) => host.toLowerCase().replace("-pooler.", ".");
-  if (productionUrl && normalizeHost(url.hostname) === normalizeHost(productionUrl.hostname)) {
-    throw new Error("Focused E2E fixtures cannot use the production database endpoint");
-  }
-  if (url.searchParams.get("sslmode") === "require") url.searchParams.set("sslmode", "verify-full");
-  return url.toString();
-}
-
-function createPool() {
-  return new Pool({ connectionString: e2eDatabaseUrl(), max: 2 });
-}
-
-async function createUser(pool: Pool, role: Role, label: string): Promise<TestUser> {
-  const id = crypto.randomUUID();
-  const unique = crypto.randomUUID().replaceAll("-", "");
-  const email = `${label}-${unique}@e2e.proctorshield.test`;
-  const fullName = role === "student"
-    ? `E2E, STUDENT, ${unique.slice(0, 6).toUpperCase()}`
-    : `E2E Teacher ${unique.slice(0, 6)}`;
-  const result = await pool.query<TestUser>(
-    `INSERT INTO users (id, full_name, email, password, role_id, status, session_version)
-     SELECT $1, $2, $3, 'unused-e2e-password', r.id, 'active', 0
-     FROM roles r
-     WHERE r.role_name = $4
-     RETURNING id, email, full_name AS "fullName", session_version AS "sessionVersion"`,
-    [id, fullName, email, role],
-  );
-  const user = result.rows[0];
-  if (!user) throw new Error(`Unable to create ${role} E2E identity`);
-  return user;
+async function createUser(pool: Pool, role: Role): Promise<TestUser> {
+  return createSyntheticAccount(pool, role);
 }
 
 async function createQuizFixture(options: {
@@ -65,10 +34,10 @@ async function createQuizFixture(options: {
   studentCount: number;
   proTeacher?: boolean;
 }): Promise<{ pool: Pool; fixture: QuizFixture }> {
-  const pool = createPool();
-  const teacher = await createUser(pool, "teacher", "E2E Teacher");
+  const pool = await createAuthenticatedTestPool();
+  const teacher = await createUser(pool, "teacher");
   const students = await Promise.all(
-    Array.from({ length: options.studentCount }, (_, index) => createUser(pool, "student", `E2E Student ${index + 1}`)),
+    Array.from({ length: options.studentCount }, () => createUser(pool, "student")),
   );
 
   if (options.proTeacher) {
@@ -150,24 +119,12 @@ async function createQuizFixture(options: {
 }
 
 async function authenticatedContext(browser: Browser, user: TestUser, role: Role) {
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret || secret.length < 32) throw new Error("NEXTAUTH_SECRET must contain at least 32 characters");
-  const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3100";
-  const context = await browser.newContext({ baseURL });
-  const token = jwt.sign(
-    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion, sessionClass: "user" },
-    secret,
-    { algorithm: "HS256", expiresIn: "15m", audience: "proctorshield:user" },
-  );
-  await context.addCookies([{
-    name: "ps_session_user",
-    value: token,
-    url: baseURL,
-    httpOnly: true,
-    secure: baseURL.startsWith("https:"),
-    sameSite: "Lax",
-  }]);
-  return context;
+  const baseURL = authenticatedTestEnvironment().origin;
+  const context = await browser.newContext({ baseURL, ignoreHTTPSErrors: true, extraHTTPHeaders: { Origin: baseURL } });
+  try {
+    await loginSyntheticAccount(context, user, role, baseURL);
+    return context;
+  } catch (error) { await context.close(); throw error; }
 }
 
 async function closeContexts(contexts: BrowserContext[]) {

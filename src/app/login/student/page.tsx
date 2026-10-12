@@ -315,17 +315,17 @@ export default function StudentLoginPage() {
             </div>
 
             {/* TAB SWITCHER (TOUCH OPTIMIZED) */}
-            <div className="grid grid-cols-2 gap-1.5 bg-[var(--ps-canvas)] p-1.5 rounded-2xl border border-[var(--ps-border)] mb-6 shadow-inner">
+            <div className="ps-auth-student-tabs grid grid-cols-2 gap-1.5 bg-[var(--ps-canvas)] p-1.5 rounded-2xl border border-[var(--ps-border)] mb-6 shadow-inner">
               <button
                 type="button"
                 onClick={() => { setActivePanel("login"); setError(""); }}
-                className={`py-3.5 px-4 rounded-xl text-base font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer select-none touch-manipulation ${
+                className={`ps-auth-student-sign-in py-3.5 px-4 rounded-xl text-base font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer select-none touch-manipulation ${
                   activePanel === "login"
                     ? "ps-auth-primary bg-[var(--ps-primary)] text-[var(--ps-text)] shadow-md shadow-blue-600/30 scale-[1.02]"
                     : "text-[var(--ps-text-muted)] hover:text-[var(--ps-text-secondary)] bg-transparent"
                 }`}
               >
-                <LogIn className="w-4 h-4" /> Sign In
+                <LogIn className="w-4 h-4" /><span>Sign In</span>
               </button>
               <button
                 type="button"
@@ -336,7 +336,7 @@ export default function StudentLoginPage() {
                     : "text-[var(--ps-text-muted)] hover:text-[var(--ps-text-secondary)] bg-transparent"
                 }`}
               >
-                <UserPlus className="w-4 h-4" /> Create Account
+                <UserPlus className="w-4 h-4" /><span>Create Account</span>
               </button>
             </div>
 
@@ -413,7 +413,7 @@ export default function StudentLoginPage() {
                       id="student-otp" type="text"
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="Enter 6-digit code"
+                      placeholder="000000"
                       className="w-full px-4 py-3.5 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-2 focus:ring-[var(--ps-focus)] transition-all text-center tracking-[0.5em] font-mono"
                       maxLength={6}
                       required
@@ -466,7 +466,7 @@ export default function StudentLoginPage() {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
                           <label htmlFor="student-login-password" className="text-sm font-semibold text-[var(--ps-text-secondary)]">Password</label>
                           <Link
                             href="/login/forgot-password?role=student"
@@ -561,7 +561,7 @@ export default function StudentLoginPage() {
                           className="w-full px-4 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-2 focus:ring-[var(--ps-focus)] transition-all"
                           required
                         />
-                        <p id="student-register-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">10–128 characters, including letters and numbers.</p>
+                        <p id="student-register-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 72 UTF-8 bytes; some characters use more than one byte.</p>
                       </div>
                       <div>
                         <label htmlFor="student-register-confirm" className="text-sm font-semibold text-[var(--ps-text-secondary)] mb-1 block">Confirm Password</label>

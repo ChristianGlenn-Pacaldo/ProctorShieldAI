@@ -1,0 +1,41 @@
+.wrapper { min-width: 0; }
+.controls { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+.wrapper .motionButton { min-height: 44px; max-width: 100%; padding: .625rem 1rem; border: 1px solid #739a89; border-radius: var(--ps-radius-control); background: #10352b; color: #eefaf2; font-size: .875rem; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.wrapper .motionButton:hover:not(:disabled) { background: #194637; }
+.wrapper .motionButton:focus-visible { outline: 3px solid #91eacb; outline-offset: 4px; }
+.wrapper .motionButton:disabled { cursor: default; }
+.flow { background: var(--ps-surface-glass); color: var(--ps-text); border: 1px solid var(--ps-border); border-radius: var(--ps-radius-card); backdrop-filter: blur(16px); overflow: visible; }
+.flow > div[class*="absolute"] { border-radius: inherit; }
+.flow > div[class*="from-background"] { --tw-gradient-from: var(--ps-surface); }
+.flow ol { list-style: none; padding: 0; margin-block: 0; }
+.flow [data-how-card] { min-width: 0; list-style: none; }
+.flow [data-how-shell] { background: var(--ps-surface-glass); border-color: var(--ps-border); box-shadow: var(--ps-shadow-card); }
+.flow .cardBackground { background: var(--ps-surface-inset); }
+.flow .cardBorder { border-color: var(--ps-border); }
+.flow .emerald { color: var(--ps-primary); }
+.flow .teal { color: var(--ps-accent); }
+.flow .gold { color: var(--ps-gold); }
+.wrapper .flow h3 { color: var(--ps-text); font-size: 1.5rem; font-weight: 600; line-height: 1.2; margin: 0 0 .625rem; letter-spacing: normal; overflow-wrap: anywhere; }
+.wrapper .flow p { color: var(--ps-text-secondary); font-size: .875rem; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.flow [data-how-body] { overflow: visible; }
+.flow ol > svg { color: var(--ps-border-control); }
+.flow ol > svg path { color: inherit; }
+@media (min-width: 1101px) {
+.flow [data-how-card]:nth-of-type(3) { top: var(--third-top); }
+.flow [data-how-card]:nth-of-type(4) { top: var(--fourth-top); }
+.flow [data-how-card]:nth-of-type(5) { top: var(--fifth-top); }
+}
+/* Variable-backed individual transforms survive CSS lowering and override Tailwind rotation/hover scale. */
+.flow[data-expanded="true"] ol { display: flex; flex-direction: column; gap: 2rem; height: auto; max-width: 38rem; }
+.flow[data-expanded="true"] [data-how-card] { position: relative; inset: auto; width: 100%; rotate: var(--ps-flow-flat-rotation, 0deg); transform: none; scale: var(--ps-flow-flat-scale, 1); margin: 0; }
+.flow[data-expanded="true"] ol > svg { display: none; }
+@media (max-width: 1100px) {
+  .flow { padding: 2rem 1.25rem; }
+  .flow ol { display: flex; flex-direction: column; gap: 2rem; height: auto; max-width: 38rem; }
+  .flow [data-how-card] { position: relative; inset: auto; width: 100%; rotate: var(--ps-flow-flat-rotation, 0deg); transform: none; scale: var(--ps-flow-flat-scale, 1); margin: 0; }
+  .flow ol > svg { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow [data-how-card] { transition: none; }
+  .flow [data-how-card]:hover { scale: 1; transform: none; }
+}

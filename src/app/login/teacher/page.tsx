@@ -347,7 +347,7 @@ export default function TeacherLoginPage() {
                       id="teacher-otp" type="text"
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="Enter 6-digit code"
+                      placeholder="000000"
                       className="w-full px-4 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all text-center tracking-[0.5em]"
                       maxLength={6}
                       required
@@ -398,7 +398,7 @@ export default function TeacherLoginPage() {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
                           <label htmlFor="teacher-login-password" className="text-sm font-semibold text-[var(--ps-text-secondary)]">Password</label>
                           <Link
                             href="/login/forgot-password?role=teacher"
@@ -488,7 +488,7 @@ export default function TeacherLoginPage() {
                           className="w-full px-4 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all"
                           required
                         />
-                        <p id="teacher-register-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">10–128 characters, including letters and numbers.</p>
+                        <p id="teacher-register-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 72 UTF-8 bytes; some characters use more than one byte.</p>
                       </div>
                       <div>
                         <label htmlFor="teacher-register-confirm" className="text-sm font-semibold text-[var(--ps-text-secondary)] mb-1.5 block">Confirm Password</label>

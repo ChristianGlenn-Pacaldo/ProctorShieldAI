@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { isStrictPasswordInput } from "./password-hash.ts";
 import type { NextRequest } from "next/server";
 import { getRedis, isRedisReady } from "./redis.ts";
 
@@ -74,7 +75,7 @@ export function hashOtp(userId: string, code: string, purpose: "login" | "passwo
 export function isStrongPassword(password: unknown): password is string {
   return typeof password === "string"
     && password.length >= 10
-    && password.length <= 128
+    && isStrictPasswordInput(password)
     && /[A-Za-z]/.test(password)
     && /\d/.test(password);
 }

@@ -6,6 +6,8 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { loadArenaModule } from "./helpers/arena-fixture.ts";
 
+import { assertIsolatedNetwork, assertNoTestEnvFiles, isolatedPostgresConfig, verifyIsolatedDatabaseIdentity } from "./helpers/isolated-test-environment.ts";
+
 const configured = process.env.ARENA_CONCURRENCY_TEST_DATABASE_URL;
 
 // Never fall back to DATABASE_URL, .env, staging, demo or E2E. Opt-in requires
@@ -13,15 +15,13 @@ const configured = process.env.ARENA_CONCURRENCY_TEST_DATABASE_URL;
 test("PostgreSQL independent connections serialize Arena mutations and roll back failures", {
   skip: !configured ? "Dedicated local disposable PostgreSQL is not configured" : false,
 }, async () => {
-  const url = new URL(configured!);
-  assert.equal(process.env.ARENA_CONCURRENCY_TEST_DATABASE_APPROVED, "true");
-  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname));
-  assert.equal(url.protocol, "postgresql:");
-  assert.equal(url.pathname, "/proctorshield_arena_atomic_test");
+  assertNoTestEnvFiles();
+  const config = isolatedPostgresConfig("arena");
+  assertIsolatedNetwork();
   const schema = `arena_atomic_${crypto.randomBytes(8).toString("hex")}`;
-  const admin = new Client({ connectionString: configured });
-  const one = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1, application_name: schema }, { schema }) });
-  const two = new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1, application_name: schema }, { schema }) });
+  const admin = new Client({ ...config.connection });
+  const one = new PrismaClient({ adapter: new PrismaPg({ ...config.connection, max: 1, application_name: schema }, { schema }) });
+  const two = new PrismaClient({ adapter: new PrismaPg({ ...config.connection, max: 1, application_name: schema }, { schema }) });
   const arena = loadArenaModule("src/lib/arena.ts", {
     "./prisma.ts": { __esModule: true, default: one },
     "./redis.ts": { getRedis: () => null, isRedisReady: () => false },
@@ -30,6 +30,7 @@ test("PostgreSQL independent connections serialize Arena mutations and roll back
   let schemaCreated = false;
   await admin.connect();
   try {
+    await verifyIsolatedDatabaseIdentity(admin, config);
     await admin.query(`CREATE SCHEMA "${schema}"`);
     schemaCreated = true;
     await admin.query(`CREATE TABLE "${schema}".settings (

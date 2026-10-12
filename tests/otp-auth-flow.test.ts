@@ -104,6 +104,7 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
         if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
         if (name === "@/lib/email") return email;
         if (name === "@/lib/auth") return load("src/lib/auth.ts");
+        if (name === "./password-hash.ts") return load("src/lib/password-hash.ts");
         if (name === "@/lib/auth-origin") return load("src/lib/auth-origin.ts");
         if (name === "@/lib/google-signin-challenge") return load("src/lib/google-signin-challenge.ts");
         if (name === "./redis.ts") return { getRedis: () => null, isRedisReady: () => false };
@@ -136,7 +137,7 @@ function fixture(options: { deliveryFailure?: boolean; unverifiedGoogle?: boolea
     return first.status === 409 && (await first.clone().json()).code === "BROWSER_AUTH_INITIALIZED" ? send() : first;
   }
   return {
-    post, mails, get user() { return user; }, get otps() { return otps; }, get sessionCreations() { return sessionCreations; },
+    post, mails, verifyPassword: (password: string, hashed: string) => (load("src/lib/auth.ts").verifyPassword as (p: string, h: string) => Promise<boolean>)(password, hashed), get user() { return user; }, get otps() { return otps; }, get sessionCreations() { return sessionCreations; },
     cookies: cookieValues,
     addOtp(purpose: "login" | "password-reset", expiresAt = new Date(Date.now() + 600_000)) {
       otps.push({ id: crypto.randomUUID(), userId: user.id, code: hashOtp(user.id, "123456", purpose), expiresAt });
@@ -205,7 +206,8 @@ test("successful reset consumes emailed OTP, changes password, and rejects the o
   assert.equal((await setup.post("forgot-password", { email: setup.user.email })).status, 200);
   assert.equal(setup.mails.length, 1);
   assert.equal((await setup.post("reset-password", { email: setup.user.email, otpCode: "123456", newPassword: "ChangedPass456" })).status, 200);
-  assert.equal(await bcrypt.compare("ChangedPass456", setup.user.password), true);
+  assert.match(setup.user.password, /^psai:pw:v1:\$2b\$12\$/);
+  assert.equal(await setup.verifyPassword("ChangedPass456", setup.user.password), true);
   assert.equal(setup.user.sessionVersion, 1); assert.equal(setup.otps.length, 0);
   assert.equal(setup.cookies.get("ps_session_user"), originalCookie); assert.equal(await setup.getSession(), null);
   assert.equal((await setup.post("reset-password", { email: setup.user.email, otpCode: "123456", newPassword: "AnotherPass789" })).status, 401);

@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -66,6 +67,7 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
   vm.runInNewContext(compiled, {
     exports,
     require: (name: string) => {
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
@@ -112,12 +114,15 @@ function fixture(status: "Active" | "Suspended", plan: "Premium" | "Free Tier", 
     element.type === "tr" && textOf(element).includes("QA Teacher"))!;
   const error = (root: ElementNode) => findElement(root, (element) => element.props.role === "alert");
 
-  return { render, button, row, error, unmount: () => cleanup?.(), getRequests: () => requests, getDashboardFetches: () => dashboardFetches };
+  const ready = async () => { render(); await new Promise(setImmediate); };
+
+  return { render, ready, button, row, error, unmount: () => cleanup?.(), getRequests: () => requests, getDashboardFetches: () => dashboardFetches };
 }
 
 for (const [initialStatus, action] of [["Active", "Suspend"], ["Suspended", "Restore"]] as const) {
   test(`failed ${action.toLowerCase()} keeps the persisted ${initialStatus.toLowerCase()} state`, async () => {
     const setup = fixture(initialStatus, "Free Tier", false);
+    await setup.ready();
     await setup.button(setup.render(), action).props.onClick();
     const view = setup.render();
 
@@ -135,6 +140,7 @@ for (const [initialStatus, action, finalStatus] of [
 ] as const) {
   test(`successful ${action.toLowerCase()} updates the displayed status`, async () => {
     const setup = fixture(initialStatus, "Free Tier", true);
+    await setup.ready();
     await setup.button(setup.render(), action).props.onClick();
     const view = setup.render();
 
@@ -148,6 +154,7 @@ for (const [initialStatus, action, finalStatus] of [
 for (const succeeds of [false, true]) {
   test(`${succeeds ? "successful" : "failed"} subscription save ${succeeds ? "updates the table" : "keeps the modal open and table unchanged"}`, async () => {
     const setup = fixture("Active", "Free Tier", succeeds);
+    await setup.ready();
     setup.button(setup.render(), "Edit").props.onClick();
     const select = findElement(setup.render(), (element) => element.type === "select")!;
     select.props.onChange({ target: { value: "Premium" } });
@@ -167,6 +174,7 @@ for (const succeeds of [false, true]) {
 
 test("unchanged Dashboard subscription Save is disabled and sends no request", async () => {
   const setup = fixture("Active", "Premium", true);
+  await setup.ready();
   setup.button(setup.render(), "Edit").props.onClick();
   const view = setup.render();
   const save = setup.button(view, "Save Changes");

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Zap } from "lucide-react";
 import PusherClient from "pusher-js";
+import { DashboardLoadingStatus, DashboardListSkeleton, MetricValueSkeleton } from "@/components/dashboard-loading";
 import Link from "next/link";
 import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
 import { useUserSessionWork, UserSessionReauthentication } from "@/components/user-session-lifecycle";
@@ -235,14 +236,12 @@ export default function TeacherDashboardContent({
     </div>
   );
 
-  if (isLoading && !hasLoadedDashboard) {
-    return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /></div>;
-  }
-
-  if (!hasLoadedDashboard) return loadFailure;
+  const initialLoading = isLoading && !hasLoadedDashboard;
+  if (!hasLoadedDashboard && !initialLoading) return loadFailure;
 
   return (
     <div className="ps-teacher-overview ps-teacher-glass-canvas space-y-6 animate-fade-in">
+      {initialLoading && <DashboardLoadingStatus label="Loading Teacher Dashboard statistics and submissions..." />}
       {loadFailure}
       {/* ProctorShield Activity Creation Hub */}
       <ProctorShieldCreateHub
@@ -303,7 +302,7 @@ export default function TeacherDashboardContent({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div aria-busy={initialLoading} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
           <div
             key={s.label}
@@ -318,7 +317,7 @@ export default function TeacherDashboardContent({
               </span>
             </div>
             <div className="text-2xl sm:text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-              {s.value}
+              {initialLoading ? <MetricValueSkeleton /> : s.value}
             </div>
             <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{s.label}</div>
             <div className="text-[10px] text-[var(--muted)] mt-0.5">{s.sub}</div>
@@ -333,8 +332,8 @@ export default function TeacherDashboardContent({
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📊 Violation Breakdown</h3>
           </div>
-          <div className="p-5 space-y-4">
-            {violationsBreakdown.map((v) => (
+          <div aria-busy={initialLoading} className="p-5 space-y-4">
+            {initialLoading ? <DashboardListSkeleton variant="chart" /> : violationsBreakdown.map((v) => (
               <div key={v.type} className="flex items-center gap-3">
                 <span className="text-xs text-[var(--muted)] w-28 shrink-0">{v.type}</span>
                 <div className="flex-1 h-2 bg-[var(--surface2)] rounded-full overflow-hidden">
@@ -366,11 +365,9 @@ export default function TeacherDashboardContent({
             />
           </div>
         </div>
-        <div role="region" aria-label="Teacher verdict summaries" tabIndex={0} className="ps-teacher-glass-dense overflow-x-auto min-h-[150px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+        <div aria-busy={initialLoading} role="region" aria-label="Teacher verdict summaries" tabIndex={0} className="ps-teacher-glass-dense overflow-x-auto min-h-[150px]">
+          {initialLoading ? (
+            <div className="p-5"><DashboardListSkeleton variant="table" /></div>
           ) : filteredVerdicts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)] text-center">
               <span className="text-xl mb-1.5">🎓</span>

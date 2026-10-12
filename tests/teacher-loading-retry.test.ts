@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
@@ -80,6 +81,7 @@ function fixture(relativePath: string, replies: Reply[]) {
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/quiz-scanner") return quizScanner;
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "react-dom") return { createPortal: (children: unknown) => children };

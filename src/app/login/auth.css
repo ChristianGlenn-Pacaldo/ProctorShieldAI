@@ -116,3 +116,15 @@ html.dark .ps-auth .ps-theme-when-dark { display: flex; align-items: center; gap
 
 .ps-auth .ps-auth-unified { padding-top: 80px; padding-bottom: 24px; }
 @media (max-width:1023px) { .ps-auth .ps-auth-unified { padding-top: 88px; } }
+
+/* Flexible labels retain readable text and visible icons under text enlargement. */
+.ps-auth .ps-auth-student-tabs { grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(4ch + 3rem)), 1fr)); }
+.ps-auth .ps-auth-student-tabs > button { min-width: 0; }
+.ps-auth .ps-auth-student-tabs > button > svg { flex-shrink: 0; }
+.ps-auth .ps-auth-student-tabs > button > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Keep the Student label free to wrap when text is enlarged. */
+@media (max-width: 359px) {
+  .ps-auth .ps-auth-student-sign-in { padding-inline: 8px; }
+  .ps-auth .ps-auth-student-tabs > button:last-child { padding-inline: 4px; }
+}

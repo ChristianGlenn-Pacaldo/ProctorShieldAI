@@ -221,7 +221,7 @@ export default function SettingsContent() {
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p id="student-new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">10–128 characters, including letters and numbers.</p>
+              <p id="student-new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 72 UTF-8 bytes; some characters use more than one byte.</p>
             </div>
 
             <div>

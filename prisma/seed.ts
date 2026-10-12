@@ -1,12 +1,7 @@
 import "dotenv/config";
 import prisma from "../src/lib/prisma";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../src/lib/password-hash.ts";
 import { randomBytes } from "node:crypto";
-
-
-async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
-}
 
 async function main() {
   if (process.env.SEED_DEMO_DATA !== "true") {
@@ -62,7 +57,7 @@ async function main() {
 
   const student1 = await prisma.user.upsert({
     where: { email: "student@demo.com" },
-    update: { password: studentPassword },
+    update: { password: studentPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Juan Dela Cruz",
       email: "student@demo.com",
@@ -74,7 +69,7 @@ async function main() {
 
   const student2 = await prisma.user.upsert({
     where: { email: "maria@demo.com" },
-    update: { password: studentPassword },
+    update: { password: studentPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Maria Santos",
       email: "maria@demo.com",
@@ -86,7 +81,7 @@ async function main() {
 
   const student3 = await prisma.user.upsert({
     where: { email: "ethan@demo.com" },
-    update: { password: studentPassword },
+    update: { password: studentPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Ethan Reyes",
       email: "ethan@demo.com",
@@ -98,7 +93,7 @@ async function main() {
 
   const student4 = await prisma.user.upsert({
     where: { email: "carlo@demo.com" },
-    update: { password: studentPassword },
+    update: { password: studentPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Carlo Mendoza",
       email: "carlo@demo.com",
@@ -110,7 +105,7 @@ async function main() {
 
   const teacher1 = await prisma.user.upsert({
     where: { email: "teacher@demo.com" },
-    update: { password: teacherPassword },
+    update: { password: teacherPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Sir Ramos",
       email: "teacher@demo.com",
@@ -122,7 +117,7 @@ async function main() {
 
   const teacher2 = await prisma.user.upsert({
     where: { email: "ana@demo.com" },
-    update: { password: teacherPassword },
+    update: { password: teacherPassword, sessionVersion: { increment: 1 } },
     create: {
       fullName: "Prof. Ana Lim",
       email: "ana@demo.com",
@@ -134,7 +129,7 @@ async function main() {
 
   const admin1 = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { password: adminPassword, roleId: adminRole.id, status: "active" },
+    update: { password: adminPassword, sessionVersion: { increment: 1 }, roleId: adminRole.id, status: "active" },
     create: {
       fullName: "System Admin",
       email: adminEmail,

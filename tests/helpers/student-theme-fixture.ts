@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -66,6 +67,7 @@ export function studentThemeFixture(scene: StudentScene, variant = "default") {
       target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, {
     exports, console,
     require(name: string) {
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "next/link") return { __esModule: true, default: (props: any) => jsx("a", props) };

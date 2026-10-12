@@ -13,6 +13,7 @@ import {
   Compass,
   UserRound,
 } from "lucide-react";
+import { DashboardLoadingStatus, DashboardListSkeleton, MetricValueSkeleton } from "@/components/dashboard-loading";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -193,9 +194,11 @@ export default function StudentDashboardContent() {
   const completedCount = completed.length;
 
   const avgScore = averageExamScore(validQuizzes);
+  const initialLoading = isFetching && !hasLoadedQuizzes;
 
   return (
     <div className="ps-student-page ps-glass-overview min-w-0 space-y-6 animate-fade-in pb-12">
+      {initialLoading && <DashboardLoadingStatus label="Scanning for active missions... Loading exam results..." />}
       {/* Class-based overrides follow the shell's selected theme, not the OS theme. */}
       <div className="ps-student-hero ps-glass-card relative overflow-hidden rounded-3xl border p-6 sm:p-8 text-[var(--ink)]">
 
@@ -276,7 +279,7 @@ export default function StudentDashboardContent() {
       )}
 
       {/* ── VIBRANT GAMIFIED METRIC TILES ─────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div aria-busy={initialLoading} className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="ps-student-card ps-glass-card min-w-0 bg-[var(--surface)] rounded-2xl border-2 border-[var(--ps-border)] p-3 sm:p-5 shadow-xs hover:border-[var(--ps-border)] transition-all group">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div className="w-11 h-11 rounded-xl bg-[var(--ps-success-soft)] text-[var(--ps-success)]  flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -287,7 +290,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {hasLoadedQuizzes ? completedCount : "—"}
+            {hasLoadedQuizzes ? completedCount : initialLoading ? <MetricValueSkeleton /> : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Quizzes Conquered
@@ -304,7 +307,7 @@ export default function StudentDashboardContent() {
             </span>
           </div>
           <div className="text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-            {hasLoadedQuizzes ? (completedCount > 0 ? `${avgScore}%` : "0%") : "—"}
+            {hasLoadedQuizzes ? (completedCount > 0 ? `${avgScore}%` : "0%") : initialLoading ? <MetricValueSkeleton /> : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
             Average Exam Score
@@ -314,7 +317,7 @@ export default function StudentDashboardContent() {
       </div>
 
       {/* ── ACTIVE MISSIONS (UPCOMING QUIZZES) ────────────────────── */}
-      <div className="ps-student-card ps-glass-card bg-[var(--surface)] rounded-3xl border border-[var(--border)] shadow-xs p-6">
+      <div aria-busy={initialLoading} className="ps-student-card ps-glass-card bg-[var(--surface)] rounded-3xl border border-[var(--border)] shadow-xs p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--border)] mb-4">
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-[var(--ps-accent)]" />
@@ -330,10 +333,8 @@ export default function StudentDashboardContent() {
           </Link>
         </div>
 
-        {isFetching && !hasLoadedQuizzes ? (
-          <div className="py-8 text-center text-sm text-[var(--muted)] animate-pulse">
-            Scanning for active missions...
-          </div>
+        {initialLoading ? (
+          <DashboardListSkeleton variant="quiz" count={2} />
         ) : !hasLoadedQuizzes ? null : upcoming.length === 0 ? (
           <div className="py-8 text-center">
             <div className="text-3xl mb-2">🎉</div>
@@ -415,7 +416,7 @@ export default function StudentDashboardContent() {
       {/* ── GAMIFIED PROGRESSION JOURNEY & RECENT TRIUMPHS ────────── */}
       <div className="grid gap-6">
         {/* Recent Triumphs (Quiz Results) */}
-        <div className="ps-student-card ps-glass-card bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-xs flex flex-col justify-between">
+        <div aria-busy={initialLoading} className="ps-student-card ps-glass-card bg-[var(--surface)] rounded-3xl border border-[var(--border)] p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -432,10 +433,8 @@ export default function StudentDashboardContent() {
               </Link>
             </div>
 
-            {isFetching && !hasLoadedQuizzes ? (
-              <p className="py-6 text-xs text-[var(--muted)] animate-pulse text-center">
-                Loading exam results...
-              </p>
+            {initialLoading ? (
+              <DashboardListSkeleton count={3} />
             ) : !hasLoadedQuizzes ? null : completed.length === 0 ? (
               <p className="py-6 text-xs text-[var(--muted)] italic text-center">
                 No completed exams yet. Take your first quiz or enter an arena match!

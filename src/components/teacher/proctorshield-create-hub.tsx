@@ -65,20 +65,20 @@ export default function ProctorShieldCreateHub({
         </h2>
 
         {/* Tab Pills (Create, Upload) */}
-        <div className="inline-flex items-center p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
+        <div className="inline-flex max-w-full flex-wrap justify-center items-center p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
           <button
             type="button"
             onClick={() => {
               setActiveTab("create");
               onOpenCreateQuiz("proctored");
             }}
-            className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`inline-flex max-w-full min-h-[44px] flex-wrap justify-center items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === "create"
                 ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/25"
                 : "text-[var(--muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>Create</span>
             <span className="hidden sm:inline text-[10px] opacity-80 font-normal">a resource</span>
           </button>
@@ -93,13 +93,13 @@ export default function ProctorShieldCreateHub({
               setActiveTab("upload");
               if (onOpenAiGenerator) onOpenAiGenerator();
             }}
-            className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`inline-flex max-w-full min-h-[44px] flex-wrap justify-center items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === "upload"
                 ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/25"
                 : "text-[var(--muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 shrink-0" />
             <span>Upload</span>
             <span className="hidden sm:inline text-[10px] opacity-80 font-normal">&amp; enhance AI</span>
             {!isSubscribed && <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />}

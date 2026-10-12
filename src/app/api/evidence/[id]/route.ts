@@ -26,19 +26,35 @@ function evidenceResponse(request: Request, bytes: Uint8Array, contentType: stri
     headers["Content-Disposition"] = `attachment; filename="evidence-${evidenceId}.${extension}"`;
   }
   const range = request.headers.get("range");
-  if (contentType.startsWith("video/") && range) {
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-    if (match) {
-      const start = match[1] ? Number(match[1]) : 0;
-      const requestedEnd = match[2] ? Number(match[2]) : bytes.byteLength - 1;
-      const end = Math.min(requestedEnd, bytes.byteLength - 1);
-      if (Number.isInteger(start) && Number.isInteger(end) && start >= 0 && start <= end) {
-        const chunk = bytes.slice(start, end + 1);
-        headers["Content-Range"] = `bytes ${start}-${end}/${bytes.byteLength}`;
-        headers["Content-Length"] = String(chunk.byteLength);
-        return new NextResponse(Buffer.from(chunk), { status: 206, headers });
+  if (contentType.startsWith("video/") && range !== null) {
+    // Single byte ranges only. BigInt avoids rounding very large decimal bounds.
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    const size = BigInt(bytes.byteLength);
+    let start = BigInt(0);
+    let end = size - BigInt(1);
+    let valid = Boolean(match && (match[1] || match[2])) && size > BigInt(0);
+    if (valid && match) {
+      if (!match[1]) {
+        const suffix = BigInt(match[2]);
+        valid = suffix > BigInt(0);
+        start = suffix >= size ? BigInt(0) : size - suffix;
+      } else {
+        start = BigInt(match[1]);
+        if (match[2]) end = BigInt(match[2]);
+        valid = start < size && end >= start;
+        if (end >= size) end = size - BigInt(1);
       }
     }
+    if (!valid) {
+      headers["Content-Range"] = `bytes */${bytes.byteLength}`;
+      headers["Content-Length"] = "0";
+      return new NextResponse(null, { status: 416, headers });
+    }
+    // The storage API already returns a buffer; do not add another full-file read.
+    const chunk = bytes.subarray(Number(start), Number(end) + 1);
+    headers["Content-Range"] = `bytes ${start}-${end}/${bytes.byteLength}`;
+    headers["Content-Length"] = String(chunk.byteLength);
+    return new NextResponse(Buffer.from(chunk), { status: 206, headers });
   }
   headers["Content-Length"] = String(bytes.byteLength);
   return new NextResponse(Buffer.from(bytes), { headers });

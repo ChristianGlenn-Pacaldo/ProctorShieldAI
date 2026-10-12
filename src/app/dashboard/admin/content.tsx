@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Users, FileText, AlertTriangle, Brain } from "lucide-react";
 import PusherClient from "pusher-js";
+import { DashboardLoadingStatus, DashboardListSkeleton, MetricValueSkeleton } from "@/components/dashboard-loading";
 import Link from "next/link";
 import { useAdminSessionLifecycle } from "@/components/admin-session-lifecycle";
 
@@ -328,7 +329,7 @@ export default function AdminDashboardContent() {
     return (
       <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-600 dark:text-rose-400">
         <p>{sessionLost === 401 ? "Your Admin session has expired or changed." : "You no longer have Admin access."} Sign in as an Admin to continue.</p>
-        <Link href="/admin/login" prefetch={false} className="mt-3 inline-block font-semibold underline">Admin Login</Link>
+        <Link href="/login" prefetch={false} className="mt-3 inline-block font-semibold underline">Admin Login</Link>
       </div>
     );
   }
@@ -344,6 +345,7 @@ export default function AdminDashboardContent() {
     );
   }
 
+  const initialLoading = isLoading && !hasLoaded;
   const statCards = [
     {
       label: "Active Sessions",
@@ -381,6 +383,7 @@ export default function AdminDashboardContent() {
 
   return (
     <div className="ps-admin-overview ps-admin-glass-canvas space-y-6 animate-fade-in">
+      {initialLoading && <DashboardLoadingStatus label="Loading Admin Dashboard statistics, activity and users..." />}
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
           <span>{loadError} Previously loaded data is stale.</span>
@@ -395,7 +398,7 @@ export default function AdminDashboardContent() {
         </p>
       )}
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div aria-busy={initialLoading} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
           <div
             key={s.label}
@@ -409,8 +412,8 @@ export default function AdminDashboardContent() {
                 {loadError ? "STALE" : hasLoaded ? s.badge : "LOADING"}
               </span>
             </div>
-            {isLoading && s.value === 0 ? (
-              <div className="h-8 w-16 bg-[var(--surface2)] animate-pulse rounded-lg mt-1" />
+            {initialLoading ? (
+              <div className="text-2xl sm:text-3xl"><MetricValueSkeleton /></div>
             ) : (
               <div className="text-2xl sm:text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
                 {s.value}
@@ -429,13 +432,9 @@ export default function AdminDashboardContent() {
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📈 Platform Demographics</h3>
           </div>
-          <div className="p-5 space-y-4">
-            {platformBars.length === 0 && isLoading ? (
-              <div className="space-y-4 py-2">
-                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-3/4" />
-                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-2/3" />
-                <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-1/2" />
-              </div>
+          <div aria-busy={initialLoading} className="p-5 space-y-4">
+            {initialLoading ? (
+              <DashboardListSkeleton variant="chart" count={3} />
             ) : platformBars.length === 0 ? (
               <div className="text-xs text-[var(--muted)] py-4 text-center">No online sessions active</div>
             ) : (
@@ -451,11 +450,8 @@ export default function AdminDashboardContent() {
             )}
 
             <div className="pt-4 mt-4 border-t border-[var(--border)] space-y-4">
-              {activityBars.length === 0 && isLoading ? (
-                <div className="space-y-4 py-2">
-                  <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-5/6" />
-                  <div className="h-4 bg-[var(--surface2)] animate-pulse rounded w-4/5" />
-                </div>
+              {initialLoading ? (
+                <DashboardListSkeleton variant="chart" count={2} />
               ) : (
                 activityBars.map((b) => (
                   <div key={b.label} className="ps-admin-demographic-row flex items-center gap-3 animate-fade-in">
@@ -477,8 +473,8 @@ export default function AdminDashboardContent() {
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🕐 Recent Activity Feed</h3>
             <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600/15 text-blue-600 dark:text-blue-400 rounded-full">{loadError ? "STALE" : "REAL-TIME"}</span>
           </div>
-          <div className="ps-admin-glass-dense p-5 space-y-2 max-h-[300px] overflow-y-auto">
-            {activities.length === 0 ? (
+          <div aria-busy={initialLoading} className="ps-admin-glass-dense p-5 space-y-2 max-h-[300px] overflow-y-auto">
+            {initialLoading ? <DashboardListSkeleton /> : activities.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-[var(--muted)] text-center h-[160px]">
                 <span className="text-xl mb-1">📋</span>
                 <p className="text-xs font-semibold">No platform activity yet</p>
@@ -510,7 +506,7 @@ export default function AdminDashboardContent() {
           </span>
         </div>
         {statusError && <p role="alert" className="px-5 py-3 text-xs font-semibold text-rose-500">{statusError}</p>}
-        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin platform users" tabIndex={0}>
+        <div aria-busy={initialLoading} className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin platform users" tabIndex={0}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
@@ -520,10 +516,10 @@ export default function AdminDashboardContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {isLoading && users.length === 0 ? (
+              {initialLoading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12">
-                    <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <td colSpan={7} className="p-5">
+                    <DashboardListSkeleton variant="table" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (

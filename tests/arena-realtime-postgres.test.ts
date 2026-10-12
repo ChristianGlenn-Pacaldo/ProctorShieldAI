@@ -11,20 +11,20 @@ import { arenaHttpReceiver, waitForArenaCondition } from "./helpers/arena-http-r
 import { createArenaPusherDelivery } from "../src/lib/arena-pusher-transport.ts";
 import { createArenaRecoveryWorker } from "../src/lib/arena-recovery-worker.ts";
 
+import { assertIsolatedNetwork, assertNoTestEnvFiles, isolatedPostgresConfig, verifyIsolatedDatabaseIdentity } from "./helpers/isolated-test-environment.ts";
+
 const configured = process.env.ARENA_CONCURRENCY_TEST_DATABASE_URL;
 
 test("real PostgreSQL Arena recovery with cancellable stalled HTTP delivery", {
   skip: !configured ? "Dedicated isolated local Arena PostgreSQL is not configured" : false,
   timeout: 90_000,
 }, async (t) => {
-  const url = new URL(configured!);
-  assert.equal(process.env.ARENA_CONCURRENCY_TEST_DATABASE_APPROVED, "true");
-  assert.equal(url.protocol, "postgresql:");
-  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname));
-  assert.equal(url.pathname, "/proctorshield_arena_atomic_test");
+  assertNoTestEnvFiles();
+  const config = isolatedPostgresConfig("arena");
+  assertIsolatedNetwork();
   const schema = `arena_transport_${crypto.randomBytes(8).toString("hex")}`;
-  const admin = new Client({ connectionString: configured });
-  const newClient = () => new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1, application_name: schema }, { schema }) });
+  const admin = new Client({ ...config.connection });
+  const newClient = () => new PrismaClient({ adapter: new PrismaPg({ ...config.connection, max: 1, application_name: schema }, { schema }) });
   const one = newClient(), two = newClient();
   const receiver = await arenaHttpReceiver();
   const signer = new Pusher({ appId: "123", key: "isolated-key", secret: "isolated-secret", cluster: "mt1" });
@@ -89,6 +89,7 @@ test("real PostgreSQL Arena recovery with cancellable stalled HTTP delivery", {
   let created = false;
   await admin.connect();
   try {
+    await verifyIsolatedDatabaseIdentity(admin, config);
     await admin.query(`CREATE SCHEMA "${schema}"`); created = true;
     await admin.query(`SET search_path TO "${schema}"`);
     for (const dir of fs.readdirSync("prisma/migrations").sort()) {

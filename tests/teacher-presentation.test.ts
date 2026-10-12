@@ -68,10 +68,10 @@ test("Teacher settings labels, password help and visibility controls stay access
     assert.ok(html.includes('id="' + id + '"'));
   }
   assert.match(html, /aria-describedby="teacher-new-password-help"/);
-  assert.match(html, /10–128 characters, including letters and numbers/);
+  assert.match(html, /At least 10 characters with letters and numbers/);
   assert.match(html, /Show current password/);
   assert.match(html, /Show new password/);
-  assert.match(fs.readFileSync("src/app/api/auth/profile/route.ts", "utf8"), /10-128 characters and contain letters and numbers/);
+  assert.match(fs.readFileSync("src/app/api/auth/profile/route.ts", "utf8"), /at least 10 characters, contain letters and numbers, and fit within 72 UTF-8 bytes/);
 });
 
 test("All existing Teacher scenes and Free gates still render their actual components", () => {

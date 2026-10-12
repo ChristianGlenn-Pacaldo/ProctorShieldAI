@@ -1,27 +1,22 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ArrowUpRight, AudioLines, Brain, Camera, Check, ChevronDown, Eye, Fingerprint, Layers, LockKeyhole, Menu, Monitor, Play, ScanFace, Sparkles, Swords, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Brain, Camera, Check, ChevronDown, Eye, Fingerprint, Layers, LockKeyhole, Menu, Play, ScanFace, Sparkles, Swords, X } from "lucide-react";
+import AuthThemeControl from "@/components/auth-theme-control";
 import BrandImage from "@/components/brand-image";
+import HeroLogoIntro from "@/components/hero-logo-intro";
+import ScrollExpandMedia from "@/components/scroll-expansion-hero";
+import LandingHowItWorks from "@/components/landing-how-it-works";
+import ProductFeatures from "@/components/product-features";
 import Velaris from "@/components/velaris";
 import { FREE_MANUAL_QUIZ_LIMIT, FREE_STUDENT_LIMIT_PER_QUIZ, PRO_MONTHLY_PRICE_PHP, PRO_STUDENT_LIMIT_PER_QUIZ } from "@/lib/subscription-rules";
+import { setupLandingNavigation } from "@/components/landing-navigation";
 import styles from "./landing.module.css";
 
-const features = [
-  { icon: ScanFace, label: "01 / VISION", title: "A watchful eye. A fairer quiz.", description: "Face and head-position monitoring helps flag sustained looking away, missing faces, and additional people during proctored quizzes." },
-  { icon: Camera, label: "02 / EVIDENCE", title: "Every flag has a story.", description: "Review timestamped snapshots and recorded evidence alongside violation events, with the context you need to make a decision." },
-  { icon: Brain, label: "03 / INSIGHTS", title: "From events to understanding.", description: "Gemini-assisted reports bring recorded events together into an assessment of risk for teachers to review." },
-  { icon: Monitor, label: "04 / FOCUS", title: "Keep the classroom in focus.", description: "Track app and tab switching during monitored attempts and follow student activity in the Teacher Live Monitor." },
-  { icon: AudioLines, label: "05 / AUDIO", title: "Listen for the unexpected.", description: "Audio monitoring flags elevated sound levels during proctored attempts, adding another signal to the evidence timeline." },
-  { icon: Swords, label: "06 / POWER ARENA", title: "A little competition. A lot of learning.", description: "Turn quizzes into a multiplayer battle with gameplay points, power-ups, and a live leaderboard. Keep learning playful." },
-];
-const steps = [
-  { num: "01", tag: "CREATE", title: "Your quiz, your way.", body: "Write questions yourself or use AI to help create them. Choose a proctored quiz or Power Arena, then share your room code." },
-  { num: "02", tag: "JOIN", title: "One code. Everyone in.", body: "Students sign in, enter the quiz code, and complete the required checks. No separate app installation needed." },
-  { num: "03", tag: "REVIEW", title: "See the bigger picture.", body: "Follow proctored sessions live, then review results, recorded events, and supporting evidence in your teaching workspace." },
-];
+
+
 const faqs = [
   { question: "How do students join a quiz?", answer: "Students enter the teacher’s quiz code here or in their Student Dashboard. They sign in and complete the required lobby checks before starting." },
   { question: "Does every head movement count as cheating?", answer: "Detection signals and recorded incidents are different. Proctored sessions use confirmation rules before recording qualifying events. Teachers can review the recorded evidence and AI report in context." },
@@ -38,19 +33,23 @@ export default function LandingPage() {
     const clean = quickCode.trim().toUpperCase();
     router.push(clean ? `/join?code=${encodeURIComponent(clean)}` : "/join");
   };
-  const closeMenu = () => setMenuOpen(false);
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (headerRef.current) return setupLandingNavigation(headerRef.current, () => setMenuOpen(false));
+  }, []);
 
   return (
     <div className={styles.page}>
       <div className={styles.background} aria-hidden="true"><Velaris bg="#012620" speed={2} grain={0.12} height="100%" /></div>
       <a href="#main-content" className={styles.skip}>Skip to content</a>
-      <header className={styles.header}>
-        <div className={styles.navbar}>
+      <header ref={headerRef} className={styles.header}>
+        <div className={styles.navbar} data-nav-bar="">
           <Link href="/" className={styles.brand} aria-label="ProctorShieldAI home">
             <BrandImage width={35} decorative preload />
             <span>ProctorShield<span className={styles.brandAccent}>AI</span><small>ACADEMIC INTEGRITY, REIMAGINED</small></span>
           </Link>
-          <nav className={styles.desktopNav} aria-label="Main navigation">
+          <nav className={styles.desktopNav} aria-label="Main navigation" data-section-navigation="">
+            <span className={styles.navIndicator} aria-hidden="true" />
             <a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQs</a>
           </nav>
           <div className={styles.navActions}>
@@ -59,13 +58,15 @@ export default function LandingPage() {
             <button className={styles.menuButton} type="button" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="mobile-navigation">{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
           </div>
         </div>
-        {menuOpen && <nav id="mobile-navigation" className={styles.mobileNav} aria-label="Mobile navigation">
-          <a href="#features" onClick={closeMenu}>Features</a><a href="#how" onClick={closeMenu}>How it works</a><a href="#pricing" onClick={closeMenu}>Pricing</a><a href="#faq" onClick={closeMenu}>FAQs</a><Link href="/login">Log in</Link>
+        {menuOpen && <nav id="mobile-navigation" className={styles.mobileNav} aria-label="Mobile navigation" data-section-navigation="">
+          <a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQs</a><Link href="/login">Log in</Link>
         </nav>}
       </header>
 
+      <div className={`${styles.container} ${styles.themeControl}`}><AuthThemeControl /></div>
+
       <main id="main-content">
-        <section className={`${styles.container} ${styles.hero}`} aria-labelledby="hero-title">
+        <section className={`${styles.container} ${styles.hero}`} aria-labelledby="hero-title" data-scroll-hero="">
           <div className={styles.heroCopy}>
             <div className={styles.eyebrow}><span className={styles.liveDot} /> A BRIGHTER STANDARD FOR ONLINE QUIZZES</div>
             <h1 id="hero-title">Great minds.<br />Honest quizzes.<br /><span>Better learning.</span></h1>
@@ -88,13 +89,14 @@ export default function LandingPage() {
             <div className={styles.visualHalo} aria-hidden="true" />
             <div className={styles.logoStage}>
               <div className={styles.stageTop}><span><span className={styles.liveDot} /> THE CLASSROOM IN GOOD HANDS</span><Fingerprint size={20} /></div>
-              <BrandImage variant="logo" width={470} preload className={styles.heroLogo} />
+              <ScrollExpandMedia className={styles.heroLogo}><HeroLogoIntro /></ScrollExpandMedia>
               <div className={styles.stageBottom}><span>Confidence in every assessment.</span><LockKeyhole size={15} /></div>
             </div>
             <div className={`${styles.floatingCard} ${styles.visionCard}`}><span className={styles.floatingIcon}><Eye size={21} /></span><div><strong>AI-assisted monitoring</strong><small>A little more peace of mind.</small></div><Check size={16} /></div>
             <div className={`${styles.floatingCard} ${styles.evidenceCard}`}><span className={styles.floatingIcon}><Layers size={21} /></span><div><strong>Evidence with context</strong><small>Review. Understand. Decide.</small></div></div>
             <span className={styles.visualCaption}>ONE CONNECTED CLASSROOM WORKSPACE</span>
           </div>
+          <div className={styles.heroExpansionSpace} data-hero-expansion-space="" aria-hidden="true" />
         </section>
 
         <div className={styles.capabilityStrip}><div className={styles.container}>
@@ -104,14 +106,12 @@ export default function LandingPage() {
 
         <section id="features" className={`${styles.container} ${styles.section}`} aria-labelledby="features-title">
           <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>LESS GUESSWORK. MORE CLARITY.</span><h2 id="features-title">Your classroom.<br /><span>A stronger foundation.</span></h2></div><p>From the first question to the final review, bring your assessment tools together without losing the human perspective.</p></div>
-          <div className={styles.featuresGrid}>{features.map(({ icon: Icon, label, title, description }) => <article key={label} className={styles.featureCard}>
-            <div className={styles.featureTop}><span className={styles.featureIcon}><Icon size={24} /></span><span>{label}</span></div><h3>{title}</h3><p>{description}</p>
-          </article>)}</div>
+          <ProductFeatures />
         </section>
 
         <section id="how" className={styles.howSection} aria-labelledby="how-title"><div className={`${styles.container} ${styles.section}`}>
-          <div className={styles.centerHeading}><span className={styles.eyebrow}>A SIMPLE FLOW, FROM START TO FINISH</span><h2 id="how-title">Good teaching.<br /><span>Fewer moving parts.</span></h2><p>Three steps. One place to make it happen.</p></div>
-          <div className={styles.stepsGrid}>{steps.map(step => <article key={step.num} className={styles.stepCard}><div className={styles.stepNumber}>{step.num}<ArrowRight size={20} /></div><span className={styles.stepTag}>{step.tag}</span><h3>{step.title}</h3><p>{step.body}</p></article>)}</div>
+          <div className={styles.centerHeading}><span className={styles.eyebrow}>A SIMPLE FLOW, FROM START TO FINISH</span><h2 id="how-title">Good teaching.<br /><span>Fewer moving parts.</span></h2><p>Five steps. One place to make it happen.</p></div>
+          <LandingHowItWorks />
           <div className={styles.arenaBanner}><div className={styles.arenaBadge}><Swords size={30} /></div><div><span className={styles.eyebrow}>MEET POWER ARENA</span><h3>Make the next quiz a friendly showdown.</h3><p>Gameplay points, power-ups, and a little classroom competition.</p></div><Link href="/join" className={styles.secondaryButton}>Enter the Arena <ArrowUpRight size={17} /></Link></div>
         </div></section>
 
@@ -131,7 +131,51 @@ export default function LandingPage() {
 
         <section className={styles.bottomSection}><div className={`${styles.container} ${styles.bottomCard}`}><BrandImage width={55} decorative /><span className={styles.eyebrow}>LET GOOD LEARNING LEAD THE WAY</span><h2>A brighter classroom<br />starts with you.</h2><p>Your next quiz. A little more engaging. A lot more confident.</p><Link href="/login" className={styles.primaryButton}><span>Sign in to ProctorShieldAI</span><ArrowUpRight size={18} /></Link></div></section>
       </main>
-      <footer className={`${styles.container} ${styles.footer}`}><Link href="/" className={styles.brand} aria-label="ProctorShieldAI home"><BrandImage width={30} decorative /><span>ProctorShield<span className={styles.brandAccent}>AI</span></span></Link><p>Built for fairer assessments and better learning.</p><div><a href="#features">Features</a><a href="#pricing">Pricing</a><Link href="/admin/login">Admin</Link></div></footer>
+      <footer className={styles.footer} aria-label="ProctorShieldAI footer">
+        <div className={styles.container}>
+          <div className={styles.footerGrid}>
+            <div className={styles.footerIdentity}>
+              <Link href="/" className={styles.footerBrand} aria-label="ProctorShieldAI home">
+                <BrandImage width={44} decorative />
+                <span>ProctorShield<span className={styles.footerAccent}>AI</span></span>
+              </Link>
+              <p className={styles.footerTagline}>Smarter Quizzes. Stronger Integrity.</p>
+              <p className={styles.footerDescription}>A connected assessment workspace for creating quizzes, reviewing proctored attempts, and supporting better learning with Power Arena.</p>
+            </div>
+            <nav className={styles.footerColumn} aria-labelledby="footer-platform-heading">
+              <h2 id="footer-platform-heading">Platform</h2>
+              <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how">How it works</a></li>
+                <li><a href="#pricing">Plans &amp; pricing</a></li>
+              </ul>
+            </nav>
+            <nav className={styles.footerColumn} aria-labelledby="footer-portals-heading">
+              <h2 id="footer-portals-heading">User portals</h2>
+              <ul>
+                <li><Link href="/login/student">Student login</Link></li>
+                <li><Link href="/login/teacher">Teacher login</Link></li>
+              </ul>
+            </nav>
+            <nav className={styles.footerColumn} aria-labelledby="footer-resources-heading">
+              <h2 id="footer-resources-heading">Help &amp; resources</h2>
+              <ul>
+                <li><a href="#faq">FAQs</a></li>
+                <li><Link href="/login/forgot-password">Password recovery</Link></li>
+                <li><Link href="/join">Join a quiz</Link></li>
+              </ul>
+            </nav>
+          </div>
+          <div className={styles.footerContext}>
+            <p><strong>Technology with context.</strong> Explore how monitoring signals and recorded evidence support teacher review.</p>
+            <a href="#features">Explore monitoring features <ArrowUpRight size={16} aria-hidden="true" /></a>
+          </div>
+          <div className={styles.footerBottom}>
+            <p>© 2026 ProctorShieldAI. All rights reserved.</p>
+            <a href="#main-content">Back to top <ArrowUpRight size={16} aria-hidden="true" /></a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

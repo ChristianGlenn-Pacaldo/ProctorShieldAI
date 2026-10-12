@@ -66,7 +66,8 @@ for (const role of ["student", "teacher"] as const) test(`actual ${role} shell f
   setup.queue("/api/notifications", { body: { success: true, notifications: rows, unreadCount: 3 } });
   setup.render(); await setup.ready();
   assert.equal(setup.notificationCount(), 2);
-  assert.equal(textOf(setup.bell()), "2");
+  // The list still hides retired notices; the badge now reports all authorized unread records.
+  assert.equal(textOf(setup.bell()), "3");
   await setup.bell().props.onClick(); await setup.ready();
   assert.doesNotMatch(textOf(setup.render()), retired);
   setup.queue("/api/notifications", { body: { success: true, notifications: [notice("old", "Level Up!")], unreadCount: 1 } });

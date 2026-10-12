@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -74,6 +75,7 @@ function fixture(relativePath: string, replies: Array<Reply | Promise<Reply>>) {
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
@@ -214,7 +216,7 @@ function assertSessionLost(setup: ReturnType<typeof fixture>) {
   const view = setup.render(), text = textOf(view);
   assert.match(text, /Admin session has expired or changed|You no longer have Admin access/);
   assert.doesNotMatch(text, /Test Teacher|teacher@example|Private|LIVE|Platform Users|Retry|Could not load/);
-  assert.ok(nodesOf(view, n => n.props.href === "/admin/login" && textOf(n) === "Admin Login").length);
+  assert.ok(nodesOf(view, n => n.props.href === "/login" && textOf(n) === "Admin Login").length);
   assert.equal(JSON.stringify(setup.states[0]), JSON.stringify(dashboardBody(0).stats));
   for (const index of [1, 2, 3, 4]) assert.equal(JSON.stringify(setup.states[index]), "[]");
   assert.equal(setup.states[6], null, "editing user cleared");

@@ -1,0 +1,78 @@
+name: Cloud release verification
+
+on:
+  push:
+    branches: ['codex/cloud-release-verification-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Safe regressions (database suites excluded explicitly)
+        run: python3 scripts/ci/cloud-verification.py checks
+      - name: Production build
+        run: python3 scripts/ci/cloud-verification.py build
+      - name: Public Chromium smoke (synthetic configuration only)
+        env:
+          CI: 'true'
+          E2E_WEB_SERVER_COMMAND: npm run prepare:standalone && node .next/standalone/server.js
+        run: |
+          npx playwright install --with-deps chromium
+          python3 scripts/ci/cloud-verification.py browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-check-results
+          path: .ci-results/
+          retention-days: 7
+
+  isolated-postgresql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Four actual PostgreSQL suites in a loopback-only namespace
+        run: python3 scripts/ci/cloud-verification.py postgres
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: isolated-postgresql-results
+          path: .ci-results/
+          retention-days: 7
+
+  migration-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Actual migration image build and no-network helper check
+        run: python3 scripts/ci/cloud-verification.py image
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-image-results
+          path: .ci-results/
+          retention-days: 7

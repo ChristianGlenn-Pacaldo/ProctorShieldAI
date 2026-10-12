@@ -109,7 +109,7 @@ export default function UnifiedGoogleSignIn() {
   return <div className="mt-6">
     <div className="mb-5 flex items-center gap-3"><span aria-hidden="true" className="h-px flex-1 bg-[var(--ps-border)]" /><p className="text-sm font-medium text-[var(--ps-text-muted)]">OR</p><span aria-hidden="true" className="h-px flex-1 bg-[var(--ps-border)]" /></div>
     {error && <p role="alert" className="ps-auth-alert text-base text-[var(--ps-error)] mb-3">{error}</p>}
-    {pending ? <form onSubmit={verify} aria-busy={busy} className="space-y-3">
+    {pending ? <form method="post" onSubmit={verify} aria-busy={busy} className="space-y-3">
       <p className="text-base text-[var(--ps-text-secondary)]">Enter the code emailed to {pending.email}.</p>
       <label htmlFor="google-otp" className="text-sm font-semibold text-[var(--ps-text-secondary)] block">Verification Code</label>
       <input id="google-otp" name="otpCode" inputMode="numeric" autoComplete="one-time-code" maxLength={6}

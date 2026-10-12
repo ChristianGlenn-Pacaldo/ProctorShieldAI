@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { authFixture } from "./helpers/auth-fixture.ts";
 import { getAuthDestination } from "../src/lib/auth-destination.ts";
 
 type ElementNode = { type: unknown; props: Record<string, unknown> };
@@ -65,13 +66,13 @@ function proxyFixture() {
   };
 }
 
-test("anonymous and invalid Admin sessions reach the canonical Admin login page", () => {
+test("anonymous and invalid Admin sessions reach the unified login page", () => {
   const proxy = proxyFixture();
   for (const pathname of ["/dashboard/admin", "/dashboard/admin/users"]) {
     for (const cookie of [undefined, { role: "admin", value: "expired" }, { role: "admin", value: "invalid" }]) {
       const response = proxy(pathname, cookie);
       assert.equal(response.status, 307);
-      assert.equal(new URL(response.headers.get("Location")!).pathname, "/admin/login");
+      assert.equal(new URL(response.headers.get("Location")!).pathname, "/login");
     }
   }
   assert.equal(proxy("/admin/login").status, 200);
@@ -124,10 +125,10 @@ async function layoutRedirect(relativePath: string, session: { role: string; ful
   }
 }
 
-test("Admin layout sends missing or revoked sessions to Admin login", async () => {
+test("Admin layout sends missing or revoked sessions to unified login", async () => {
   const layout = "src/app/dashboard/admin/layout.tsx";
-  assert.equal((await layoutRedirect(layout, null)).redirectedTo, "/admin/login");
-  assert.equal((await layoutRedirect(layout, { role: "teacher", fullName: "Wrong Role" })).redirectedTo, "/admin/login");
+  assert.equal((await layoutRedirect(layout, null)).redirectedTo, "/login");
+  assert.equal((await layoutRedirect(layout, { role: "teacher", fullName: "Wrong Role" })).redirectedTo, "/login");
   const valid = await layoutRedirect(layout, { role: "admin", fullName: "QA Admin" });
   assert.equal(valid.redirectedTo, null);
   assert.equal(valid.result?.props.role, "admin");
@@ -191,5 +192,18 @@ test("all roles return to generic login after account-wide logout", async () => 
     await (button.props.onClick as () => Promise<void>)();
     assert.deepEqual(fixture.requests, [{ url: "/api/auth/logout", role }]);
     assert.equal(fixture.window.location.href, "/login");
+  }
+});
+
+test("Admin recovery respects persisted revocation, account restrictions and wrong-class cookies", async () => {
+  for (const state of ["valid", "missing", "revoked", "disabled", "teacher-cookie", "student-cookie"]) {
+    const f = authFixture();
+    if (state !== "missing") f.cookies.set("ps_session_admin", f.token(state.endsWith("cookie") ? state.split("-")[0] : "admin"));
+    if (state === "revoked") f.users.get("admin")!.sessionVersion++;
+    if (state === "disabled") f.users.get("admin")!.status = "suspended";
+    const session = await f.auth.getAdminSession();
+    const result = await layoutRedirect("src/app/dashboard/admin/layout.tsx", session);
+    assert.equal(result.redirectedTo, state === "valid" ? null : "/login", state);
+    assert.equal(f.events.length, 0, "recovery must not log in, log out, or rotate an account");
   }
 });

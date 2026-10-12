@@ -1,0 +1,12 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci && npx prisma generate
+COPY prisma.config.ts ./
+COPY src ./src
+COPY tests ./tests
+COPY scripts/run-isolated-postgres-tests.mjs ./scripts/run-isolated-postgres-tests.mjs
+COPY scripts/ci/postgres-worker.mjs ./scripts/ci/postgres-worker.mjs
+USER node
+CMD ["node", "scripts/ci/postgres-worker.mjs"]

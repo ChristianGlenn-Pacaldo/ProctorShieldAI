@@ -1,6 +1,5 @@
-import "dotenv/config";
 import { expect, test } from "@playwright/test";
-import { authenticateAsExistingRole } from "./helpers/auth";
+import { authenticateAsSyntheticRole } from "./helpers/auth";
 
 test.describe("authenticated entitlement and quiz flows", () => {
   test.skip(
@@ -8,8 +7,16 @@ test.describe("authenticated entitlement and quiz flows", () => {
     "Set RUN_AUTHENTICATED_E2E=true and use a disposable E2E_DATABASE_URL to run authenticated flows",
   );
 
+  test("synthetic Admin receives only an Admin-scoped browser session", async ({ context }) => {
+    await authenticateAsSyntheticRole(context, "admin");
+    const accepted = await context.request.get("/api/auth/session?scope=admin");
+    expect(accepted.status()).toBe(200);
+    expect((await accepted.json()).user.role).toBe("admin");
+    expect((await context.request.get("/api/auth/session?scope=user")).status()).toBe(401);
+  });
+
   test("student join input retains a complete current-format access code", async ({ context, page }) => {
-    await authenticateAsExistingRole(context, "student");
+    await authenticateAsSyntheticRole(context, "student");
     await page.goto("/join");
     const input = page.getByPlaceholder(/enter quiz code/i);
     await input.fill("PS-1CD0309D3B");
@@ -18,7 +25,7 @@ test.describe("authenticated entitlement and quiz flows", () => {
   });
 
   test("free teacher sees AI and sixth-manual-quiz paywalls", async ({ context, page }) => {
-    await authenticateAsExistingRole(context, "teacher");
+    await authenticateAsSyntheticRole(context, "teacher");
     await page.route("**/api/billing/status", (route) => route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -60,7 +67,7 @@ test.describe("authenticated entitlement and quiz flows", () => {
   });
 
   test("Pro teacher can open manual and AI creation", async ({ context, page }) => {
-    await authenticateAsExistingRole(context, "teacher");
+    await authenticateAsSyntheticRole(context, "teacher");
     const proEntitlements = {
       isSubscribed: true,
       planName: "Premium Yearly",
@@ -93,7 +100,7 @@ test.describe("authenticated entitlement and quiz flows", () => {
   });
 
   test("student stays in the lobby until the teacher starts the quiz", async ({ context, page }) => {
-    await authenticateAsExistingRole(context, "student");
+    await authenticateAsSyntheticRole(context, "student");
     let teacherStarted = false;
     await page.route("**/api/quizzes/901", (route) => route.fulfill({
       status: 200,

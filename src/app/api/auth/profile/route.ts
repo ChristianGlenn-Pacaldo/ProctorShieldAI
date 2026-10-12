@@ -58,7 +58,7 @@ async function PUTImpl(req: NextRequest) {
       }
       if (!isStrongPassword(newPassword)) {
         return NextResponse.json(
-          { success: false, message: "New password must be 10-128 characters and contain letters and numbers." },
+          { success: false, message: "New password must be at least 10 characters, contain letters and numbers, and fit within 72 UTF-8 bytes." },
           { status: 400 }
         );
       }

@@ -12,6 +12,8 @@ import { billingEvent, loadBillingModule, paidCheckout } from "./helpers/paymong
 import { rebuildEntitlement } from "../src/lib/paymongo-entitlement.ts";
 import { isTrustedAuthOrigin } from "../src/lib/auth-origin.ts";
 
+import { assertIsolatedNetwork, assertNoTestEnvFiles, isolatedPostgresConfig, verifyIsolatedDatabaseIdentity } from "./helpers/isolated-test-environment.ts";
+
 const configured = process.env.PAYMONGO_CONCURRENCY_TEST_DATABASE_URL;
 const day = 86_400_000;
 const future = new Date("2035-01-01T00:00:00Z");
@@ -21,19 +23,18 @@ test("PayMongo atomic mutations with independent PostgreSQL connections", {
   timeout: 120_000,
 }, async (t) => {
   // Never read DATABASE_URL, .env, Railway, or any application/test database.
-  const url = new URL(configured!);
-  assert.equal(process.env.PAYMONGO_CONCURRENCY_TEST_DATABASE_APPROVED, "true");
-  assert.equal(url.protocol, "postgresql:");
-  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname));
-  assert.equal(url.pathname, "/proctorshield_paymongo_atomic_test");
+  assertNoTestEnvFiles();
+  const config = isolatedPostgresConfig("paymongo");
+  assertIsolatedNetwork();
   const schema = `paymongo_atomic_${crypto.randomBytes(8).toString("hex")}`;
-  const admin = new Client({ connectionString: configured });
-  const newClient = () => new PrismaClient({ adapter: new PrismaPg({ connectionString: configured, max: 1 }, { schema }) });
+  const admin = new Client({ ...config.connection });
+  const newClient = () => new PrismaClient({ adapter: new PrismaPg({ ...config.connection, max: 1 }, { schema }) });
   const one = newClient(), two = newClient();
   const billing = loadBillingModule(one);
   let created = false;
   await admin.connect();
   try {
+    await verifyIsolatedDatabaseIdentity(admin, config);
     await admin.query(`CREATE SCHEMA "${schema}"`); created = true;
     await admin.query(`SET search_path TO "${schema}"`);
     await admin.query(`
