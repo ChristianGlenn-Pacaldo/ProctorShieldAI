@@ -153,8 +153,12 @@ async function inspectImage() {
   check(digest('/review/password-hash.ts')===manifest.passwordHelperSHA256,'Exact source helper mismatch');
   const require=createRequire(root+'/package.json');
   // Turbopack inlines many libraries. Only actual externals need node_modules entries.
-  const dependencies=['next','react','react-dom','@prisma/client','pg','google-auth-library','@aws-sdk/client-s3'];
+  const dependencies=['next','react','react-dom','@prisma/client','pg'];
   const resolved=dependencies.map(name=>({name,path:path.relative(root,require.resolve(name))}));
+  const optionalRootEntries=['google-auth-library','@aws-sdk/client-s3','bcryptjs','jsonwebtoken','ioredis','@prisma/adapter-pg','nodemailer','pusher'].map(name=>{
+    try { return {name,rootEntry:path.relative(root,require.resolve(name))}; }
+    catch(error) { check(error.code==='MODULE_NOT_FOUND','Unexpected package entry resolution error');return {name,rootEntry:null,note:'Root entry pruned/bundled; required files are validated against all actual traces below'}; }
+  });
   const traces=walk(path.join(root,'.next/server')).filter(file=>file.endsWith('.nft.json'));
   check(traces.length>0,'Standalone dependency traces absent');
   let traceEntries=0;
@@ -190,7 +194,7 @@ async function inspectImage() {
     await original.evaluate();
     sourceTests=await passwordChecks(original.namespace,'exact source reader');
   }
-  emit({status:'PASS',sourceSHA:SOURCE_SHA,sourceTree:SOURCE_TREE,alpine:fs.readFileSync('/etc/os-release','utf8').split('\n').find(line=>line.startsWith('PRETTY_NAME=')),node:process.version,uid:process.getuid(),resolvedDependencies:resolved,traceFilesVerified:traces.length,traceEntriesVerified:traceEntries,generatedPrismaSchemaVerified:true,officialAssetsVerified:manifest.assets.length,credentialSignatureFindings:0,compiledReader:compiled.proof,compiledTests,sourceTests,liveDatabaseVerified:false,deployableStagingImage:false});
+  emit({status:'PASS',sourceSHA:SOURCE_SHA,sourceTree:SOURCE_TREE,alpine:fs.readFileSync('/etc/os-release','utf8').split('\n').find(line=>line.startsWith('PRETTY_NAME=')),node:process.version,uid:process.getuid(),resolvedDependencies:resolved,optionalRootEntries,traceFilesVerified:traces.length,traceEntriesVerified:traceEntries,generatedPrismaSchemaVerified:true,officialAssetsVerified:manifest.assets.length,credentialSignatureFindings:0,compiledReader:compiled.proof,compiledTests,sourceTests,liveDatabaseVerified:false,deployableStagingImage:false});
 }
 
 async function publicSmoke() {
