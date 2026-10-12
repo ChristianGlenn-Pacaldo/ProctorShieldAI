@@ -22,14 +22,15 @@ export async function nativeZoomChecks() {
     const { windowId } = await cdp.send('Browser.getWindowForTarget', { targetId: targetInfo.targetId });
     await page.goto(ORIGIN + '/login/student', { waitUntil: 'domcontentloaded' });
     const baseline = await page.evaluate(() => ({ width: window.innerWidth, ratio: window.devicePixelRatio, scale: window.visualViewport?.scale }));
-    const zoom = await worker.evaluate(`async () => {
+    const zoom = await worker.evaluate(async () => {
+      const chrome = globalThis.chrome;
       const tabs = await chrome.tabs.query({url:'https://127.0.0.1:3443/*'});
       const tab = tabs.find(value => value.url.includes('/login/student'));
       if (!tab?.id) throw new Error('Owned login tab unavailable');
       await chrome.tabs.setZoomSettings(tab.id, {mode:'automatic',scope:'per-tab'});
       await chrome.tabs.setZoom(tab.id,2);
       return await chrome.tabs.getZoom(tab.id);
-    }`);
+    });
     await page.waitForTimeout(250);
     const enlarged = await page.evaluate(() => ({ width: window.innerWidth, ratio: window.devicePixelRatio, scale: window.visualViewport?.scale }));
     evidence = { browserZoomAPI: zoom, baseline, enlarged, CSSZoomModified: false, textSizeModified: false };
@@ -40,12 +41,13 @@ export async function nativeZoomChecks() {
         // At 200% native zoom, a 640 physical CSS-pixel window produces a 320 CSS-pixel layout.
         await cdp.send('Browser.setWindowBounds', { windowId, bounds: { width: width * factor, height: 1050 * factor } });
         await page.goto(ORIGIN + route, { waitUntil: 'domcontentloaded' });
-        await worker.evaluate(`async ({factor,url}) => {
+        await worker.evaluate(async ({factor,url}) => {
+          const chrome = globalThis.chrome;
           const tabs=await chrome.tabs.query({url:'https://127.0.0.1:3443/*'});
           const tab=tabs.find(value=>value.url===url);
           await chrome.tabs.setZoom(tab.id,factor);
           return await chrome.tabs.getZoom(tab.id);
-        }`, { factor, url: page.url() });
+        }, { factor, url: page.url() });
         await page.evaluate(theme => { localStorage.setItem('theme', theme); document.documentElement.classList.toggle('dark', theme === 'dark'); }, theme);
         await page.waitForTimeout(150);
         const measurements = await page.evaluate(() => {
@@ -56,7 +58,7 @@ export async function nativeZoomChecks() {
           }).length;
           return { width: innerWidth, scrollWidth: document.documentElement.scrollWidth, ratio: devicePixelRatio, clipped };
         });
-        const nativeFactor = await worker.evaluate(`async url => {const tabs=await chrome.tabs.query({url:'https://127.0.0.1:3443/*'});return chrome.tabs.getZoom(tabs.find(value=>value.url===url).id)}`, page.url());
+        const nativeFactor = await worker.evaluate(async url => {const chrome=globalThis.chrome;const tabs=await chrome.tabs.query({url:'https://127.0.0.1:3443/*'});return chrome.tabs.getZoom(tabs.find(value=>value.url===url).id)}, page.url());
         check(nativeFactor === factor && Math.abs(measurements.width - width) < 3, 'Native zoom layout width mismatch');
         check(measurements.scrollWidth <= measurements.width + 1 && measurements.clipped === 0, 'Actual text/control clipping or horizontal overflow at native zoom');
         await page.locator('input').first().focus();
