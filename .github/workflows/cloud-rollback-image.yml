@@ -1,0 +1,114 @@
+name: Cloud rollback image verification
+
+on:
+  push:
+    branches: ['codex/cloud-rollback-image-verification-20261013']
+    paths:
+      - '.github/workflows/cloud-rollback-image.yml'
+      - 'tests/infrastructure/verify-rollback-image.mjs'
+  workflow_dispatch:
+    inputs:
+      approved:
+        description: Explicitly approve isolated synthetic image verification
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollback-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rollback-image:
+    if: >-
+      github.repository == 'ChristianGlenn-Pacaldo/ProctorShieldAI' &&
+      github.ref == 'refs/heads/codex/cloud-rollback-image-verification-20261013' &&
+      (github.event_name == 'push' || inputs.approved == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IMAGE: proctorshieldai-rollback-verification:2f0df056f0a7
+    steps:
+      - name: Checkout approved verification files
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: verification
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout immutable application source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 2f0df056f0a76c9d897625fd1edc5ac448405758
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Prove candidate and two-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          git -C verification merge-base --is-ancestor 2f0df056f0a76c9d897625fd1edc5ac448405758 HEAD
+          git -C verification diff --name-only 2f0df056f0a76c9d897625fd1edc5ac448405758 HEAD | sort > results/verification-files.txt
+          printf '%s\n' '.github/workflows/cloud-rollback-image.yml' 'tests/infrastructure/verify-rollback-image.mjs' | sort > "$RUNNER_TEMP/expected-files.txt"
+          diff -u "$RUNNER_TEMP/expected-files.txt" results/verification-files.txt
+          git -C verification diff --check 2f0df056f0a76c9d897625fd1edc5ac448405758 HEAD
+          node verification/tests/infrastructure/verify-rollback-image.mjs source "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/results"
+          docker version --format '{{json .}}' > results/docker-version.json
+          df -h / > results/worker-disk.txt
+          free -m > results/worker-memory.txt
+      - name: Build existing production Dockerfile with synthetic public configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull node:24-alpine
+          docker image inspect node:24-alpine --format '{{json .RepoDigests}}' > results/base-image-digests.json
+          docker build --progress=plain \
+            --label org.opencontainers.image.revision=2f0df056f0a76c9d897625fd1edc5ac448405758 \
+            --build-arg NEXT_PUBLIC_APP_URL=https://rollback-verification.invalid \
+            --build-arg NEXT_PUBLIC_GOOGLE_CLIENT_ID=synthetic.apps.googleusercontent.com \
+            --build-arg NEXT_PUBLIC_PUSHER_KEY=synthetic \
+            --build-arg NEXT_PUBLIC_PUSHER_CLUSTER=mt1 \
+            --file candidate/Dockerfile --tag "$IMAGE" candidate 2>&1 | tee results/build.log
+      - name: Actual Alpine compiled reader and offline standalone startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          node verification/tests/infrastructure/verify-rollback-image.mjs runtime "$IMAGE" "$GITHUB_WORKSPACE/results" | tee results/runtime-summary.json
+      - name: Export verified test image and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker save "$IMAGE" | gzip -1 > results/verification-image.tar.gz
+          test "$(stat -c %s results/verification-image.tar.gz)" -lt 1500000000
+          sha256sum results/verification-image.tar.gz > results/verification-image.sha256
+          printf '%s\n' 'SYNTHETIC TEST IMAGE ONLY. NOT CONFIGURED OR APPROVED FOR STAGING. Seven-day verification retention is not an operational rollback-retention policy.' > results/IMAGE-NOT-FOR-DEPLOYMENT.txt
+      - name: Sanitize artifact selection
+        id: sanitize
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never upload checkout, source helper, credentials, raw environment or databases.
+          rm -f results/password-hash.ts
+          set +e
+          grep -rIlE --exclude='*.tar.gz' -e '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|WrongSyntheticPassword|DifferentSuffix|SyntheticPassword42|A{71}' results
+          scan_status=$?
+          set -e
+          if [ "$scan_status" -ne 1 ]; then
+            echo 'Artifact sanitation failed; refusing upload.'
+            exit 1
+          fi
+      - name: Upload sanitized verification artifacts
+        if: ${{ !cancelled() && steps.sanitize.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rollback-image-verification-${{ github.run_id }}
+          path: results/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
