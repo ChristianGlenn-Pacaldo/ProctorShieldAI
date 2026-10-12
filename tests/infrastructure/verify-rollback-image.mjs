@@ -295,10 +295,10 @@ async function withDatabase(user, operation) {
   try {
     await client.connect();
     const {rows:[identity]}=await client.query(`SELECT current_database() AS database, current_user AS username,
-      inet_server_addr()::text AS address, inet_server_port() AS port,
+      host(inet_server_addr()) AS address, masklen(inet_server_addr()) AS address_mask, inet_server_port() AS port,
       current_setting('server_version_num')::int AS version,
       shobj_description(oid,'pg_database') AS marker FROM pg_database WHERE datname=current_database()`);
-    check(identity.database===DB && identity.username===user && identity.address==='127.0.0.1' && identity.port===DB_PORT && Math.floor(identity.version/10000)===18 && identity.marker==='proctorshield:disposable:'+config.instance,'Effective database identity mismatch');
+    for(const [field,actual,expected] of [['database',identity.database,DB],['role',identity.username,user],['address',identity.address,'127.0.0.1'],['mask',identity.address_mask,32],['port',identity.port,DB_PORT],['major',Math.floor(identity.version/10000),18],['marker',identity.marker,'proctorshield:disposable:'+config.instance]]) check(actual===expected,'Effective database identity mismatch: '+field);
     const {rows:[role]}=await client.query('SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user');
     check(Object.values(role).every(value=>value===false),'Unexpected database privileges');
     return await operation(client,{...identity,markerVerified:true},config);
@@ -458,6 +458,13 @@ REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
       if(probe.status===0){ready=true;break;}await delay(1000);
     }
     check(ready,'Disposable PostgreSQL did not initialize');
+    const settingsSQL="SELECT json_build_object('listen',current_setting('listen_addresses'),'port',current_setting('port'),'hbaFile',current_setting('hba_file'),'passwordEncryption',current_setting('password_encryption'),'systemIdentifier',(SELECT system_identifier::text FROM pg_control_system()),'rules',(SELECT json_agg(json_build_object('type',type,'database',database,'users',user_name,'address',address,'method',auth_method,'error',error) ORDER BY rule_number) FROM pg_hba_file_rules))";
+    const pgSettings=JSON.parse(docker('exec','--user','postgres',pgid,'psql','-h','/var/run/postgresql','-p',String(DB_PORT),'-U','psai_provisioner','-d','postgres','-At','-v','ON_ERROR_STOP=1','-c',settingsSQL));
+    check(pgSettings.listen==='127.0.0.1' && pgSettings.port===String(DB_PORT) && pgSettings.hbaFile==='/etc/psai/pg_hba.conf' && pgSettings.passwordEncryption==='scram-sha-256','Unexpected effective PostgreSQL settings');
+    check(pgSettings.rules.length===6 && pgSettings.rules.every(rule=>!rule.error && !['trust','md5','password'].includes(rule.method)),'Unsafe effective HBA rules');
+    const tcpRules=pgSettings.rules.filter(rule=>rule.method==='scram-sha-256');
+    check(tcpRules.length===2 && tcpRules.every(rule=>rule.type==='host' && rule.address==='127.0.0.1' && JSON.stringify(rule.database)===JSON.stringify([DB]) && rule.users.length===1 && [OWNER,APP].includes(rule.users[0])),'Unexpected HBA allowlist');
+    save(out,'postgres-effective-settings.json',{status:'PASS',...pgSettings,initdbTrustWarningAppliesToUnusedGeneratedHBA:true});
     const network='container:'+pgid;
     const ns=helper('namespace',network);
     const pgNamespace=docker('exec',pgid,'readlink','/proc/self/ns/net');check(ns.namespace===pgNamespace,'Namespace identity mismatch');
