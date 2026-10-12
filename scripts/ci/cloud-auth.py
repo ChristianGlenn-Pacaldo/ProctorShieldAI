@@ -13,8 +13,8 @@ def inspect_runtime(name,network,kind):
     base.require(host['NetworkMode']==network and not host.get('PortBindings') and not host.get('Privileged') and not host.get('CapAdd'),'Unsafe container networking/capabilities')
     base.require(host['Memory']>0 and host.get('PidsLimit',0)>0,'Runtime resource caps missing')
     destinations={'postgres':{'/run/psai/owner-password','/etc/psai/pg_hba.conf','/etc/psai/pg_ident.conf','/docker-entrypoint-initdb.d/001-auth.sql','/var/lib/postgresql'},
-        'redis':{'/run/psai/redis.conf','/data'},'worker':{'/run/psai/auth-config.json','/run/psai/ca.pem','/run/psai/tls-key.pem','/run/psai/tls-cert.pem','/run/psai/google-key.pem','/tmp'}}[kind]
-    base.require(all(m['Destination'] in destinations and (m['Type']=='tmpfs' or m.get('RW') is False) for m in item.get('Mounts',[])),'Unexpected or writable private/source mount')
+        'redis':{'/run/psai/redis.conf','/data'},'worker':{'/run/psai/auth-config.json','/run/psai/ca.pem','/run/psai/tls-key.pem','/run/psai/tls-cert.pem','/run/psai/google-key.pem','/tmp','/tmp/psai-results'}}[kind]
+    base.require(all(m['Destination'] in destinations and (m['Type']=='tmpfs' or m.get('RW') is False or (kind=='worker' and m['Destination']=='/tmp/psai-results')) for m in item.get('Mounts',[])),'Unexpected or writable private/source mount')
     if kind!='postgres':base.require(host['ReadonlyRootfs'],'Writable application/cache image forbidden')
     (base.RESULTS/('auth-container-'+kind+'.json')).write_text(json.dumps({'id':item['Id'],'image':item['Image'],'network':network,'memoryLimit':host['Memory'],'privileged':False,'publishedPorts':False,'owned':True},indent=2))
     return item['Id']
@@ -92,15 +92,13 @@ def run():
         base.OWNED.append(worker)
         mounts=[]
         for name in ['auth-config.json','ca.pem','tls-key.pem','tls-cert.pem','google-key.pem']:mounts+=mount(name,'/run/psai/'+name)
+        target=base.RESULTS/'authentication';target.mkdir(exist_ok=True);target.chmod(0o777)
+        mounts+=['--mount',f'type=bind,src={target},dst=/tmp/psai-results']
         base.run('auth-worker-create',['docker','create','--name',worker,'--label',base.LABEL,'--network','container:'+pgid,
             '--memory','6g','--cpus','3','--pids-limit','768','--read-only','--shm-size','256m','--tmpfs','/tmp:rw,size=1g',
             '--cap-drop','ALL','--security-opt','no-new-privileges:true',*mounts,image],print_log=False)
         inspect_runtime(worker,'container:'+pgid,'worker')
-        try:base.run('actual-authentication-worker',['docker','start','-a',worker],timeout=1200)
-        finally:
-            target=base.RESULTS/'authentication';target.mkdir(exist_ok=True)
-            cp=subprocess.run(['docker','cp',worker+':/tmp/psai-results/.',str(target)],capture_output=True,text=True,timeout=30)
-            base.require(cp.returncode==0,'Authentication results unavailable; do not claim PASS')
+        base.run('actual-authentication-worker',['docker','start','-a',worker],timeout=1200)
         report=json.loads((target/'authentication-results.json').read_text())
         base.require(report['overall']=='passed' and report['counts']['passed']>0,'Actual authenticated cases failed')
         base.require(all(report['counts'][name]==0 for name in ['failed','timedOut','skipped','interrupted']),'Failed or skipped authenticated cases')

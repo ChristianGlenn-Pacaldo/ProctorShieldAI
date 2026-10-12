@@ -14,6 +14,7 @@ const servers = [];
 let cache;
 const messages = new Map();
 const transports = { googleCertificates: 0, emailDeliveries: 0, pusherDeliveries: 0, unrelatedRequests: 0 };
+const observations = [];
 const safeEnv = () => ({ PATH: process.env.PATH, LANG: 'C.UTF-8', PLAYWRIGHT_BROWSERS_PATH: '/opt/psai-browsers', NODE_EXTRA_CA_CERTS: '/run/psai/ca.pem' });
 
 async function waitApp() {
@@ -92,8 +93,10 @@ async function adapters(runtime) {
   });
   await listen(provider, 443);
   const proxy = https.createServer(tls, (request, response) => {
+    const observation = { path: request.url.split('?')[0], method: request.method, origin: request.headers.origin || null };
     const upstream = http.request({ host: '127.0.0.1', port: 3100, path: request.url, method: request.method,
       headers: { ...request.headers, host: '127.0.0.1:3443', 'x-forwarded-proto': 'https' } }, result => {
+      observation.status = result.statusCode; observations.push(observation);
       response.writeHead(result.statusCode, result.headers); result.pipe(response);
     });
     upstream.on('error', () => reply(response, 503, { error: 'Owned local application unavailable' })); request.pipe(upstream);
@@ -171,4 +174,17 @@ async function main() {
 
 try { await main(); }
 catch (error) { console.error(sanitize(error.message || 'Authentication worker failed')); process.exitCode = 1; }
-finally { await stopApp(); for (const server of servers) await new Promise(resolve => server.close(resolve)); if (cache) await cache.quit().catch(() => {}); }
+finally {
+  await stopApp();
+  if (fs.existsSync(RESULTS)) {
+    const secretFile = PRIVATE + '/secrets.json';
+    const tracked = fs.existsSync(secretFile) ? JSON.parse(fs.readFileSync(secretFile, 'utf8')) : [];
+    const count = tracked.filter(secret => applicationLog.includes(secret)).length;
+    fs.writeFileSync(RESULTS + '/sensitive-log-check.json', JSON.stringify({ status: count ? 'FAIL' : 'PASS', detectedValues: count, rawLogsPublished: false }, null, 2));
+    fs.writeFileSync(RESULTS + '/application-sanitized.log', sanitize(applicationLog));
+    fs.writeFileSync(RESULTS + '/http-boundary-observations.json', JSON.stringify(observations, null, 2));
+    if (count) process.exitCode = 1;
+  }
+  for (const server of servers) await new Promise(resolve => server.close(resolve));
+  if (cache) await cache.quit().catch(() => {});
+}

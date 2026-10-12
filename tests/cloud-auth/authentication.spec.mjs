@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
+import https from 'node:https';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { verifyPassword } from '../../src/lib/password-hash.ts';
@@ -27,7 +28,9 @@ for (const role of ['student', 'teacher', 'admin']) for (const version of ['lega
     const page = await c.newPage();
     await page.goto(ORIGIN + '/dashboard/' + role, { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(new RegExp('/dashboard/' + role + '(?:/|$)'));
-    await expect(page.locator('h1').first()).toBeVisible();
+    if (role === 'student') await expect(page.locator('h1').first()).toBeVisible();
+    if (role === 'teacher') await expect(page.getByRole('heading', { name: 'Battle Power Arena Mode', exact: true })).toBeVisible();
+    if (role === 'admin') await expect(page.getByText('Active Sessions', { exact: true }).first()).toBeVisible();
     await page.reload({ waitUntil: 'domcontentloaded' });
     check((await call(c, sessionPath(user), undefined, 'GET')).status === 200, 'Refresh lost actual session');
   });
@@ -299,6 +302,7 @@ test('AUTH24 create/join/start/answer/submit/readback uses actual authenticated 
     quizMode: 'proctored', questions: [{ questionText: 'Select the correct synthetic answer', questionType: 'multiple_choice', points: 1,
       choices: [{ choiceText: 'Correct synthetic answer', isCorrect: true }, { choiceText: 'Other synthetic answer', isCorrect: false }] }] });
   check(create.status === 201 && create.body.quiz?.id, 'Actual Teacher quiz creation failed'); const quiz = create.body.quiz;
+  check((await call(tc, '/api/quizzes/' + quiz.id, { quizStatus: 'active' }, 'PUT')).status === 200, 'Actual Teacher activation failed');
   check((await call(sc, '/api/quizzes/join', { accessCode: quiz.accessCode })).status === 201, 'Actual Student enrollment failed');
   check((await call(tc, '/api/quizzes/' + quiz.id + '/start', {})).status === 200, 'Actual Teacher start failed');
   const detail = await call(sc, '/api/quizzes/' + quiz.id, undefined, 'GET'); check(detail.status === 200 && detail.body.studentQuizId, 'Actual attempt detail failed');
@@ -374,10 +378,16 @@ test('AUTH28 password replacement racing login never accepts old credentials at 
   check((await call(racing, sessionPath(user), undefined, 'GET')).status === 401, 'Old credentials authorized new stored version');
 });
 
-test('AUTH29 actual Origin-protected handlers reject missing or cross-site headers before auth mutation', async ({ browser }) => {
-  const missing = await browserContext(browser, { extraHTTPHeaders: { 'x-forwarded-for': '192.0.2.250' } });
-  const foreign = await browserContext(browser, { extraHTTPHeaders: { Origin: 'https://untrusted.example', 'x-forwarded-for': '192.0.2.251' } });
-  for (const c of [missing, foreign]) for (const [route, method] of [['/api/auth/login', 'POST'], ['/api/auth/register', 'POST'], ['/api/auth/profile', 'PUT'], ['/api/quizzes/1/start', 'POST']]) {
-    check((await call(c, route, { email: 'synthetic-origin@example.invalid', password: 'SyntheticOrigin12!' }, method)).status === 403, 'Actual Origin guard accepted untrusted mutation');
+test('AUTH29 actual Origin-protected handlers reject missing or cross-site headers before auth mutation', async () => {
+  for (const origin of [null, 'https://untrusted.example']) for (const [route, method] of [['/api/auth/login', 'POST'], ['/api/auth/register', 'POST'], ['/api/auth/profile', 'PUT'], ['/api/quizzes/1/start', 'POST']]) {
+    // Raw HTTPS ensures the "missing" case has no implicit browser/client Origin.
+    const status = await new Promise((resolve, reject) => {
+      const payload = JSON.stringify({ email: 'synthetic-origin@example.invalid', password: 'SyntheticOrigin12!' });
+      const request = https.request(ORIGIN + route, { method, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...(origin ? { Origin: origin } : {}) } }, response => {
+        response.resume(); response.once('end', () => resolve(response.statusCode));
+      });
+      request.once('error', reject); request.end(payload);
+    });
+    check(status === 403, `Actual Origin guard response for ${method} ${route} (${origin ? 'foreign' : 'absent'}): ${status}`);
   }
 });
