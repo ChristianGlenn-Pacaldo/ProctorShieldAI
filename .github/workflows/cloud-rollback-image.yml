@@ -1,8 +1,8 @@
-name: Cloud rollback image verification
+name: Cloud production runtime verification
 
 on:
   push:
-    branches: ['codex/cloud-rollback-image-verification-20261013']
+    branches: ['codex/cloud-production-runtime-verification-20261013']
     paths:
       - '.github/workflows/cloud-rollback-image.yml'
       - 'tests/infrastructure/verify-rollback-image.mjs'
@@ -25,12 +25,13 @@ jobs:
   rollback-image:
     if: >-
       github.repository == 'ChristianGlenn-Pacaldo/ProctorShieldAI' &&
-      github.ref == 'refs/heads/codex/cloud-rollback-image-verification-20261013' &&
+      github.ref == 'refs/heads/codex/cloud-production-runtime-verification-20261013' &&
       (github.event_name == 'push' || inputs.approved == true)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      IMAGE: proctorshieldai-rollback-verification:2f0df056f0a7
+      IMAGE: proctorshieldai-runtime-verification:2f0df056f0a7
+      PSAI_ISOLATED_TESTS_APPROVED: 'true'
     steps:
       - name: Checkout approved verification files
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -65,6 +66,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node -e 'const fs=require("fs"); const m=Number(fs.readFileSync("/proc/meminfo","utf8").match(/^MemAvailable:\s+(\d+)/m)[1]); const d=fs.statfsSync("."); if(m<2500*1024 || Number(d.bavail)*Number(d.bsize)<6*1024**3) process.exit(1)'
+          docker pull postgres:18.6-bookworm
+          docker image inspect postgres:18.6-bookworm --format '{{json .RepoDigests}}' > results/postgres-image-digests.json
+          PG_IMAGE="$(docker image inspect postgres:18.6-bookworm --format '{{index .RepoDigests 0}}')"
+          [[ "$PG_IMAGE" =~ ^postgres@sha256:[0-9a-f]{64}$ ]]
+          printf 'PSAI_POSTGRES_IMAGE=%s\n' "$PG_IMAGE" >> "$GITHUB_ENV"
           docker pull node:24-alpine
           docker image inspect node:24-alpine --format '{{json .RepoDigests}}' > results/base-image-digests.json
           docker build --progress=plain \
@@ -74,11 +81,11 @@ jobs:
             --build-arg NEXT_PUBLIC_PUSHER_KEY=synthetic \
             --build-arg NEXT_PUBLIC_PUSHER_CLUSTER=mt1 \
             --file candidate/Dockerfile --tag "$IMAGE" candidate 2>&1 | tee results/build.log
-      - name: Actual Alpine compiled reader and offline standalone startup
+      - name: Actual Alpine reader, isolated PostgreSQL and normal production Arena startup
         shell: bash
         run: |
           set -euo pipefail
-          node verification/tests/infrastructure/verify-rollback-image.mjs runtime "$IMAGE" "$GITHUB_WORKSPACE/results" | tee results/runtime-summary.json
+          node verification/tests/infrastructure/verify-rollback-image.mjs runtime "$IMAGE" "$GITHUB_WORKSPACE/results" "$GITHUB_WORKSPACE/candidate" | tee results/runtime-summary.json
       - name: Export verified test image and checksum
         shell: bash
         run: |
@@ -86,7 +93,8 @@ jobs:
           docker save "$IMAGE" | gzip -1 > results/verification-image.tar.gz
           test "$(stat -c %s results/verification-image.tar.gz)" -lt 1500000000
           sha256sum results/verification-image.tar.gz > results/verification-image.sha256
-          printf '%s\n' 'SYNTHETIC TEST IMAGE ONLY. NOT CONFIGURED OR APPROVED FOR STAGING. Seven-day verification retention is not an operational rollback-retention policy.' > results/IMAGE-NOT-FOR-DEPLOYMENT.txt
+          sha256sum --check results/verification-image.sha256
+          printf '%s\n' 'NOT FOR STAGING DEPLOYMENT. SYNTHETIC VERIFICATION IMAGE ONLY. Seven-day verification retention is not an operational rollback-retention policy.' > results/IMAGE-NOT-FOR-DEPLOYMENT.txt
       - name: Sanitize artifact selection
         id: sanitize
         if: always()
@@ -107,7 +115,7 @@ jobs:
         if: ${{ !cancelled() && steps.sanitize.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: rollback-image-verification-${{ github.run_id }}
+          name: production-runtime-verification-${{ github.run_id }}
           path: results/
           retention-days: 7
           if-no-files-found: error
