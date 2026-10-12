@@ -36,7 +36,9 @@ function installNetworkGuard(allowDatabase=false) {
   };
   const lookup=dns.lookup;
   dns.lookup=function(host,...args) {
-    if(allowDatabase && host==='127.0.0.1') return lookup.call(this,host,...args);
+    // Numeric bind/DB addresses are handled locally by Node without a DNS request.
+    // This grants no outbound socket permission to 0.0.0.0.
+    if(allowDatabase && (host==='127.0.0.1' || host==='0.0.0.0')) return lookup.call(this,host,...args);
     return blocked('dns-lookup')();
   };
   for(const key of Object.keys(dns)) if(key.startsWith('resolve') || key==='reverse') dns[key]=blocked('dns-resolution');
@@ -357,7 +359,7 @@ async function namespaceEvidence() {
   check(nativeFailure==='ENETUNREACH','Native egress isolation not proven');
   emit({status:'PASS',namespace:fs.readlinkSync('/proc/self/ns/net'),devices,ipv4Routes:0,nativeEgressResult:nativeFailure,publishedPorts:0});
 }
-function guardControls() {
+async function guardControls() {
   const positive=[[DB_PORT,'127.0.0.1'],[{port:DB_PORT,host:'127.0.0.1'}],[[{port:DB_PORT,host:'127.0.0.1'},null]]];
   for(const args of positive) check(allowedDestination(args),'Approved connect signature rejected');
   installNetworkGuard(true);
@@ -369,7 +371,10 @@ function guardControls() {
     check(rejected,'Safety negative control failed');passed++;
   }
   for(const args of [[DB_PORT],[{port:DB_PORT,host:'localhost'}],[{port:DB_PORT,host:'127.0.0.1',path:'/tmp/socket'}],[{port:DB_PORT,host:'127.0.0.1',lookup:()=>{}}]]) check(!allowedDestination(args),'Ambiguous connection accepted');
-  emit({status:'PASS',negativeControls:passed,positiveNormalizationChecks:positive.length,malformedControls:4,realExternalConnections:0});
+  const literal=await new Promise(resolve=>dns.lookup('0.0.0.0',(error,address)=>resolve({error:!!error,address})));
+  check(!literal.error && literal.address==='0.0.0.0','Numeric server bind lookup rejected');
+  check(!allowedDestination([3000,'0.0.0.0']),'Bind lookup must not allow outbound sockets');
+  emit({status:'PASS',negativeControls:passed,positiveNormalizationChecks:positive.length,malformedControls:4,numericBindLookup:true,realExternalConnections:0});
 }
 function resourceGuard() {
   const available=Number(fs.readFileSync('/proc/meminfo','utf8').match(/^MemAvailable:\s+(\d+)/m)?.[1])*1024;
@@ -545,7 +550,7 @@ else {
     else if(mode==='runtime') await verifyRuntime(process.argv[3],process.argv[4],path.resolve(process.argv[1]),process.argv[5]);
     else if(mode==='inspect') await inspectImage();
     else if(mode==='smoke') await publicSmoke();
-    else if(mode==='guard-controls') guardControls();
+    else if(mode==='guard-controls') await guardControls();
     else if(mode==='namespace') await namespaceEvidence();
     else if(mode==='db-init') await initializeDatabase();
     else if(mode==='db-app-identity') await databaseObservation(APP);
