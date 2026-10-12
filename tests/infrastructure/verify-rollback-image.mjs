@@ -218,8 +218,13 @@ async function publicSmoke() {
 function execute(args,cwd,options={}) {
   const cp=childProcess.spawnSync(args[0],args.slice(1),{cwd,encoding:'utf8',timeout:options.timeout||60_000,maxBuffer:20*1024*1024,env:options.env||process.env});
   if(cp.status!==0) {
-    const line=cp.stdout.split('\n').findLast(text=>text.startsWith('{"status":"FAIL"'));
+    const line=(cp.stdout+'\n'+cp.stderr).split('\n').findLast(text=>text.startsWith('{"status":"FAIL"'));
     if(line) console.error(line);
+    else {
+      const diagnostic=cp.stderr.split('\n').find(text=>/^(Error:|TypeError:|ReferenceError:|docker:)/.test(text));
+      if(diagnostic) console.error(JSON.stringify({status:'FAIL',mode:'child-diagnostic',error:diagnostic.replace(/https?:\/\/\S+/g,'[URL]').slice(0,180)}));
+      console.error(JSON.stringify({status:'FAIL',mode:'child-exit',exitStatus:cp.status,signal:cp.signal}));
+    }
     throw new Error(options.label||'Verification subprocess failed');
   }
   return (options.combine ? cp.stdout+'\n'+cp.stderr : cp.stdout).trim();
