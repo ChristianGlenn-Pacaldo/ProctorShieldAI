@@ -50,6 +50,19 @@ def image_ref(image):
     return digest
 
 
+def verify_test_summary(log):
+    # Node 24 can report TAP (#) or its default text reporter (ℹ).
+    # Both must prove actual cases ran and none failed, skipped or cancelled.
+    counts = {}
+    for key in ['tests','pass','fail','skipped','cancelled']:
+        values = re.findall(r'^(?:#|ℹ)\s+' + key + r'\s+(\d+)\s*$', log, re.M)
+        require(len(values) == 1, 'Missing or ambiguous PostgreSQL test summary: ' + key)
+        counts[key] = int(values[0])
+    require(counts['tests'] > 0 and counts['pass'] == counts['tests'], 'Incomplete PostgreSQL test execution')
+    require(all(counts[key] == 0 for key in ['fail','skipped','cancelled']), 'Failed, skipped or cancelled PostgreSQL tests are not passing')
+    return counts
+
+
 def inspect_owned(container, expected_network):
     raw = run('inspect-' + container, ['docker', 'inspect', container], print_log=False)
     obj = json.loads(raw)[0]
@@ -132,8 +145,8 @@ def postgres():
             '--cap-drop','ALL','--security-opt','no-new-privileges:true', *mount(config,'/run/psai/test-config.json'), workerimage], print_log=False)
         inspect_owned(workername, 'container:'+pgid)
         log = run('actual-postgresql-tests', ['docker','start','-a',workername], timeout=900)
-        require(re.search(r'^# fail 0$', log, re.M) is not None, 'Missing successful test summary')
-        require(re.search(r'^# skipped 0$', log, re.M) is not None and re.search(r'^# cancelled 0$', log, re.M) is not None, 'Skipped or cancelled PostgreSQL tests are not passing')
+        counts = verify_test_summary(log)
+        (RESULTS / 'postgres-test-counts.json').write_text(json.dumps(counts, indent=2))
         state = json.loads(run('worker-final-state', ['docker','inspect',workername], print_log=False))[0]['State']
         require(state['ExitCode'] == 0 and not state.get('OOMKilled'), 'Worker failed or exhausted memory')
         print('Four PostgreSQL suites ran against actual isolated PostgreSQL; provider transports remain simulated.', flush=True)
