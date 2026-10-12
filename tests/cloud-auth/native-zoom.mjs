@@ -8,6 +8,7 @@ export async function nativeZoomChecks() {
   const cases = [];
   let browser;
   let zoomAvailable = false;
+  let evidence;
   try {
     fs.mkdirSync('/tmp/psai-native-config', { recursive: true });
     fs.mkdirSync('/tmp/psai-native-cache', { recursive: true });
@@ -31,9 +32,9 @@ export async function nativeZoomChecks() {
     }`);
     await page.waitForTimeout(250);
     const enlarged = await page.evaluate(() => ({ width: window.innerWidth, ratio: window.devicePixelRatio, scale: window.visualViewport?.scale }));
+    evidence = { browserZoomAPI: zoom, baseline, enlarged, CSSZoomModified: false, textSizeModified: false };
     check(zoom === 2 && Math.abs(enlarged.ratio / baseline.ratio - 2) < 0.1 && Math.abs(enlarged.width * 2 - baseline.width) < 3, 'Native browser zoom could not be independently proven');
     zoomAvailable = true;
-    const evidence = { browserZoomAPI: zoom, baseline, enlarged, CSSZoomModified: false, textSizeModified: false };
     for (const width of [320, 375, 390]) for (const theme of ['light', 'dark']) for (const route of ['/login/student', '/login/teacher', '/login/forgot-password?role=student', '/login/forgot-password?role=teacher']) {
       for (const factor of [1, 2]) {
         // At 200% native zoom, a 640 physical CSS-pixel window produces a 320 CSS-pixel layout.
@@ -71,6 +72,38 @@ export async function nativeZoomChecks() {
     return { status: 'PASS', actualNativeZoom: evidence, cases, GoogleButtonContainment: 'UNVERIFIED: real Google configuration and external SDK unavailable' };
   } catch (error) {
     const defect = /Actual text\/control clipping|Keyboard focus lost|Keyboard tab order lost/.test(error.message || '');
-    return { status: zoomAvailable && defect ? 'FAIL' : 'BLOCKED', cases, message: sanitize(error.message || 'Native zoom unavailable'), GoogleButtonContainment: 'UNVERIFIED' };
+    return { status: zoomAvailable && defect ? 'FAIL' : 'BLOCKED', actualNativeZoom: evidence, cases, message: sanitize(error.message || 'Native zoom unavailable'), GoogleButtonContainment: 'UNVERIFIED' };
   } finally { if (browser) await browser.close(); }
+}
+
+export async function normalMobileChecks() {
+  const cases = [];
+  const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
+  try {
+    for (const width of [320, 375, 390]) for (const theme of ['light', 'dark']) {
+      const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width, height: 1000 }, colorScheme: theme });
+      try {
+        await context.addInitScript(theme => localStorage.setItem('theme', theme), theme);
+        const page = await context.newPage();
+        for (const route of ['/login/student', '/login/teacher', '/login/forgot-password?role=student', '/login/forgot-password?role=teacher']) {
+          await page.goto(ORIGIN + route, { waitUntil: 'domcontentloaded' });
+          await page.locator('input').first().waitFor();
+          const measurements = await page.evaluate(() => {
+            const nodes = [...document.querySelectorAll('h1,h2,label,input,button[type="submit"]')].filter(node => node.getBoundingClientRect().width > 0);
+            return { width: innerWidth, scrollWidth: document.documentElement.scrollWidth, theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+              clipped: nodes.filter(node => { const box = node.getBoundingClientRect(); return box.left < -1 || box.right > innerWidth + 1 || node.scrollWidth > node.clientWidth + 2; }).length };
+          });
+          check(measurements.width === width && measurements.scrollWidth <= width + 1 && measurements.clipped === 0 && measurements.theme === theme, 'Normal mobile layout/theme/clipping failed');
+          await page.locator('input').first().focus(); await page.keyboard.press('Tab');
+          check(await page.evaluate(() => document.activeElement !== document.body), 'Normal mobile keyboard tabbing failed');
+          const name = route.includes('forgot') ? (route.includes('teacher') ? 'teacher-recovery' : 'student-recovery') : route.endsWith('teacher') ? 'teacher-login' : 'student-login';
+          const screenshot = `${name}-${theme}-${width}-normal.png`;
+          await page.screenshot({ path: RESULTS + '/' + screenshot, fullPage: true });
+          cases.push({ page: name, theme, CSSLayoutWidth: width, nativeFactor: 1, measurements, keyboardFocus: 'PASS', screenshot });
+        }
+      } finally { await context.close(); }
+    }
+    return { status: 'PASS', cases, native200Percent: false, GoogleButtonContainment: 'UNVERIFIED' };
+  } catch (error) { return { status: 'FAIL', cases, message: sanitize(error.message || 'Normal mobile check failed'), native200Percent: false }; }
+  finally { await browser.close(); }
 }

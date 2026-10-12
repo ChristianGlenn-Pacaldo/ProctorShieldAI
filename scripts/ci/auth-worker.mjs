@@ -158,7 +158,10 @@ async function main() {
     tests.once('exit', resolve);
   });
   check(exit === 0, 'Actual authenticated browser/API tests failed');
-  const { nativeZoomChecks } = await import('../../tests/cloud-auth/native-zoom.mjs');
+  const { nativeZoomChecks, normalMobileChecks } = await import('../../tests/cloud-auth/native-zoom.mjs');
+  const mobile = await normalMobileChecks();
+  fs.writeFileSync(RESULTS + '/normal-mobile-results.json', JSON.stringify(mobile, null, 2));
+  check(mobile.status === 'PASS', 'Actual normal mobile layout/accessibility checks failed');
   const zoom = await nativeZoomChecks();
   fs.writeFileSync(RESULTS + '/native-zoom-results.json', JSON.stringify(zoom, null, 2));
   check(zoom.status !== 'FAIL', 'Native zoom exposed an actual accessibility defect');
