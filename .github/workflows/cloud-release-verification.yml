@@ -43,6 +43,7 @@ jobs:
         with:
           name: source-check-results
           path: .ci-results/
+          include-hidden-files: true
           retention-days: 7
 
   isolated-postgresql:
@@ -59,6 +60,7 @@ jobs:
         with:
           name: isolated-postgresql-results
           path: .ci-results/
+          include-hidden-files: true
           retention-days: 7
 
   migration-image:
@@ -75,4 +77,5 @@ jobs:
         with:
           name: migration-image-results
           path: .ci-results/
+          include-hidden-files: true
           retention-days: 7
