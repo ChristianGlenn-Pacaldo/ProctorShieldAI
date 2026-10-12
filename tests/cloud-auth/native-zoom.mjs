@@ -39,7 +39,7 @@ export async function nativeZoomChecks() {
     for (const width of [320, 375, 390]) for (const theme of ['light', 'dark']) for (const route of ['/login/student', '/login/teacher', '/login/forgot-password?role=student', '/login/forgot-password?role=teacher']) {
       for (const factor of [1, 2]) {
         // At 200% native zoom, a 640 physical CSS-pixel window produces a 320 CSS-pixel layout.
-        await cdp.send('Browser.setWindowBounds', { windowId, bounds: { width: width * factor, height: 1050 * factor } });
+        await cdp.send('Browser.setWindowBounds', { windowId, bounds: { width: width * factor, height: 1400 * factor } });
         await page.goto(ORIGIN + route, { waitUntil: 'domcontentloaded' });
         await worker.evaluate(async ({factor,url}) => {
           const chrome = globalThis.chrome;
@@ -67,8 +67,15 @@ export async function nativeZoomChecks() {
         check(await page.evaluate(() => document.activeElement !== document.body), 'Keyboard tab order lost');
         const name = route.includes('forgot') ? (route.includes('teacher') ? 'teacher-recovery' : 'student-recovery') : route.endsWith('teacher') ? 'teacher-login' : 'student-login';
         const screenshot = `${name}-${theme}-${width}-native-${factor}00.png`;
-        await page.screenshot({ path: RESULTS + '/' + screenshot, fullPage: true });
-        cases.push({ page: name, theme, CSSLayoutWidth: width, physicalViewportWidth: width * factor, nativeFactor, measurements, keyboardFocus: 'PASS', screenshot });
+        // Capture the actual native-zoom surface without Playwright's full-page
+        // device-metrics override, which can crop a zoomed browser to CSS pixels.
+        const surface = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+        const png = Buffer.from(surface.data, 'base64');
+        const capture = { pixelWidth: png.readUInt32BE(16), pixelHeight: png.readUInt32BE(20), method: 'CDP_NATIVE_SURFACE' };
+        check(capture.pixelWidth === width * factor, 'Native screenshot surface width mismatch');
+        check(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), 'Native screenshot viewport does not contain the full page');
+        fs.writeFileSync(RESULTS + '/' + screenshot, png);
+        cases.push({ page: name, theme, CSSLayoutWidth: width, physicalViewportWidth: width * factor, nativeFactor, measurements, keyboardFocus: 'PASS', capture, screenshot });
       }
     }
     return { status: 'PASS', actualNativeZoom: evidence, cases, GoogleButtonContainment: 'UNVERIFIED: real Google configuration and external SDK unavailable' };
