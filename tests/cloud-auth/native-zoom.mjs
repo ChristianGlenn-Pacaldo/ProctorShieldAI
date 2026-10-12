@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { chromium } from '@playwright/test';
 import { ORIGIN, RESULTS, check, sanitize } from './runtime.mjs';
 
@@ -8,7 +9,10 @@ export async function nativeZoomChecks() {
   let browser;
   let zoomAvailable = false;
   try {
+    fs.mkdirSync('/tmp/psai-native-config', { recursive: true });
+    fs.mkdirSync('/tmp/psai-native-cache', { recursive: true });
     browser = await chromium.launchPersistentContext('', { channel: 'chromium', headless: true, ignoreHTTPSErrors: true,
+      env: { ...process.env, XDG_CONFIG_HOME: '/tmp/psai-native-config', XDG_CACHE_HOME: '/tmp/psai-native-cache' },
       viewport: null, args: ['--window-size=1280,1000', '--disable-dev-shm-usage', '--disable-extensions-except=' + extension, '--load-extension=' + extension] });
     const worker = browser.serviceWorkers()[0] || await browser.waitForEvent('serviceworker', { timeout: 10_000 });
     const page = await browser.newPage();
