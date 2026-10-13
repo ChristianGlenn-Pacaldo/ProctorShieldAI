@@ -1,0 +1,16 @@
+{
+  "name": "proctorshieldai-recovery-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/unit.test.mjs",
+    "test:integration": "node --test --test-concurrency=1 tests/postgres.integration.test.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1123.0"
+  }
+}

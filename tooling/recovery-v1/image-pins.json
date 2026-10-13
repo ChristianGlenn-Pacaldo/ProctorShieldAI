@@ -1,0 +1,20 @@
+{
+  "platform": "linux/amd64",
+  "images": {
+    "node": {
+      "pinnedReference": "node@sha256:51b1100cc2a83d370c6a60952e3f2989c8a43159d0e38586e090f3b3326efefd",
+      "source": "https://hub.docker.com/v2/repositories/library/node/tags/24-bookworm-slim",
+      "verification": "Official public Docker Hub metadata; Docker pull verification pending"
+    },
+    "postgres": {
+      "pinnedReference": "postgres@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c",
+      "source": "Phase 5.8 successful cloud run 38302222493 postgres-image-digests.json",
+      "verification": "Retained verified cloud evidence; no new image pulled"
+    }
+  },
+  "limitations": [
+    "Anonymous manifest resolution returned 401; metadata fallback used for Node.",
+    "This is a base-image pin record, not a built operations-image digest.",
+    "Object-storage tests use explicitly labelled synthetic HTTP/S3 fixtures, not live R2 or MinIO."
+  ]
+}

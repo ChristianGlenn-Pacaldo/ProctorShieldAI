@@ -1,0 +1,49 @@
+name: Synthetic recovery tooling verification
+on:
+  push:
+    branches: ['codex/recovery-tooling-synthetic-20261013']
+    paths: ['tooling/recovery-v1/**', '.github/workflows/recovery-tooling-synthetic.yml']
+permissions:
+  contents: read
+concurrency:
+  group: synthetic-recovery-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  synthetic-recovery:
+    if: github.repository == 'ChristianGlenn-Pacaldo/ProctorShieldAI' && github.ref == 'refs/heads/codex/recovery-tooling-synthetic-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PSAI_SYNTHETIC_CLOUD_APPROVED: 'true'
+    defaults:
+      run:
+        working-directory: tooling/recovery-v1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify immutable parent and exact additive file scope
+        run: |
+          node tests/verify-publication.mjs
+          git diff --check 2f0df056f0a76c9d897625fd1edc5ac448405758 HEAD
+          sh -n cleanup-owned.sh
+      - name: Install locked external tooling dependencies only
+        run: npm ci --ignore-scripts --no-audit --no-fund --fetch-retries=0 --fetch-timeout=15000
+      - name: Build and test synthetic recovery image and owned PostgreSQL clusters
+        run: node tests/cloud-driver.mjs
+      - name: Validate sanitized artifact allowlist
+        id: sanitize
+        if: ${{ !cancelled() }}
+        run: node tests/sanitize-artifacts.mjs
+      - name: Upload only sanitized evidence
+        if: ${{ !cancelled() && steps.sanitize.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: synthetic-recovery-verification-${{ github.run_id }}
+          path: tooling/recovery-v1/sanitized-artifacts/
+          retention-days: 7
+          if-no-files-found: error

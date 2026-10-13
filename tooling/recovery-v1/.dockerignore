@@ -1,0 +1,14 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!lib/
+!lib/**
+!tests/
+!tests/**
+!backup-once.mjs
+!recover-once.mjs
+!gate-control.mjs
+!verify-operation.mjs
+!cleanup-owned.mjs
+!cleanup-owned.sh
