@@ -1,3 +1,5 @@
+import "./student.css";
+import "./student-glass.css";
 import DashboardShell from "@/components/dashboard-shell";
 import { getUserSession } from "@/lib/auth";
 import { redirect } from "next/navigation";

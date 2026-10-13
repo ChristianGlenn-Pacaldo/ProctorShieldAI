@@ -1,0 +1,75 @@
+/* Controlled Student pilot. Every material is explicitly opted in; cached
+   App Router CSS cannot change another role or assessment/media surface. */
+[data-portal="student"].ps-student-glass-shell {
+  --ps-glass-card-fill:color-mix(in srgb,var(--ps-surface) 68%,transparent);
+  --ps-glass-dense-fill:color-mix(in srgb,var(--ps-surface) 95%,transparent);
+  --ps-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 76%,transparent);
+  --ps-glass-edge:color-mix(in srgb,var(--ps-border-control) 40%,transparent);
+  --ps-glass-reflection:color-mix(in srgb,var(--ps-surface) 65%,transparent);
+  --ps-glass-mint:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-glass-blur:10px;
+  --ps-glass-card-glow:color-mix(in srgb,var(--ps-accent-soft) 70%,transparent);
+  --ps-glass-card-sheen:color-mix(in srgb,var(--ps-surface) 75%,transparent);
+  --ps-glass-card-edge:color-mix(in srgb,var(--ps-border-control) 48%,transparent);
+  --ps-glass-ambient-near:color-mix(in srgb,var(--ps-accent) 14%,transparent);
+  --ps-glass-ambient-far:color-mix(in srgb,var(--ps-primary) 12%,transparent);
+  --ps-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-surface) 85%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 10%,transparent);
+}
+html.dark [data-portal="student"].ps-student-glass-shell {
+  --ps-glass-card-fill:color-mix(in srgb,var(--ps-surface) 66%,transparent);
+  --ps-glass-chrome-fill:color-mix(in srgb,var(--ps-surface) 72%,transparent);
+  --ps-glass-edge:color-mix(in srgb,var(--ps-primary) 28%,transparent);
+  --ps-glass-reflection:color-mix(in srgb,var(--ps-primary) 10%,transparent);
+  --ps-glass-mint:color-mix(in srgb,var(--ps-accent) 6%,transparent);
+  --ps-glass-card-glow:color-mix(in srgb,var(--ps-primary) 22%,transparent);
+  --ps-glass-card-sheen:color-mix(in srgb,var(--ps-primary) 14%,transparent);
+  --ps-glass-card-edge:color-mix(in srgb,var(--ps-primary) 36%,transparent);
+  --ps-glass-ambient-near:color-mix(in srgb,var(--ps-primary) 24%,transparent);
+  --ps-glass-ambient-far:color-mix(in srgb,var(--ps-accent) 16%,transparent);
+  --ps-glass-material-shadow:var(--ps-shadow),inset 0 1px 0 color-mix(in srgb,var(--ps-primary) 20%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--ps-gold) 8%,transparent);
+}
+/* Only the opted-in overview gets the new static canvas; other Student
+   content retains its approved background and receives navigation chrome. */
+[data-portal="student"].ps-student-glass-shell:has(.ps-glass-overview) {
+  background:radial-gradient(ellipse at 4% 4%,color-mix(in srgb,var(--ps-accent) 26%,transparent),transparent 52%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),var(--ps-accent-soft)) !important;
+}
+html.dark [data-portal="student"].ps-student-glass-shell:has(.ps-glass-overview) {
+  background:radial-gradient(ellipse at 6% 6%,color-mix(in srgb,var(--ps-primary) 16%,transparent),transparent 50%),radial-gradient(ellipse at 80% 70%,color-mix(in srgb,var(--ps-accent) 9%,transparent),transparent 55%),linear-gradient(145deg,var(--ps-canvas),color-mix(in srgb,var(--ps-canvas) 75%,var(--ps-media))) !important;
+}
+/* Static light lives behind the opted-in overview cards. It neither creates
+   an overlay nor changes sizing, hit targets, or other Student routes. */
+[data-portal="student"].ps-student-glass-shell .ps-glass-overview {
+  background:radial-gradient(ellipse at 12% 36%,var(--ps-glass-ambient-near),transparent 52%),radial-gradient(ellipse at 88% 75%,var(--ps-glass-ambient-far),transparent 58%);
+}
+[data-portal="student"].ps-student-glass-shell .ps-glass-card {
+  background:radial-gradient(ellipse at 0% 0%,var(--ps-glass-card-glow),transparent 68%),linear-gradient(125deg,var(--ps-glass-card-sheen),transparent 48%,var(--ps-glass-mint)),var(--ps-glass-card-fill) !important;
+  border-color:var(--ps-glass-card-edge) !important;
+  box-shadow:var(--ps-glass-material-shadow),inset 0 1px 1px var(--ps-glass-card-sheen) !important;
+  backdrop-filter:blur(var(--ps-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-glass-blur));
+}
+[data-portal="student"].ps-student-glass-shell .ps-glass-chrome {
+  background:linear-gradient(130deg,var(--ps-glass-reflection),transparent 45%),var(--ps-glass-chrome-fill) !important;
+  border-color:var(--ps-glass-edge) !important;
+  box-shadow:var(--ps-glass-material-shadow) !important;
+  backdrop-filter:blur(var(--ps-glass-blur));
+  -webkit-backdrop-filter:blur(var(--ps-glass-blur));
+}
+[data-portal="student"].ps-student-glass-shell .ps-glass-dense {
+  background:var(--ps-glass-dense-fill) !important;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+[data-portal="student"].ps-student-glass-shell .ps-glass-frame {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--ps-glass-reflection) 30%,transparent),transparent 55%),color-mix(in srgb,var(--ps-surface) 24%,transparent) !important;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+@media(max-width:767px) {
+  [data-portal="student"].ps-student-glass-shell {--ps-glass-blur:4px;--ps-glass-card-fill:color-mix(in srgb,var(--ps-surface) 82%,transparent);}
+  html.dark [data-portal="student"].ps-student-glass-shell {--ps-glass-card-fill:color-mix(in srgb,var(--ps-surface) 80%,transparent);}
+}
+@supports not (backdrop-filter:blur(1px)) {
+  [data-portal="student"].ps-student-glass-shell .ps-glass-card,
+  [data-portal="student"].ps-student-glass-shell .ps-glass-chrome {background:var(--ps-surface) !important;}
+}

@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -66,6 +67,7 @@ function fixture(relativePath: string, responses: Record<string, Reply[]>) {
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/student-result-summary") return studentResultSummary;
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};

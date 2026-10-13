@@ -553,7 +553,7 @@ export default function TeacherQuizzesPage({
   const filtered = quizzes.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="space-y-6">
+    <div className="ps-teacher-glass-canvas space-y-6">
       {/* ─────────────────────────────────────────────────────────────
           1. PROCTORSHIELD ACTIVITY CREATION HUB
       ───────────────────────────────────────────────────────────── */}
@@ -666,7 +666,7 @@ export default function TeacherQuizzesPage({
       {/* ─────────────────────────────────────────────────────────────
           3. QUIZZES TABLE SECTION
       ───────────────────────────────────────────────────────────── */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs">
+      <div className="ps-teacher-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2 font-[family-name:var(--font-display)]">
             <span>📝</span> My Created Quizzes
@@ -678,7 +678,7 @@ export default function TeacherQuizzesPage({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search quizzes..."
-                className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
+                className="ps-teacher-glass-dense w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
               />
             </div>
 
@@ -712,7 +712,7 @@ export default function TeacherQuizzesPage({
           </div>
         </div>
 
-        <div className="overflow-x-auto min-h-[300px]">
+        <div role="region" aria-label="Teacher quiz library" tabIndex={0} className="ps-teacher-glass-dense overflow-x-auto min-h-[300px]">
           {loadError && (
             <div role="alert" className="flex items-center justify-between gap-4 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-sm text-rose-600 dark:text-rose-400">
               <span>{loadError}</span>
@@ -1276,13 +1276,13 @@ export default function TeacherQuizzesPage({
       ───────────────────────────────────────────────────────────── */}
       {showBillingModal && portalMounted && createPortal(
         <div
-          className="teacher-content app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in"
+          className="teacher-content ps-teacher-glass-dialog app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowBillingModal(false);
           }}
         >
           <div
-            className="app-modal-panel relative flex min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+            className="app-modal-panel ps-teacher-glass-card relative flex min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-violet-600/10 to-amber-500/5 pointer-events-none" />
@@ -1301,7 +1301,7 @@ export default function TeacherQuizzesPage({
                   : "AI Quiz Generation is a Pro feature. Upgrade your plan to unlock AI-powered quiz creation, live monitoring, and ProctorShield Arena."}
               </p>
 
-              <div className="space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
+              <div className="ps-teacher-glass-dense space-y-2.5 text-left mb-6 bg-[var(--surface2)] rounded-xl p-4 border border-[var(--border)]">
                 {[
                   "AI Quiz Generation (Gemini AI)",
                   "Real-time Live Monitoring",

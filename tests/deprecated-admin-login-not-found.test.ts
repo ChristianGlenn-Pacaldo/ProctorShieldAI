@@ -9,6 +9,8 @@ import ts from "typescript";
 import { getAuthDestination } from "../src/lib/auth-destination.ts";
 import { authFixture } from "./helpers/auth-fixture.ts";
 
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
+
 const requireNode = createRequire(import.meta.url);
 const { NextRequest, NextResponse } = requireNode("next/server");
 const navigation = requireNode("next/navigation");
@@ -36,6 +38,7 @@ const page = load<{ default: () => never; metadata: { title: string; description
 const fallback = load<{ default: () => ReactElement }>(`${directory}/not-found.tsx`, {
   "react/jsx-runtime": requireNode("react/jsx-runtime"),
   "next/link": { __esModule: true, default: "a" },
+  "@/components/brand-image": officialBrandModule,
   "next/image": { __esModule: true, default: "img" },
   "lucide-react": requireNode("lucide-react"),
   "./not-found.module.css": { __esModule: true, default: new Proxy({}, { get: (_target, name) => name }) },

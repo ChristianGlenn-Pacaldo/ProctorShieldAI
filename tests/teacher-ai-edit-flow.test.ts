@@ -101,6 +101,9 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
     };
     vm.runInNewContext(compiled[key], {
       exports, require(name: string) {
+        // Presentation imports do not replace the actual page/editor logic.
+        if (name === "@/styles/assessment-theme.css") return {};
+        if (name === "@/components/assessment-theme-control") return { __esModule: true, default: "assessment-theme-control" };
         if (name === "react") return runner.hooks;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "react-dom") return { createPortal: (child: Node) => child };

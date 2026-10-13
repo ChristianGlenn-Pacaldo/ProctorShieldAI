@@ -35,23 +35,24 @@ export default function ResultsContent() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="ps-student-page min-w-0 space-y-6">
+      <div><h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--ps-font-display)] text-[var(--ps-text)]">Results &amp; Performance</h1><p className="mt-2 text-sm text-[var(--ps-text-secondary)]">Review your completed attempts and academic results.</p></div>
       {loadError && (
-        <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">
+        <div role="alert" className="rounded-lg border border-[var(--ps-border)] bg-[var(--ps-error-soft)] p-3 text-sm text-[var(--ps-error)] ">
           {loadError} <button type="button" onClick={() => void fetchResults()} className="font-bold underline">Retry</button>
         </div>
       )}
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
+        <div className="ps-student-card bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
+          <div className="w-10 h-10 rounded-xl bg-[var(--ps-success-soft)] text-[var(--ps-success)] flex items-center justify-center mb-3">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? results.filter((result) => result.isCompleted).length : "—"}</div>
           <div className="text-xs text-[var(--muted)]">Completed Attempts</div>
         </div>
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
+        <div className="ps-student-card bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5">
+          <div className="w-10 h-10 rounded-xl bg-[var(--ps-accent-soft)] text-[var(--ps-accent)] flex items-center justify-center mb-3">
             <BarChart3 className="w-5 h-5" />
           </div>
           <div className="text-2xl font-extrabold text-[var(--ink)]">{hasLoaded ? `${averageExamScore(results)}%` : "—"}</div>
@@ -60,11 +61,16 @@ export default function ResultsContent() {
       </div>
 
       {/* Results Table */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+      <div className="ps-student-card bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
           <h3 className="text-sm font-bold text-[var(--ink)]">📈 Quiz Attempt History</h3>
         </div>
-        <div className="overflow-x-auto">
+        {hasLoaded && results.length === 0 && (
+          <p role="status" className="px-5 py-8 text-center text-[var(--muted)] sm:hidden">
+            No quiz history found.
+          </p>
+        )}
+        <div role="region" aria-label="Quiz attempt history" tabIndex={0} className={`overflow-x-auto${hasLoaded && results.length === 0 ? " hidden sm:block" : ""}`}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
@@ -97,35 +103,35 @@ export default function ResultsContent() {
                   const isSuspicious = verdict === "suspicious";
                   const isInvalidated = r.integrityInvalidated === true;
                   const verdictClass = isClean
-                    ? "bg-emerald-500/15 text-emerald-600"
+                    ? "bg-[var(--ps-success-soft)] text-[var(--ps-success)]"
                     : isSuspicious
-                      ? "bg-amber-500/15 text-amber-600"
-                      : "bg-rose-500/15 text-rose-600";
+                      ? "bg-[var(--ps-gold-soft)] text-[var(--ps-gold)]"
+                      : "bg-[var(--ps-error-soft)] text-[var(--ps-error)]";
                   return (
                     <tr key={r.id} className="hover:bg-[var(--surface2)] transition-colors">
                       <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.quiz?.title || "Unknown Quiz"}</td>
                       <td className="px-5 py-3">
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                           isArena
-                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
-                            : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20"
+                            ? "bg-[var(--ps-gold-soft)] text-[var(--ps-gold)]  border border-[var(--ps-border)]"
+                            : "bg-[var(--ps-accent-soft)] text-[var(--ps-accent)]  border border-[var(--ps-border)]"
                         }`}>
                           {isArena ? "Power Arena" : "Live Exam"}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-sm text-[var(--muted)]">{new Date(r.createdAt).toLocaleDateString()}</td>
-                      <td className={`px-5 py-3 text-sm font-bold ${!isArena && isInvalidated ? "text-rose-500" : "text-[var(--ink)]"}`}>
+                      <td className={`px-5 py-3 text-sm font-bold ${!isArena && isInvalidated ? "text-[var(--ps-error)]" : "text-[var(--ink)]"}`}>
                         {!isCompleted ? "Pending" : isArena
                           ? (r.score != null ? `${r.score} pts` : "Completed")
                           : (isInvalidated ? "Invalidated" : r.score != null ? `${r.score}%` : "Pending")}
                       </td>
                       <td className="px-5 py-3">
                         {!isCompleted ? (
-                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-400">
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[var(--ps-surface-inset)] text-[var(--ps-text-muted)] ">
                             {pendingStatus}
                           </span>
                         ) : isArena ? (
-                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[var(--ps-success-soft)] text-[var(--ps-success)] ">
                             Match Completed
                           </span>
                         ) : (
@@ -137,7 +143,7 @@ export default function ResultsContent() {
                       <td className="px-5 py-3">
                         {isCompleted ? <button
                           onClick={() => setSelectedResult(r)}
-                          className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 transition-colors"
+                          className="text-xs font-semibold text-[var(--muted)] hover:text-[var(--ps-accent)] transition-colors"
                         >
                           Review
                         </button> : <span className="text-xs text-[var(--muted)]">Not available</span>}

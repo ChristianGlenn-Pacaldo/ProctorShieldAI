@@ -1,3 +1,5 @@
+import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
+import { officialBrandModule } from "./brand-image-fixture.ts";
 import * as quizScanner from "../../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -128,9 +130,11 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
+        if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
         if (name === "@/lib/quiz-scanner") return quizScanner;
         if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
         if (name === "@/lib/student-result-summary") return load("src/lib/student-result-summary.ts");
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
         if (name === "lucide-react") return new Proxy({}, { get: () => () => null });

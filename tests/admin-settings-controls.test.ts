@@ -98,7 +98,7 @@ test("unsupported global settings are clearly unavailable and cannot be saved", 
   const setup = fixture();
   const view = await setup.loaded();
 
-  const systemName = findElement(view, (element) => element.type === "input" && element.props.value === "Proctor Shield AI")!;
+  const systemName = findElement(view, (element) => element.type === "input" && element.props.value === "ProctorShieldAI")!;
   assert.equal(systemName.props.disabled, true);
   assert.equal(setup.button(view, "Save Configuration").props.disabled, true);
   assert.match(textOf(view), /Global configuration is not available yet/);

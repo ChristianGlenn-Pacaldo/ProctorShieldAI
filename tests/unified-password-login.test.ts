@@ -1,3 +1,4 @@
+import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import { fetchAuth } from "../src/lib/auth-request.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -55,6 +56,7 @@ function ui(fetcher: Fetcher, path = "src/app/login/content.tsx", search = "") {
       set href(url: string) { destinations.push(url); } } },
     fetch: async (url: string, init: RequestInit) => { calls.push({ url, init }); return fetcher(url, init); },
     require(name: string) {
+        if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
       if (name === "react") return { useState: state, useRef: (value: unknown) => state({ current: value })[0],
         useEffect: (effect: () => void) => { if (!mounted) effects.push(effect); } };
       if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Node["props"]) => ({ type, props }),
@@ -272,4 +274,25 @@ test("blocked browser cookies stop after one retry and keep the password form us
   assert.equal(page.calls.length, 2); assert.equal(page.destinations.length, 0);
   assert.match(page.content(), /Unable to sign in/);
   assert.equal(page.find(n => n.type === "button" && n.props.type === "submit").props.disabled, false);
+});
+
+
+test("native POST safety preserves synchronous cancellation and hydrated JSON login", async () => {
+  let prevented = false;
+  const page = ui(async (url, init) => {
+    assert.equal(prevented, true, "native submission is cancelled before fetch");
+    assert.equal(url, "/api/auth/login");
+    assert.equal(init.method, "POST");
+    assert.equal((init.headers as Record<string, string>)["Content-Type"], "application/json");
+    assert.deepEqual(JSON.parse(String(init.body)), { email: "student@example.test", password: "FixturePassword123" });
+    return Response.json({}, { status: 401 });
+  });
+  page.fill();
+  const form = page.find(node => node.type === "form");
+  assert.equal(form.props.method, "post");
+  assert.equal(form.props.action, undefined);
+  await form.props.onSubmit!({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(page.calls.length, 1);
+  assert.deepEqual(page.destinations, []);
 });

@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -56,6 +57,7 @@ function listFixture(relativePath: string, responseKey: "users" | "quizzes", ini
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
@@ -162,6 +164,7 @@ test("dashboard periodically replaces stale presence and cancels its timer on un
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "@/components/admin-session-lifecycle") return { useAdminSessionLifecycle: () => null };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };

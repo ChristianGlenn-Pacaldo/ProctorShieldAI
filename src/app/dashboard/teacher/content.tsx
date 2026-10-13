@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Zap } from "lucide-react";
 import PusherClient from "pusher-js";
+import { DashboardLoadingStatus, DashboardListSkeleton, MetricValueSkeleton } from "@/components/dashboard-loading";
 import Link from "next/link";
 import ProctorShieldCreateHub from "@/components/teacher/proctorshield-create-hub";
 import { useUserSessionWork, UserSessionReauthentication } from "@/components/user-session-lifecycle";
@@ -235,14 +236,12 @@ export default function TeacherDashboardContent({
     </div>
   );
 
-  if (isLoading && !hasLoadedDashboard) {
-    return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /></div>;
-  }
-
-  if (!hasLoadedDashboard) return loadFailure;
+  const initialLoading = isLoading && !hasLoadedDashboard;
+  if (!hasLoadedDashboard && !initialLoading) return loadFailure;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="ps-teacher-overview ps-teacher-glass-canvas space-y-6 animate-fade-in">
+      {initialLoading && <DashboardLoadingStatus label="Loading Teacher Dashboard statistics and submissions..." />}
       {loadFailure}
       {/* ProctorShield Activity Creation Hub */}
       <ProctorShieldCreateHub
@@ -271,7 +270,7 @@ export default function TeacherDashboardContent({
       />
 
       {/* Power Arena Quick Action Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-500/50">
+      <div className="ps-teacher-arena-banner ps-teacher-glass-card relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-500/50">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-2xl shadow-md shadow-amber-500/30 shrink-0">
             ⚔️
@@ -281,7 +280,7 @@ export default function TeacherDashboardContent({
               <h3 className="font-extrabold text-sm sm:text-base text-[var(--ink)] font-[family-name:var(--font-display)]">
                 Battle Power Arena Mode
               </h3>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-500 border border-amber-500/30">
+              <span className="ps-teacher-glass-status text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-500 border border-amber-500/30">
                 PRO ARENA
               </span>
             </div>
@@ -294,7 +293,7 @@ export default function TeacherDashboardContent({
         <Link
           href={isSubscribed ? "/dashboard/teacher/playground" : "/dashboard/teacher/billing"}
           className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/25 shrink-0 active:scale-95"
-          style={{ background: "linear-gradient(110deg, #d97706 0%, #f59e0b 50%, #ea580c 100%)" }}
+          style={{ background: "var(--ps-primary)", color: "var(--ps-on-primary)" }}
         >
           <Zap className="w-3.5 h-3.5" />
           <span>{isSubscribed ? "Launch Power Arena" : "Unlock Power Arena"}</span>
@@ -303,11 +302,11 @@ export default function TeacherDashboardContent({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div aria-busy={initialLoading} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
           <div
             key={s.label}
-            className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
+            className="ps-teacher-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-5 shadow-xs transition-all hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 group"
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
@@ -318,7 +317,7 @@ export default function TeacherDashboardContent({
               </span>
             </div>
             <div className="text-2xl sm:text-3xl font-black text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">
-              {s.value}
+              {initialLoading ? <MetricValueSkeleton /> : s.value}
             </div>
             <div className="text-xs font-bold text-[var(--ink2)] mt-0.5">{s.label}</div>
             <div className="text-[10px] text-[var(--muted)] mt-0.5">{s.sub}</div>
@@ -329,12 +328,12 @@ export default function TeacherDashboardContent({
       {/* Violations Breakdown */}
       <div className="grid gap-4">
         {/* Violations Breakdown */}
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="ps-teacher-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📊 Violation Breakdown</h3>
           </div>
-          <div className="p-5 space-y-4">
-            {violationsBreakdown.map((v) => (
+          <div aria-busy={initialLoading} className="p-5 space-y-4">
+            {initialLoading ? <DashboardListSkeleton variant="chart" /> : violationsBreakdown.map((v) => (
               <div key={v.type} className="flex items-center gap-3">
                 <span className="text-xs text-[var(--muted)] w-28 shrink-0">{v.type}</span>
                 <div className="flex-1 h-2 bg-[var(--surface2)] rounded-full overflow-hidden">
@@ -351,25 +350,24 @@ export default function TeacherDashboardContent({
       </div>
 
       {/* AI Verdict Summary Table */}
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+      <div className="ps-teacher-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="ps-teacher-verdict-toolbar flex flex-col items-stretch gap-3 px-5 py-4 border-b border-[var(--border)] sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🧠 AI Verdict Summary — Recent Submissions</h3>
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
             <input
               type="text"
               placeholder="Search students..."
+              aria-label="Search verdict summaries"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-blue-500 w-48"
+              className="ps-teacher-glass-dense pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-blue-500 w-full sm:w-48"
             />
           </div>
         </div>
-        <div className="overflow-x-auto min-h-[150px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+        <div aria-busy={initialLoading} role="region" aria-label="Teacher verdict summaries" tabIndex={0} className="ps-teacher-glass-dense overflow-x-auto min-h-[150px]">
+          {initialLoading ? (
+            <div className="p-5"><DashboardListSkeleton variant="table" /></div>
           ) : filteredVerdicts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)] text-center">
               <span className="text-xl mb-1.5">🎓</span>

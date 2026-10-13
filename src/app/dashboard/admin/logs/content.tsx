@@ -60,12 +60,12 @@ export default function LogsContent() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+    <div className="ps-admin-glass-canvas animate-fade-in">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🧠 Global AI Event Logs</h3>
-            <p className="text-[10px] text-[var(--muted)] mt-0.5">{total} violation events recorded</p>
+            <p className="ps-admin-glass-caption text-[10px] text-[var(--muted)] mt-0.5">{total} violation events recorded</p>
           </div>
           <button
             onClick={handleExportCSV}
@@ -84,7 +84,7 @@ export default function LogsContent() {
             </button>
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin AI event logs" tabIndex={0}>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
@@ -125,11 +125,11 @@ export default function LogsContent() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--muted)]">
+        <div className="ps-admin-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--muted)]">
           <span>
             Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}–{(page - 1) * pageSize + logs.length} of {total}
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button type="button" disabled={isLoading || page <= 1} onClick={() => fetchLogs(page - 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Previous</button>
             <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
             <button type="button" disabled={isLoading || page >= Math.ceil(total / pageSize)} onClick={() => fetchLogs(page + 1)} className="font-semibold text-[var(--ink)] disabled:opacity-40">Next</button>

@@ -1,3 +1,4 @@
+import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -64,6 +65,7 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
     require: (name: string) => {
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/student-result-summary") return studentResultSummary;
+      if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
@@ -85,8 +87,19 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
   return render();
 }
 
+function childNodes(node: ElementNode): ElementNode[] {
+  const children = Array.isArray(node.props.children) ? node.props.children : [node.props.children];
+  return children.filter((child): child is ElementNode => Boolean(child && typeof child === "object" && "props" in child));
+}
+
+function missionCards(tree: ElementNode) {
+  // A mission card contains its quiz-heading block and sibling action block.
+  // Find that semantic structure without depending on colors or CSS classes.
+  return nodesOf(tree, (node) => node.type === "div" && childNodes(node).some((block) =>
+    block.type === "div" && childNodes(block).some((heading) => heading.type === "h3")));
+}
 function mission(tree: ElementNode, id: string) {
-  const cards = nodesOf(tree, (node) => node.type === "div" && String(node.props.className).includes("rounded-2xl border-2 border-indigo-500/20"));
+  const cards = missionCards(tree);
   const card = cards.find((node) => nodesOf(node, (child) => child.type === "h3" && textOf(child) === `Quiz ${id}`).length > 0);
   assert.ok(card, `Mission ${id} remains visible`);
   return card;
@@ -131,6 +144,6 @@ test("pending, rejected, completed, and unsupported attempts never claim an open
     assert.doesNotMatch(textOf(card), /Room Open|Take Quiz|Enter Arena/);
     assert.equal(actionLinks(card).length, 0);
   }
-  assert.equal(nodesOf(tree, (node) => node.type === "div" && String(node.props.className).includes("rounded-2xl border-2 border-indigo-500/20") && textOf(node).includes("Quiz 8")).length, 0);
+  assert.equal(missionCards(tree).filter((node) => textOf(node).includes("Quiz 8")).length, 0);
   assert.match(textOf(tree), /Recent Results.*Quiz 8/);
 });

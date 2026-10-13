@@ -1,5 +1,7 @@
 "use client";
 
+import AssessmentThemeControl from "@/components/assessment-theme-control";
+
 import { createDesktopIncidentReporter, createDesktopHeadTracker, detectDesktopFacesWithFallback, getDesktopInferenceDimensions, measureDesktopLandmarkPose, prepareDesktopFaceFrame, requestDesktopCamera } from "@/lib/desktop-head-tracking";
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -2366,8 +2368,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
   // ─── PRE-START SCREEN ────────────────────────────
   if (!hasStarted) {
     return (
-      <div className="exam-shell min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+      <div className="ps-quiz-lobby exam-shell min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
         <div className="bg-[#111] p-8 rounded-2xl border border-gray-800 max-w-lg w-full text-center">
+          <div className="mb-4 flex justify-end"><AssessmentThemeControl /></div>
           {isMobile && (
             <div className="mb-4 flex items-start gap-3 bg-violet-500/10 border border-violet-500/30 rounded-xl px-4 py-3 text-left">
               <Smartphone className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
@@ -2627,6 +2630,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             {quiz?.title || "Proctored Exam"}
           </h1>
 
+          <AssessmentThemeControl />
           {/* Sound Toggle */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
@@ -2693,7 +2697,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         {/* MOBILE PROCTORING BAR */}
         <div className="block lg:hidden bg-[#141724] border border-[#212638] rounded-2xl p-3 space-y-3 shrink-0 shadow-md">
           <div className="flex items-center justify-between gap-3">
-            <div className="w-28 h-20 bg-black rounded-xl overflow-hidden relative border border-emerald-500/40 shrink-0">
+            <div className="ps-proctor-media w-28 h-20 bg-black rounded-xl overflow-hidden relative border border-emerald-500/40 shrink-0">
               <video ref={mobileVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/80 rounded text-[8px] font-bold text-emerald-400">
                 LIVE AI
@@ -2748,7 +2752,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         <div className="hidden lg:flex w-80 flex-col gap-4 overflow-y-auto shrink-0 pr-1">
           
           {/* Webcam Card */}
-          <div className="bg-[#141726] border-2 border-emerald-500/50 rounded-2xl p-2 relative aspect-[4/3] w-full flex items-center justify-center shadow-lg overflow-hidden shrink-0">
+          <div className="ps-proctor-media bg-[#141726] border-2 border-emerald-500/50 rounded-2xl p-2 relative aspect-[4/3] w-full flex items-center justify-center shadow-lg overflow-hidden shrink-0">
             {!cameraActive && <p className="text-xs text-slate-400 animate-pulse">Initializing Camera...</p>}
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover rounded-xl" />
             <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-black/80 backdrop-blur-sm rounded-full text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
@@ -2761,7 +2765,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             <div className="w-full text-left text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
               HEAD DIRECTION
             </div>
-            <div className="relative w-36 h-36 rounded-full border border-emerald-500/30 bg-[#0a0c14] flex items-center justify-center my-2 shadow-inner">
+            <div className="ps-proctor-radar relative w-36 h-36 rounded-full border border-emerald-500/30 bg-[#0a0c14] flex items-center justify-center my-2 shadow-inner">
               <div className="absolute w-24 h-24 rounded-full border border-emerald-500/20" />
               <div className="absolute w-12 h-12 rounded-full border border-emerald-500/20" />
               <div className="absolute w-full h-[1px] bg-emerald-500/20" />

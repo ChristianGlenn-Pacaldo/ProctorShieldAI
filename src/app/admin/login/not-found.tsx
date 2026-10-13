@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import BrandImage from "@/components/brand-image";
 import styles from "./not-found.module.css";
 
 export default function NotFound() {
@@ -10,7 +11,7 @@ export default function NotFound() {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Link href="/" className={styles.brand} aria-label="ProctorShieldAI home">
-            <span className={styles.brandIcon}><ShieldCheck size={26} aria-hidden="true" /></span>
+            <BrandImage width={34} decorative />
             <span>ProctorShield<span className={styles.brandAccent}>AI</span></span>
           </Link>
         </div>

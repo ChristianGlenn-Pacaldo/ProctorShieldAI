@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 test("public homepage and student login render", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle(/Proctor Shield AI/i);
+  await expect(page).toHaveTitle(/ProctorShieldAI/i);
   await page.goto("/login/student");
   await expect(page.getByRole("button", { name: /sign in|log in/i }).first()).toBeVisible();
 });

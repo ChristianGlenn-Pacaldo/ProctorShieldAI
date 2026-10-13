@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import BrandImage from "./brand-image";
 import { visibleStudentNotifications } from "@/lib/notification-presentation";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -22,7 +23,6 @@ import {
   CreditCard,
   Bell,
   ChevronDown,
-  ShieldCheck,
   UserRound,
   ArrowUpRight,
   Swords,
@@ -408,21 +408,20 @@ export default function DashboardShell({
   return (
     <AdminSessionLifecycleContext.Provider value={adminSession}>
     <UserSessionLifecycleContext.Provider value={userSession}>
-    <div className="dashboard-ambient app-gradient-shell flex h-screen">
+    <div data-portal={role} className={role === "student" ? "dashboard-ambient app-gradient-shell flex h-screen ps-student-glass-shell" : role === "teacher" ? "dashboard-ambient app-gradient-shell flex h-screen ps-teacher-glass-shell" : role === "admin" ? "dashboard-ambient app-gradient-shell flex h-screen ps-admin-glass-shell" : "dashboard-ambient app-gradient-shell flex h-screen"}>
       {/* ── SIDEBAR ─────────────────────────────── */}
       <aside
         className={clsx(
           "dashboard-sidebar fixed inset-y-0 left-0 z-40 w-60 border-r border-[var(--border)] flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          role === "student" ? "ps-glass-chrome" : role === "teacher" ? "ps-teacher-glass-chrome" : role === "admin" && "ps-admin-glass-chrome"
         )}
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-[var(--border)]">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${portal.logoColor} flex items-center justify-center text-sm text-white shadow-sm`}>
-            <ShieldCheck className="w-5 h-5" aria-hidden="true" />
-          </div>
+          <BrandImage width={34} decorative />
           <div>
-            <div className="text-sm font-bold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">{portal.title}</div>
+            <div className="text-sm font-bold text-[var(--ink)] tracking-tight font-[family-name:var(--font-display)]">ProctorShieldAI</div>
             <div className="text-[10px] text-[var(--muted)] font-semibold tracking-wider uppercase">
               {portal.sub}
             </div>
@@ -480,7 +479,7 @@ export default function DashboardShell({
         {/* User */}
         <div className="px-4 py-4 border-t border-[var(--border)] bg-[var(--surface2)]">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${identityColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
+            <div className={`dashboard-identity w-9 h-9 rounded-full bg-gradient-to-br ${identityColor} flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`}>
               {userSessionLost ? "—" : userInitials}
             </div>
             <div className="min-w-0">
@@ -502,7 +501,7 @@ export default function DashboardShell({
       {/* ── MAIN CONTENT ───────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="dashboard-topbar relative z-30 h-16 border-b border-[var(--border)] flex items-center justify-between px-4 sm:px-6 shrink-0">
+        <header className={clsx("dashboard-topbar relative z-30 h-16 border-b border-[var(--border)] flex items-center justify-between px-4 sm:px-6 shrink-0", role === "student" ? "ps-glass-chrome" : role === "teacher" ? "ps-teacher-glass-chrome" : role === "admin" && "ps-admin-glass-chrome")}>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -603,7 +602,7 @@ export default function DashboardShell({
                 aria-expanded={profileOpen}
                 className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 pr-2.5 text-left shadow-sm hover:border-blue-400/50"
               >
-                <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${identityColor} flex items-center justify-center text-[10px] font-bold text-white`}>
+                <span className={`dashboard-identity w-7 h-7 rounded-lg bg-gradient-to-br ${identityColor} flex items-center justify-center text-[10px] font-bold text-white`}>
                   {userSessionLost ? "—" : userInitials}
                 </span>
                 <span className="hidden xl:block max-w-28 truncate text-xs font-semibold text-[var(--ink)]">{userSessionLost ? "Session ended" : userName}</span>

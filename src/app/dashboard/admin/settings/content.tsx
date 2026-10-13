@@ -69,9 +69,9 @@ export default function SettingsContent() {
     .slice(0, 2);
 
   return (
-    <div className="animate-fade-in grid lg:grid-cols-2 gap-4">
+    <div className="ps-admin-glass-canvas animate-fade-in grid lg:grid-cols-2 gap-4">
       {/* Admin Profile */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)]">👤 Admin Profile</h3>
         </div>
@@ -80,8 +80,8 @@ export default function SettingsContent() {
             {initials || "AD"}
           </div>
           <h3 className="text-lg font-bold text-[var(--ink)] mb-1">{name}</h3>
-          <p className="text-sm text-[var(--muted)] mb-6">ProctorShield Administration</p>
-          <form onSubmit={handleSaveProfile} className="text-left space-y-3">
+          <p className="text-sm text-[var(--muted)] mb-6">ProctorShieldAI Administration</p>
+          <form onSubmit={handleSaveProfile} className="ps-admin-glass-dense text-left space-y-3">
             <label htmlFor="admin-full-name" className="text-xs font-semibold text-[var(--muted)] block">Full Name</label>
             <input
               id="admin-full-name"
@@ -104,14 +104,14 @@ export default function SettingsContent() {
       </div>
 
       {/* Global Settings */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
+      <div className="ps-admin-glass-card bg-[var(--surface)] rounded-2xl border border-[var(--border)]">
         <div className="px-5 py-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-bold text-[var(--ink)]">⚙️ Global Settings</h3>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="ps-admin-glass-dense p-5 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">System Name</label>
-            <input value="Proctor Shield AI" disabled aria-describedby="admin-settings-unavailable" className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] disabled:cursor-not-allowed" />
+            <label htmlFor="admin-system-name" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">System Name</label>
+            <input id="admin-system-name" value="ProctorShieldAI" disabled aria-describedby="admin-settings-unavailable" className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] disabled:cursor-not-allowed" />
           </div>
           <div className="pt-3 border-t border-[var(--border)]">
             <label className="text-xs font-semibold text-[var(--muted)] mb-3 block">Platform Policies</label>

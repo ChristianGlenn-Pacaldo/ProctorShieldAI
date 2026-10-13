@@ -57,7 +57,7 @@ export default function ProctorShieldCreateHub({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ps-teacher-hub ps-teacher-glass-card space-y-6">
       {/* ProctorShield Top Greeting & Mode Selector */}
       <div className="text-center space-y-4 pt-2">
         <h2 className="text-xl sm:text-2xl font-black text-[var(--ink)] font-[family-name:var(--font-display)] tracking-tight">
@@ -65,20 +65,20 @@ export default function ProctorShieldCreateHub({
         </h2>
 
         {/* Tab Pills (Create, Upload) */}
-        <div className="inline-flex items-center p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
+        <div className="inline-flex max-w-full flex-wrap justify-center items-center p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
           <button
             type="button"
             onClick={() => {
               setActiveTab("create");
               onOpenCreateQuiz("proctored");
             }}
-            className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`inline-flex max-w-full min-h-[44px] flex-wrap justify-center items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === "create"
                 ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/25"
                 : "text-[var(--muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>Create</span>
             <span className="hidden sm:inline text-[10px] opacity-80 font-normal">a resource</span>
           </button>
@@ -93,13 +93,13 @@ export default function ProctorShieldCreateHub({
               setActiveTab("upload");
               if (onOpenAiGenerator) onOpenAiGenerator();
             }}
-            className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`inline-flex max-w-full min-h-[44px] flex-wrap justify-center items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === "upload"
                 ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/25"
                 : "text-[var(--muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 shrink-0" />
             <span>Upload</span>
             <span className="hidden sm:inline text-[10px] opacity-80 font-normal">&amp; enhance AI</span>
             {!isSubscribed && <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
@@ -113,7 +113,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={() => onOpenCreateQuiz("proctored")}
-          className="group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 border-emerald-500/30 hover:border-emerald-500 shadow-xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer"
+          className="ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 border-emerald-500/30 hover:border-emerald-500 shadow-xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer"
         >
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
             <ClipboardCheck className="w-8 h-8" />
@@ -135,7 +135,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={handleArenaClick}
-          className={`group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
+          className={`ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
             isSubscribed
               ? "border-amber-500/40 hover:border-amber-500 hover:shadow-xl hover:shadow-amber-500/10"
               : "border-amber-500/30 hover:border-amber-400 hover:shadow-lg"
@@ -170,7 +170,7 @@ export default function ProctorShieldCreateHub({
         <button
           type="button"
           onClick={handleAiClick}
-          className={`group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
+          className={`ps-teacher-glass-dense group p-5 sm:p-6 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface2)] border-2 transition-all flex flex-col items-center text-center space-y-3.5 cursor-pointer relative ${
             isSubscribed
               ? "border-purple-500/40 hover:border-purple-500 hover:shadow-xl hover:shadow-purple-500/10"
               : "border-purple-500/30 hover:border-purple-400 hover:shadow-lg"

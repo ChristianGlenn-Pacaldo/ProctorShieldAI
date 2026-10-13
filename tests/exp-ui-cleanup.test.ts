@@ -66,6 +66,7 @@ for (const role of ["student", "teacher"] as const) test(`actual ${role} shell f
   setup.queue("/api/notifications", { body: { success: true, notifications: rows, unreadCount: 3 } });
   setup.render(); await setup.ready();
   assert.equal(setup.notificationCount(), 2);
+  // Preserve main's badge calculation: count visible unread notices.
   assert.equal(textOf(setup.bell()), "2");
   await setup.bell().props.onClick(); await setup.ready();
   assert.doesNotMatch(textOf(setup.render()), retired);

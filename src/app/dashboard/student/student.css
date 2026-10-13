@@ -1,0 +1,162 @@
+/* Phase C: loaded by the existing Student App Router layout. Every rule is
+   Student-scoped because route CSS can remain loaded after client navigation. */
+[data-portal="student"] {
+  --background: var(--ps-canvas);
+  --foreground: var(--ps-text);
+  --surface: var(--ps-surface);
+  --surface2: var(--ps-surface-inset);
+  --surface-glass: var(--ps-glass);
+  --ink: var(--ps-text);
+  --ink2: var(--ps-text-secondary);
+  --ink3: var(--ps-text-muted);
+  --muted: var(--ps-text-secondary);
+  --muted2: var(--ps-text-muted);
+  --border: var(--ps-border);
+  --border2: var(--ps-border-control);
+  --font-display: var(--ps-font-display);
+  --dashboard-accent: var(--ps-accent);
+  --dashboard-danger: var(--ps-error);
+  height: 100dvh;
+  color: var(--ps-text);
+  color-scheme: var(--ps-color-scheme);
+  font-family: var(--ps-font-body);
+  background: var(--ps-canvas);
+}
+[data-portal="student"] :is(.dashboard-sidebar, .dashboard-topbar) {
+  --muted: var(--ps-text-secondary);
+  --muted2: var(--ps-text-muted);
+  --dashboard-accent: var(--ps-accent);
+  --dashboard-danger: var(--ps-error);
+  background: var(--ps-glass);
+  box-shadow: var(--ps-shadow);
+  backdrop-filter: blur(8px);
+}
+[data-portal="student"] .dashboard-sidebar { background: var(--ps-surface); }
+[data-portal="student"] .dashboard-nav-active {
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
+  box-shadow: var(--ps-shadow);
+}
+[data-portal="student"] .dashboard-nav-active::before {
+  background: var(--ps-gold);
+  box-shadow: none;
+}
+[data-portal="student"] .dashboard-identity {
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
+}
+[data-portal="student"] .dashboard-dropdown {
+  background: var(--ps-surface-elevated);
+  box-shadow: var(--ps-shadow-overlay);
+  backdrop-filter: none;
+}
+[data-portal="student"] .dashboard-topbar :is(button, a):hover {
+  border-color: var(--ps-focus);
+}
+[data-portal="student"] .dashboard-icon-button > span {
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
+}
+[data-portal="student"] .dashboard-topbar .bg-blue-500 {
+  background: var(--ps-accent);
+}
+[data-portal="student"] .dashboard-topbar :is(.hover\:bg-blue-500\/10, .bg-blue-500\/10):hover {
+  background: var(--ps-accent-soft);
+}
+[data-portal="student"] .dashboard-main {
+  min-width: 0;
+  scrollbar-color: var(--ps-border-control) var(--ps-canvas);
+}
+[data-portal="student"] .ps-student-page {
+  width: 100%;
+  max-width: 88rem;
+  margin-inline: auto;
+}
+[data-portal="student"] .ps-student-hero {
+  border-color: var(--ps-border);
+  background: linear-gradient(125deg, var(--ps-surface), var(--ps-accent-soft));
+  box-shadow: var(--ps-shadow);
+}
+[data-portal="student"] .dashboard-main .ps-student-card {
+  background: var(--ps-glass);
+  border-color: var(--ps-border);
+  box-shadow: var(--ps-shadow);
+}
+[data-portal="student"] :is(h1, h2, h3, h4) { font-family: var(--ps-font-display); }
+[data-portal="student"] :is(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
+  outline: var(--ps-focus-width) solid var(--ps-focus);
+  outline-offset: var(--ps-focus-offset);
+}
+[data-portal="student"] .dashboard-main :is(input, select, textarea):focus {
+  border-color: var(--ps-focus) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ps-focus) 20%, transparent) !important;
+}
+[data-portal="student"] .dashboard-main :is(input, select, textarea) {
+  max-width: 100%;
+  min-height: var(--ps-control-min-height);
+  font-size: 1rem;
+}
+[data-portal="student"] :is(button, a)[class*="bg-[var(--ps-primary)]"],
+[data-portal="student"] :is(button, a)[class*="from-[var(--ps-primary)]"],
+[data-portal="student"] .app-modal-panel button[class*="bg-indigo-600"] {
+  min-height: var(--ps-control-min-height);
+  background: var(--ps-primary) !important;
+  color: var(--ps-on-primary);
+  border-color: var(--ps-primary);
+  box-shadow: var(--ps-shadow);
+}
+[data-portal="student"] :is(button, a)[class*="bg-[var(--ps-primary)]"]:hover:not(:disabled),
+[data-portal="student"] :is(button, a)[class*="from-[var(--ps-primary)]"]:hover:not(:disabled),
+[data-portal="student"] .app-modal-panel button[class*="bg-indigo-600"]:hover:not(:disabled) {
+  background: var(--ps-primary-hover) !important;
+}
+[data-portal="student"] .ps-student-danger {
+  color: var(--ps-error);
+  background: var(--ps-error-soft);
+  border: 1px solid var(--ps-error);
+}
+[data-portal="student"] :is(.app-modal-panel, .dashboard-dropdown) {
+  border-radius: var(--ps-radius-dialog);
+}
+[data-portal="student"] :is(th, td) { overflow-wrap: anywhere; }
+[data-portal="student"] table { min-width: 46rem; }
+[data-portal="student"] .dashboard-main th { color: var(--ps-text-secondary); }
+[data-portal="student"] .dashboard-main tbody tr:hover { background: var(--ps-surface-inset); }
+/* Shared report/name components keep their behavior and other-role styling. */
+[data-portal="student"] :is(.ps-student-reports, .app-modal-panel) :is(.text-indigo-500, .text-indigo-600, .text-violet-600) { color: var(--ps-accent); }
+[data-portal="student"] :is(.ps-student-reports, .app-modal-panel) :is(.bg-indigo-500\/5, .bg-indigo-500\/10, .bg-violet-500\/10) { background: var(--ps-accent-soft); }
+[data-portal="student"] .ps-student-reports :is(.text-emerald-600, .text-amber-600, .text-rose-600, .text-slate-500) { color: var(--ps-text-secondary); }
+[data-portal="student"] .ps-student-reports .text-emerald-600 { color: var(--ps-success); }
+[data-portal="student"] .ps-student-reports .text-amber-600 { color: var(--ps-warning); }
+[data-portal="student"] .ps-student-reports .text-rose-600 { color: var(--ps-error); }
+[data-portal="student"] .ps-student-reports .bg-emerald-500\/15 { background: var(--ps-success-soft); }
+[data-portal="student"] .ps-student-reports .bg-amber-500\/15 { background: var(--ps-warning-soft); }
+[data-portal="student"] .ps-student-reports .bg-rose-500\/15,
+[data-portal="student"] .app-modal-panel .bg-red-500\/10 { background: var(--ps-error-soft); }
+[data-portal="student"] .app-modal-panel .text-red-500 { color: var(--ps-error); }
+[data-portal="student"] .app-modal-panel .text-amber-500 { color: var(--ps-warning); }
+@media (max-width: 639px) {
+  [data-portal="student"] .dashboard-topbar { gap: 0.5rem; }
+  [data-portal="student"] .dashboard-topbar > div { gap: 0.5rem; }
+  [data-portal="student"] .dashboard-main { padding: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-portal="student"] *, [data-portal="student"] *::before, [data-portal="student"] *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-portal="student"] .ps-student-secondary { min-height: var(--ps-control-min-height); color: var(--ps-text); border: 1px solid var(--ps-border-control); background: var(--ps-surface-inset); }
+[data-portal="student"] .ps-student-secondary:hover:not(:disabled) { background: var(--ps-surface-elevated); }
+[data-portal="student"] .app-modal-panel button:disabled { background: var(--ps-surface-inset); color: var(--ps-text-secondary); }
+
+[data-portal="student"] .dashboard-topbar .bg-blue-500\/5 { background: var(--ps-accent-soft); }
+[data-portal="student"] .dashboard-dropdown .focus-visible\:bg-blue-500\/10:focus-visible { background: var(--ps-accent-soft); }
+[data-portal="student"] .dashboard-dropdown p { font-size: var(--ps-text-caption-size); }
+[data-portal="student"] .dashboard-nav-item { min-height: var(--ps-control-min-height); }
+[data-portal="student"] .dashboard-topbar .dashboard-icon-button { min-width: var(--ps-control-min-height); min-height: var(--ps-control-min-height); }
+[data-portal="student"] .app-modal-panel button[aria-label="Close result details"] { min-width: var(--ps-control-min-height); min-height: var(--ps-control-min-height); }
+[data-portal="student"] .ps-student-reports .bg-slate-500\/15 { background: var(--ps-surface-inset); }
+[data-portal="student"] .ps-student-reports :is(.border-indigo-500\/15, .border-indigo-500\/20, .border-rose-500\/20) { border-color: var(--ps-border); }
