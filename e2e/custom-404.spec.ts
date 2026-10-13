@@ -6,7 +6,7 @@ test("custom 404 retains Home and artwork without the retired Sign In action", a
   await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to Home" })).toHaveAttribute("href", "/");
   await expect(page.getByRole("link", { name: "Go to Sign In" })).toHaveCount(0);
-  const artwork = page.locator('img[alt=""]');
+  const artwork = page.getByRole("main").locator('img[src*="proctorshield-404-robot"]');
   await expect(artwork).toBeVisible();
   await expect(artwork).toHaveAttribute("src", /proctorshield-404-robot/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
