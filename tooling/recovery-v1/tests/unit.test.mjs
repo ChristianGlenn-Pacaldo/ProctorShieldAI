@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable,Writable } from 'node:stream';
 import { fixture,gateFixture,objectFixture,sign } from './fixtures.mjs';
-import { loadOperation,canonical,sha,begin,finish,validateEndpoint,secret,SafeError,log,syncFile } from '../lib/security.mjs';
+import { loadOperation,canonical,sha,begin,finish,validateEndpoint,secret,plainFile,SafeError,log,syncFile } from '../lib/security.mjs';
 import { deadline,child } from '../lib/process.mjs';
 import { encryptToFile,decryptFileToPath } from '../lib/backup-crypto.mjs';
 import { pause,drain,owned,release } from '../lib/gate.mjs';
@@ -134,7 +134,8 @@ test('safe error/log contract rejects credential payloads',()=>{
 test('symlink secret rejected',{skip:process.platform==='win32'?'Windows symlink privilege unavailable; Linux cloud check required':false},async t=>{
   const f=await fixture(t),c=await loadOperation(f.paths,'verify');
   await fs.symlink(path.join(f.paths.secrets,'gate-token'),path.join(f.paths.secrets,'linked-token'));
-  await assert.rejects(secret(c,'linked-token'),/FILE_TYPE_SIZE/);
+  await assert.rejects(secret(c,'linked-token'),{code:'SECRET_PERMISSIONS'});
+  await assert.rejects(plainFile(path.join(f.paths.secrets,'linked-token')),{code:'FILE_TYPE_SIZE'});
 });
 test('manifest validates mapping before any further object fetch',async t=>{
   const f=await fixture(t),c=await loadOperation(f.paths,'verify');
