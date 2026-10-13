@@ -1,0 +1,39 @@
+name: Isolated owned-lease PostgreSQL verification
+on:
+  push:
+    branches: ['codex/owned-gate-postgres-verification-20261013']
+permissions:
+  contents: read
+concurrency:
+  group: owned-gate-postgres-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  owned-gate-postgres:
+    if: github.repository == 'ChristianGlenn-Pacaldo/ProctorShieldAI' && github.ref == 'refs/heads/codex/owned-gate-postgres-verification-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PSAI_OWNED_GATE_CLOUD_APPROVED: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify exact parent, twelve-file scope and immutable runtime hashes
+        run: node tests/infrastructure/verify-owned-gate-postgres.mjs --preflight
+      - name: Run one bounded synthetic PostgreSQL verification
+        run: node tests/infrastructure/verify-owned-gate-postgres.mjs
+      - name: Final owned-resource cleanup
+        if: ${{ always() }}
+        run: node tests/infrastructure/verify-owned-gate-postgres.mjs --cleanup
+      - name: Upload only driver-validated sanitized JSON
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owned-gate-postgres-${{ github.run_id }}
+          path: owned-gate-evidence/verification.json
+          if-no-files-found: error
+          retention-days: 7

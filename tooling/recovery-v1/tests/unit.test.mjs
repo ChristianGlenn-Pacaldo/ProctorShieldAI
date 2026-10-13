@@ -8,7 +8,7 @@ import { fixture,gateFixture,objectFixture,sign } from './fixtures.mjs';
 import { loadOperation,canonical,sha,begin,finish,validateEndpoint,secret,plainFile,SafeError,log,syncFile } from '../lib/security.mjs';
 import { deadline,child } from '../lib/process.mjs';
 import { encryptToFile,decryptFileToPath } from '../lib/backup-crypto.mjs';
-import { pause,drain,owned,release } from '../lib/gate.mjs';
+import { gate,pause,drain,owned,release } from '../lib/gate.mjs';
 import { validateManifest } from '../lib/manifest.mjs';
 
 test('signed independent approval/runtime are required and accepted',async t=>{
@@ -110,7 +110,10 @@ test('another operation cannot acquire or release owned pause',async t=>{
     b=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}});
   const ca=await loadOperation(a.paths,'gate'),cb=await loadOperation(b.paths,'gate');
   await pause(ca);await assert.rejects(pause(cb),/GATE_ALREADY_OWNED/);
-  await assert.rejects(release(cb),/GATE_OTHER_OWNER/);assert.equal(g.state.paused,true);await release(ca);
+  await assert.rejects(release(cb),{code:'ENOENT'});
+  // An unpinned peer cannot obtain release authority from the public owner tuple.
+  await assert.rejects(gate(cb,'DELETE',{contract:'owned-lease-v1',owner:g.state.owner,operationId:g.state.operationId,leaseId:g.state.leaseId,expectedGeneration:g.state.generation,releaseCapability:b.secrets['gate-release-capability']}),/GATE_REQUEST_FAILED/);
+  assert.equal(g.state.paused,true);await release(ca);
 });
 test('drain timeout preserves pause for supervisor and does not force-delete markers',async t=>{
   const g=await gateFixture(t,{active:2}),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
@@ -234,3 +237,59 @@ test('Linux cancellation kills the owned subprocess group including a TERM-resis
       assert.ok(state===undefined||state==='Z');
     }finally{await d.close();}
   });
+
+
+test('owned receipt integrity rejects tampering before release',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);const file=path.join(c.workRoot,'ledger',c.op.operationId+'-gate-lease.json');
+  const e=JSON.parse(await fs.readFile(file));e.payload.generation++;await fs.writeFile(file,canonical(e));
+  await assert.rejects(owned(c),/GATE_RECEIPT/);await assert.rejects(release(c),/GATE_RECEIPT/);assert.equal(g.state.paused,true);
+});
+test('exporter without supervisor capability can observe but never release',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);await fs.rm(path.join(f.paths.secrets,'gate-release-capability'));
+  assert.equal((await owned(c)).safeForBackup,true);await assert.rejects(release(c),{code:'ENOENT'});assert.equal(g.state.paused,true);
+});
+test('incorrect supervisor capability rejects release without altering lease',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);const before={...g.state};await fs.writeFile(path.join(f.paths.secrets,'gate-release-capability'),'0'.repeat(64));
+  await assert.rejects(release(c),/GATE_RELEASE_PROOF/);assert.deepEqual(g.state,before);
+});
+test('pinned lease refuses a newer generation and same-owner lease',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);g.state.generation+=2;g.state.leaseId=crypto.randomUUID();const before={...g.state};
+  await assert.rejects(owned(c),/GATE_LEASE_CHANGED/);await assert.rejects(release(c),/GATE_LEASE_CHANGED/);assert.deepEqual(g.state,before);
+});
+test('successful release is idempotent only for its exact successor generation',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);await release(c);assert.deepEqual(await release(c),{released:false,alreadyOpen:true});
+  g.state.generation+=2;await assert.rejects(release(c),/GATE_LEASE_CHANGED/);assert.equal(g.state.paused,false);
+});
+test('pause intent is exclusive and pin loss never triggers reacquisition',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  await pause(c);const pin=path.join(c.workRoot,'ledger',c.op.operationId+'-gate-lease.json');await fs.rm(pin);
+  await assert.rejects(release(c),{code:'ENOENT'});assert.equal(g.state.paused,true);
+  // Simulate externally opened state; the durable acquisition intent still forbids a replay.
+  Object.assign(g.state,{paused:false,safeForBackup:false,owner:null,operationId:null,leaseId:null,generation:g.state.generation+1});
+  const before={...g.state};await assert.rejects(pause(c),{code:'EEXIST'});assert.deepEqual(g.state,before);
+});
+test('legacy response contract is rejected without blind DELETE fallback',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  delete g.state.releaseProof;await assert.rejects(pause(c),/GATE_CONTRACT/);assert.equal(g.state.paused,false);
+});
+test('gate acquisition response loss retains pause and intent without automatic retry',async t=>{
+  const g=await gateFixture(t),f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  g.setLosePostResponse(true);await assert.rejects(pause(c),{name:'TypeError'});
+  assert.equal(g.state.paused,true);assert.equal(g.calls.filter(x=>x==='POST').length,1);
+  assert.ok((await fs.stat(path.join(c.workRoot,'ledger',c.op.operationId+'-gate-intent.json'))).isFile());
+  await assert.rejects(release(c),{code:'ENOENT'});await assert.rejects(pause(c),/GATE_ALREADY_OWNED/);
+  assert.equal(g.calls.filter(x=>x==='POST').length,1);assert.equal(g.calls.filter(x=>x==='DELETE').length,0);
+});
+test('gate receipt persistence failure retains pause and never overwrites existing metadata',async t=>{
+  let pin;const sentinel='synthetic-unrelated-pin';
+  const g=await gateFixture(t,{onAcquired:()=>fs.writeFile(pin,sentinel,{flag:'wx'})});
+  const f=await fixture(t,{gate:{endpoint:g.endpoint,contract:'owned-lease-v1'}}),c=await loadOperation(f.paths,'gate');
+  pin=path.join(c.workRoot,'ledger',c.op.operationId+'-gate-lease.json');
+  await assert.rejects(pause(c),{code:'EEXIST'});assert.equal(g.state.paused,true);assert.equal(await fs.readFile(pin,'utf8'),sentinel);
+  await assert.rejects(pause(c),/GATE_RECEIPT_EXISTS/);assert.equal(g.calls.filter(x=>x==='POST').length,1);assert.equal(g.calls.filter(x=>x==='DELETE').length,0);
+});

@@ -38,7 +38,7 @@ export async function fixture(t,overrides={}){
     'destination-access':'synthetic-backup-access','destination-secret':'SYNTHETIC_ONLY_BACKUP_SECRET',
     'recoverystore-access':'synthetic-recovery-access','recoverystore-secret':'SYNTHETIC_ONLY_RECOVERY_SECRET',
     'source-db-password':'synthetic-database-password','recovery-db-password':'synthetic-recovery-password',
-    'gate-token':'synthetic-gate-token'};
+    'gate-token':'synthetic-gate-token','gate-release-capability':crypto.randomBytes(32).toString('hex')};
   for(const [name,value] of Object.entries(secrets))await fs.writeFile(path.join(secretRoot,name),value,{mode:0o600});
   const save=async()=>{
     context.operationHash=sha(canonical(op));context.runnerId=op.runnerId;context.imageDigest=op.imageDigest;
@@ -47,27 +47,32 @@ export async function fixture(t,overrides={}){
   };
   await save();return {root,paths,op,context,save,approver,runtime,anchors,secrets};
 }
-export async function gateFixture(t,{active=0}={}){
-  const state={contract:'owned-lease-v1',paused:false,generation:0,activeMutations:active,safeForBackup:false,owner:null,operationId:null,leaseId:null};
-  let failDelete=false;
+export async function gateFixture(t,{active=0,onAcquired}={}){
+  const state={contract:'owned-lease-v1',releaseProof:'sha256-capability-v1',legacyPaused:false,paused:false,generation:0,activeMutations:active,safeForBackup:false,owner:null,operationId:null,leaseId:null};
+  let failDelete=false,releaseHash=null,losePostResponse=false;const calls=[];
   const server=http.createServer(async(req,res)=>{
     if(req.headers.authorization!=='Bearer synthetic-gate-token'){res.writeHead(401);res.end('{}');return;}
+    calls.push(req.method);
     const chunks=[];for await(const b of req)chunks.push(b);
     const data=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):{};
     if(req.method==='POST'){
-      if(state.paused||data.expectedGeneration!==state.generation){res.writeHead(409);res.end('{}');return;}
+      if(state.paused||data.contract!=='owned-lease-v1'||!/^[a-f0-9]{64}$/.test(data.releaseHash||'')||data.expectedGeneration!==state.generation){res.writeHead(409);res.end('{}');return;}
+      releaseHash=data.releaseHash;
       Object.assign(state,{paused:true,owner:data.owner,operationId:data.operationId,leaseId:crypto.randomUUID(),generation:state.generation+1});
+      if(onAcquired)await onAcquired();
+      if(losePostResponse){res.destroy();return;}
     }else if(req.method==='DELETE'){
-      if(failDelete||!state.paused||data.owner!==state.owner||data.operationId!==state.operationId||data.leaseId!==state.leaseId||data.expectedGeneration!==state.generation){
+      if(failDelete||!state.paused||data.contract!=='owned-lease-v1'||!/^[a-f0-9]{64}$/.test(data.releaseCapability||'')||crypto.createHash('sha256').update(data.releaseCapability||'').digest('hex')!==releaseHash||data.owner!==state.owner||data.operationId!==state.operationId||data.leaseId!==state.leaseId||data.expectedGeneration!==state.generation){
         res.writeHead(409);res.end('{}');return;
       }
+      releaseHash=null;
       Object.assign(state,{paused:false,owner:null,operationId:null,leaseId:null,generation:state.generation+1});
     }else if(req.method!=='GET'){res.writeHead(405);res.end('{}');return;}
     state.safeForBackup=state.paused&&state.activeMutations===0;
     res.setHeader('Content-Type','application/json');res.end(JSON.stringify(state));
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>{server.closeAllConnections();server.close(r);}));
-  return {state,endpoint:'http://127.0.0.1:'+server.address().port,setFailDelete(v){failDelete=v;}};
+  return {state,calls,endpoint:'http://127.0.0.1:'+server.address().port,setFailDelete(v){failDelete=v;},setLosePostResponse(v){losePostResponse=v;}};
 }
 function xml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
 export async function objectFixture(t){

@@ -1,0 +1,22 @@
+FROM node@sha256:51b1100cc2a83d370c6a60952e3f2989c8a43159d0e38586e090f3b3326efefd AS node
+FROM postgres@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+LABEL psai.usage="SYNTHETIC OWNED-GATE VERIFICATION ONLY; NOT FOR STAGING DEPLOYMENT"
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /opt/npm
+WORKDIR /opt/owned-gate
+COPY package.json package-lock.json ./
+RUN node /opt/npm/bin/npm-cli.js ci --ignore-scripts --no-audit --no-fund --fetch-retries=0 --fetch-timeout=15000
+COPY prisma/schema.prisma ./prisma/schema.prisma
+# Code generation only: no migrate/seed/bootstrap, no database URL or connection.
+RUN node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma \
+ && groupadd --gid 1001 ownedgate && useradd --uid 1001 --gid 1001 --no-create-home ownedgate
+COPY src/lib/backup-write-gate.ts ./src/lib/backup-write-gate.ts
+COPY src/app/api/internal/backup-write-gate/route.ts ./src/app/api/internal/backup-write-gate/route.ts
+COPY tests/helpers/isolated-test-environment.ts ./tests/helpers/isolated-test-environment.ts
+COPY tests/backup-write-gate-postgres.test.mjs ./tests/backup-write-gate-postgres.test.mjs
+COPY tooling/recovery-v1/lib ./tooling/recovery-v1/lib
+COPY tooling/recovery-v1/gate-control.mjs ./tooling/recovery-v1/gate-control.mjs
+COPY tooling/recovery-v1/tests/fixtures.mjs ./tooling/recovery-v1/tests/fixtures.mjs
+USER 1001:1001
+ENTRYPOINT ["node"]
+CMD ["/opt/owned-gate/tests/backup-write-gate-postgres.test.mjs", "/run/psai-gate-config.json"]

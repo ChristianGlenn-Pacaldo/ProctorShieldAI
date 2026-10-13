@@ -13,7 +13,11 @@ export async function control(paths){
     if(action==='status'){const d=await gate(c,'GET',null,t.signal);log('gate_status',{status:d.paused?'PAUSED':'OPEN'});return d;}
     if(action==='pause'){ledger=await begin(c,'pause');const d=await pause(c,t.signal);await finish(ledger,'completed');log('gate_paused');return d;}
     if(action==='drain'){const d=await drain(c,t.signal);log('gate_drained');return d;}
-    if(action==='resume'){const d=await release(c,t.signal);log('gate_released',{status:d.released?'RELEASED':'ALREADY_OPEN'});return d;}
+    if(action==='resume'){
+      // Supervisor-only capability; no blind resume while an exporter is active.
+      const job=await jobIdentity(paths,c);await stopJob(job);
+      const d=await release(c,t.signal);log('gate_released',{status:d.released?'RELEASED':'ALREADY_OPEN'});return d;
+    }
     ledger=await begin(c,'watchdog');
     const job=await jobIdentity(paths,c);
     while(true){
