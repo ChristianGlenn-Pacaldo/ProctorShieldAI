@@ -1,0 +1,39 @@
+name: Isolated independent fencing verification
+on:
+  push:
+    branches: ['codex/independent-fencing-verification-20261013']
+permissions:
+  contents: read
+concurrency:
+  group: independent-fencing-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fencing:
+    if: github.repository == 'ChristianGlenn-Pacaldo/ProctorShieldAI' && github.ref == 'refs/heads/codex/independent-fencing-verification-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PSAI_FENCING_CLOUD_APPROVED: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify exact parent, additive scope and live-mode blocker
+        run: node tooling/recovery-v1/tests/fencing-cloud-driver.mjs --preflight
+      - name: Run one bounded synthetic Docker fencing verification
+        run: node tooling/recovery-v1/tests/fencing-cloud-driver.mjs
+      - name: Final owned-resource cleanup
+        if: ${{ always() }}
+        run: node tooling/recovery-v1/tests/fencing-cloud-driver.mjs --cleanup
+      - name: Upload only validated sanitized JSON
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: independent-fencing-${{ github.run_id }}
+          path: fencing-evidence/verification.json
+          retention-days: 7
+          if-no-files-found: error
