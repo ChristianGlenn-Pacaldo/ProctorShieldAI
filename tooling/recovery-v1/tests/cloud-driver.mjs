@@ -17,7 +17,7 @@ const network=label+'-internal',out=path.join(root,'evidence');
 const pins=JSON.parse(await fs.readFile('image-pins.json','utf8'));
 const pg=pins.images.postgres.pinnedReference;
 assert.match(pg,/^postgres@sha256:[a-f0-9]{64}$/);
-let netCreated=false,imageId,failed=false,interrupted=false;
+let netCreated=false,imageId,failed=false,interrupted=false,phase='resource_preflight',testDiagnostics=null;
 const command=async (file,args,timeout=30000)=>(await exec(file,args,{cwd:root,timeout,maxBuffer:16*1024*1024,windowsHide:true,shell:false})).stdout.trim();
 const docker=(args,timeout)=>command('docker',args,timeout);
 const record=async(name,value)=>fs.writeFile(path.join(out,name),JSON.stringify(value,null,2)+'\n');
@@ -31,11 +31,40 @@ async function owned(cid){
   assert.ok(containers.has(cid));
   assert.equal(await docker(['inspect','--format','{{index .Config.Labels "psai.synthetic.owner"}}',cid]),label);
 }
+
+async function publicTestNames(){
+  const names=new Set();
+  for(const file of ['unit.test.mjs','postgres.integration.test.mjs']){
+    const source=await fs.readFile(path.join(root,'tests',file),'utf8');
+    for(const match of source.matchAll(/\btest\('([^'\r\n]{1,180})'\s*,/g))names.add(match[1]);
+    for(const match of source.matchAll(/\['([^'\r\n]{1,100})',f=>/g))names.add('reject '+match[1]);
+  }return names;
+}
+function sanitizeTestDiagnostics(raw,code,phase,names){
+  const stages=new Set(['resource_preflight','image_build','linux_unit','postgres_provision','postgres_integration','docker_watchdog','runtime_dependencies']);
+  assert.ok(stages.has(phase));
+  const counts={};
+  for(const key of ['tests','pass','fail','skipped']){
+    const m=raw.match(new RegExp('^# '+key+' (\\d+)$','m')),value=m?Number(m[1]):null;
+    counts[key]=Number.isSafeInteger(value)&&value>=0&&value<=100000?value:null;
+  }
+  const failedTests=[...new Set(raw.split('\n').filter(x=>/^not ok \d+ - /.test(x)).map(x=>{
+    const name=x.replace(/^not ok \d+ - /,'');
+    return names.has(name)?name:'REDACTED_TEST_NAME';
+  }))].slice(0,100);
+  const allowedCodes=['SECRET_PERMISSIONS','FILE_TYPE_SIZE','LEDGER_SYMLINK','CANCELLED','SUBPROCESS_FAILED','SUBPROCESS_START','SIGNATURE_INVALID','READBACK_CHECKSUM','CIPHER_CHECKSUM'];
+  const knownFailureCodes=counts.fail>0?allowedCodes.filter(value=>new RegExp('\\b'+value+'\\b').test(raw)):[];
+  const exit=/^\d{1,3}$/.test(code)&&Number(code)<=255?Number(code):null;
+  const category=exit!==0||counts.fail>0?'SYNTHETIC_TEST_FAILURE':counts.skipped>0?'UNEXPECTED_SKIPPED_TEST':'TEST_SUMMARY';
+  return {phase,category,containerExitCode:exit,...counts,failedTests,knownFailureCodes};
+}
 async function runBounded(cid,ms){
   await owned(cid);await docker(['start',cid]);
   try{
-    const code=await docker(['wait',cid],ms);assert.equal(code,'0');
-    return await docker(['logs',cid]);
+    const code=await docker(['wait',cid],ms);
+    const raw=await docker(['logs',cid]);
+    testDiagnostics=sanitizeTestDiagnostics(raw,code,phase,await publicTestNames());
+    assert.equal(code,'0');return raw;
   }catch{
     await owned(cid);await docker(['stop','--time','1',cid]);throw new Error('SYNTHETIC_CONTAINER_FAILED_OR_TIMED_OUT');
   }
@@ -54,6 +83,7 @@ try{
   const disk=await fs.statfs(root);
   assert.ok(mem>=2500*1024 && Number(disk.bavail)*Number(disk.bsize)>=6*1024**3);
   const meta=path.join(out,'build-metadata.private.json');
+  phase='image_build';
   await docker(['buildx','build','--load','--platform','linux/amd64','--metadata-file',meta,
     '--label','org.opencontainers.image.revision='+process.env.GITHUB_SHA,
     '--tag',label+':test','.'],15*60*1000);
@@ -70,8 +100,10 @@ try{
   const restrictions=['--restart=no','--read-only','--user','1001:1001','--cap-drop=ALL',
     '--security-opt=no-new-privileges','--pids-limit=128','--memory=1g','--cpus=2',
     '--tmpfs','/tmp:rw,nosuid,nodev,size=256m,mode=1777','--tmpfs','/work:rw,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=0700'];
+  phase='linux_unit';
   const unit=await create([...restrictions,'--network=none',imageId,'--test','--test-reporter=tap','--test-concurrency=1','/opt/recovery/tests/unit.test.mjs']);
   await record('unit-results.json',{...summary(await runBounded(unit,120000)),platform:'Linux actual built image'});
+  phase='postgres_provision';testDiagnostics=null;
   await docker(['network','create','--internal','--label','psai.synthetic.owner='+label,network]);netCreated=true;
   assert.equal(await docker(['network','inspect','--format','{{.Internal}}|{{index .Labels "psai.synthetic.owner"}}',network]),'true|'+label);
   const pgCids=[];
@@ -90,12 +122,15 @@ try{
       catch{await new Promise(r=>setTimeout(r,500));}
     }assert.equal(ready,true);
   }
+  phase='postgres_integration';testDiagnostics=null;
   const integration=await create([...restrictions,'--network',network,'--env','PSAI_DISPOSABLE_POSTGRES_APPROVED=true',imageId,
     '--test','--test-reporter=tap','--test-concurrency=1','/opt/recovery/tests/postgres.integration.test.mjs']);
   await record('integration-results.json',{...summary(await runBounded(integration,180000)),postgresMajor:18,
     databases:'Separate fresh synthetic databases on two owned clusters',objectStore:'Loopback HTTP S3 protocol simulator, not R2',
     networkInternal:true,publishedPorts:0,liveProviderVerification:false});
+  phase='docker_watchdog';testDiagnostics=null;
   await command(process.execPath,['tests/cloud-runtime.mjs',imageId,manifestDigest],120000);
+  phase='runtime_dependencies';testDiagnostics=null;
   const dependencies=await create([...restrictions,'--network=none',imageId,'-e',
     "const{execFileSync}=require('node:child_process');if(process.getuid()!==1001)process.exit(1);for(const p of ['pg_dump','pg_restore','psql'])if(!execFileSync(p,['--version']).toString().includes(' 18.'))process.exit(1);import('/opt/recovery/node_modules/@aws-sdk/client-s3/dist-cjs/index.js').then(()=>console.log('RUNTIME_DEPENDENCIES_PASS'));" ]);
   assert.equal(await runBounded(dependencies,30000),'RUNTIME_DEPENDENCIES_PASS');
@@ -104,7 +139,7 @@ try{
     toolingNetwork:'Internal bridge; loopback-only storage/gate fixtures; only synthetic PostgreSQL peers',
     unitAndHeartbeatNetwork:'none',clientsMajor:18,awsSdkPresent:true});
 }catch{
-  failed=true;await record('failure.json',{status:'FAIL',code:'SYNTHETIC_CLOUD_VERIFICATION_FAILED',rawDiagnosticsWithheld:true});
+  failed=true;await record('failure.json',{status:'FAIL',code:'SYNTHETIC_CLOUD_VERIFICATION_FAILED',phase,testDiagnostics,rawDiagnosticsWithheld:true});
 }finally{
   for(const cid of [...containers].reverse()){
     try{
