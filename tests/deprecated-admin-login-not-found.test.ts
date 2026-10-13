@@ -7,6 +7,7 @@ import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { getAuthDestination } from "../src/lib/auth-destination.ts";
+import { THEME_BOOTSTRAP } from "../src/lib/theme-presentation.ts";
 import { authFixture } from "./helpers/auth-fixture.ts";
 
 import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
@@ -40,6 +41,8 @@ const fallback = load<{ default: () => ReactElement }>(`${directory}/not-found.t
   "next/link": { __esModule: true, default: "a" },
   "@/components/brand-image": officialBrandModule,
   "next/image": { __esModule: true, default: "img" },
+  "next/script": requireNode("next/script"),
+  "@/lib/theme-presentation": { THEME_BOOTSTRAP },
   "lucide-react": requireNode("lucide-react"),
   "./not-found.module.css": { __esModule: true, default: new Proxy({}, { get: (_target, name) => name }) },
 });

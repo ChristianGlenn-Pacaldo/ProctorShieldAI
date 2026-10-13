@@ -1,0 +1,40 @@
+/* Public join presentation only; quiz lookup and admission remain unchanged. */
+.screen {
+  color-scheme: var(--ps-color-scheme);
+  color: var(--ps-text);
+  font-family: var(--ps-font-body);
+  overflow-wrap: anywhere;
+}
+
+.header { flex-wrap: wrap; gap: 16px; }
+.brand { min-width: 0; max-width: 100%; }
+.brand > div { min-width: 0; }
+.brand > div > div { flex-wrap: wrap; }
+.brand img, .controls svg { flex-shrink: 0; }
+.controls { flex-wrap: wrap; }
+.screen :is(button, a) { min-height: 44px; min-width: 44px; }
+.screen :is(button, a, input):focus-visible {
+  outline: 3px solid var(--ps-focus);
+  outline-offset: 3px;
+}
+.screen input::placeholder { color: var(--ps-text-muted); opacity: 1; }
+.screen input:focus { border-color: var(--ps-focus) !important; }
+.screen :global(.text-white) { color: inherit; }
+.screen :is(:global(.text-slate-300), :global(.text-slate-400)) { color: var(--ps-text-secondary); }
+.screen :is(:global(.text-indigo-300), :global(.text-indigo-400)) { color: var(--ps-accent); }
+.screen :global(.text-emerald-400) { color: var(--ps-success); }
+.screen :global(.text-amber-400) { color: var(--ps-gold); }
+.screen :global(.text-blue-400) { color: var(--ps-info); }
+.screen :global(.fill-white) { fill: currentColor; }
+.screen :is(:global(.bg-indigo-950\/80), :global(.bg-indigo-500\/10)) { background: var(--ps-accent-soft); }
+.screen :global(.border-indigo-500\/30) { border-color: var(--ps-border); }
+.screen button[type="submit"]:hover:not(:disabled) { background: var(--ps-primary-hover) !important; }
+.screen button svg { flex-shrink: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .screen :is(button, input), .screen :global(.animate-pulse), .screen :global(.animate-spin) {
+    transition: none !important;
+    animation: none !important;
+  }
+  .screen button:active { scale: none; }
+}

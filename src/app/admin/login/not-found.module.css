@@ -1,3 +1,6 @@
+/* The framework error path may omit the normal root-layout reset. */
+:global(body):has(.screen) { margin: 0; }
+.screen, .screen *, .screen *::before, .screen *::after { box-sizing: border-box; }
 .screen {
   position: relative;
   isolation: isolate;
@@ -5,11 +8,13 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100svh;
-  overflow: hidden;
-  color: #f8fafc;
+  color-scheme: var(--ps-color-scheme);
+  font-family: var(--ps-font-body);
+  overflow-wrap: anywhere;
+  color: var(--ps-text);
   background:
-    radial-gradient(ellipse at 78% 48%, rgba(6, 182, 212, 0.08), transparent 48%),
-    linear-gradient(115deg, #0b101e, #0f172a);
+    radial-gradient(ellipse at 78% 48%, color-mix(in srgb, var(--ps-accent) 8%, transparent), transparent 48%),
+    linear-gradient(115deg, var(--ps-canvas), var(--ps-surface));
 }
 
 .grid {
@@ -19,15 +24,15 @@
   pointer-events: none;
   opacity: 0.26;
   background-image:
-    linear-gradient(rgba(56, 189, 248, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--ps-accent) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ps-accent) 7%, transparent) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: radial-gradient(ellipse at 75% 50%, #000, transparent 75%);
 }
 
 .header {
   padding: 22px 40px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid var(--ps-border);
 }
 
 .headerInner {
@@ -41,7 +46,7 @@
   align-items: center;
   gap: 12px;
   border-radius: 8px;
-  color: #f8fafc;
+  color: var(--ps-text);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.7px;
@@ -53,14 +58,14 @@
   width: 38px;
   height: 38px;
   place-items: center;
-  border: 1px solid rgba(34, 211, 238, 0.3);
+  border: 1px solid var(--ps-border-control);
   border-radius: 12px;
-  color: #67e8f9;
-  background: rgba(6, 182, 212, 0.07);
+  color: var(--ps-focus);
+  background: var(--ps-accent-soft);
 }
 
 .brandAccent {
-  color: #67e8f9;
+  color: var(--ps-focus);
 }
 
 .main {
@@ -81,22 +86,23 @@
 }
 
 .badge {
+  margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 7px 14px;
-  border: 1px solid #2c4358;
+  border: 1px solid var(--ps-border);
   border-radius: 999px;
-  color: #c7e2f3;
-  background: #152335;
+  color: var(--ps-gold);
+  background: var(--ps-gold-soft);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 1px;
 }
 
 .heading {
-  margin-top: 24px;
-  font-family: var(--font-display), sans-serif;
+  margin: 24px 0 0;
+  font-family: var(--ps-font-display);
   font-size: clamp(2rem, 4.5vw, 3.75rem);
   font-weight: 700;
   line-height: 1.12;
@@ -106,8 +112,8 @@
 
 .description {
   max-width: 470px;
-  margin-top: 22px;
-  color: #a7b6ca;
+  margin: 22px 0 0;
+  color: var(--ps-text-secondary);
   font-size: 17px;
   line-height: 1.7;
 }
@@ -138,28 +144,28 @@
 }
 
 .primary {
-  color: #082032;
-  background: #22d3ee;
+  color: var(--ps-on-primary);
+  background: var(--ps-primary);
 }
 
 .primary:hover {
-  background: #67e8f9;
+  background: var(--ps-primary-hover);
 }
 
 .secondary {
-  border-color: #345367;
-  color: #f1f5f9;
-  background: rgba(15, 23, 42, 0.4);
+  border-color: var(--ps-border-control);
+  color: var(--ps-text);
+  background: var(--ps-glass);
 }
 
 .secondary:hover {
-  border-color: #67e8f9;
-  background: #17283b;
+  border-color: var(--ps-focus);
+  background: var(--ps-surface-inset);
 }
 
 .screen .button:focus-visible,
 .screen .brand:focus-visible {
-  outline: 3px solid #67e8f9;
+  outline: 3px solid var(--ps-focus);
   outline-offset: 5px;
 }
 
@@ -200,13 +206,13 @@
   justify-content: center;
   gap: 7px;
   padding: 20px 24px;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
-  color: #9aabc2;
+  border-top: 1px solid var(--ps-border);
+  color: var(--ps-text-muted);
   font-size: 12px;
 }
 
 .footer span:first-child {
-  color: #cbd5e1;
+  color: var(--ps-text-secondary);
   font-weight: 600;
 }
 

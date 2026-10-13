@@ -1,12 +1,15 @@
 import Image from "next/image";
+import Script from "next/script";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import BrandImage from "@/components/brand-image";
+import { THEME_BOOTSTRAP } from "@/lib/theme-presentation";
 import styles from "./not-found.module.css";
 
 export default function NotFound() {
   return (
     <div className={styles.screen}>
+      <Script id="ps-not-found-theme" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       <div className={styles.grid} aria-hidden="true" />
       <header className={styles.header}>
         <div className={styles.headerInner}>

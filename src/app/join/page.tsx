@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import BrandImage from "@/components/brand-image";
+import styles from "./join.module.css";
 import { normalizeQuizAccessCode } from "@/lib/quiz-access-code";
 import {
   playBloop,
@@ -204,27 +205,27 @@ function JoinContent() {
 
   return (
     <div
-      className="min-h-screen flex flex-col relative overflow-x-hidden select-none"
+      className={`${styles.screen} min-h-screen flex flex-col relative select-none`}
       style={{
-        backgroundColor: "#070b14",
-        backgroundImage: "radial-gradient(circle at 50% 10%, #1e1548 0%, #0e1224 45%, #070b14 85%)",
-        color: "#ffffff",
+        backgroundColor: "var(--ps-canvas)",
+        backgroundImage: "radial-gradient(ellipse at 50% 10%, var(--ps-accent-soft), transparent 70%)",
+        color: "var(--ps-text)",
       }}
     >
       {/* Ambient Lighting Orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute top-[-5%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-25"
-          style={{ backgroundColor: "#4f46e5" }}
+          style={{ backgroundColor: "var(--ps-primary)" }}
         />
         <div
           className="absolute bottom-[-10%] right-[-10%] w-[550px] h-[550px] rounded-full blur-[140px] opacity-20"
-          style={{ backgroundColor: "#7c3aed" }}
+          style={{ backgroundColor: "var(--ps-gold)" }}
         />
         <div
           className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
-            backgroundImage: "radial-gradient(circle at 1px 1px, #6366f1 1px, transparent 0)",
+            backgroundImage: "radial-gradient(circle at 1px 1px, var(--ps-accent) 1px, transparent 0)",
             backgroundSize: "28px 28px",
           }}
         />
@@ -232,25 +233,25 @@ function JoinContent() {
 
       {/* Top Header */}
       <header
-        className="relative z-20 w-full px-5 sm:px-8 py-4 flex items-center justify-between border-b backdrop-blur-md"
+        className={`${styles.header} relative z-20 w-full px-5 sm:px-8 py-4 flex items-center justify-between border-b backdrop-blur-md`}
         style={{
-          backgroundColor: "rgba(10, 15, 30, 0.85)",
-          borderColor: "rgba(99, 102, 241, 0.2)",
+          backgroundColor: "var(--ps-glass)",
+          borderColor: "var(--ps-accent-soft)",
         }}
       >
-        <Link href="/dashboard/student" className="flex items-center gap-3 group">
+        <Link href="/dashboard/student" className={`${styles.brand} flex items-center gap-3 group`}>
           <BrandImage width={35} decorative />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-xl tracking-tight font-[family-name:var(--font-display)] text-white">
-                ProctorShield<span style={{ color: "#818cf8" }}>AI</span>
+                ProctorShield<span style={{ color: "var(--ps-gold)" }}>AI</span>
               </span>
               <span
                 className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md"
                 style={{
-                  backgroundColor: "rgba(99, 102, 241, 0.2)",
-                  color: "#a5b4fc",
-                  border: "1px solid rgba(99, 102, 241, 0.35)",
+                  backgroundColor: "var(--ps-accent-soft)",
+                  color: "var(--ps-accent)",
+                  border: "1px solid var(--ps-border)",
                 }}
               >
                 Quiz Portal
@@ -263,16 +264,16 @@ function JoinContent() {
         </Link>
 
         {/* Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className={`${styles.controls} flex items-center gap-2.5`}>
           <button
             type="button"
             onClick={handleToggleSound}
             aria-label={soundActive ? "Mute SFX" : "Enable SFX"}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.08)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#e2e8f0",
+              backgroundColor: "var(--ps-surface-inset)",
+              border: "1px solid var(--ps-border-control)",
+              color: "var(--ps-text-secondary)",
             }}
           >
             {soundActive ? (
@@ -293,8 +294,8 @@ function JoinContent() {
             aria-label="Back to Student Dashboard"
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 text-white"
             style={{
-              backgroundColor: "rgba(99, 102, 241, 0.25)",
-              border: "1px solid rgba(99, 102, 241, 0.4)",
+              backgroundColor: "var(--ps-accent-soft)",
+              border: "1px solid var(--ps-border-control)",
             }}
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -312,8 +313,8 @@ function JoinContent() {
             <div
               className="absolute -bottom-1 -right-1 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 text-white"
               style={{
-                backgroundColor: "#10b981",
-                border: "2px solid #070b14",
+                backgroundColor: "var(--ps-success-soft)",
+                border: "2px solid var(--ps-canvas)",
               }}
             >
               <Zap className="w-3 h-3 fill-white" /> Ready
@@ -323,9 +324,9 @@ function JoinContent() {
           <div
             className="px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold inline-flex items-center gap-2 max-w-md shadow-lg"
             style={{
-              backgroundColor: "rgba(18, 24, 46, 0.9)",
-              border: "1px solid rgba(99, 102, 241, 0.3)",
-              color: "#e2e8f0",
+              backgroundColor: "var(--ps-glass)",
+              border: "1px solid var(--ps-border)",
+              color: "var(--ps-text-secondary)",
             }}
           >
             <span>
@@ -338,9 +339,9 @@ function JoinContent() {
         <div
           className="w-full rounded-3xl p-6 sm:p-8 relative"
           style={{
-            backgroundColor: "#11182c",
-            border: "2px solid rgba(99, 102, 241, 0.4)",
-            boxShadow: "0 25px 60px rgba(0, 0, 0, 0.7), 0 0 50px rgba(99, 102, 241, 0.15)",
+            backgroundColor: "var(--ps-glass)",
+            border: "2px solid var(--ps-border)",
+            boxShadow: "var(--ps-shadow-overlay)",
           }}
         >
           <div className="text-center mb-6">
@@ -366,7 +367,8 @@ function JoinContent() {
                 type="text"
                 value={joinCode}
                 onChange={(e) => handleInputChange(e.target.value)}
-                placeholder={`ENTER ${destinationName.toUpperCase()} CODE (e.g. PS-123)`}
+                aria-label={`Enter ${destinationName} Code`}
+                placeholder="PS-123"
                 autoFocus
                 autoCapitalize="characters"
                 autoCorrect="off"
@@ -374,9 +376,9 @@ function JoinContent() {
                 maxLength={16}
                 className="w-full py-4 px-6 text-center text-xl sm:text-2xl font-mono font-black tracking-[0.15em] sm:tracking-[0.2em] rounded-2xl text-white placeholder:text-slate-500 placeholder:tracking-normal placeholder:font-sans placeholder:text-base sm:placeholder:text-lg focus:outline-none transition-all uppercase"
                 style={{
-                  backgroundColor: "#090d1a",
-                  border: "2px solid #4f46e5",
-                  boxShadow: "inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.2)",
+                  backgroundColor: "var(--ps-surface-inset)",
+                  border: "2px solid var(--ps-border-control)",
+                  boxShadow: "var(--ps-shadow)",
                 }}
               />
               {joinCode.length > 0 && (
@@ -404,9 +406,9 @@ function JoinContent() {
               <div
                 className="w-full text-center text-xs sm:text-sm font-bold py-2.5 px-4 rounded-xl"
                 style={{
-                  backgroundColor: "rgba(225, 29, 72, 0.15)",
-                  border: "1px solid rgba(225, 29, 72, 0.4)",
-                  color: "#fecdd3",
+                  backgroundColor: "var(--ps-error-soft)",
+                  border: "1px solid var(--ps-error)",
+                  color: "var(--ps-error)",
                 }}
               >
                 {message}
@@ -419,19 +421,19 @@ function JoinContent() {
               disabled={isLoading || isResolvingCode || isClosedCode || joinCode.trim().length === 0}
               className="w-full py-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wider flex items-center justify-center gap-3 transition-all duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #7c3aed 100%)",
-                color: "#ffffff",
-                boxShadow: "0 6px 0 #312e81, 0 12px 25px rgba(79, 70, 229, 0.4)",
+                background: "var(--ps-primary)",
+                color: "var(--ps-on-primary)",
+                boxShadow: "0 6px 0 var(--ps-primary-hover), var(--ps-shadow)",
               }}
               onMouseDown={(e) => {
                 if (!isLoading && joinCode.trim().length > 0) {
                   e.currentTarget.style.transform = "translateY(3px)";
-                  e.currentTarget.style.boxShadow = "0 2px 0 #312e81, 0 6px 15px rgba(79, 70, 229, 0.3)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 var(--ps-primary-hover), var(--ps-shadow)";
                 }
               }}
               onMouseUp={(e) => {
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 6px 0 #312e81, 0 12px 25px rgba(79, 70, 229, 0.4)";
+                e.currentTarget.style.boxShadow = "0 6px 0 var(--ps-primary-hover), var(--ps-shadow)";
               }}
             >
               {isLoading || isResolvingCode ? (
@@ -452,7 +454,7 @@ function JoinContent() {
           {activeQuizzes.length > 0 && (
             <div
               className="mt-5 pt-4"
-              style={{ borderTop: "1px solid rgba(255, 255, 255, 0.1)" }}
+              style={{ borderTop: "1px solid var(--ps-border)" }}
             >
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -474,16 +476,16 @@ function JoinContent() {
                     }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                     style={{
-                      backgroundColor: "rgba(99, 102, 241, 0.2)",
-                      border: "1px solid rgba(99, 102, 241, 0.35)",
-                      color: "#c7d2fe",
+                      backgroundColor: "var(--ps-accent-soft)",
+                      border: "1px solid var(--ps-border)",
+                      color: "var(--ps-text)",
                     }}
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <span className="truncate max-w-[140px]">{quiz.title}</span>
                     <span
                       className="font-mono text-[10px] px-1.5 py-0.5 rounded font-bold"
-                      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)", color: "#a5b4fc" }}
+                      style={{ backgroundColor: "var(--ps-surface-inset)", color: "var(--ps-accent)" }}
                     >
                       {quiz.accessCode || "JOIN"}
                     </span>
@@ -538,8 +540,8 @@ export default function JoinPage() {
     <Suspense
       fallback={
         <div
-          className="min-h-screen flex items-center justify-center text-white font-bold"
-          style={{ backgroundColor: "#070b14" }}
+          className={`${styles.screen} min-h-screen flex items-center justify-center text-white font-bold`}
+          style={{ backgroundColor: "var(--ps-canvas)" }}
         >
           <div className="flex items-center gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
