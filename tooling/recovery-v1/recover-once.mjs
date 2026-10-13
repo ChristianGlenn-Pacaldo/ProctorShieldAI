@@ -47,7 +47,7 @@ export async function runRecover(paths){
     await decryptFileToPath(cipher,dump,c.encryptionKey,manifest.database.plainSha256,manifest.database.plainBytes);
     const list=child('pg_restore',['--list',dump],{signal:timer.signal});list.stdout.resume();await list.done;
     // A trusted synthetic source is required here; live archives remain blocked at policy validation.
-    const restore=child('pg_restore',['--exit-on-error','--single-transaction','--no-owner','--no-acl',dump],
+    const restore=child('pg_restore',['--dbname',c.op.recovery.name,'--exit-on-error','--single-transaction','--no-owner','--no-acl',dump],
       {env:await databaseEnv(c,true),signal:timer.signal});restore.stdout.resume();await restore.done;
     requireThat(canonical(await tableDigests(c,timer.signal,true))===canonical(manifest.attestation.tableDigests),'RESTORED_DATA_MISMATCH');
     requireThat(canonical(await schemaFingerprint(c,timer.signal,true))===canonical(manifest.attestation.schema),'RESTORED_SCHEMA_MISMATCH');
