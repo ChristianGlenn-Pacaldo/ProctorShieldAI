@@ -38,18 +38,14 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // 2. Platform user distribution (all registered users)
+    // 2. Classroom demographics cover registered Students and Teachers.
     const totalStudents = await prisma.user.count({
       where: { role: { roleName: "student" } },
     });
     const totalTeachers = await prisma.user.count({
       where: { role: { roleName: "teacher" } },
     });
-    const totalAdmins = await prisma.user.count({
-      where: { role: { roleName: "admin" } },
-    });
-
-    const totalCalculated = Math.max(1, totalStudents + totalTeachers + totalAdmins);
+    const totalCalculated = Math.max(1, totalStudents + totalTeachers);
 
     // 3. User Management table list (Fetch all non-admin users)
     const dbUsers = await prisma.user.findMany({
@@ -131,7 +127,6 @@ export async function GET(req: NextRequest) {
       platformBars: [
         { label: "Students", value: totalStudents, pct: Math.round((totalStudents / totalCalculated) * 100), color: "bg-indigo-500" },
         { label: "Teachers", value: totalTeachers, pct: Math.round((totalTeachers / totalCalculated) * 100), color: "bg-violet-500" },
-        { label: "Admins", value: totalAdmins, pct: Math.round((totalAdmins / totalCalculated) * 100), color: "bg-rose-500" },
       ],
       activityBars: [
         { label: "Quizzes In-Progress", value: activeQuizzes, pct: activeQuizzes > 0 ? 100 : 0, color: "bg-emerald-500" },

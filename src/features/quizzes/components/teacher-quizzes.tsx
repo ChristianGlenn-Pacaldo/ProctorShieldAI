@@ -79,6 +79,7 @@ export default function TeacherQuizzesPage({
   const [isPreparingScan, setIsPreparingScan] = useState(false);
   const scanGenerationRef = useRef(0);
   const cameraCleanupRef = useRef<(() => void) | null>(null);
+  const aiRequestRef = useRef<AbortController | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Quick Manage Quiz Modal State
@@ -116,6 +117,13 @@ export default function TeacherQuizzesPage({
   const stopCamera = () => {
     cameraCleanupRef.current?.(); cameraCleanupRef.current = null;
   };
+  const closeAiModal = () => {
+    aiRequestRef.current?.abort();
+    aiRequestRef.current = null;
+    setIsAiModalOpen(false);
+    setIsAiGenerating(false);
+    stopCamera();
+  };
   useEffect(() => {
     if (isAiModalOpen && activeTab === "scan" && cameraOpen && !scanSource && videoRef.current) {
       cameraCleanupRef.current = startQuizScannerCamera(videoRef.current, setScannerError);
@@ -123,8 +131,12 @@ export default function TeacherQuizzesPage({
     return stopCamera;
   }, [isAiModalOpen, activeTab, cameraOpen, scanSource]);
   useEffect(() => {
-    if (!isAiModalOpen) setIsPreparingScan(false);
-    return () => { scanGenerationRef.current++; };
+    if (!isAiModalOpen) { setIsPreparingScan(false); setIsAiGenerating(false); }
+    return () => {
+      scanGenerationRef.current++;
+      aiRequestRef.current?.abort();
+      aiRequestRef.current = null;
+    };
   }, [isAiModalOpen]);
 
   const fetchQuizzes = async () => {
@@ -428,7 +440,7 @@ export default function TeacherQuizzesPage({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    stopCamera(); setCameraOpen(false); setScannerError(null); setIsPreparingScan(true);
+    stopCamera(); setCameraOpen(false); setScanSource(null); setScannerError(null); setIsPreparingScan(true);
     const generation = ++scanGenerationRef.current;
     try {
       const source = await prepareQuizScan(file);
@@ -440,6 +452,12 @@ export default function TeacherQuizzesPage({
 
   const handleAiGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (aiRequestRef.current) return;
+    const controller = new AbortController();
+    aiRequestRef.current = controller;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 120_000);
+    setScannerError(null);
     setIsAiGenerating(true);
 
     try {
@@ -452,21 +470,16 @@ export default function TeacherQuizzesPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
-      if (res.status === 403) {
-        if (
-          confirm(
-            "You need an active ProctorShield Pro subscription to use this feature.\n\nClick OK to upgrade your plan via GCash or Card."
-          )
-        ) {
-          window.location.href = "/dashboard/teacher/billing";
-        }
-        setIsAiGenerating(false);
+      const data = await res.json().catch(() => { throw new Error("The AI service returned an unreadable response. Please try again shortly."); });
+      if (controller.signal.aborted || aiRequestRef.current !== controller) return;
+      if (res.status === 403 && data.code === "SUBSCRIPTION_REQUIRED") {
+        setUpgradeReason("ai");
+        setShowBillingModal(true);
         return;
       }
-
-      const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || data.message || "AI generation failed");
       }
@@ -513,11 +526,13 @@ export default function TeacherQuizzesPage({
       setScanSource(null);
       setCameraOpen(false);
       setActiveTab("upload");
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || "An error occurred while generating questions");
+    } catch (err: unknown) {
+      if (aiRequestRef.current !== controller || (controller.signal.aborted && !timedOut)) return;
+      setScannerError(timedOut ? "AI generation took too long. Your source is still available; try again with fewer questions."
+        : err instanceof Error ? err.message : "Could not reach the AI service. Check your connection and try again.");
     } finally {
-      setIsAiGenerating(false);
+      clearTimeout(timer);
+      if (aiRequestRef.current === controller) { aiRequestRef.current = null; setIsAiGenerating(false); }
     }
   };
 
@@ -623,8 +638,7 @@ export default function TeacherQuizzesPage({
           className="teacher-content app-modal-backdrop bg-black/80 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setIsAiModalOpen(false);
-              stopCamera();
+              closeAiModal();
             }
           }}
         >
@@ -639,21 +653,19 @@ export default function TeacherQuizzesPage({
                 <Sparkles className="w-5 h-5 text-purple-500" /> Auto-Generate with ProctorShield AI
               </h2>
               <button
-                onClick={() => {
-                  setIsAiModalOpen(false);
-                  stopCamera();
-                }}
+                aria-label="Close AI generator"
+                onClick={closeAiModal}
                 className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAiGenerate} className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <form onSubmit={handleAiGenerate} aria-busy={isAiGenerating} className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
               <div className="flex border-b border-[var(--border)]" role="tablist" aria-label="AI source">
                 {(["upload", "scan"] as const).map(mode => (
-                  <button key={mode} type="button" role="tab" aria-selected={activeTab === mode}
+                  <button key={mode} type="button" role="tab" disabled={isAiGenerating} aria-selected={activeTab === mode}
                     onClick={() => { stopCamera(); setCameraOpen(false); setScannerError(null); setActiveTab(mode); }}
                     className={`pb-2 text-sm font-semibold flex-1 border-b-2 cursor-pointer ${activeTab === mode ? "border-purple-500 text-purple-600" : "border-transparent text-[var(--muted)]"}`}>
                     {mode === "upload" ? "Upload" : "Scan"}
@@ -663,9 +675,9 @@ export default function TeacherQuizzesPage({
               <div role="tabpanel" aria-label={activeTab === "upload" ? "Upload" : "Scan"}>
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-3">
-                    {activeTab === "scan" && <button type="button" onClick={() => { setScanSource(null); setScannerError(null); setCameraOpen(true); }} className="px-4 py-2 rounded-lg bg-purple-600 text-white">Scan with Camera</button>}
+                    {activeTab === "scan" && <button type="button" disabled={isAiGenerating} onClick={() => { setScanSource(null); setScannerError(null); setCameraOpen(true); }} className="px-4 py-2 rounded-lg bg-purple-600 text-white">Scan with Camera</button>}
                     {activeTab === "upload" && <label className="px-4 py-2 rounded-lg border border-[var(--border)] cursor-pointer">Upload from Device
-                      <input type="file" accept="image/*,application/pdf,.pdf,text/plain,.txt" onChange={handleFileUpload} className="sr-only" disabled={isPreparingScan} />
+                      <input type="file" accept="image/*,application/pdf,.pdf,text/plain,.txt" onChange={handleFileUpload} className="sr-only" disabled={isPreparingScan || isAiGenerating} />
                     </label>}
                   </div>
                   <p className="text-xs text-[var(--muted)]">Images up to 10 MB, PDF up to 4 MB, or plain text up to 60 KB.</p>
@@ -678,10 +690,11 @@ export default function TeacherQuizzesPage({
                   {scanSource && <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
                     {scanSource.dataUrl?.startsWith("data:image/") && <img src={scanSource.dataUrl} alt="Scan preview" className="w-full max-h-[220px] object-contain" />}
                     <p className="text-sm">{scanSource.name}</p>
-                    <button type="button" onClick={() => setScanSource(null)} className="text-sm text-rose-500">Remove scan</button>
+                    <button type="button" disabled={isAiGenerating} onClick={() => setScanSource(null)} className="text-sm text-rose-500">Remove scan</button>
                   </div>}
                   <label className="block text-xs font-semibold" htmlFor="scan-question-count">Number of Questions (1–50)</label>
-                  <input id="scan-question-count" type="number" min={1} max={50} step={1} required value={aiQuestionCount} onChange={e => setAiQuestionCount(Number(e.target.value))} className="w-full px-3 py-2 border rounded-lg" />
+                  <input id="scan-question-count" type="number" min={1} max={50} step={1} required disabled={isAiGenerating} value={aiQuestionCount} onChange={e => setAiQuestionCount(Number(e.target.value))} className="w-full px-3 py-2 border rounded-lg" />
+                  {isAiGenerating && <p role="status" className="text-sm text-[var(--muted)]">Generating questions. This may take up to two minutes. Review the questions in Studio before saving your quiz.</p>}
                 </div>
               </div>
 
@@ -690,10 +703,7 @@ export default function TeacherQuizzesPage({
               <div className="shrink-0 flex flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAiModalOpen(false);
-                    stopCamera();
-                  }}
+                  onClick={closeAiModal}
                   className="flex-1 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface2)] transition-all cursor-pointer"
                 >
                   Cancel

@@ -120,7 +120,7 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
         if (name === "@/components/teacher/proctorshield-quiz-editor") return { __esModule: true, default: "editor" };
         if (name === "@/components/teacher/proctorshield-create-hub") return { __esModule: true, default: "hub" };
         throw Error(`Unexpected dependency: ${name}`);
-      }, fetch, alert: (message: string) => alerts.push(message), console: { error() {} },
+      }, fetch, AbortController, setTimeout, clearTimeout, alert: (message: string) => alerts.push(message), console: { error() {} },
       document: { body: { style: {} } }, window: { location: { search: "" } }, URLSearchParams,
     }, { filename: paths[key] });
     return (props: any) => runner.render(() => exports.default!(props));
@@ -181,7 +181,8 @@ for (const source of ["upload", "camera"] as const) {
 test("AI failure keeps the existing quiz identity, unsaved settings, and old questions", async () => {
   const setup = await fixture({ failure: true }); await setup.openExisting(); setup.setDuration();
   setup.button("AI Generator").props.onClick(); const failed = await setup.generate("upload");
-  assert.match(text(failed), /Old saved question/); assert.deepEqual(setup.alerts, ["Provider unavailable"]);
+  assert.match(text(failed), /Old saved question/); assert.deepEqual(setup.alerts, []);
+  assert.equal(text(setup.pageNode(node => node.props.role === "alert")), "Provider unavailable");
   await setup.button("Publish Quiz").props.onClick();
   const save = setup.requests.find(request => request.method === "PUT");
   assert.equal(save?.url, "/api/quizzes/7"); assert.equal(save?.body?.duration, 33);

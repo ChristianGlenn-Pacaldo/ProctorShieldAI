@@ -90,6 +90,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
           : { success: true, aiGenerationReceipt: "signed-receipt", questions: [{ questionText: "Generated", choices: [] }] },
       };
     },
+    AbortController, setTimeout, clearTimeout,
     alert: (message: string) => alerts.push(message),
     FileReader: class {
       result = "data:image/png;base64,QUJD";
@@ -123,14 +124,14 @@ test("AI UI exposes Upload and Scan only, defaults to Upload and rejects an empt
   assert.deepEqual(tabs.map(textOf), ["Upload", "Scan"]);
   assert.equal(tabs[0].props["aria-selected"], true);
   assert.equal(setup.node(node => node.type === "textarea"), undefined);
-  await setup.submit(); assert.equal(setup.requests.length, 0); assert.match(setup.alerts[0], /upload a file first/);
+  await setup.submit(); assert.equal(setup.requests.length, 0); assert.match(textOf(setup.node(node => node.props.role === "alert")), /upload a file first/);
 });
 
 test("Upload defaults to five questions and validates the shared 1–50 limit", async () => {
   const setup = fixture(); setup.open();
   await invoke(setup.node(node => node.type === "input" && node.props.type === "file"), "onChange", { target: { files: [{}] } });
   const count=setup.node(node => node.props.id === "scan-question-count"); assert.equal(count.props.value,5);
-  invoke(count,"onChange",{target:{value:"51"}});await setup.submit();assert.equal(setup.requests.length,0);assert.match(setup.alerts[0],/between 1 and 50/);
+  invoke(count,"onChange",{target:{value:"51"}});await setup.submit();assert.equal(setup.requests.length,0);assert.match(textOf(setup.node(node=>node.props.role==="alert")),/between 1 and 50/);
   invoke(count,"onChange",{target:{value:"7"}});await setup.submit();assert.equal(setup.requests[0].body.numQuestions,7);
 });
 
@@ -157,7 +158,8 @@ test("non-OK AI response shows its error without opening Studio", async () => {
   setup.open();
   await invoke(setup.node((entry) => entry.type === "input" && entry.props.type === "file"), "onChange", { target: { files: [{}] } });
   await setup.submit();
-  assert.deepEqual(setup.alerts, ["Generation unavailable"]);
+  assert.deepEqual(setup.alerts, []);
+  assert.equal(textOf(setup.node(node => node.props.role === "alert")), "Generation unavailable");
   assert.ok(setup.node((entry) => entry.type === "form" && typeof entry.props.onSubmit === "function"));
   assert.equal(setup.node((entry) => entry.type === "editor"), undefined);
 });

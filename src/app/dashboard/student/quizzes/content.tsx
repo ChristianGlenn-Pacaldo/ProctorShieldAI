@@ -66,7 +66,7 @@ export default function QuizzesContent() {
           </div>
         )}
 
-        <div role="region" aria-label="Enrolled quizzes" tabIndex={0} className="overflow-x-auto min-h-[300px]">
+        <div role="region" aria-label="Enrolled quizzes" tabIndex={0} className="ps-table-scroll overflow-x-auto min-h-[300px]">
           {isLoading && !hasLoaded ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-6 h-6 border-2 border-[var(--ps-accent)] border-t-transparent rounded-full animate-spin" />
@@ -77,7 +77,7 @@ export default function QuizzesContent() {
               <p className="text-sm font-semibold">No enrolled quizzes found</p>
             </div>
           ) : (
-            <table className="w-full min-w-[880px]">
+            <table className="ps-dashboard-table w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   {["Quiz Title", "Mode", "Subject", "Duration", "Status", "AI Verdict", "Action"].map((h) => (
@@ -94,7 +94,7 @@ export default function QuizzesContent() {
                   const targetUrl = isArena ? `/arena/${e.id}` : `/quiz/${e.id}`;
                   return (
                     <tr key={enrollment.id} className="hover:bg-[var(--surface2)] transition-colors">
-                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title || "Untitled Quiz"}</td>
+                      <td className="ps-table-text px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title || "Untitled Quiz"}</td>
                       <td className="px-5 py-3">
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                           isArena
@@ -104,8 +104,8 @@ export default function QuizzesContent() {
                           {isArena ? "Power Arena" : "Live Monitored Exam"}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.subject?.subjectName || "N/A"}</td>
-                      <td className="px-5 py-3 text-sm text-[var(--ink)]">{e.duration} min</td>
+                      <td className="ps-table-text px-5 py-3 text-sm text-[var(--muted)]">{e.subject?.subjectName || "N/A"}</td>
+                      <td className="whitespace-nowrap px-5 py-3 text-sm text-[var(--ink)]">{e.duration} min</td>
                       <td className="px-5 py-3">
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-[var(--ps-success-soft)] text-[var(--ps-success)]' : 'bg-[var(--ps-accent-soft)] text-[var(--ps-accent)]'}`}>
                           {enrollment.quizStatus?.toUpperCase()}
@@ -118,10 +118,8 @@ export default function QuizzesContent() {
                       </td>
                       <td className="px-5 py-3">
                         {!isCompleted ? (
-                          <Link href={targetUrl}>
-                            <button className="text-xs font-bold text-[var(--ps-on-primary)] bg-[var(--ps-primary)] px-3 py-1.5 rounded-lg hover:bg-[var(--ps-primary-hover)] transition-all shadow-md">
-                              {isArena ? "Enter Arena" : "Take Quiz"}
-                            </button>
+                          <Link href={targetUrl} className="inline-flex items-center text-xs font-bold text-[var(--ps-on-primary)] bg-[var(--ps-primary)] px-3 py-1.5 rounded-lg hover:bg-[var(--ps-primary-hover)] transition-all shadow-md">
+                            {isArena ? "Enter Arena" : "Take Quiz"}
                           </Link>
                         ) : (
                           <button

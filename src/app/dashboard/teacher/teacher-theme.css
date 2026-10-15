@@ -557,9 +557,6 @@
 }
 
 /* Deliberate horizontal scrolling preserves readable quiz columns on small screens. */
-.teacher-content .ps-teacher-quiz-table {table-layout:auto;min-width:1180px;}
-.teacher-content .ps-teacher-quiz-table th {white-space:nowrap;word-break:normal;}
-.teacher-content .ps-teacher-quiz-table td {vertical-align:middle;word-break:normal;overflow-wrap:normal;}
+.teacher-content .ps-teacher-quiz-table {--ps-table-min-width:74rem;}
 .teacher-content .ps-teacher-quiz-table td:first-child {min-width:200px;max-width:320px;overflow-wrap:anywhere;}
 .teacher-content .ps-teacher-quiz-table td:nth-child(3) {min-width:140px;max-width:200px;overflow-wrap:anywhere;}
-.teacher-content .ps-teacher-quiz-table button {white-space:nowrap;flex-shrink:0;}

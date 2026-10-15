@@ -16,7 +16,7 @@ const generatedQuestions = Array.from({ length: 3 }, (_, index) => ({
 
 // Exercise the installed SDK's real retry transport against an isolated local
 // server. This fixture never uses the configured provider or application data.
-async function providerFixture(t: TestContext, statuses: number[], output = JSON.stringify({ questions: generatedQuestions })) {
+async function providerFixture(t: TestContext, statuses: number[], output = JSON.stringify({ questions: generatedQuestions }), retryDelay?: string) {
   const requests: any[] = [];
   const diagnostics: unknown[][] = [];
   let receipts = 0;
@@ -26,10 +26,12 @@ async function providerFixture(t: TestContext, statuses: number[], output = JSON
     for await (const chunk of request) body += chunk.toString();
     requests.push(JSON.parse(body));
     const status = statuses[Math.min(requests.length - 1, statuses.length - 1)];
+    if (status === 0) return; // Deliberately stalled provider; cancelled by deadline test.
     response.writeHead(status, { "Content-Type": "application/json" });
     response.end(JSON.stringify(status === 200
       ? { candidates: [{ content: { role: "model", parts: [{ text: output }] }, finishReason: "STOP" }] }
-      : { error: { code: status, status: "UNAVAILABLE", message: "Provider details with fixture-secret must stay private" } }));
+      : { error: { code: status, status: "UNAVAILABLE", message: "Provider details with fixture-secret must stay private",
+        details: retryDelay ? [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay }] : [] } }));
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise<void>((resolve, reject) => {
@@ -117,14 +119,51 @@ test("persistent provider 503 stops after three calls and reports a safe retryab
 });
 
 test("invalid credentials, bad requests and quota errors are not retried", async (t) => {
-  for (const status of [400, 401, 403, 429]) {
+  for (const status of [400, 401, 403, 404, 429]) {
     const setup = await providerFixture(t, [status]);
     const response = await setup.post({ topic: "Biology", numQuestions: 3 });
     assert.equal(setup.requests.length, 1, `HTTP ${status} must not retry`);
-    assert.equal(response.status, 500);
+    assert.equal(response.status, status === 400 ? 500 : 503);
+    if (status === 429) assert.equal(response.body.code, "AI_PROVIDER_QUOTA");
+    else if (status !== 400) assert.equal(response.body.code, "AI_PROVIDER_CONFIGURATION");
     assert.equal(setup.receipts, 0);
     assert.doesNotMatch(JSON.stringify({ response, diagnostics: setup.diagnostics }), /fixture-secret|Provider details/);
   }
+});
+
+test("provider quota reports its actual bounded retry delay without leaking provider details or issuing another call", async t => {
+  for (const [delay, expected] of [["29843s", "29843"], ["999999999s", "86400"], ["-1s", "60"], ["12.4s", "13"]]) {
+    const setup = await providerFixture(t, [429], undefined, delay);
+    const response = await setup.post({ imageBase64: "QUJD", mimeType: "image/jpeg", numQuestions: 3 });
+    assert.equal(response.status, 503);
+    assert.equal(response.body.code, "AI_PROVIDER_QUOTA");
+    assert.equal(response.headers["Retry-After"], expected);
+    assert.equal(setup.requests.length, 1);
+    assert.equal(setup.receipts, 0);
+    assert.match(response.body.error, /usage quota/);
+    assert.doesNotMatch(JSON.stringify({ response, diagnostics: setup.diagnostics }), /fixture-secret|Provider details/);
+  }
+});
+
+test("provider request timeout reports a safe actionable response", async t => {
+  const setup = await providerFixture(t, [504]);
+  const response = await setup.post({ topic: "Biology" });
+  assert.equal(response.status, 504);
+  assert.equal(response.body.code, "AI_PROVIDER_TIMEOUT");
+  assert.equal(setup.requests.length, 1);
+  assert.equal(setup.receipts, 0);
+});
+
+test("the total deadline aborts a stalled real SDK request instead of leaving generation pending", async t => {
+  const original = AbortSignal.timeout;
+  AbortSignal.timeout = () => original(100);
+  t.after(() => { AbortSignal.timeout = original; });
+  const setup = await providerFixture(t, [0]);
+  const response = await setup.post({ topic: "Biology" });
+  assert.equal(response.status, 504);
+  assert.equal(response.body.code, "AI_PROVIDER_TIMEOUT");
+  assert.ok(setup.requests.length <= 1);
+  assert.equal(setup.receipts, 0);
 });
 
 test("malformed successful provider output is not retried or signed", async (t) => {

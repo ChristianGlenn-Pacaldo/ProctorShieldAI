@@ -29,6 +29,7 @@ export default function TeacherQuizLibrary({quizzes,filtered,search,setSearch,is
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search quizzes..."
+                aria-label="Search created quizzes"
                 className="ps-teacher-glass-dense w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-[var(--ink)] placeholder:text-[var(--muted2)] focus:outline-none focus:border-indigo-500/50"
               />
             </div>
@@ -56,7 +57,7 @@ export default function TeacherQuizLibrary({quizzes,filtered,search,setSearch,is
           </div>
         </div>
 
-        <div role="region" aria-label="Teacher quiz library" tabIndex={0} className="ps-teacher-glass-dense min-w-0 max-w-full overflow-x-auto min-h-[300px]">
+        <div role="region" aria-label="Teacher quiz library" tabIndex={0} className="ps-table-scroll ps-teacher-glass-dense min-w-0 max-w-full overflow-x-auto min-h-[300px]">
           {loadError && (
             <div role="alert" className="flex items-center justify-between gap-4 border-b border-rose-500/30 bg-rose-500/10 px-5 py-3 text-sm text-rose-600 dark:text-rose-400">
               <span>{loadError}</span>
@@ -73,7 +74,7 @@ export default function TeacherQuizLibrary({quizzes,filtered,search,setSearch,is
               <p className="text-sm font-semibold">No quizzes found</p>
             </div>
           ) : (
-            <table className="ps-teacher-quiz-table w-full min-w-[1180px]">
+            <table className="ps-dashboard-table ps-teacher-quiz-table w-full min-w-[1180px]">
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   {["Quiz Title", "Mode", "Subject", "Join Code", "Questions", "Students", "Status", "Actions"].map((h) => (

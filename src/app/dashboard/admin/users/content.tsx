@@ -139,8 +139,8 @@ export default function UsersContent() {
             </button>
           </div>
         )}
-        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin user management" tabIndex={0}>
-          <table className="w-full">
+        <div className="ps-table-scroll ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin user management" tabIndex={0}>
+          <table className="ps-dashboard-table w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                 {["User", "Email", "Role", "Status", "Joined Date", "Actions"].map((h) => (
@@ -166,8 +166,8 @@ export default function UsersContent() {
               ) : (
                 filtered.map((u) => (
                   <tr key={u.id} className="hover:bg-[var(--surface2)]/60 transition-colors">
-                    <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{u.name}</td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm font-semibold text-[var(--ink)]">{u.name}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.roleClass}`}>
                         {u.role}
@@ -178,8 +178,9 @@ export default function UsersContent() {
                         {u.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
-                    <td className="px-5 py-3 flex gap-2 items-center">
+                    <td className="whitespace-nowrap px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-3 items-center">
                       <button
                         onClick={() => { setEditUser(u); setEditSubStatus(u.subscription?.includes("PRO") || false); }}
                         className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
@@ -205,6 +206,7 @@ export default function UsersContent() {
                           Suspend
                         </button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))

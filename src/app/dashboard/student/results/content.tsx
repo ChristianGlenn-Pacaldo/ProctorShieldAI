@@ -73,8 +73,8 @@ export default function ResultsContent() {
             No quiz history found.
           </p>
         )}
-        <div role="region" aria-label="Quiz attempt history" tabIndex={0} className={`overflow-x-auto${hasLoaded && results.length === 0 ? " hidden sm:block" : ""}`}>
-          <table className="w-full">
+        <div role="region" aria-label="Quiz attempt history" tabIndex={0} className={`ps-table-scroll overflow-x-auto${hasLoaded && results.length === 0 ? " hidden sm:block" : ""}`}>
+          <table className="ps-dashboard-table w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 {["Quiz", "Mode", "Record Date", "Score", "Status / Verdict", "Details"].map((h) => (
@@ -112,7 +112,7 @@ export default function ResultsContent() {
                       : "bg-[var(--ps-error-soft)] text-[var(--ps-error)]";
                   return (
                     <tr key={r.id} className="hover:bg-[var(--surface2)] transition-colors">
-                      <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.quiz?.title || "Unknown Quiz"}</td>
+                      <td className="ps-table-text px-5 py-3 text-sm font-semibold text-[var(--ink)]">{r.quiz?.title || "Unknown Quiz"}</td>
                       <td className="px-5 py-3">
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                           isArena

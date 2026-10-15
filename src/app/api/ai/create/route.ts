@@ -9,7 +9,22 @@ import { createAiQuizReceipt } from "@/lib/ai-quiz-provenance";
 
 const AI_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
+// Read only the provider's bounded retry hint; never return its raw error payload.
+function providerRetrySeconds(error: unknown): number | undefined {
+  if (!error || typeof error !== "object" || !("message" in error) || typeof error.message !== "string") return;
+  try {
+    const details: unknown = JSON.parse(error.message)?.error?.details;
+    if (!Array.isArray(details)) return;
+    for (const detail of details) {
+      if (detail?.["@type"] !== "type.googleapis.com/google.rpc.RetryInfo" || typeof detail.retryDelay !== "string") continue;
+      const match = detail.retryDelay.match(/^(\d+(?:\.\d+)?)s$/);
+      if (match) return Math.max(1, Math.min(86_400, Math.ceil(Number(match[1]))));
+    }
+  } catch { /* Provider messages are not always JSON. */ }
+}
+
 async function POSTImpl(req: NextRequest) {
+  let providerDeadline: AbortSignal | undefined;
   try {
     const session = await getSession();
     if (!session || session.role !== "teacher") {
@@ -51,6 +66,7 @@ async function POSTImpl(req: NextRequest) {
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
+        timeout: 45_000,
         // Retry temporary provider overload only; attempts includes the first call.
         retryOptions: {
           attempts: 3,
@@ -119,11 +135,13 @@ async function POSTImpl(req: NextRequest) {
     }
     contents.push(prompt);
 
+    providerDeadline = AbortSignal.timeout(90_000);
     const response = await ai.models.generateContent({
       model: process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash",
       contents: contents,
       config: {
         responseMimeType: "application/json",
+        abortSignal: req.signal ? AbortSignal.any([req.signal, providerDeadline]) : providerDeadline,
       },
     });
 
@@ -164,6 +182,21 @@ async function POSTImpl(req: NextRequest) {
     const providerStatus = typeof error === "object" && error !== null
       && "status" in error && typeof error.status === "number" ? error.status : undefined;
     console.error("AI Create request failed", { providerStatus: providerStatus ?? null });
+    if (providerStatus === 429) {
+      const retryAfter = providerRetrySeconds(error) ?? 60;
+      const delay = retryAfter >= 3600 ? ` The provider advises waiting about ${Math.ceil(retryAfter / 3600)} hour(s) before retrying.` : " Please wait before retrying.";
+      return NextResponse.json({
+        error: `AI generation is unavailable because the provider's usage quota has been reached.${delay} If this continues, ask your administrator to review the AI service quota. Your source has been kept for retry.`,
+        code: "AI_PROVIDER_QUOTA",
+      }, { status: 503, headers: { "Retry-After": String(retryAfter) } });
+    }
+    if (providerDeadline?.aborted || providerStatus === 408 || providerStatus === 504
+      || (error && typeof error === "object" && "name" in error && error.name === "APIConnectionTimeoutError")) {
+      return NextResponse.json({ error: "The AI provider took too long to respond. Please try again with fewer questions or a smaller source.", code: "AI_PROVIDER_TIMEOUT" }, { status: 504 });
+    }
+    if (providerStatus === 401 || providerStatus === 403 || providerStatus === 404) {
+      return NextResponse.json({ error: "The AI service configuration needs administrator attention. Please contact your administrator.", code: "AI_PROVIDER_CONFIGURATION" }, { status: 503 });
+    }
     if (providerStatus === 503) {
       return NextResponse.json({
         error: "AI provider is temporarily busy. Please try again shortly.",

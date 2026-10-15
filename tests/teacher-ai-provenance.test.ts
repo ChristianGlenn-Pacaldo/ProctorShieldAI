@@ -121,7 +121,7 @@ test("successful Gemini generation issues a teacher-bound receipt for returned q
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected import: ${name}`);
     },
-    process: { env: { GEMINI_API_KEY: "test-key" } },
+    process: { env: { GEMINI_API_KEY: "test-key" } }, AbortSignal,
     console: { error() {} },
   }, { filename: generationPath });
   const result = await exports.POST!({ headers: { get: () => null }, json: async () => ({ topic: "Networking", numQuestions: 1 }) });

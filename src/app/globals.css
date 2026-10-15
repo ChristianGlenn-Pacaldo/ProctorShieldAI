@@ -480,6 +480,46 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Opt-in dashboard tables: preserve labels; scroll the table, never the page.
+   Shared across roles so cached route styles cannot split badges into letters. */
+[data-portal] .ps-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+[data-portal] .ps-table-scroll > table.ps-dashboard-table {
+  width: 100%;
+  min-width: var(--ps-table-min-width, 66rem);
+  table-layout: auto;
+}
+[data-portal] table.ps-dashboard-table th {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+[data-portal] table.ps-dashboard-table td {
+  vertical-align: middle;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+[data-portal] table.ps-dashboard-table .ps-table-text {
+  min-width: 12rem;
+  max-width: 20rem;
+  overflow-wrap: anywhere;
+}
+[data-portal] table.ps-dashboard-table td span.rounded-full {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+[data-portal] table.ps-dashboard-table :is(button, a, code) {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 @media (max-width: 639px) {
   .app-modal-backdrop {
     padding: 0.5rem;

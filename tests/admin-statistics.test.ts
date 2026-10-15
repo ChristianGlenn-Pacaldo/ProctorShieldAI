@@ -114,6 +114,39 @@ test("Admin dashboard counts only today's UTC flagged analyses and shows only pa
   assert.equal(body.users.find((user: { id: string }) => user.id === "free").plan, "Free Tier");
 });
 
+for (const [students, teachers] of [[14, 8], [0, 0]]) {
+  test(`Classroom demographics exclude Admins and retain activity metrics (${students}/${teachers})`, async () => {
+    const countedRoles: string[] = [];
+    const prisma = {
+      user: {
+        count: async (query: { where: { role?: { roleName: string } } }) => {
+          const role = query.where.role?.roleName;
+          if (!role) return 2;
+          countedRoles.push(role);
+          return role === "student" ? students : role === "teacher" ? teachers : 99;
+        },
+        findMany: async () => [],
+      },
+      quiz: { count: async () => 6 },
+      violation: { count: async () => 3 },
+      aiAnalysis: { count: async () => 11 },
+    };
+    const response = await loadRoute("src/app/api/dashboard/admin/route.ts", prisma)(new Request("http://localhost/api/dashboard/admin"));
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(countedRoles, ["student", "teacher"]);
+    const denominator = Math.max(1, students + teachers);
+    assert.deepEqual(body.platformBars.map(({ label, value, pct }: { label: string; value: number; pct: number }) => ({ label, value, pct })), [
+      { label: "Students", value: students, pct: Math.round(students / denominator * 100) },
+      { label: "Teachers", value: teachers, pct: Math.round(teachers / denominator * 100) },
+    ]);
+    assert.deepEqual(body.activityBars.map(({ label, value }: { label: string; value: number }) => ({ label, value })), [
+      { label: "Quizzes In-Progress", value: 6 }, { label: "Active Violations", value: 3 },
+    ]);
+    assert.equal(body.stats.totalUsers, 2);
+  });
+}
+
 test("Admin analytics counts ended quizzes and distinct teachers with paid entitlement", async () => {
   const paidSubscription: Subscription = {
     subscriptionStatus: "active",

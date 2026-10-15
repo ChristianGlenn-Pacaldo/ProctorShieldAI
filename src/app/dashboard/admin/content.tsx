@@ -434,7 +434,7 @@ export default function AdminDashboardContent() {
           </div>
           <div aria-busy={initialLoading} className="p-5 space-y-4">
             {initialLoading ? (
-              <DashboardListSkeleton variant="chart" count={3} />
+              <DashboardListSkeleton variant="chart" count={2} />
             ) : platformBars.length === 0 ? (
               <div className="text-xs text-[var(--muted)] py-4 text-center">No online sessions active</div>
             ) : (
@@ -506,8 +506,8 @@ export default function AdminDashboardContent() {
           </span>
         </div>
         {statusError && <p role="alert" className="px-5 py-3 text-xs font-semibold text-rose-500">{statusError}</p>}
-        <div aria-busy={initialLoading} className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin platform users" tabIndex={0}>
-          <table className="w-full">
+        <div aria-busy={initialLoading} className="ps-table-scroll ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin platform users" tabIndex={0}>
+          <table className="ps-dashboard-table w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                 {["User", "Email", "Role", "Subscription", "Status", "Joined", "Actions"].map((h) => (
@@ -531,11 +531,13 @@ export default function AdminDashboardContent() {
               ) : (
                 users.map((u) => (
                   <tr key={u.id} className="hover:bg-[var(--surface2)]/60 transition-colors animate-fade-in">
-                    <td className="px-5 py-3 flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(5,150,105,0.5)]" : "bg-[var(--border)]"}`} title={u.isOnline ? "Online" : "Offline"} />
+                    <td className="ps-table-text px-5 py-3">
+                      <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 shrink-0 rounded-full ${u.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(5,150,105,0.5)]" : "bg-[var(--border)]"}`} title={u.isOnline ? "Online" : "Offline"} />
                       <span className="text-sm font-semibold text-[var(--ink)]">{u.name}</span>
+                      </div>
                     </td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm text-[var(--muted)]">{u.email}</td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.roleClass}`}>{u.role}</span></td>
                     <td className="px-5 py-3">
                       {u.plan === "Premium" ? (
@@ -547,8 +549,9 @@ export default function AdminDashboardContent() {
                       )}
                     </td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>{u.status}</span></td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
-                    <td className="px-5 py-3 flex gap-2">
+                    <td className="whitespace-nowrap px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
                       {u.role === "Teacher" && (
                         <button 
                           onClick={() => { setPlanError(null); setEditingUser(u); }}
@@ -562,6 +565,7 @@ export default function AdminDashboardContent() {
                       ) : (
                         <button disabled={updatingUserId === u.id} onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-red-400 hover:text-red-500 cursor-pointer disabled:opacity-50">Suspend</button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))

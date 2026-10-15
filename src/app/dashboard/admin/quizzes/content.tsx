@@ -119,8 +119,8 @@ export default function QuizzesContent() {
             </button>
           </div>
         )}
-        <div className="ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin quiz directory" tabIndex={0}>
-          <table className="w-full">
+        <div className="ps-table-scroll ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto" role="region" aria-label="Admin quiz directory" tabIndex={0}>
+          <table className="ps-dashboard-table w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 {["Quiz Title", "Instructor", "Date", "Status"].map((h) => (
@@ -146,9 +146,9 @@ export default function QuizzesContent() {
               ) : (
                 filtered.map((e) => (
                   <tr key={e.id} className="hover:bg-[var(--surface2)] transition-colors animate-fade-in">
-                    <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title}</td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.instructor}</td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{e.date}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm font-semibold text-[var(--ink)]">{e.title}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm text-[var(--muted)]">{e.instructor}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-sm text-[var(--muted)]">{e.date}</td>
                     <td className="px-5 py-3"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${e.statusClass}`}>{e.status}</span></td>
                   </tr>
                 ))

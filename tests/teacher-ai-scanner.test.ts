@@ -2,16 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadArenaModule } from "./helpers/arena-fixture.ts";
 const questions=[{questionText:"What is 2+2?",choices:[{choiceText:"4",isCorrect:true},{choiceText:"3",isCorrect:false},{choiceText:"5",isCorrect:false},{choiceText:"6",isCorrect:false}]}];
-export function aiFixture(output:any={questions}) {
+export function aiFixture(output:any={questions}, options:{role?:string|null;subscribed?:boolean}={}) {
  const requests:any[]=[];const route=loadArenaModule("src/app/api/ai/create/route.ts",{
  __process:{env:{GEMINI_API_KEY:"fixture-key"}},"@/lib/backup-write-gate":{withBackupWriteGate:(fn:any)=>fn},"next/server":{NextResponse:{json:(body:any,init:any={})=>({status:init.status??200,body})}},
- "@/lib/auth":{getSession:async()=>({userId:"teacher",role:"teacher"})},"@/lib/security":{consumeRateLimitGroup:async()=>({allowed:true}),getClientIp:()=>"local"},
- "@/lib/maintenance":{expireSubscriptions:async()=>{}},"@/lib/teacher-entitlements":{getTeacherEntitlements:async()=>({isSubscribed:true})},"@/lib/ai-quiz-provenance":{createAiQuizReceipt:()=>"receipt"},
+ "@/lib/auth":{getSession:async()=>options.role===null?null:({userId:"teacher",role:options.role??"teacher"})},"@/lib/security":{consumeRateLimitGroup:async()=>({allowed:true}),getClientIp:()=>"local"},
+ "@/lib/maintenance":{expireSubscriptions:async()=>{}},"@/lib/teacher-entitlements":{getTeacherEntitlements:async()=>({isSubscribed:options.subscribed??true})},"@/lib/ai-quiz-provenance":{createAiQuizReceipt:()=>"receipt"},
  "@google/genai":{GoogleGenAI:class{models={generateContent:async(args:any)=>{requests.push(args);return{text:typeof output==="string"?output:JSON.stringify(output)};}};}},
  });return {requests,post:(body:any)=>route.POST({json:async()=>body,headers:{get:()=>null}})};
 }
 test("PDF upload uses provider document inlineData and selected question count",async()=>{const f=aiFixture();const r=await f.post({imageBase64:Buffer.from("%PDF-1.4 sample").toString("base64"),mimeType:"application/pdf",numQuestions:7});assert.equal(r.status,200);assert.equal(f.requests[0].contents[0].inlineData.mimeType,"application/pdf");assert.ok(f.requests[0].contents.at(-1).includes("Generate 7"));});
 test("text file contents enter generation rather than being treated as an empty topic",async()=>{const f=aiFixture();const r=await f.post({sourceText:"Chapter 1: Algebra",numQuestions:3});assert.equal(r.status,200);assert.ok(f.requests[0].contents.at(-1).includes("Chapter 1: Algebra"));});
+test("signed-out, Student, Admin and Free Teacher requests cannot invoke the AI provider",async()=>{
+ for(const options of [{role:null},{role:"student"},{role:"admin"},{role:"teacher",subscribed:false}]){
+  const f=aiFixture(undefined,options);const r=await f.post({sourceText:"Synthetic notes",numQuestions:3});
+  assert.equal(r.status,options.role==="teacher"?403:401);assert.equal(f.requests.length,0);assert.equal(r.body.aiGenerationReceipt,undefined);
+ }
+});
 test("malformed AI choices are rejected before attesting or opening question creation",async()=>{const f=aiFixture({questions:[{questionText:"Bad",choices:[{choiceText:"X",isCorrect:true},{choiceText:"Y",isCorrect:true}]}]});assert.equal((await f.post({topic:"Math",numQuestions:1})).status,502);});
 test("image and captured JPEG use the same generation path",async()=>{for(const mimeType of ["image/png","image/jpeg"]){const f=aiFixture();const r=await f.post({imageBase64:"QUJD",mimeType,numQuestions:4});assert.equal(r.status,200);assert.equal(f.requests[0].contents[0].inlineData.mimeType,mimeType);}});
 test("invalid and oversized uploads are rejected before provider work",async()=>{for(const source of [{imageBase64:"bad!",mimeType:"image/png"},{imageBase64:"AAAA",mimeType:"application/zip"},{imageBase64:"A".repeat(5_500_001),mimeType:"image/png"}]){const f=aiFixture();assert.equal((await f.post(source)).status,413);assert.equal(f.requests.length,0);}});

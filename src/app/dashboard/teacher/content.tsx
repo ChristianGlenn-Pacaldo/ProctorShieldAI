@@ -369,7 +369,7 @@ export default function TeacherDashboardContent({
             />
           </div>
         </div>
-        <div aria-busy={initialLoading} role="region" aria-label="Teacher verdict summaries" tabIndex={0} className="ps-teacher-glass-dense overflow-x-auto min-h-[150px]">
+        <div aria-busy={initialLoading} role="region" aria-label="Teacher verdict summaries" tabIndex={0} className="ps-table-scroll ps-teacher-glass-dense overflow-x-auto min-h-[150px]">
           {initialLoading ? (
             <div className="p-5"><DashboardListSkeleton variant="table" /></div>
           ) : filteredVerdicts.length === 0 ? (
@@ -381,7 +381,7 @@ export default function TeacherDashboardContent({
               </p>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="ps-dashboard-table w-full">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
                   {["Student", "Quiz", "Violations Summary", "AI Verdict", "Score", "Action"].map((h) => (
@@ -394,8 +394,8 @@ export default function TeacherDashboardContent({
               <tbody className="divide-y divide-[var(--border)]">
                 {filteredVerdicts.map((v, i) => (
                   <tr key={v.name + i} className="hover:bg-[var(--surface2)]/60 transition-colors">
-                    <td className="px-5 py-3 text-sm font-semibold text-[var(--ink)]">{v.name}</td>
-                    <td className="px-5 py-3 text-sm text-[var(--muted)]">{v.quiz}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm font-semibold text-[var(--ink)]">{v.name}</td>
+                    <td className="ps-table-text px-5 py-3 text-sm text-[var(--muted)]">{v.quiz}</td>
                     <td className="px-5 py-3">
                       {v.violations.length > 0 ? (
                         <div className="flex gap-1.5 flex-wrap">

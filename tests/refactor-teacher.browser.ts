@@ -109,3 +109,88 @@ test("Manage uses the loaded summary and Studio fetches full details on demand",
   results.push({case:"Manage avoids unused fetch; Studio loads on demand",pass:true});
  }finally{await f.page.close();}
 });
+
+// Real file preparation, React handlers and Studio; synthetic API responses only.
+const aiQuestions=[{questionText:"Which gas do plants release?",choices:[
+ {choiceText:"Oxygen",isCorrect:true},{choiceText:"Nitrogen",isCorrect:false},
+ {choiceText:"Helium",isCorrect:false},{choiceText:"Hydrogen",isCorrect:false},
+]}];
+const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=","base64");
+const pdf=Buffer.from("%PDF-1.4\nSynthetic browser transport fixture\n%%EOF");
+for(const source of ["PDF","image","camera"]){
+ test("AI Create "+source+" prepares source, reports quota and retries into Studio without saving",async()=>{
+  const f=await screen(390,"light");let calls=0;const bodies:Array<Record<string,any>>=[];
+  try{
+   await f.page.addInitScript(()=>{
+    const canvas=document.createElement("canvas");canvas.width=640;canvas.height=480;
+    const context=canvas.getContext("2d")!;context.fillStyle="white";context.fillRect(0,0,640,480);
+    const stream=canvas.captureStream();
+    Object.defineProperty(navigator.mediaDevices,"getUserMedia",{value:async()=>stream});
+    (window as any).__syntheticScannerStream=stream;
+   });
+   await f.page.reload();await f.page.getByRole("button",{name:"AI Create",exact:true}).waitFor();
+   await f.page.route("**/api/ai/create",async route=>{
+    calls++;bodies.push(route.request().postDataJSON());
+    await route.fulfill(calls===1?{status:503,json:{code:"AI_PROVIDER_QUOTA",error:"AI provider usage quota reached. Try again later."}}:{json:{success:true,aiGenerationReceipt:"synthetic-receipt",detectedTitle:"Synthetic AI Quiz",questions:aiQuestions}});
+   });
+   await f.page.getByRole("button",{name:"AI Create",exact:true}).click();
+   if(source==="camera"){
+    await f.page.getByRole("tab",{name:"Scan",exact:true}).click();
+    await f.page.getByRole("button",{name:"Scan with Camera",exact:true}).click();
+    await f.page.waitForFunction(()=>{const v=document.querySelector("video");return v&&v.readyState>=2;});
+    await f.page.getByRole("button",{name:"Capture Photo",exact:true}).click();
+   }else await f.page.locator('input[type="file"]').setInputFiles({name:source==="PDF"?"synthetic.pdf":"synthetic.png",mimeType:source==="PDF"?"application/pdf":"image/png",buffer:source==="PDF"?pdf:png});
+   await f.page.getByRole("button",{name:"Remove scan",exact:true}).waitFor();
+   await f.page.getByLabel("Number of Questions (1–50)").fill("1");
+   await f.page.getByRole("button",{name:"Generate Magic",exact:true}).click();
+   await f.page.getByRole("alert").getByText(/usage quota/).waitFor();
+   assert.equal(await f.page.getByRole("button",{name:"Remove scan",exact:true}).count(),1);
+   assert.equal(await f.page.getByLabel("Number of Questions (1–50)").inputValue(),"1");
+   assert.equal(bodies[0].mimeType,source==="PDF"?"application/pdf":"image/jpeg");
+   await f.page.getByRole("button",{name:"Generate Magic",exact:true}).click();
+   await f.page.getByRole("textbox",{name:"Quiz title",exact:true}).waitFor();
+   assert.equal(await f.page.getByRole("textbox",{name:"Quiz title",exact:true}).inputValue(),"Synthetic AI Quiz");
+   assert.equal(calls,2);assert.deepEqual(bodies[0],bodies[1]);
+   assert.equal(f.requests.filter(r=>/^(POST|PUT|DELETE) /.test(r)).length,0,"AI review must not save records");
+   if(source==="camera")assert.equal(await f.page.evaluate(()=>(window as any).__syntheticScannerStream.getTracks().every((t:MediaStreamTrack)=>t.readyState==="ended")),true);
+   assert.deepEqual(f.errors,[]);results.push({case:"AI Create "+source+" quota recovery",pass:true,syntheticProvider:true});
+  }finally{await f.page.close();}
+ });
+}
+
+test("AI Create cancellation aborts an in-flight request and ignores a late successful response",async()=>{
+ const f=await screen(390,"dark");let release!:()=>void;const hold=new Promise<void>(resolve=>release=resolve);
+ try{
+  await f.page.route("**/api/ai/create",async route=>{await hold;await route.fulfill({json:{success:true,aiGenerationReceipt:"late-receipt",detectedTitle:"Stale quiz",questions:aiQuestions}}).catch(()=>{});});
+  await f.page.getByRole("button",{name:"AI Create",exact:true}).click();
+  await f.page.locator('input[type="file"]').setInputFiles({name:"synthetic.pdf",mimeType:"application/pdf",buffer:pdf});
+  await f.page.getByRole("button",{name:"Remove scan",exact:true}).waitFor();
+  const request=f.page.waitForRequest("**/api/ai/create");
+  await f.page.getByRole("button",{name:"Generate Magic",exact:true}).click();const sent=await request;
+  assert.equal(await f.page.getByRole("tab",{name:"Upload",exact:true}).isDisabled(),true);
+  await f.page.getByRole("button",{name:"Close AI generator",exact:true}).click();release();
+  await sent.response().catch(()=>null);
+  await f.page.getByRole("button",{name:"AI Create",exact:true}).click();
+  assert.equal(await f.page.getByRole("button",{name:"Generate Magic",exact:true}).isEnabled(),true);
+  assert.equal(await f.page.getByRole("textbox",{name:"Quiz title",exact:true}).count(),0);
+  assert.deepEqual(f.errors,[]);results.push({case:"AI cancellation and stale response",pass:true});
+ }finally{release();await f.page.close();}
+});
+
+for(const theme of ["light","dark"])for(const width of [360,390,768,1280,1440]){
+ test("AI Create quota message layout "+theme+" "+width,async()=>{
+  const f=await screen(width,theme);
+  try{
+   await f.page.route("**/api/ai/create",route=>route.fulfill({status:503,json:{code:"AI_PROVIDER_QUOTA",error:"AI generation is unavailable because the provider's usage quota has been reached. The provider advises waiting about 9 hours before retrying. Ask your administrator to review the AI service quota."}}));
+   await f.page.getByRole("button",{name:"AI Create",exact:true}).click();
+   await f.page.locator('input[type="file"]').setInputFiles({name:"synthetic.pdf",mimeType:"application/pdf",buffer:pdf});
+   await f.page.getByRole("button",{name:"Remove scan",exact:true}).waitFor();
+   await f.page.getByRole("button",{name:"Generate Magic",exact:true}).click();
+   await f.page.getByRole("alert").waitFor();
+   const panel=f.page.locator(".app-modal-panel"),box=await panel.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width+2);
+   assert.equal(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true);
+   await capture(f.page,review+`/ai-quota-${theme}-${width}.png`);
+   assert.deepEqual(f.errors,[]);results.push({case:"AI quota layout",width,theme,pass:true});
+  }finally{await f.page.close();}
+ });
+}
