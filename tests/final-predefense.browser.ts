@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test,{before,after}from"node:test";
 import fs from"node:fs";import path from"node:path";import http from"node:http";
 import {chromium,type Browser,type Page}from"playwright";
-const origin="http://127.0.0.1:3121",review="release-review/final-predefense-2026-10-15",temp=".tmp-predefense-browser";
+const origin="http://127.0.0.1:3121",review=process.env.PREDEFENSE_BROWSER_REVIEW_DIR||"release-review/final-predefense-2026-10-15",temp=".tmp-predefense-browser";
 let browser:Browser,server:http.Server;const results:Array<Record<string,unknown>>=[];
 before(async()=>{
  server=http.createServer((req,res)=>{

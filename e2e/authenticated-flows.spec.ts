@@ -10,8 +10,8 @@ test.describe("authenticated entitlement and quiz flows", () => {
 
   test("student join input retains a complete current-format access code", async ({ context, page }) => {
     await authenticateAsExistingRole(context, "student");
-    await page.goto("/join");
-    const input = page.getByPlaceholder(/enter quiz code/i);
+    await page.goto("/join", { waitUntil: "domcontentloaded" });
+    const input = page.getByRole("textbox", { name: "Enter Quiz Code", exact: true });
     await input.fill("PS-1CD0309D3B");
     await expect(input).toHaveValue("PS-1CD0309D3B");
     await expect(input).toHaveAttribute("maxlength", "16");
@@ -93,14 +93,15 @@ test.describe("authenticated entitlement and quiz flows", () => {
   });
 
   test("student stays in the lobby until the teacher starts the quiz", async ({ context, page }) => {
-    await authenticateAsExistingRole(context, "student");
+    const student = await authenticateAsExistingRole(context, "student");
     let teacherStarted = false;
+    await page.route("**/api/quizzes/901/privacy", route => route.fulfill({ json: { retentionDays: 37, institution: null, contact: null } }));
     await page.route("**/api/quizzes/901", (route) => route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         success: true,
-        userId: "e2e-student",
+        userId: student.userId,
         studentQuizId: "e2e-attempt",
         studentQuizStatus: teacherStarted ? "in_progress" : "enrolled",
         canEnterQuiz: teacherStarted,
@@ -143,7 +144,9 @@ test.describe("authenticated entitlement and quiz flows", () => {
     await expect(page.getByRole("button", { name: "Waiting for Teacher to Start..." })).toBeDisabled();
 
     teacherStarted = true;
-    await expect(page.getByRole("button", { name: /Start Quiz/i })).toBeEnabled({ timeout: 5_000 });
+    // Teacher start unlocks the lobby, while privacy/device checks remain required.
+    await expect(page.getByRole("button", { name: "Waiting for Teacher to Start...", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Check Device & Start Quiz", exact: true })).toBeDisabled();
     await expect(page.getByText("The teacher started the quiz.")).toHaveCount(0);
   });
 });

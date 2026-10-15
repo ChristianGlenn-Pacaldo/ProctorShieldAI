@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./refactor-source.ts";
 import * as questionWork from "../../src/lib/arena-question-work.ts";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -12,7 +13,7 @@ import * as arenaFeature from "../../src/lib/power-arena-feature.ts";
 
 const compiled = new Map<string, string>();
 export function loadArenaModule(file: string, dependencies: Record<string, unknown>) {
-  if (!compiled.has(file)) compiled.set(file, ts.transpileModule(fs.readFileSync(file, "utf8"), {
+  if (!compiled.has(file)) compiled.set(file, ts.transpileModule(refactorTestSource(file), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
   }).outputText);
   const exports: any = {};
@@ -21,6 +22,7 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
     setTimeout, clearTimeout, AbortController, AbortSignal,
     process: dependencies.__process ?? { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn(...args: unknown[]) { (dependencies.__warnings as unknown[][] | undefined)?.push(args); }, info() {} },
     require: (name: string) => {
+      if (name === "server-only") return {};
       if (["@/lib/power-arena-feature", "./power-arena-feature.ts", "./lib/power-arena-feature"].includes(name) && !(name in dependencies)) return arenaFeature;
       if (name === "node:crypto") return crypto;
       if (name === "@/lib/arena-question-work" && !(name in dependencies)) return questionWork;

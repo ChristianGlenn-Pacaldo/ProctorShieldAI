@@ -213,5 +213,12 @@
     "src/app/dashboard/student/results/content.tsx": "346501e1ee1da0c70adf52721366b72b0ea19250281b52dddf521d4375aac7eb",
     "src/lib/auth-destination.ts": "ae85bf312395e64ee26ffb74ace4dd273581d77cf9300fb062e6068d74e3a305",
     "src/app/login/page.tsx": "4c5140b3d8ef2cdeec07978969ca2854960f6ec932548b69086957f3e0a702e9"
+  },
+  "refactorBaseline": "d61e2ec46d9bc97bd5a458e3f5f952e1bc34aec3",
+  "refactorOverrides": {
+    "src/app/api/quizzes/route.ts": "4ce4b1ce6f944481c202ad20463586e46e623c21b3fc0da632e44cbac43106b2"
+  },
+  "mvpOverrides": {
+    "src/app/api/live/join/route.ts": "bb1858758f1bb2169cb9f0fbc63b0197be83f69531f6411b4ab4e49571c0fcb9"
   }
 }

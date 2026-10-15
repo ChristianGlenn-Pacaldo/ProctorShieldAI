@@ -317,6 +317,27 @@ test("Pusher outage does not hide a persisted authoritative violation count", as
   const result = await f.load("live/violation").POST(request({ quizId: 7, studentQuizId: "attempt-1", violationType: "tab_switch", confidenceScore: 100 }));
   assert.equal(result.status, 200); assert.equal(result.body.violationCount, 1);
 });
+
+test("live registration responds before realtime delivery and isolates a provider failure", async () => {
+  const f = fixture(), tasks: Array<() => Promise<void>> = [], deliveries: string[] = [];
+  f.deps["next/server"].after = (work: () => Promise<void>) => tasks.push(work);
+  f.deps["@/lib/pusher"].pusherServer.trigger = async (channel: string) => {
+    deliveries.push(channel); throw Error("signed-url provider-body must never be logged");
+  };
+  const response = await f.load("live/join").POST(request({ quizId: 7, studentQuizId: "attempt-1" }));
+  assert.equal(response.status, 200); assert.equal(response.body.teacherId, "teacher");
+  assert.equal(tasks.length, 1); assert.deepEqual(deliveries, []);
+  await tasks[0]();
+  assert.deepEqual(deliveries.sort(), ["private-admin-dashboard", "private-teacher-teacher"]);
+  assert.equal(f.state.attempt.quizStatus, "in_progress");
+});
+
+test("invalid live registration schedules no provider work", async () => {
+  const f = fixture(), tasks: unknown[] = [];
+  f.deps["next/server"].after = (work: unknown) => tasks.push(work);
+  const response = await f.load("live/join").POST(request({ quizId: 7, studentQuizId: "another-attempt" }));
+  assert.equal(response.status, 404); assert.equal(tasks.length, 0);
+});
 test("fullscreen exit is canonical, accepted, and counted authoritatively while resize is rejected", async () => {
   const f = fixture();
   const first = await f.load("live/violation").POST(request({

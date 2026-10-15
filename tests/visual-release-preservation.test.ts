@@ -3,13 +3,13 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 
-const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string>; defenseBaseline: string; defenseOverrides: Record<string,string> };
-test("defense release preserves all baseline files except individually recorded approved overrides", () => {
+const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string>; defenseBaseline: string; defenseOverrides: Record<string,string>; refactorOverrides: Record<string,string>; mvpOverrides: Record<string,string> };
+test("defense release preserves baseline files except recorded defense, refactor and MVP fixes", () => {
   assert.equal(manifest.mainSHA, "3e016784e15e20c2b55dbf3dc09c5a16ca0d3dc4");
   assert.ok(Object.keys(manifest.hashes).length > 150);
   for (const [file,expected] of Object.entries(manifest.hashes)) {
     const normalized = Buffer.from(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
-    assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.defenseOverrides[file] ?? expected,file);
+    assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.mvpOverrides[file] ?? manifest.refactorOverrides[file] ?? manifest.defenseOverrides[file] ?? expected,file);
   }
   assert.equal(fs.existsSync("src/lib/password-hash.ts"),false,"future versioned-password implementation is excluded");
 });

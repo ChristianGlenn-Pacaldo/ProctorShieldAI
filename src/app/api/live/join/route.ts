@@ -1,5 +1,5 @@
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
@@ -44,7 +44,7 @@ async function POSTImpl(req: NextRequest) {
     // NO snapshot data here — snapshots go through /api/live/snapshot instead
     const channelName = `private-teacher-${quiz.teacherId}`;
 
-    await pusherServer.trigger(channelName, "student-joined", {
+    const joinedEvent = {
       studentId: session.userId,
       studentName: session.fullName,
       quizId: quiz.id,
@@ -53,21 +53,24 @@ async function POSTImpl(req: NextRequest) {
       monitoringLevel: enrollment.monitoringLevel === "strict" ? "strict" : "reduced",
       connectionStatus: "online",
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    // Broadcast student-joined event to admin
+    // Enrollment and start are already persisted. Realtime is advisory: an
+    // outage must not make a valid monitor registration look like it failed.
+    // Teacher polling continues to read the authoritative active attempts.
     try {
-      await pusherServer.trigger("private-admin-dashboard", "activity", {
-        type: "quiz-join",
-        userId: session.userId,
-        fullName: session.fullName,
-        role: "student",
-        activity: `${session.fullName} joined quiz: ${quiz.title}`,
-        timestamp: new Date().toISOString(),
+      after(async () => {
+        const deliveries = await Promise.allSettled([
+          pusherServer.trigger(channelName, "student-joined", joinedEvent),
+          pusherServer.trigger("private-admin-dashboard", "activity", {
+            type: "quiz-join", userId: session.userId, fullName: session.fullName,
+            role: "student", activity: `${session.fullName} joined quiz: ${quiz.title}`,
+            timestamp: new Date().toISOString(),
+          }),
+        ]);
+        if (deliveries.some(result => result.status === "rejected")) console.error("Live join notification delivery failed");
       });
-    } catch (e) {
-      console.error("Failed to broadcast join to admin:", e);
-    }
+    } catch { console.error("Live join notification scheduling failed"); }
 
     return NextResponse.json({ success: true, teacherId: quiz.teacherId });
   } catch (error) {

@@ -5,6 +5,7 @@ import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import Pusher from "pusher";
+import { createHash, createHmac } from "node:crypto";
 
 const source = ts.transpileModule(fs.readFileSync("src/lib/logout-realtime.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -24,7 +25,16 @@ test("logout uses bounded signed HTTPS without redirects and discards provider b
     assert.match(String(url), /^https:\/\/api-ap1\.pusher\.com\/apps\/123\/events\?/);
     assert.equal(options!.redirect, "error"); assert.equal(options!.method, "POST");
     const body = String(options!.body);
-    assert.equal(String(url).split("?")[1], signer.createSignedQueryString({ method: "POST", path: "/apps/123/events", body }));
+    // Verify the transmitted signature using its original timestamp. Signing
+    // again can cross a second boundary on a loaded machine and fail spuriously.
+    const query = new URL(String(url)).searchParams;
+    const signature = query.get("auth_signature"); query.delete("auth_signature");
+    assert.equal(query.get("auth_key"), "fixture-key");
+    assert.match(query.get("auth_timestamp")!, /^\d+$/);
+    assert.equal(query.get("auth_version"), "1.0");
+    assert.equal(query.get("body_md5"), createHash("md5").update(body).digest("hex"));
+    const canonical = [...query].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join("&");
+    assert.equal(signature, createHmac("sha256", "fixture-secret").update(`POST\n/apps/123/events\n${canonical}`).digest("hex"));
     assert.deepEqual(JSON.parse(body), { name: "activity", channels: ["private-admin-dashboard"], data: JSON.stringify({ type: "logout", userId: "fixture" }) });
     return new Response(new ReadableStream({ cancel() { cancelled = true; } }));
   });

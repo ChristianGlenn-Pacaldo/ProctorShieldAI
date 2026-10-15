@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import * as defenseFeature from "../src/lib/power-arena-feature.ts";
 import * as passwordUpdate from "../src/lib/password-update.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
@@ -25,8 +26,8 @@ function nodesOf(value: unknown, predicate: (node: ElementNode) => boolean): Ele
 }
 
 function fixture(initialStatus = "active") {
-  const componentPath = path.resolve(process.cwd(), "src/app/dashboard/teacher/quizzes/content.tsx");
-  const compiled = ts.transpileModule(fs.readFileSync(componentPath, "utf8"), {
+  const componentPath = path.resolve(process.cwd(), "src/features/quizzes/components/teacher-quizzes.tsx");
+  const compiled = ts.transpileModule(refactorTestSource(componentPath), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
   const server: { quiz: Quiz; retakes: Array<{ studentQuizId: number; studentName: string; quizTitle: string }> } = {
@@ -48,11 +49,12 @@ function fixture(initialStatus = "active") {
     useRef: () => ({ current: null }),
     useEffect: (callback: () => void) => { if (collectEffects) effects.push(callback); },
   };
-  const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
+  const jsx = (type: string | ((props: Record<string, unknown>) => any), props: Record<string, unknown>) => typeof type === "function" ? type(props) : ({ type, props });
   const component: { default?: (props: Record<string, unknown>) => ElementNode } = {};
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      if (name === "server-only") return {};
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;

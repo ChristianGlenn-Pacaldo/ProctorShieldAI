@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,10 +10,10 @@ import * as scanner from "../src/lib/quiz-scanner.ts";
 
 type Node = { type: string; props: Record<string, any> };
 const paths = {
-  page: "src/app/dashboard/teacher/quizzes/content.tsx",
+  page: "src/features/quizzes/components/teacher-quizzes.tsx",
   editor: "src/components/teacher/proctorshield-quiz-editor.tsx",
 };
-const compiled = Object.fromEntries(Object.entries(paths).map(([key, relative]) => [key, ts.transpileModule(fs.readFileSync(path.resolve(relative), "utf8"), {
+const compiled = Object.fromEntries(Object.entries(paths).map(([key, relative]) => [key, ts.transpileModule(refactorTestSource(path.resolve(relative)), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
 }).outputText]));
 const oldQuestions = [{ questionText: "Old saved question", questionType: "multiple_choice", points: 1, choices: [
@@ -96,12 +97,14 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
   const load = (key: "page" | "editor") => {
     const runner = hookRunner();
     const exports: { default?: (props: any) => Node } = {};
-    const jsx = (type: string, props: Record<string, any>) => {
+    const jsx = (type: string | ((props: Record<string, any>) => any), props: Record<string, any>) => {
+    if (typeof type === "function") return type(props);
       if (type === "video" && props.ref) props.ref.current = { readyState: 2, videoWidth: 1280, videoHeight: 720 };
       return { type, props };
     };
     vm.runInNewContext(compiled[key], {
       exports, require(name: string) {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
         // Presentation imports do not replace the actual page/editor logic.
         if (name === "@/styles/assessment-theme.css") return {};

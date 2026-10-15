@@ -30,7 +30,7 @@ const battleRoute = source("src/app/api/arena/battle-action/route.ts");
 const arenaRealtime = source("src/lib/arena-realtime.ts");
 const arenaContent = source("src/app/arena/[id]/content.tsx");
 const resultsRoute = source("src/app/api/dashboard/student/results/route.ts");
-const teacherQuizzes = source("src/app/dashboard/teacher/quizzes/content.tsx");
+const teacherQuizzes = source("src/features/quizzes/components/teacher-quizzes.tsx");
 
 test("deleted, archived, and unavailable quiz states are authoritatively closed", () => {
   assert.equal(isQuizAvailable("draft"), true);

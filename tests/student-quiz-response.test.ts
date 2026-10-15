@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +29,7 @@ type StudentQuizResponse = {
 
 test("Student quiz list serializes only the teacher name", async () => {
   const routePath = path.resolve(process.cwd(), "src/app/api/quizzes/route.ts");
-  const compiled = ts.transpileModule(fs.readFileSync(routePath, "utf8"), {
+  const compiled = ts.transpileModule(refactorTestSource(routePath), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   const teacher = {
@@ -88,7 +89,7 @@ test("Student quiz list serializes only the teacher name", async () => {
     },
     "@/lib/prisma": { __esModule: true, default: prisma },
     "@/lib/auth": { getSession: async () => ({ role: "student", userId: "student-1" }) },
-    "node:crypto": {},
+    "node:crypto": { randomUUID: () => "2d43b0b9-a784-44e7-9e14-ab985c21dac0" },
     "@/lib/teacher-entitlements": {},
     "@/lib/subscription-rules": {},
     "@/lib/quiz-mode": {},

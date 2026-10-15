@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -73,9 +74,10 @@ function creationFixture(subscribed: boolean) {
     $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction),
   };
   const exports: { POST?: (request: unknown) => Promise<{ status: number; body: Record<string, unknown> }> } = {};
-  vm.runInNewContext(transpile(fs.readFileSync(creationPath, "utf8")), {
+  vm.runInNewContext(transpile(refactorTestSource(creationPath)), {
     exports,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { after: () => {}, NextResponse: { json: responseJson } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
@@ -105,6 +107,7 @@ test("successful Gemini generation issues a teacher-bound receipt for returned q
   vm.runInNewContext(transpile(fs.readFileSync(generationPath, "utf8")), {
     exports,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { NextResponse: { json: responseJson } };
       if (name === "@google/genai") return { GoogleGenAI: class {

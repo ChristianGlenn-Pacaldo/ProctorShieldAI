@@ -10,7 +10,8 @@ test.beforeEach(async ({ context, baseURL }) => {
     browserId: "11111111-1111-4111-8111-111111111111", authGeneration: "22222222-2222-4222-8222-222222222222",
   }, secret, { algorithm: "HS256", audience: "proctorshield:user", expiresIn: "10m" });
   // Local proxy admission fixture only. No persisted account or live login.
-  await context.addCookies([{ name: "ps_session_user", value, url: baseURL, httpOnly: true, sameSite: "Lax" }]);
+  await context.addCookies([{ name: "ps_session_user", value, url: baseURL, httpOnly: true, sameSite: "Lax" }, {name:"ps_browser_auth",value:"11111111-1111-4111-8111-111111111111",url:baseURL,httpOnly:true,sameSite:"Lax"}]);
+  await context.route("**/api/auth/session?*",route=>route.fulfill({json:{authenticated:true,user:{userId:"synthetic-student",role:"student",fullName:"Synthetic Student"}}}));
   // Keep offline visual tests deterministic. Verify the approved system-font
   // fallback; Google Fonts availability is a separate live-provider check.
   await context.route("https://fonts.googleapis.com/**", route => route.fulfill({ contentType: "text/css", body: "/* Offline font-provider fixture: system fallback. */" }));
@@ -27,7 +28,7 @@ for (const theme of ["light", "dark"] as const) {
     const canvas = theme === "light" ? "rgb(243, 248, 241)" : "rgb(1, 38, 32)";
 
     for (const path of ["/join", "/admin/login", "/public-entry-test-missing"]) {
-      const response = await page.goto(path);
+      const response = await page.goto(path, { waitUntil: "domcontentloaded" });
       expect(response?.status()).toBe(path === "/join" ? 200 : 404);
       const title = path === "/join" ? "Enter Quiz Code" : "This page could not be found.";
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
@@ -40,7 +41,10 @@ for (const theme of ["light", "dark"] as const) {
         expect(await page.getByRole("main").locator("..").evaluate(el => getComputedStyle(el).backgroundColor)).toBe(canvas);
       } else {
         await expect(page.getByRole("link", { name: "Back to Home" })).toHaveAttribute("href", "/");
-        await expect(page.getByRole("main").locator('img[src*="proctorshield-404-robot"]')).toBeVisible();
+        const artwork = page.getByRole("main").locator('img[src*="proctorshield-404-robot"]');
+        await expect(artwork).toBeVisible();
+        await expect(artwork).toHaveJSProperty("complete", true);
+        expect(await artwork.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
       if (testInfo.project.name === "mobile-chromium") {
@@ -78,19 +82,10 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("synthetic join retains authoritative Arena routing and JSON request", async ({ page }) => {
-  await page.route("**/api/quizzes", route => route.fulfill({ json: { quizzes: [] } }));
-  const quiz = { id: 901, title: "Synthetic Arena", teacher: "Synthetic Instructor", isArena: true, quizMode: "arena", quizStatus: "active" };
-  await page.route("**/api/quizzes/join?*", route => route.fulfill({ json: { quiz, join: { eligible: true, state: "joinable" }, destination: "/arena/901" } }));
-  await page.route("**/api/quizzes/join", async route => {
-    expect(route.request().method()).toBe("POST");
-    expect(route.request().postDataJSON()).toEqual({ accessCode: "PS-901" });
-    await route.fulfill({ json: { quiz, destination: "/arena/901" } });
-  });
-  await page.route("**/arena/901", route => route.fulfill({ contentType: "text/html", body: "<h1>Synthetic destination</h1>" }));
-  await page.goto("/join");
-  await page.getByRole("textbox", { name: "Enter Quiz Code", exact: true }).fill("ps-901");
-  await expect(page.getByRole("heading", { name: "Enter Arena Code" })).toBeVisible();
-  await page.getByRole("button", { name: "Join Arena", exact: true }).click();
-  await expect(page).toHaveURL(/\/arena\/901$/);
+test("defense build denies Arena pages and API requests", async ({ request }) => {
+  const api=await request.get("/api/arena/901");
+  expect(api.status()).toBe(403);
+  await expect(api.json()).resolves.toMatchObject({code:"FEATURE_DISABLED"});
+  const page=await request.get("/arena/901");
+  expect([403,404]).toContain(page.status());
 });

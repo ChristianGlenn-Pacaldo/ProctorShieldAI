@@ -1,0 +1,24 @@
+# Local refactor and MVP review backlog
+
+Scope: `codex/debuggable-architecture`, based on `d61e2ec46d9bc97bd5a458e3f5f952e1bc34aec3`. This is an engineering review, not a release approval or a claim that the entire application has been refactored.
+
+| Item | State | Evidence or next action |
+| --- | --- | --- |
+| Teacher quiz library separation | Implemented | Existing components, Studio, subscription rules and authorization are reused. UI presentation, pure filtering, server queries and minimized error references have distinct boundaries. |
+| Disabled Arena late-join request leakage | Fixed locally | Pending approvals now use the same mode filter as the quiz list and retakes. Executable route tests check ownership and mode predicates. |
+| Unused Manage detail request | Removed locally | Removed unused state and an unconditional detail fetch. Manage uses its existing summary; Studio retains its on-demand detail request. Browser regression covers both behaviors. |
+| Shared request types | Improved locally | Late-join and retake panels share `PendingQuizRequest`; no duplicate model or generic repository was added. Legacy AI/editor payload typing remains incremental work. |
+| Stale sidebar and public-entry tests | Updated locally | Disabled Arena navigation must be absent. Public-entry tests explicitly await content and image readiness; privacy checks precede device checks. Initial failures remain in review logs. |
+| Database-backed core MVP checks | Executed locally | Combined desktop/mobile run: 31 passed, 1 desktop quiz-flow failure under resource pressure. The same desktop flow passed in an isolated rerun; all 32 cases have a passing execution. Actual password sessions, persisted quizzes/answers/results, ownership, late entry, Admin suspension and synthetic evidence authorization were exercised. Existing migrations were applied only to the new owned PostgreSQL fixture. Railway and existing databases are excluded. See `release-review/mvp-database-2026-10-15/`. |
+| Database E2E auth helper | Corrected locally | Shared helpers now perform actual password login and verify the current server session. Loopback database/account guards exclude existing accounts; no JWT forging or weakened application session policy. Historical Arena E2E fixtures remain outside the defense run. |
+| Live monitor notification failure | Fixed locally | Valid monitor registration responds before advisory Pusher delivery, with static failure logs. Enrollment ownership/start checks stay server enforced. Focused regressions cover provider failure and rejected registration. |
+| Logout signature-test timestamp race | Fixed in test | Verify the transmitted signature against its own timestamp instead of signing again across a second boundary. Application logout policy is unchanged. |
+| Independent database transaction checks | Passed locally | 95 checks passed with independent PostgreSQL connections in separately owned synthetic databases. Arena is enabled only inside retained design tests; the compiled academic app stays disabled. No payment provider is contacted. |
+| Cold AI model delivery and low-memory load | Open acceptance gate | Live multi-shard model proxy delivery and real inference competed with quiz requests on the 8 GB local host; timeouts and fail-closed authentication errors were observed. Workflow tests reuse actual cached model weights. The isolated desktop flow passed; cold cloud delivery, shared-host resource pressure and classroom load remain unverified. |
+| Legacy provider-error logging | Open | Other endpoints can log raw provider error objects, including signed request URLs. This fixture uses public synthetic credentials only. Extend the existing minimized logging pattern in a separate review; no operational secrets were retrieved or rotated here. |
+| Physical device and live-provider verification | Open | Real camera/microphone, permission recovery, inference accuracy, Google, mail, payment and realtime providers require dedicated checks. Synthetic browser checks do not establish these results. |
+| Remaining architecture increments | Open | Extract scanner/AI/billing presentation next; then review join/results services. Submission and monitoring lifecycle changes require transaction/recovery/device coverage first. Preserve one Next.js deployment and existing contracts. |
+| Admin evidence approvals | Deferred by owner | No approval system, evidence-permission change or new compliance claim is part of this branch. |
+| Capstone documentation and deployment | Paused | Preserve manuscripts, records, credentials, main and Railway. Owner reviews this branch before any push or release. |
+
+Earlier results are preserved in `release-review/mvp-2026-10-15/`; database continuation results belong in `release-review/mvp-database-2026-10-15/`. A passing dependency audit reports known advisories at the time of the check; it is not a general security guarantee.

@@ -22,7 +22,7 @@ const retakeRedirectSrc = fs.readFileSync(
   "utf-8"
 );
 const teacherQuizzesSrc = fs.readFileSync(
-  path.resolve(process.cwd(), "src/app/dashboard/teacher/quizzes/content.tsx"),
+  path.resolve(process.cwd(), "src/features/quizzes/components/teacher-quizzes.tsx"),
   "utf-8"
 );
 const teacherArenaHostSrc = fs.readFileSync(

@@ -1,3 +1,5 @@
+import { getTeacherQuizLibrary } from "@/features/quizzes/server/teacher-quiz-library";
+import { createRequestContext, logRequestFailure } from "@/server/observability/request-context";
 import { isPowerArenaEnabled, isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
@@ -21,6 +23,7 @@ function newCode(prefix: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const requestContext = createRequestContext("quizzes.list");
   try {
     // A role-bound consumer must not receive a replacement account's list.
     // Preserve the existing unscoped Teacher/Admin callers.
@@ -33,76 +36,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (session.role === "teacher") {
-      // Teachers get the quizzes they created
-      const quizzes = await prisma.quiz.findMany({
-        where: {
-          teacherId: session.userId,
-          ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}),
-          quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
-        },
-        include: {
-          subject: true,
-          _count: { select: { studentQuizzes: true } },
-        },
-        orderBy: { createdAt: "desc" },
+      const library = await getTeacherQuizLibrary(session.userId, {
+        prisma, getTeacherEntitlements, isPowerArenaEnabled, isDisabledArenaResource,
       });
-
-      // Fetch pending retakes for this teacher
-      const pendingRetakes = await prisma.studentQuiz.findMany({
-        where: {
-          quizStatus: "pending_retake",
-          quiz: { teacherId: session.userId, ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}) },
-        },
-        include: {
-          student: { select: { fullName: true } },
-          quiz: { select: { title: true } },
-        },
-      });
-
-      // Fetch pending late-join approvals for this teacher
-      const pendingApprovals = await prisma.studentQuiz.findMany({
-        where: {
-          quizStatus: "pending_approval",
-          quiz: { teacherId: session.userId },
-        },
-        include: {
-          student: { select: { fullName: true } },
-          quiz: { select: { title: true } },
-        },
-      });
-
-      const entitlements = await getTeacherEntitlements(session.userId);
-      const distinctParticipants = await prisma.studentQuiz.findMany({
-        where: { quizId: { in: quizzes.map((quiz) => quiz.id) } },
-        select: { quizId: true, studentId: true },
-        distinct: ["quizId", "studentId"],
-      });
-      const participantCounts = distinctParticipants.reduce((counts, enrollment) => {
-        counts.set(enrollment.quizId, (counts.get(enrollment.quizId) ?? 0) + 1);
-        return counts;
-      }, new Map<number, number>());
-
-      return NextResponse.json({
-        success: true,
-        quizzes: quizzes.filter(row => !isDisabledArenaResource(row)).map((quiz) => ({
-          ...quiz,
-          participantCount: participantCounts.get(quiz.id) ?? 0,
-          participantLimit: entitlements.studentLimitPerQuiz,
-        })),
-        entitlements,
-        pendingRetakes: pendingRetakes.map((pr) => ({
-          studentQuizId: pr.id,
-          studentName: pr.student.fullName,
-          quizTitle: pr.quiz.title,
-          quizId: pr.quizId,
-        })),
-        pendingApprovals: pendingApprovals.map((pa) => ({
-          studentQuizId: pa.id,
-          studentName: pa.student.fullName,
-          quizTitle: pa.quiz.title,
-          quizId: pa.quizId,
-        })),
-      }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json(library, { headers: { ...NO_STORE_HEADERS, ...requestContext.headers } });
     } else if (session.role === "student") {
       // Students get the quizzes they have joined
       const studentQuizzes = await prisma.studentQuiz.findMany({
@@ -136,9 +73,10 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "Invalid role" }, { status: 403 });
-  } catch (error) {
-    console.error("Fetch quizzes error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch {
+    logRequestFailure(requestContext, "QUIZ_LIST_FAILED");
+    return NextResponse.json({ error: "Internal server error", code: "QUIZ_LIST_FAILED", requestId: requestContext.requestId },
+      { status: 500, headers: { ...NO_STORE_HEADERS, ...requestContext.headers } });
   }
 }
 

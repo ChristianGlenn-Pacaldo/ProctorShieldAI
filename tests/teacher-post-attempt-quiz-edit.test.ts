@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import * as defenseFeature from "../src/lib/power-arena-feature.ts";
 import * as passwordUpdate from "../src/lib/password-update.ts";
 import * as questionOrder from "../src/lib/quiz-question-order.ts";
@@ -15,7 +16,7 @@ const routePath = path.resolve(process.cwd(), "src/app/api/quizzes/[id]/route.ts
 const creationPath = path.resolve(process.cwd(), "src/app/api/quizzes/route.ts");
 const editorPath = path.resolve(process.cwd(), "src/components/teacher/proctorshield-quiz-editor.tsx");
 const routeSource = fs.readFileSync(routePath, "utf8");
-const creationSource = fs.readFileSync(creationPath, "utf8");
+const creationSource = refactorTestSource(creationPath);
 const editorSource = fs.readFileSync(editorPath, "utf8");
 
 function transpile(source: string) {
@@ -69,6 +70,7 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
   vm.runInNewContext(transpile(routeSource), {
     exports,
     require: (name: string) => {
+      if (name === "server-only") return {};
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;
@@ -261,6 +263,7 @@ function creationFixture() {
   vm.runInNewContext(transpile(creationSource), {
     exports,
     require: (name: string) => {
+      if (name === "server-only") return {};
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;

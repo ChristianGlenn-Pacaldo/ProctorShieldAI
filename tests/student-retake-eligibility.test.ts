@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
@@ -8,7 +9,7 @@ import ts from "typescript";
 import * as eligibility from "../src/lib/retake-eligibility.ts";
 
 function compile(file: string) {
-  return ts.transpileModule(fs.readFileSync(file, "utf8"), {
+  return ts.transpileModule(refactorTestSource(file), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
 }
@@ -42,6 +43,8 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
   vm.runInNewContext(compile(file), {
     exports: route,
     require: (name: string) => {
+      if (name === "server-only") return {};
+      if (name === "node:crypto") return { randomUUID: () => "2d43b0b9-a784-44e7-9e14-ab985c21dac0" };
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (name === "next/server") return { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } };
@@ -97,6 +100,7 @@ function modal(initial: Record<string, unknown>, respond: () => Promise<Response
   vm.runInNewContext(compile("src/components/student/ResultModal.tsx"), {
     exports: component,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "react") return { useState: (initialValue: unknown) => {
         const slot = index++;

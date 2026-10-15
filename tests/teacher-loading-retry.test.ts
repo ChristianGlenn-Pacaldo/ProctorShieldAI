@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
@@ -32,7 +33,7 @@ function fixture(relativePath: string, replies: Reply[]) {
     return { ...page, requests: page.requestsCount, ready: page.settle, refetch: () => page.click("Refresh"), emit: async () => {} };
   }
   const absolutePath = path.resolve(process.cwd(), relativePath);
-  const code = ts.transpileModule(fs.readFileSync(absolutePath, "utf8"), {
+  const code = ts.transpileModule(refactorTestSource(absolutePath), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -73,13 +74,14 @@ function fixture(relativePath: string, replies: Reply[]) {
     },
   };
   const lifecycle = loadUserLifecycleModule(react);
-  const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
+  const jsx = (type: string | ((props: Record<string, unknown>) => any), props: Record<string, unknown>) => typeof type === "function" ? type(props) : ({ type, props });
   const component: { default?: (props: Record<string, unknown>) => ElementNode } = {};
   const location = { href: "http://localhost/dashboard/teacher", search: "" };
   const timer = (callback: () => void) => { intervals.push(callback); return intervals.length; };
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/quiz-scanner") return quizScanner;
@@ -178,7 +180,7 @@ const evidence = { id: "e1", name: "Regression Student", quizTitle: "Regression 
 const report = reportCard();
 const cases = [
   { name: "Dashboard", path: "src/app/dashboard/teacher/content.tsx", empty: dashboardBody(0), populated: dashboardBody(7), visible: "Total Quizzes", emptyText: "Total Quizzes", error: "Could not load the Teacher Dashboard" },
-  { name: "My Quizzes", path: "src/app/dashboard/teacher/quizzes/content.tsx", empty: { quizzes: [], pendingRetakes: [], pendingApprovals: [] }, populated: { quizzes: [quiz], pendingRetakes: [], pendingApprovals: [] }, visible: "Regression Quiz", emptyText: "No quizzes found", error: "Could not load My Quizzes" },
+  { name: "My Quizzes", path: "src/features/quizzes/components/teacher-quizzes.tsx", empty: { quizzes: [], pendingRetakes: [], pendingApprovals: [] }, populated: { quizzes: [quiz], pendingRetakes: [], pendingApprovals: [] }, visible: "Regression Quiz", emptyText: "No quizzes found", error: "Could not load My Quizzes" },
   { name: "Evidence", path: "src/app/dashboard/teacher/evidence/content.tsx", empty: { success: true, evidence: [], total: 0, page: 1, pageSize: 25 }, populated: { success: true, evidence: [evidence], total: 1, page: 1, pageSize: 25 }, visible: "Regression Student", emptyText: "No proctoring violations recorded", error: "Could not load Evidence Logs" },
   { name: "Reports", path: "src/app/dashboard/teacher/reports/content.tsx", empty: reportPayload(), populated: reportPayload({ reports: [report], totalReports: 1 }), visible: "Clean", emptyText: "No matching monitored quiz reports", error: "Could not load AI Reports" },
   { name: "Billing", path: "src/app/dashboard/teacher/billing/content.tsx", empty: { isSubscribed: false, subscription: null, payments: [], paymentMode: "test" }, populated: { isSubscribed: true, subscription: { planName: "Premium Tier" }, payments: [], paymentMode: "test" }, visible: "Premium Tier", emptyText: "Free Tier", error: "Could not load Billing" },

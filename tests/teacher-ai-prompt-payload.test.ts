@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
@@ -9,9 +10,9 @@ import ts from "typescript";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 
-const componentPath = path.resolve(process.cwd(), "src/app/dashboard/teacher/quizzes/content.tsx");
+const componentPath = path.resolve(process.cwd(), "src/features/quizzes/components/teacher-quizzes.tsx");
 const apiSource = fs.readFileSync(path.resolve(process.cwd(), "src/app/api/ai/create/route.ts"), "utf8");
-const compiled = ts.transpileModule(fs.readFileSync(componentPath, "utf8"), {
+const compiled = ts.transpileModule(refactorTestSource(componentPath), {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
     target: ts.ScriptTarget.ES2022,
@@ -55,7 +56,8 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
     useEffect: (callback: () => void) => { if (collectEffects) effects.push(callback); },
     useRef: (initial: unknown) => ({ current: initial }),
   };
-  const jsx = (type: string, props: Record<string, unknown>) => {
+  const jsx = (type: string | ((props: Record<string, unknown>) => any), props: Record<string, unknown>) => {
+    if (typeof type === "function") return type(props);
     if (type === "video" && props.ref) (props.ref as { current: unknown }).current = { readyState: 2, videoWidth: 1280, videoHeight: 720 };
     return { type, props };
   };
@@ -63,6 +65,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/quiz-scanner") return { ...quizScanner, prepareQuizScan: async () => ({ name: "Fixture image", dataUrl: "data:image/jpeg;base64,QUJD" }), captureQuizScan: () => ({ name: "Camera scan", dataUrl: "data:image/jpeg;base64,QUJD" }) };
       if (name === "react") return react;

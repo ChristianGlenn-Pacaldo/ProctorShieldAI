@@ -23,6 +23,16 @@ const eslintConfig = defineConfig([
       "react/no-unescaped-entities": "warn",
     },
   },
+  // New feature boundaries are enforced while legacy modules move incrementally.
+  {
+    files: ["src/features/**/components/**/*.{ts,tsx}", "src/features/**/domain/**/*.ts", "src/shared/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: ["@/lib/prisma", "@/lib/auth", "@/lib/evidence-storage"],
+        patterns: ["@/server/**", "@/features/**/server/**", "../server/**", "../../server/**"],
+      }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

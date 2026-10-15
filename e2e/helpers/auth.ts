@@ -1,72 +1,47 @@
-import "dotenv/config";
 import type { BrowserContext } from "@playwright/test";
-import jwt from "jsonwebtoken";
-import { Pool } from "pg";
+import { randomInt } from "node:crypto";
 
-type Role = "student" | "teacher";
+export type TestRole = "student" | "teacher" | "admin";
 
-interface AuthenticatedUser {
-  id: string;
-  email: string;
-  fullName: string;
-  sessionVersion: number;
+export function syntheticAccount(role: TestRole, email?: string) {
+  const baseURL = process.env.E2E_BASE_URL;
+  const database = process.env.E2E_DATABASE_URL;
+  const password = process.env.E2E_ACCOUNT_PASSWORD;
+  if (process.env.RUN_AUTHENTICATED_E2E !== "true" || !baseURL || !database || !password)
+    throw new Error("Explicit disposable E2E configuration and synthetic account password are required");
+  const url = new URL(baseURL), db = new URL(database);
+  if (![url.hostname, db.hostname].every(host => ["127.0.0.1", "localhost"].includes(host))
+    || !/^\/proctorshield_mvp_[a-f0-9]{8}$/.test(db.pathname))
+    throw new Error("Database MVP authentication is restricted to the owned loopback fixture");
+  const address = email || process.env[`E2E_${role.toUpperCase()}_EMAIL`] || `${role}@mvp.example.test`;
+  if (!/^[a-z0-9-]{1,64}@mvp\.example\.test$/.test(address)) throw new Error("Use only synthetic MVP accounts");
+  return { origin: url.origin, email: address, password, role };
 }
 
-async function findExistingUser(role: Role): Promise<AuthenticatedUser | null> {
-  const configuredUrl = process.env.E2E_DATABASE_URL;
-  if (!configuredUrl) {
-    throw new Error("E2E_DATABASE_URL is required for authenticated E2E tests; DATABASE_URL fallback is intentionally disabled");
+// Real password authentication sets all current HttpOnly/browser-generation
+// cookies. Never forge JWTs or weaken server session validation for E2E.
+export async function authenticateAsExistingRole(context: BrowserContext, role: TestRole, email?: string) {
+  const account = syntheticAccount(role, email);
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin === account.origin) return route.continue();
+    if (url.hostname === "fonts.googleapis.com") return route.fulfill({ contentType: "text/css", body: "/* isolated provider */" });
+    return route.abort();
+  });
+  const headers = { Origin: account.origin, "X-Forwarded-For": `127.20.${randomInt(1, 254)}.${randomInt(1, 254)}` };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await context.request.post(account.origin + "/api/auth/login", { headers, data: account });
+    const body = await response.json();
+    if (response.status() === 409 && body.code === "BROWSER_AUTH_INITIALIZED") continue;
+    if (response.status() === 503 && attempt < 4) { await new Promise(resolve => setTimeout(resolve, 300)); continue; }
+    if (!response.ok() || !body.success || body.user?.role !== role)
+      throw new Error(`Synthetic ${role} login failed (${response.status()}): ${body.message || body.error || "unexpected response"}`);
+    const scope = role === "admin" ? "scope=admin" : `scope=user&role=${role}`;
+    const verified = await context.request.get(account.origin + "/api/auth/session?" + scope);
+    const session = await verified.json();
+    if (!verified.ok() || !session.authenticated || session.user?.role !== role)
+      throw new Error(`Synthetic ${role} session validation failed (${verified.status()})`);
+    return session.user as { userId: string; role: TestRole; email: string; fullName: string };
   }
-
-  const databaseUrl = new URL(configuredUrl);
-  const productionUrl = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : null;
-  const normalizeNeonHost = (host: string) => host.toLowerCase().replace("-pooler.", ".");
-  if (productionUrl && normalizeNeonHost(databaseUrl.hostname) === normalizeNeonHost(productionUrl.hostname)) {
-    throw new Error("E2E_DATABASE_URL resolves to the production database endpoint; use a separate disposable Neon branch");
-  }
-  if (databaseUrl.searchParams.get("sslmode") === "require") {
-    databaseUrl.searchParams.set("sslmode", "verify-full");
-  }
-  const connectionString = databaseUrl.toString();
-
-  const pool = new Pool({ connectionString, max: 1 });
-  try {
-    const result = await pool.query<AuthenticatedUser>(
-      `SELECT u.id, u.email, u.full_name AS "fullName", u.session_version AS "sessionVersion"
-       FROM users u
-       INNER JOIN roles r ON r.id = u.role_id
-       WHERE r.role_name = $1 AND u.status = 'active'
-       ORDER BY u.created_at ASC
-       LIMIT 1`,
-      [role],
-    );
-    return result.rows[0] ?? null;
-  } finally {
-    await pool.end();
-  }
-}
-
-export async function authenticateAsExistingRole(context: BrowserContext, role: Role) {
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret || secret.length < 32) throw new Error("NEXTAUTH_SECRET must contain at least 32 characters");
-
-  const user = await findExistingUser(role);
-  if (!user) throw new Error(`No active ${role} account exists for authenticated E2E testing`);
-
-  const token = jwt.sign(
-    { userId: user.id, email: user.email, role, fullName: user.fullName, sessionVersion: user.sessionVersion, sessionClass: "user" },
-    secret,
-    { algorithm: "HS256", expiresIn: "15m", audience: "proctorshield:user" },
-  );
-
-  const baseUrl = new URL(process.env.E2E_BASE_URL ?? "http://localhost:3100");
-
-  await context.addCookies([{
-    name: "ps_session_user",
-    value: token,
-    url: baseUrl.origin,
-    httpOnly: true,
-    secure: baseUrl.protocol === "https:",
-    sameSite: "Lax",
-  }]);
+  throw new Error("Synthetic authentication initialization did not complete");
 }

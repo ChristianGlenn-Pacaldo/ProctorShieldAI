@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -29,7 +30,7 @@ function quizApi(auth: ReturnType<typeof authFixture>) {
       studentQuiz,
       quiz: { findMany: async () => { queries++; return [{ id: 44, quizStatus: "in_progress" }]; } },
     } },
-    "node:crypto": {},
+    "node:crypto": { randomUUID: () => "2d43b0b9-a784-44e7-9e14-ab985c21dac0" },
     "@/lib/backup-write-gate": { withBackupWriteGate: (handler: unknown) => handler },
     "@/lib/teacher-entitlements": { getTeacherEntitlements: async () => ({ studentLimitPerQuiz: 99 }) },
     "@/lib/subscription-rules": {},
@@ -39,10 +40,11 @@ function quizApi(auth: ReturnType<typeof authFixture>) {
     "@/lib/retake-eligibility": { withRetakeEligibility },
   };
   const route = {} as { GET: (request: Request) => Promise<Response> };
-  const compiled = ts.transpileModule(fs.readFileSync("src/app/api/quizzes/route.ts", "utf8"), {
+  const compiled = ts.transpileModule(refactorTestSource("src/app/api/quizzes/route.ts"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(compiled, { exports: route, require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
     if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
     return dependencies[name];

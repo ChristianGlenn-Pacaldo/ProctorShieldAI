@@ -71,7 +71,7 @@ for (const role of ["student", "teacher", "admin"] as const) {
         const active = await styles(page, ".dashboard-nav-active");
         const backgrounds = active.image.match(/rgb\([^)]+\)/g)!.map((value) => value.match(/[\d.]+/g)!.map(Number));
         for (const background of backgrounds) { contrast(active.color, background, 4.5, "active navigation"); contrast(active.icon!, background, 3, "active icon"); }
-        if (role === "teacher") {
+        if (role === "teacher" && process.env.POWER_ARENA_ENABLED === "true") {
           await page.locator(".dashboard-nav-badge").evaluate((element) => {
             for (const animation of element.getAnimations()) if (animation instanceof CSSAnimation && animation.animationName === "pulse") {
               animation.pause(); animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2;
@@ -81,6 +81,10 @@ for (const role of ["student", "teacher", "admin"] as const) {
           const composite = (color: RGB) => color.slice(0, 3).map((channel, index) => channel * badge.opacity + sidebar.surface2[index] * (1 - badge.opacity));
           contrast(composite(badge.color), composite(badge.background), 4.5, "Pro badge at its minimum opacity");
           const arena = await styles(page, 'nav a[href="/dashboard/teacher/playground"]'); contrast(arena.icon!, sidebar.surface2, 3, "Arena icon");
+        }
+        if (process.env.POWER_ARENA_ENABLED !== "true") {
+          assert.equal(await page.locator('nav a[href*="playground"], nav a[href*="arena"], .dashboard-nav-badge').count(), 0,
+            "disabled Arena navigation and badges stay absent");
         }
         await page.locator(normalSelector).first().evaluate((element) => element.setAttribute("aria-disabled", "true"));
         await page.locator(normalSelector).first().hover(); const disabled = await styles(page, normalSelector);

@@ -121,9 +121,9 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
           const target = "src/" + name.slice(2);
           return load(fs.existsSync(target + ".tsx") ? target + ".tsx" : target + ".ts");
         }
-        if (name.startsWith("./")) {
+        if (name.startsWith(".")) {
           const target = path.resolve(path.dirname(file), name);
-          return load(fs.existsSync(target) ? target : target + ".tsx");
+          return load(fs.existsSync(target) ? target : fs.existsSync(target + ".tsx") ? target + ".tsx" : target + ".ts");
         }
         throw new Error("Unexpected display fixture dependency: " + name);
       },

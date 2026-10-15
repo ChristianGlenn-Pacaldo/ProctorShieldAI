@@ -217,6 +217,8 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
       choices: [{ id: 11, choiceText: "True" }, { id: 12, choiceText: "False" }],
     }],
   };
+  await page.route("**/api/auth/session?*",route=>route.fulfill({json:{authenticated:true,user:{userId:"e2e-mobile-student",role:"student",fullName:"Mobile Student"}}}));
+  await page.route("**/api/quizzes/901/privacy",route=>route.fulfill({json:{retentionDays:90,institution:null,contact:null}}));
   await page.route("**/api/quizzes/901", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -250,7 +252,9 @@ test("mobile page hiding reports the exact tab-switch violation", async ({ conte
   await expect(page.getByRole("link", { name: "Back to Student Dashboard" })).toHaveAttribute("href", "/dashboard/student");
 
   await page.goto("/quiz/901");
-  await page.getByRole("button", { name: /Start Quiz/i }).click();
+  await page.getByRole("button", { name: "Continue to Device Check", exact: true }).click();
+  await page.locator("#quiz-device-check").click();
+  await page.getByRole("button", { name: "I Understand, Start Quiz", exact: true }).click();
   await expect(page.getByText("Visibility regression question")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(5_200);
   await page.evaluate(() => {

@@ -1,3 +1,4 @@
+import { refactorTestSource } from "./helpers/refactor-source.ts";
 import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
@@ -10,8 +11,8 @@ import ts from "typescript";
 type ElementNode = { type: string; props: Record<string, unknown> };
 type PendingApproval = { studentQuizId: string; studentName: string; quizTitle: string; quizId: number };
 
-const componentPath = path.resolve(process.cwd(), "src/app/dashboard/teacher/quizzes/content.tsx");
-const compiled = ts.transpileModule(fs.readFileSync(componentPath, "utf8"), {
+const componentPath = path.resolve(process.cwd(), "src/features/quizzes/components/teacher-quizzes.tsx");
+const compiled = ts.transpileModule(refactorTestSource(componentPath), {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
     target: ts.ScriptTarget.ES2022,
@@ -19,7 +20,7 @@ const compiled = ts.transpileModule(fs.readFileSync(componentPath, "utf8"), {
     esModuleInterop: true,
   },
 }).outputText;
-const quizzesRoute = fs.readFileSync(path.resolve(process.cwd(), "src/app/api/quizzes/route.ts"), "utf8");
+const quizzesRoute = fs.readFileSync("src/features/quizzes/server/teacher-quiz-library.ts", "utf8");
 const approvalRoute = fs.readFileSync(path.resolve(process.cwd(), "src/app/api/quizzes/approve/route.ts"), "utf8");
 
 function textOf(value: unknown): string {
@@ -53,11 +54,12 @@ function fixture(server: { pending: PendingApproval[] }, options: { failAction?:
     useEffect: (callback: () => void) => { if (collectEffects) effects.push(callback); },
     useRef: () => ({ current: null }),
   };
-  const jsx = (type: string, props: Record<string, unknown>) => ({ type, props });
+  const jsx = (type: string | ((props: Record<string, unknown>) => any), props: Record<string, unknown>) => typeof type === "function" ? type(props) : ({ type, props });
   const component: { default?: (props: Record<string, unknown>) => ElementNode } = {};
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      if (name === "server-only") return {};
       const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/quiz-scanner") return quizScanner;
       if (name === "react") return react;
@@ -111,7 +113,7 @@ const pending = (): PendingApproval => ({
 });
 
 test("Teacher quiz API returns persisted, owner-scoped pending approvals", () => {
-  assert.match(quizzesRoute, /quizStatus:\s*"pending_approval",\s*quiz:\s*\{ teacherId: session\.userId \}/);
+  assert.match(quizzesRoute, /quizStatus:\s*"pending_approval",\s*quiz:\s*\{ teacherId, \.\.\.enabledQuizModes \}/);
   assert.match(quizzesRoute, /pendingApprovals:\s*pendingApprovals\.map/);
   assert.match(approvalRoute, /studentQuiz\.quiz\.teacherId !== session\.userId/);
 });
