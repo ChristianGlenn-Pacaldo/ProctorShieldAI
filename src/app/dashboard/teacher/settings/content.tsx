@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { CheckCircle2, XCircle, Eye, EyeOff, Lock } from "lucide-react";
+import { CheckCircle2, XCircle, Lock } from "lucide-react";
 
+import { PasswordVisibilityButton } from "@/components/password-visibility-button";
 import { updateAccountPassword, type PasswordFeedback } from "@/lib/password-update";
 
 export default function SettingsContent() {
@@ -17,6 +18,7 @@ export default function SettingsContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const passwordBusyRef = useRef(false);
@@ -82,7 +84,7 @@ export default function SettingsContent() {
       setPasswordMessage(feedback);
       if (feedback.type === "success") {
         setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-        setShowCurrent(false); setShowNew(false);
+        setShowCurrent(false); setShowNew(false); setShowConfirm(false);
       }
     } finally {
       passwordBusyRef.current = false;
@@ -113,7 +115,6 @@ export default function SettingsContent() {
                 {initials}
               </div>
               <h3 className="text-base font-bold text-[var(--ink)]">{user?.fullName || "—"}</h3>
-              <p className="text-xs text-[var(--muted)] mt-0.5">{user?.email}</p>
             </div>
             <div className="space-y-3">
               <div>
@@ -126,13 +127,9 @@ export default function SettingsContent() {
                 />
               </div>
               <div>
-                <label htmlFor="teacher-email" className="text-xs font-semibold text-[var(--muted)] mb-1.5 block">Email Address</label>
-                <input
-                  id="teacher-email"
-                  value={user?.email || ""}
-                  disabled
-                  className="ps-teacher-glass-dense w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] cursor-not-allowed"
-                />
+                <p id="teacher-email-label" className="text-xs font-semibold text-[var(--muted)] mb-1.5">Sign-in email</p>
+                <p id="teacher-email" aria-labelledby="teacher-email-label" className="break-all text-sm text-[var(--ink)]">{user?.email || "—"}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">Email changes are not available here.</p>
               </div>
               <button
                 disabled={isSaving}
@@ -166,17 +163,9 @@ export default function SettingsContent() {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Enter current password"
-                  className="ps-teacher-glass-dense w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                  className="ps-teacher-glass-dense w-full pl-9 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(!showCurrent)}
-                  aria-controls="teacher-current-password"
-                  aria-label={showCurrent ? "Hide current password" : "Show current password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]"
-                >
-                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <PasswordVisibilityButton inputId="teacher-current-password" visible={showCurrent} onToggle={() => setShowCurrent(!showCurrent)} label="current password" disabled={isChangingPassword} />
               </div>
             </div>
             {/* New Password */}
@@ -194,17 +183,9 @@ export default function SettingsContent() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="New password"
                   aria-describedby="teacher-new-password-help"
-                  className="ps-teacher-glass-dense w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
+                  className="ps-teacher-glass-dense w-full pl-9 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] focus:outline-none focus:border-blue-500 transition-colors"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(!showNew)}
-                  aria-controls="teacher-new-password"
-                  aria-label={showNew ? "Hide new password" : "Show new password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted2)] hover:text-[var(--ink)]"
-                >
-                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <PasswordVisibilityButton inputId="teacher-new-password" visible={showNew} onToggle={() => setShowNew(!showNew)} label="new password" disabled={isChangingPassword} />
               </div>
             </div>
             <p id="teacher-new-password-help" className="text-xs text-[var(--muted)]">At least 10 characters with letters and numbers. Maximum 128 characters.</p>
@@ -214,17 +195,21 @@ export default function SettingsContent() {
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted2)]" />
                 <input
-                  type="password"
+                  type={showConfirm ? "text" : "password"}
                   id="teacher-confirm-password"
+                  autoComplete="new-password"
+                  maxLength={128}
+                  disabled={isChangingPassword}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password"
-                  className={`ps-teacher-glass-dense w-full pl-9 pr-4 py-2.5 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
+                  className={`ps-teacher-glass-dense w-full pl-9 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border text-sm text-[var(--ink)] focus:outline-none transition-colors ${
                     confirmPassword && confirmPassword !== newPassword
                       ? "border-rose-500 focus:border-rose-500"
                       : "border-[var(--border)] focus:border-blue-500"
                   }`}
                 />
+                <PasswordVisibilityButton inputId="teacher-confirm-password" visible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} label="confirm password" disabled={isChangingPassword} />
               </div>
               {confirmPassword && confirmPassword !== newPassword && (
                 <p className="text-xs text-rose-500 mt-1">Passwords do not match.</p>

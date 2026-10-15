@@ -1,3 +1,4 @@
+import { passwordVisibilityModule } from "./helpers/password-visibility-fixture.ts";
 import * as defenseFeature from "../src/lib/power-arena-feature.ts";
 import * as passwordUpdate from "../src/lib/password-update.ts";
 import assert from "node:assert/strict";
@@ -30,13 +31,14 @@ function settingsFixture() {
     useRef(initial: unknown) { const slot = index++; if (!(slot in states)) states[slot] = { current: initial }; return states[slot]; },
     useEffect(effect: () => void) { index++; if (collectEffects) effects.push(effect); },
   };
-  const jsx = (type: unknown, props: Node["props"]) => ({ type, props });
+  const jsx = (type: unknown, props: Node["props"]) => typeof type === "function" ? type(props) : ({ type, props });
   const exports: { default?: () => Node } = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve("src/app/dashboard/student/settings/content.tsx"), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, {
     exports, console, setTimeout() {},
     require(name: string) {
+      if (name === "@/components/password-visibility-button") return passwordVisibilityModule;
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;
@@ -66,14 +68,15 @@ test("Settings keeps theme-aware surfaces, associated input labels and password 
   assert.ok(hero);
   assert.ok(String(hero.props.className).includes("ps-student-hero"));
   assert.ok(String(hero.props.className).includes("text-[var(--ink)]"));
-  for (const id of ["student-full-name", "student-email", "student-current-password", "student-new-password", "student-confirm-password"]) {
+  for (const id of ["student-full-name", "student-current-password", "student-new-password", "student-confirm-password"]) {
     const input = find(tree, node => node.type === "input" && node.props.id === id)!;
     assert.ok(input, id);
     assert.ok(find(tree, node => node.type === "label" && node.props.htmlFor === id));
     assert.ok(String(input.props.className).includes("bg-[var(--surface2)]"));
     assert.ok(String(input.props.className).includes("border-[var(--border)]"));
   }
-  assert.equal(find(tree, node => node.props.id === "student-email")!.props.disabled, true);
+  assert.equal(find(tree, node => node.props.id === "student-email")!.type, "p");
+  assert.equal(find(tree, node => node.type === "input" && node.props.id === "student-email"), undefined);
   const reveal = find(tree, node => node.props["aria-label"] === "Show current password")!;
   reveal.props.onClick();
   assert.equal(find(setup.render(), node => node.props.id === "student-current-password")!.props.type, "text");

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { CheckCircle2, Eye, EyeOff, Lock, Shield, XCircle } from "lucide-react";
+import { CheckCircle2, Lock, Shield, XCircle } from "lucide-react";
 
+import { PasswordVisibilityButton } from "@/components/password-visibility-button";
 import { updateAccountPassword, type PasswordFeedback } from "@/lib/password-update";
 
 export default function SettingsContent() {
@@ -15,6 +16,7 @@ export default function SettingsContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const passwordBusyRef = useRef(false);
@@ -73,7 +75,7 @@ export default function SettingsContent() {
       setPasswordMessage(feedback);
       if (feedback.type === "success") {
         setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-        setShowCurrent(false); setShowNew(false);
+        setShowCurrent(false); setShowNew(false); setShowConfirm(false);
       }
     } finally {
       passwordBusyRef.current = false;
@@ -136,15 +138,9 @@ export default function SettingsContent() {
             </div>
 
             <div>
-              <label htmlFor="student-email" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
-                Email Address
-              </label>
-              <input
-                id="student-email"
-                value={user?.email || ""}
-                disabled
-                className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--muted)] cursor-not-allowed font-medium"
-              />
+              <p id="student-email-label" className="text-xs font-semibold text-[var(--muted)] mb-1.5">Sign-in email</p>
+              <p id="student-email" aria-labelledby="student-email-label" className="break-all text-sm text-[var(--ink)]">{user?.email || "—"}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Email changes are not available here.</p>
             </div>
 
             <button
@@ -184,11 +180,9 @@ export default function SettingsContent() {
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
                   placeholder="Enter current password"
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
+                  className="w-full pl-4 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
                 />
-                <button type="button" aria-label={showCurrent ? "Hide current password" : "Show current password"} onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink3)] hover:text-[var(--ink)]">
-                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <PasswordVisibilityButton inputId="student-current-password" visible={showCurrent} onToggle={() => setShowCurrent(!showCurrent)} label="current password" disabled={isChangingPassword} />
               </div>
             </div>
 
@@ -207,11 +201,9 @@ export default function SettingsContent() {
                   onChange={(event) => setNewPassword(event.target.value)}
                   placeholder="New password"
                   aria-describedby="student-new-password-help"
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
+                  className="w-full pl-4 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
                 />
-                <button type="button" aria-label={showNew ? "Hide new password" : "Show new password"} onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink3)] hover:text-[var(--ink)]">
-                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <PasswordVisibilityButton inputId="student-new-password" visible={showNew} onToggle={() => setShowNew(!showNew)} label="new password" disabled={isChangingPassword} />
               </div>
               <p id="student-new-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 128 characters.</p>
             </div>
@@ -220,14 +212,20 @@ export default function SettingsContent() {
               <label htmlFor="student-confirm-password" className="text-xs font-bold text-[var(--muted)] mb-1.5 block uppercase tracking-wider">
                 Confirm Password
               </label>
-              <input
-                id="student-confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Re-type new password"
-                className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
-              />
+              <div className="relative">
+                <input
+                  id="student-confirm-password"
+                  autoComplete="new-password"
+                  maxLength={128}
+                  disabled={isChangingPassword}
+                  type={showConfirm ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Re-type new password"
+                  className="w-full pl-4 pr-14 py-2.5 rounded-xl bg-[var(--surface2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder:text-[var(--ink3)] focus:outline-none focus:border-[var(--ps-accent)] transition-colors"
+                />
+                <PasswordVisibilityButton inputId="student-confirm-password" visible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} label="confirm password" disabled={isChangingPassword} />
+              </div>
             </div>
 
             {passwordMessage && (

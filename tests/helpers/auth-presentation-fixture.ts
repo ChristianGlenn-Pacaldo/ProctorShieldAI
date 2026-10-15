@@ -1,3 +1,4 @@
+import { createPasswordVisibilityModule } from "./password-visibility-fixture.ts";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
@@ -30,6 +31,7 @@ export function authPresentationMarkup(relative: string, overrides: Record<strin
   vm.runInNewContext(code, { exports, URL, URLSearchParams, AbortController, process: { env: { NEXT_PUBLIC_GOOGLE_CLIENT_ID: "" } },
     fetch: () => { throw Error("Visual fixture cannot make requests"); },
     require: (name: string) => {
+      if (name === "@/components/password-visibility-button") return createPasswordVisibilityModule(jsxRuntime, icons);
       if (name === "react") return { ...React, useEffect: () => {}, useRef: (value: unknown) => ({ current: value }), useState: (initial: unknown) => {
         const key = names[index++]; return [Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : initial, () => {}];
       } };

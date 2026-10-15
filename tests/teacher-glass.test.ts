@@ -45,7 +45,9 @@ test("Quiz library and Settings keep dense tables and controls inside their glas
   const settings = teacherThemeFixture("settings").content;
   assert.match(settings, /ps-teacher-settings ps-teacher-glass-canvas/);
   assert.equal((settings.match(/ps-teacher-glass-card/g) ?? []).length, 2);
-  assert.equal((settings.match(/ps-teacher-glass-dense/g) ?? []).length, 5);
+  assert.equal((settings.match(/ps-teacher-glass-dense/g) ?? []).length, 4);
+  assert.match(settings, /<p id="teacher-email" aria-labelledby="teacher-email-label"/);
+  assert.doesNotMatch(settings, /<input[^>]*id="teacher-email"/);
   assert.match(settings, /aria-describedby="teacher-new-password-help"/);
 });
 

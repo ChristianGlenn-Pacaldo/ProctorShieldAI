@@ -63,7 +63,7 @@ test("Teacher studio portals retain quiz title, publication, settings and questi
 
 test("Teacher settings labels, password help and visibility controls stay accessible", () => {
   const html = teacherThemeFixture("settings").content;
-  for (const id of ["teacher-full-name", "teacher-email", "teacher-current-password", "teacher-new-password", "teacher-confirm-password"]) {
+  for (const id of ["teacher-full-name", "teacher-current-password", "teacher-new-password", "teacher-confirm-password"]) {
     assert.ok(html.includes('for="' + id + '"'));
     assert.ok(html.includes('id="' + id + '"'));
   }

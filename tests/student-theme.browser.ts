@@ -71,7 +71,7 @@ for (const scene of ["dashboard", "settings"] as StudentScene[]) for (const them
         assert.equal(await page.getByText("213%", { exact: true }).count(), 0);
         assert.equal(await page.getByText(/EXP Earned|Student Progression|Level Progression/i).count(), 0);
       } else {
-        for (const id of ["student-full-name", "student-email", "student-current-password", "student-new-password", "student-confirm-password"]) {
+        for (const id of ["student-full-name", "student-current-password", "student-new-password", "student-confirm-password"]) {
           assert.equal(await page.locator(`label[for="${id}"]`).count(), 1);
           await readable(page, `#${id}`, "--surface2");
         }

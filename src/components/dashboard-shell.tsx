@@ -109,7 +109,6 @@ const navConfig: Record<string, { section: string; items: NavItem[] }[]> = {
       items: [
         { label: "AI Logs", icon: <Brain className="w-4 h-4" />, href: "/dashboard/admin/logs" },
         { label: "Analytics", icon: <TrendingUp className="w-4 h-4" />, href: "/dashboard/admin/analytics" },
-        { label: "Settings", icon: <Settings className="w-4 h-4" />, href: "/dashboard/admin/settings" },
       ],
     },
   ],
@@ -616,12 +615,14 @@ export default function DashboardShell({
                     <p className="text-xs font-bold text-[var(--ink)] truncate">{userName}</p>
                     <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--dashboard-accent)]">{role} account</p>
                   </div>
-                  <Link
-                    href={`/dashboard/${role}/settings`}
-                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--ink2)] hover:bg-blue-500/10 hover:text-[var(--dashboard-accent)]"
-                  >
-                    <UserRound className="w-4 h-4" aria-hidden="true" /> Profile &amp; Settings
-                  </Link>
+                  {role !== "admin" && (
+                    <Link
+                      href={`/dashboard/${role}/settings`}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--ink2)] hover:bg-blue-500/10 hover:text-[var(--dashboard-accent)]"
+                    >
+                      <UserRound className="w-4 h-4" aria-hidden="true" /> Profile &amp; Settings
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={handleLogout}

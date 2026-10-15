@@ -1,3 +1,4 @@
+import { passwordVisibilityModule } from "./password-visibility-fixture.ts";
 import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
 import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
@@ -99,6 +100,7 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
     vm.runInNewContext(output, { exports, console, process: { env: {} }, URL, URLSearchParams, AbortController,
       window: { location: { search: "", origin: "https://example.test" } }, document: { body: {} },
       require(name: string) {
+      if (name === "@/components/password-visibility-button") return passwordVisibilityModule;
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;

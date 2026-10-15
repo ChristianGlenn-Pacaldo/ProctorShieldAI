@@ -1,5 +1,7 @@
 "use client";
 
+import { PasswordVisibilityButton } from "@/components/password-visibility-button";
+
 import { fetchAuth } from "@/lib/auth-request";
 
 import { useState, useEffect } from "react";
@@ -31,6 +33,8 @@ export default function TeacherLoginPage() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirm, setShowRegConfirm] = useState(false);
 
   // MFA State
   const [mfaState, setMfaState] = useState({ isPending: false, userId: "", email: "", role: "" });
@@ -479,27 +483,39 @@ export default function TeacherLoginPage() {
                       </div>
                       <div>
                         <label htmlFor="teacher-register-password" className="text-sm font-semibold text-[var(--ps-text-secondary)] mb-1.5 block">Password</label>
-                        <input
-                          id="teacher-register-password" type="password"
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Create a password"
-                          aria-describedby="teacher-register-password-help"
-                          className="w-full px-4 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all"
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            id="teacher-register-password" type={showRegPassword ? "text" : "password"}
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            placeholder="Create a password"
+                            aria-describedby="teacher-register-password-help"
+                            className="w-full pl-4 pr-14 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all"
+                            autoComplete="new-password"
+                            maxLength={128}
+                            disabled={isLoading}
+                            required
+                          />
+                          <PasswordVisibilityButton inputId="teacher-register-password" visible={showRegPassword} onToggle={() => setShowRegPassword(!showRegPassword)} label="password" disabled={isLoading} />
+                        </div>
                         <p id="teacher-register-password-help" className="mt-2 text-sm leading-5 text-[var(--ps-text-secondary)]">At least 10 characters with letters and numbers. Maximum 128 characters.</p>
                       </div>
                       <div>
                         <label htmlFor="teacher-register-confirm" className="text-sm font-semibold text-[var(--ps-text-secondary)] mb-1.5 block">Confirm Password</label>
-                        <input
-                          id="teacher-register-confirm" type="password"
-                          value={regConfirm}
-                          onChange={(e) => setRegConfirm(e.target.value)}
-                          placeholder="Repeat your password"
-                          className="w-full px-4 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all"
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            id="teacher-register-confirm" type={showRegConfirm ? "text" : "password"}
+                            value={regConfirm}
+                            onChange={(e) => setRegConfirm(e.target.value)}
+                            placeholder="Repeat your password"
+                            className="w-full pl-4 pr-14 py-3 rounded-xl bg-[var(--ps-canvas)] border border-[var(--ps-border)] text-base text-[var(--ps-text)] placeholder:text-[var(--ps-text-muted)] focus:outline-none focus:border-[var(--ps-focus)] focus:ring-1 focus:ring-[var(--ps-focus)] transition-all"
+                            autoComplete="new-password"
+                            maxLength={128}
+                            disabled={isLoading}
+                            required
+                          />
+                          <PasswordVisibilityButton inputId="teacher-register-confirm" visible={showRegConfirm} onToggle={() => setShowRegConfirm(!showRegConfirm)} label="confirm password" disabled={isLoading} />
+                        </div>
                       </div>
                       <button
                         type="submit"

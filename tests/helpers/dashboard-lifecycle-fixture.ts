@@ -1,3 +1,4 @@
+import { passwordVisibilityModule } from "./password-visibility-fixture.ts";
 import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
 import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
@@ -132,6 +133,7 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
+      if (name === "@/components/password-visibility-button") return passwordVisibilityModule;
       if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
       if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
       if (name === "@/lib/password-update") return passwordUpdate;

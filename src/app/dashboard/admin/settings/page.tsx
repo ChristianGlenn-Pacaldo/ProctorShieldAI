@@ -1,5 +1,5 @@
-import SettingsContent from "./content";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SettingsContent />;
+  redirect("/dashboard/admin");
 }

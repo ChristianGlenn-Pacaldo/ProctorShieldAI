@@ -49,9 +49,13 @@ for (const role of ["student", "teacher", "admin"] as const) {
     await page.click("Switch to dark theme"); assert.deepEqual(links(), before);
     assert.match(sidebar().props.className, /(?:^| )translate-x-0(?: |$)/);
     assert.equal(sidebarNodes(page.render(), (node) => node.props["aria-label"] === "Close navigation menu")[0].props["aria-expanded"], true);
-    assert.match(sidebarText(page.render()), /Profile & Settings/);
-    page.navigate(`/dashboard/${role}/settings`);
-    assert.equal(sidebarNodes(sidebar(), (node) => node.type === "a" && node.props.className.includes("dashboard-nav-active"))[0].props.href, `/dashboard/${role}/settings`);
+    if (role === "admin") {
+      assert.doesNotMatch(sidebarText(page.render()), /Profile & Settings/);
+      assert.ok(!links().includes("/dashboard/admin/settings"));
+    } else assert.match(sidebarText(page.render()), /Profile & Settings/);
+    const destination = role === "admin" ? "/dashboard/admin/analytics" : `/dashboard/${role}/settings`;
+    page.navigate(destination);
+    assert.equal(sidebarNodes(sidebar(), (node) => node.type === "a" && node.props.className.includes("dashboard-nav-active"))[0].props.href, destination);
     await page.click("Close navigation menu"); assert.match(sidebar().props.className, /-translate-x-full/); page.unmount();
   });
 }
