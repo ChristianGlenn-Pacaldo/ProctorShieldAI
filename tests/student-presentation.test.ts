@@ -65,14 +65,14 @@ test("Empty Results message is outside the scrolling table on mobile while deskt
   assert.ok(html.indexOf(status) >= 0);
   assert.ok(html.indexOf(status) < html.indexOf(region));
   assert.match(html, /<p role="status" class="[^"]*text-\[var\(--muted\)\][^"]*sm:hidden">\s*No quiz history found\./);
-  assert.match(html, /aria-label="Quiz attempt history" tabIndex="0" class="overflow-x-auto hidden sm:block"/);
+  assert.match(html, /aria-label="Quiz attempt history" tabIndex="0" class="ps-table-scroll overflow-x-auto hidden sm:block"/);
   assert.match(html, /<td colSpan="6"[^>]*>No quiz history found\.<\/td>/);
 });
 
 test("Populated Results keeps its scroll region, columns, score units, and review controls", () => {
   const html = studentThemeFixture("results");
   assert.doesNotMatch(html, /No quiz history found|role="status"|hidden sm:block/);
-  assert.match(html, /aria-label="Quiz attempt history" tabIndex="0" class="overflow-x-auto"/);
+  assert.match(html, /aria-label="Quiz attempt history" tabIndex="0" class="ps-table-scroll overflow-x-auto"/);
   for (const heading of ["Quiz", "Mode", "Record Date", "Score", "Status / Verdict", "Details"]) {
     assert.ok(html.includes(heading));
   }

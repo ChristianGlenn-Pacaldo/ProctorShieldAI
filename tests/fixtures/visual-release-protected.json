@@ -220,5 +220,10 @@
   },
   "mvpOverrides": {
     "src/app/api/live/join/route.ts": "bb1858758f1bb2169cb9f0fbc63b0197be83f69531f6411b4ab4e49571c0fcb9"
+  },
+  "preDefenseRelease": "d184ef833861d01ea0413c9d7737afac841db081",
+  "preDefenseOverrides": {
+    "src/app/api/ai/create/route.ts": "411553fe6fad2dc72d58562694f0eebba4d2036b66ad2abaa88ee1b9cd017e79",
+    "src/app/api/dashboard/admin/route.ts": "cda81f96dcb97be49ffcdbe997e3244c1f7b3ddaad7b5fb0009d779f7e5970d8"
   }
 }

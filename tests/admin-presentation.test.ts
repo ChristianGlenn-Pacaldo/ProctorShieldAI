@@ -37,7 +37,9 @@ test("Admin data tables retain keyboard-accessible local scrolling", () => {
   for (const [file, label] of [["content.tsx", "Admin platform users"], ["users/content.tsx", "Admin user management"], ["quizzes/content.tsx", "Admin quiz directory"], ["logs/content.tsx", "Admin AI event logs"]]) {
     const source = fs.readFileSync("src/app/dashboard/admin/" + file, "utf8");
     assert.ok(source.includes(`role="region" aria-label="${label}" tabIndex={0}`));
-    assert.match(source, /<table className="w-full">/);
+    const classes = source.match(/<table className="([^"]+)"/)?.[1]?.split(/\s+/) ?? [];
+    assert.ok(classes.includes("w-full"));
+    if (file !== "logs/content.tsx") assert.ok(classes.includes("ps-dashboard-table"));
   }
   assert.match(css, /\.ps-admin-table-scroll table \{min-width:45rem/);
   assert.match(css, /\.ps-admin-table-scroll \{max-width:100%/);

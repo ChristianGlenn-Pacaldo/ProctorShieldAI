@@ -38,7 +38,9 @@ test("Admin directories keep keyboard-accessible, dense locally scrolling tables
     assert.match(source, /ps-admin-glass-card/);
     assert.match(source, /ps-admin-table-scroll ps-admin-glass-dense overflow-x-auto/);
     assert.match(source, /role="region" aria-label="Admin [^"]+" tabIndex=\{0\}/);
-    assert.match(source, /<table className="w-full">/);
+    const classes = source.match(/<table className="([^"]+)"/)?.[1]?.split(/\s+/) ?? [];
+    assert.ok(classes.includes("w-full"));
+    if (file !== "logs/content.tsx") assert.ok(classes.includes("ps-dashboard-table"));
   }
 });
 
