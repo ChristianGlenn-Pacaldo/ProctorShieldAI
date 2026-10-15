@@ -12,7 +12,7 @@ import { chromium, type Browser } from "playwright";
 // and API boundaries are synthetic; no configured database/account is used.
 const root = process.cwd();
 const temp = path.join(root, ".tmp-account-controls-review");
-const evidence = path.join(root, "release-review/account-controls-2026-10-16");
+const evidence = path.resolve(process.env.UI_QA_ARTIFACT_DIR || path.join(root, "release-review/account-controls-2026-10-16"));
 let browser: Browser, server: http.Server, origin: string;
 const results: object[] = [];
 before(async () => {
@@ -48,7 +48,7 @@ before(async () => {
   server = http.createServer((req, res) => {
     const file = req.url === "/base.css" ? "base.css" : req.url === "/bundle.js" ? "bundle.js" : null;
     res.setHeader("Content-Type", file === "base.css" ? "text/css" : file ? "text/javascript" : "text/html");
-    res.end(file ? fs.readFileSync(path.join(temp, file)) : '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/base.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
+    res.end(file ? fs.readFileSync(path.join(temp, file)) : '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/base.css"></head><body class="app-motion-scope"><div id="root"></div><script src="/bundle.js"></script></body></html>');
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -103,6 +103,13 @@ for (const scene of ["student-register", "teacher-register", "student-settings",
             assert.equal(await control.getAttribute("type"), "button");
             assert.equal(await control.getAttribute("aria-pressed"), "false");
             const size = await control.boundingBox(); assert.ok(size && size.width >= 44 && size.height >= 44);
+            await control.hover();
+            const assertCentered = async () => {
+              const inputBox = await input.boundingBox(), buttonBox = await control.boundingBox();
+              assert.ok(inputBox && buttonBox);
+              assert.ok(Math.abs(inputBox.y + inputBox.height / 2 - buttonBox.y - buttonBox.height / 2) <= 1, "eye button must remain centered on hover and focus");
+            };
+            await assertCentered();
             const ink = await control.evaluate(el => getComputedStyle(el).color);
             assert.notEqual(ink, "rgba(0, 0, 0, 0)");
             await control.click();
@@ -115,6 +122,7 @@ for (const scene of ["student-register", "teacher-register", "student-settings",
             assert.equal(await input.getAttribute("type"), "password");
             assert.equal(await input.inputValue(), "SyntheticOnly123!");
             assert.equal(await control.getAttribute("aria-pressed"), "false");
+            await assertCentered();
           }
           if (!registration) {
             assert.equal(await page.locator(`input#${role}-email`).count(), 0);
