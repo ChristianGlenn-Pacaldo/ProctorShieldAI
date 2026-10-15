@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -101,6 +102,7 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
     };
     vm.runInNewContext(compiled[key], {
       exports, require(name: string) {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
         // Presentation imports do not replace the actual page/editor logic.
         if (name === "@/styles/assessment-theme.css") return {};
         if (name === "@/components/assessment-theme-control") return { __esModule: true, default: "assessment-theme-control" };
@@ -110,7 +112,7 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
         if (name === "lucide-react") return {};
         if (name === "next/link") return "link";
         if (name === "next/navigation") return { useRouter: () => ({ push() {} }) };
-        if (name === "@/lib/quiz-scanner") return { ...scanner, captureQuizScan: () => ({ name: "Public QA notes", dataUrl: "data:image/jpeg;base64,QUJD" }), startQuizScannerCamera: () => () => {} };
+        if (name === "@/lib/quiz-scanner") return { ...scanner, prepareQuizScan: async () => ({ name: "Fixture scan", dataUrl: "data:image/jpeg;base64,QUJD" }), captureQuizScan: () => ({ name: "Public QA notes", dataUrl: "data:image/jpeg;base64,QUJD" }), startQuizScannerCamera: () => () => {} };
         if (name === "@/lib/subscription-rules") return { FREE_STUDENT_LIMIT_PER_QUIZ: 5, PRO_STUDENT_LIMIT_PER_QUIZ: 100 };
         if (name === "@/components/teacher/proctorshield-quiz-editor") return { __esModule: true, default: "editor" };
         if (name === "@/components/teacher/proctorshield-create-hub") return { __esModule: true, default: "hub" };
@@ -132,12 +134,15 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
     assert.ok(row);
     await nodes(row, node => node.type === "button" && text(node) === "Edit")[0].props.onClick(); renderEditor();
   };
-  const generate = async (source: "text" | "camera") => {
+  const generate = async (source: "upload" | "camera") => {
     if (source === "camera") {
-      pageNode(node => node.type === "button" && text(node) === "Document Scanner").props.onClick();
+      pageNode(node => node.type === "button" && text(node) === "Scan").props.onClick();
       pageNode(node => node.type === "button" && text(node) === "Scan with Camera").props.onClick();
       pageNode(node => node.type === "button" && text(node) === "Capture Photo").props.onClick();
-    } else pageNode(node => node.type === "textarea").props.onChange({ target: { value: "Public plant notes" } });
+    } else {
+      pageNode(node => node.type === "button" && text(node) === "Upload").props.onClick();
+      await pageNode(node => node.type === "input" && node.props.type === "file").props.onChange({ target: { files: [{}] } });
+    }
     pageNode(node => node.type === "input" && node.props.type === "number" && node.props.max === 50).props.onChange({ target: { value: "2" } });
     await pageNode(node => node.type === "form" && node.props.onSubmit).props.onSubmit({ preventDefault() {} });
     return renderEditor();
@@ -149,10 +154,10 @@ async function fixture(options: { locked?: boolean; failure?: boolean; subscribe
   };
   return { requests, alerts, stored, renderPage, renderEditor, pageNode, editorNode, button, openExisting, generate, setDuration };
 }
-for (const source of ["text", "camera"] as const) {
+for (const source of ["upload", "camera"] as const) {
   test(`Edit → AI ${source} replaces questions in the same quiz and preserves configured settings`, async () => {
     const setup = await fixture(); await setup.openExisting(); setup.setDuration();
-    const entry = source === "text" ? setup.button("AI Generator") : setup.editorNode(node => node.type === "button" && text(node).startsWith("AI Generator Assistant"));
+    const entry = source === "upload" ? setup.button("AI Generator") : setup.editorNode(node => node.type === "button" && text(node).startsWith("AI Generator Assistant"));
     entry.props.onClick();
     const generated = await setup.generate(source);
     assert.match(text(generated), /New photosynthesis question/);
@@ -172,7 +177,7 @@ for (const source of ["text", "camera"] as const) {
 }
 test("AI failure keeps the existing quiz identity, unsaved settings, and old questions", async () => {
   const setup = await fixture({ failure: true }); await setup.openExisting(); setup.setDuration();
-  setup.button("AI Generator").props.onClick(); const failed = await setup.generate("text");
+  setup.button("AI Generator").props.onClick(); const failed = await setup.generate("upload");
   assert.match(text(failed), /Old saved question/); assert.deepEqual(setup.alerts, ["Provider unavailable"]);
   await setup.button("Publish Quiz").props.onClick();
   const save = setup.requests.find(request => request.method === "PUT");
@@ -188,16 +193,16 @@ test("AI replacement is unavailable once students have joined or attempted the q
 });
 test("new manual quiz retains its mode and unsaved duration when enhanced with AI", async () => {
   const setup = await fixture(); setup.pageNode(node => node.type === "hub").props.onOpenCreateQuiz("proctored");
-  setup.setDuration(); setup.button("AI Generator").props.onClick(); await setup.generate("text");
+  setup.setDuration(); setup.button("AI Generator").props.onClick(); await setup.generate("upload");
   await setup.button("Publish Quiz").props.onClick();
   const save = setup.requests.find(request => request.method === "POST" && request.url === "/api/quizzes");
   assert.equal(save?.body?.duration, 33); assert.equal(save?.body?.quizMode, "proctored");
   assert.equal(save?.body?.aiGenerationReceipt, "signed-test-receipt");
 });
 test("standalone AI Create still creates a new verified quiz", async () => {
-  const setup = await fixture(); setup.pageNode(node => node.type === "hub").props.onOpenAiGenerator(); await setup.generate("text");
+  const setup = await fixture(); setup.pageNode(node => node.type === "hub").props.onOpenAiGenerator(); await setup.generate("upload");
   await setup.button("Publish Quiz").props.onClick();
   const save = setup.requests.find(request => request.method === "POST" && request.url === "/api/quizzes");
-  assert.equal(save?.body?.duration, 60); assert.equal(save?.body?.quizMode, "arena");
+  assert.equal(save?.body?.duration, 60); assert.equal(save?.body?.quizMode, "proctored");
   assert.equal(save?.body?.aiGenerationReceipt, "signed-test-receipt"); assert.equal(setup.stored.length, 2);
 });

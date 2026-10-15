@@ -8,7 +8,7 @@ const steps: Step[] = [
   { title: "Create Your Account", description: "Register as a student or teacher, then sign in to your workspace." },
   { title: "Create & Configure Quizzes", description: "Teachers write questions or use AI assistance, choose quiz settings, and share a room code." },
   { title: "Join & Take Assessments", description: "Students enter the room code, complete any required device checks, and take the assessment." },
-  { title: "AI-Assisted Monitoring", description: "When enabled for a proctored quiz, monitoring flags recorded events for teacher review. Power Arena does not use proctoring." },
+  { title: "AI-Assisted Monitoring", description: "When enabled for a proctored quiz, monitoring flags recorded events for teacher review." },
   { title: "Review Results", description: "Students see their results. Teachers review scores and, for proctored quizzes, recorded events and supporting evidence." },
 ].map((step, index) => ({ ...step, colors: {
   bg: styles.cardBackground,

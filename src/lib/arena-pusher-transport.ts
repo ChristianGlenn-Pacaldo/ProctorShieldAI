@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "./power-arena-feature.ts";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { IncomingMessage } from "node:http";
@@ -28,6 +29,7 @@ export function createArenaPusherDelivery(options: {
 }) {
   return {
     async trigger(channels: string | string[], event: string, data: object, delivery: { signal?: AbortSignal } = {}): Promise<void> {
+      if (!isPowerArenaEnabled()) return;
       const signal = delivery.signal;
       if (signal?.aborted) throw new ArenaDeliveryError(signal.reason === "timeout" ? "timeout" : "cancelled");
       const list = typeof channels === "string" ? [channels] : channels;

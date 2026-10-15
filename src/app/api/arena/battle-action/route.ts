@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { recoverArenaFinalization, resolveArenaAttackDurably } from "@/lib/arena-finalization";
 import { scheduleTrackedBackupWork, withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
@@ -33,6 +34,7 @@ async function applyPendingAttackHit(
 }
 // POST /api/arena/battle-action — authoritative realtime targeted score-based combat
 async function POSTImpl(req: NextRequest) {
+    if (!isPowerArenaEnabled()) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
   const requestReceivedAt = Date.now();
   try {
     const session = await getSession("student");

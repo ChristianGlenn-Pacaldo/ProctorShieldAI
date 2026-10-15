@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { readArenaQuestionWork } from "@/lib/arena-question-work";
@@ -64,6 +65,7 @@ async function getAuthorizedQuiz(quizId: number, userId: string, role: string, d
   return quiz;
 }
 async function GETImpl(req: NextRequest, { params }: RouteParams) {
+    if (!isPowerArenaEnabled()) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {
@@ -149,6 +151,7 @@ async function GETImpl(req: NextRequest, { params }: RouteParams) {
   }
 }
 async function POSTImpl(req: NextRequest, { params }: RouteParams) {
+    if (!isPowerArenaEnabled()) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
   try {
     const session = await getSession();
     if (!session || !["teacher", "student", "admin"].includes(session.role)) {

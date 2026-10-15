@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserSession } from "@/lib/auth";
@@ -13,6 +14,7 @@ export async function GET() {
     const results = await prisma.studentQuiz.findMany({
       where: {
         studentId: session.userId,
+        ...(!isPowerArenaEnabled() ? { attemptMode: { not: "arena" }, quiz: { quizMode: { not: "arena" } } } : {}),
       },
       include: {
         quiz: true,
@@ -24,7 +26,7 @@ export async function GET() {
       },
     });
 
-    const normalizedResults = withRetakeEligibility(results).map((result) => {
+    const normalizedResults = withRetakeEligibility(results.filter(row => isPowerArenaEnabled() || (row.attemptMode !== "arena" && row.quiz.quizMode !== "arena"))).map((result) => {
       // Historical classification: StudentQuiz.attemptMode is authoritative
       const effectiveMode = result.attemptMode === "arena" ? "arena" : "proctored";
       const isArena = effectiveMode === "arena";

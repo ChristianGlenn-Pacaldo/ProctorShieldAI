@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -62,6 +63,7 @@ function fixture(options: { subscribed?: boolean; failure?: string } = {}) {
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/quiz-scanner") return { ...quizScanner, prepareQuizScan: async () => ({ name: "Fixture image", dataUrl: "data:image/jpeg;base64,QUJD" }), captureQuizScan: () => ({ name: "Camera scan", dataUrl: "data:image/jpeg;base64,QUJD" }) };
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
@@ -112,41 +114,27 @@ test("AI create API accepts topic and numQuestions with its existing 1–50 limi
   assert.match(apiSource, /requestedQuestions < 1 \|\| requestedQuestions > 50/);
 });
 
-test("Prompt/Text sends trimmed topic and selected numQuestions, not legacy field names", async () => {
-  const setup = fixture();
-  setup.open();
-  invoke(setup.node((entry) => entry.type === "textarea"), "onChange", { target: { value: "  Data structures  " } });
-  const countInput = setup.node((entry) => entry.props.id === "ai-question-count");
-  assert.equal(countInput.props.min, 1);
-  assert.equal(countInput.props.max, 50);
-  invoke(countInput, "onChange", { target: { value: "7" } });
-  await setup.submit();
-  assert.equal(setup.requests.length, 1);
-  assert.equal(setup.requests[0].url, "/api/ai/create");
-  assert.deepEqual({ ...setup.requests[0].body }, { type: "text", topic: "Data structures", numQuestions: 7 });
-  assert.equal("textPrompt" in setup.requests[0].body, false);
-  assert.equal("questionCount" in setup.requests[0].body, false);
-  const editor = setup.node((entry) => entry.type === "editor");
-  assert.equal((editor.props.initialQuiz as Record<string, unknown>).aiGenerationReceipt, "signed-receipt");
+test("AI UI exposes Upload and Scan only, defaults to Upload and rejects an empty source", async () => {
+  const setup = fixture(); setup.open();
+  const tabs = nodesOf(setup.render(), node => node.props.role === "tab");
+  assert.deepEqual(tabs.map(textOf), ["Upload", "Scan"]);
+  assert.equal(tabs[0].props["aria-selected"], true);
+  assert.equal(setup.node(node => node.type === "textarea"), undefined);
+  await setup.submit(); assert.equal(setup.requests.length, 0); assert.match(setup.alerts[0], /upload a file first/);
 });
 
-test("Prompt/Text defaults to five questions and rejects counts outside the API limit", async () => {
-  const setup = fixture();
-  setup.open();
-  invoke(setup.node((entry) => entry.type === "textarea"), "onChange", { target: { value: "Biology" } });
-  invoke(setup.node((entry) => entry.props.id === "ai-question-count"), "onChange", { target: { value: "51" } });
-  await setup.submit();
-  assert.equal(setup.requests.length, 0);
-  assert.match(setup.alerts[0], /between 1 and 50/);
-  invoke(setup.node((entry) => entry.props.id === "ai-question-count"), "onChange", { target: { value: "5" } });
-  await setup.submit();
-  assert.equal(setup.requests[0].body.numQuestions, 5);
+test("Upload defaults to five questions and validates the shared 1–50 limit", async () => {
+  const setup = fixture(); setup.open();
+  await invoke(setup.node(node => node.type === "input" && node.props.type === "file"), "onChange", { target: { files: [{}] } });
+  const count=setup.node(node => node.props.id === "scan-question-count"); assert.equal(count.props.value,5);
+  invoke(count,"onChange",{target:{value:"51"}});await setup.submit();assert.equal(setup.requests.length,0);assert.match(setup.alerts[0],/between 1 and 50/);
+  invoke(count,"onChange",{target:{value:"7"}});await setup.submit();assert.equal(setup.requests[0].body.numQuestions,7);
 });
 
 test("Upload and camera share the scanner payload and selected question count", async () => {
   const upload = fixture();
   upload.open();
-  upload.tab("Document Scanner");
+  upload.tab("Upload");
   await invoke(upload.node((entry) => entry.type === "input" && entry.props.type === "file"), "onChange", { target: { files: [{}] } });
   await Promise.resolve();
   await upload.submit();
@@ -154,7 +142,7 @@ test("Upload and camera share the scanner payload and selected question count", 
 
   const webcam = fixture();
   webcam.open();
-  webcam.tab("Document Scanner");
+  webcam.tab("Scan");
   invoke(webcam.node((entry) => entry.type === "button" && textOf(entry) === "Scan with Camera"), "onClick");
   invoke(webcam.node((entry) => entry.type === "button" && textOf(entry) === "Capture Photo"), "onClick");
   await webcam.submit();
@@ -164,7 +152,7 @@ test("Upload and camera share the scanner payload and selected question count", 
 test("non-OK AI response shows its error without opening Studio", async () => {
   const setup = fixture({ failure: "Generation unavailable" });
   setup.open();
-  invoke(setup.node((entry) => entry.type === "textarea"), "onChange", { target: { value: "Mathematics" } });
+  await invoke(setup.node((entry) => entry.type === "input" && entry.props.type === "file"), "onChange", { target: { files: [{}] } });
   await setup.submit();
   assert.deepEqual(setup.alerts, ["Generation unavailable"]);
   assert.ok(setup.node((entry) => entry.type === "form" && typeof entry.props.onSubmit === "function"));

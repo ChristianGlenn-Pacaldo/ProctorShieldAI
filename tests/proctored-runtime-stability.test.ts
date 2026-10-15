@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as questionWork from "../src/lib/arena-question-work.ts";
 import * as questionOrder from "../src/lib/quiz-question-order.ts";
 import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
@@ -26,6 +27,7 @@ function route(file: string, dependencies: Record<string, unknown>) {
   vm.runInNewContext(compiled.get(file)!, { exports, process: { env: {} }, console: { error() {}, warn() {} },
     Date, Set, Map, Promise, Number, String, Buffer,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/arena-question-work") return questionWork;
       if (name === "@/lib/quiz-session-timing") return sessionTiming;
       if (name === "@/lib/quiz-question-order") return questionOrder;

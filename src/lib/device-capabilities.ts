@@ -27,7 +27,7 @@ export interface ProctoringPerformanceProfile {
   frameRate: number;
   inferenceWidth: number;
   inferenceHeight: number;
-  faceInputSize: 128 | 160;
+  faceInputSize: 128 | 160 | 320;
   snapshotIntervalMs: number;
   detectionIntervalMs: number;
   audioIntervalMs: number;
@@ -133,7 +133,9 @@ export function getProctoringPerformanceProfile(
       frameRate: 24,
       inferenceWidth: 480,
       inferenceHeight: 360,
-      faceInputSize: 160,
+      // Use the same detailed landmarks directly; avoid a redundant 160px pass
+      // before the 320px verification on every normal desktop observation.
+      faceInputSize: 320,
       snapshotIntervalMs: 2_000,
       detectionIntervalMs: 500,
       audioIntervalMs: 500,

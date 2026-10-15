@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useState, useEffect } from "react";
 import {
@@ -28,6 +29,7 @@ export default function ProctorShieldCreateHub({
   onOpenArena,
   onRequirePro,
 }: ProctorShieldCreateHubProps) {
+  const arenaEnabled = usePowerArenaEnabled();
   const [activeTab, setActiveTab] = useState<"create" | "upload">("create");
   const [timeGreeting, setTimeGreeting] = useState("Good afternoon");
 
@@ -41,6 +43,7 @@ export default function ProctorShieldCreateHub({
   const cleanName = teacherName.split(" ")[0] || "Teacher";
 
   const handleArenaClick = () => {
+    if (!arenaEnabled) return;
     if (!isSubscribed) {
       if (onRequirePro) onRequirePro("arena");
       return;
@@ -108,7 +111,7 @@ export default function ProctorShieldCreateHub({
       </div>
 
       {/* Activity Creation Cards Grid (3 Cards: Live Monitored Exam, Power Arena [PRO], AI Generator [PRO]) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto">
+      <div className={`grid grid-cols-1 ${arenaEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4 sm:gap-6 max-w-5xl mx-auto`}>
         {/* 1. Live Monitored Exam - Academic Integrity */}
         <button
           type="button"
@@ -131,6 +134,7 @@ export default function ProctorShieldCreateHub({
           </div>
         </button>
 
+{arenaEnabled && <>
         {/* 2. Power Arena (Multiplayer) - PRO MODE */}
         <button
           type="button"
@@ -166,6 +170,7 @@ export default function ProctorShieldCreateHub({
           </div>
         </button>
 
+</>}
         {/* 3. AI Generator - PRO MODE ONLY */}
         <button
           type="button"

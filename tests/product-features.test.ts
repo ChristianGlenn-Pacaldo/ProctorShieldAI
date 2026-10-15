@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -14,6 +15,7 @@ const exports: { default?: React.ComponentType } = {};
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
   module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
 } }).outputText, { exports, require(name: string) {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
   if (name === "react") return React;
   if (name === "react/jsx-runtime") return jsx;
   if (name === "lucide-react") return icons;
@@ -26,7 +28,7 @@ const css = postcss.parse(fs.readFileSync("src/components/product-features.modul
 
 test("actual feature markup renders the three real-product categories once and in order", () => {
   assert.equal((html.match(/<article\b/g) ?? []).length, 3);
-  assert.deepEqual([...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(m => m[1]), ["Smart Quiz Management", "AI-Assisted Proctoring", "Power Arena"]);
+  assert.deepEqual([...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(m => m[1]), ["Smart Quiz Management", "AI-Assisted Proctoring", "Evidence Review"]);
   assert.equal((html.match(/Sample data/g) ?? []).length, 3);
   assert.doesNotMatch(html, /cartoon|investment|portfolio|guaranteed.*cheating/i);
 });
@@ -51,11 +53,14 @@ test("preview buttons have names and dialog semantics without login or submissio
 test("proctoring preview remains conditional and explicitly avoids real webcam images", () => {
   assert.match(html, /enabled proctored attempts/); assert.match(html, /Teachers review live status/);
   assert.match(html, /camera-pending placeholders, with no real webcam images/);
-  assert.match(html, /gameplay points, power-ups, and a live leaderboard/);
+  assert.match(html, /available short clips/);
+  assert.match(html, /Requires an active Pro plan/);
+  assert.match(html, /Media redacted/);
+  assert.doesNotMatch(html, /Power Arena|power-arena|signed URL|guaranteed.*cheating/i);
 });
 
 test("both themes have matching product image sources and the viewer supports safe original-image links", () => {
-  for (const id of ["quiz-management", "ai-proctoring", "power-arena"]) for (const theme of ["light", "dark"]) assert.ok(fs.existsSync(`public/images/features/${id === "power-arena" ? "power-arena-arsenal" : id}-${theme}.webp`));
+  for (const id of ["quiz-management", "ai-proctoring", "evidence-review"]) for (const theme of ["light", "dark"]) assert.ok(fs.existsSync(`public/images/features/${id}-${theme}.webp`));
   assert.match(css.toString(), /:global\(html\.dark\) \.lightImage[^}]*display: none/);
   assert.match(css.toString(), /:global\(html\.dark\) \.darkImage[^}]*display: block/);
   assert.match(source, /rel="noopener noreferrer"/); assert.match(source, /showModal\(\)/);

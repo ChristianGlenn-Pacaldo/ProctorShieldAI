@@ -1,3 +1,5 @@
+import * as defenseFeature from "../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../src/lib/password-update.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -51,6 +53,10 @@ function fixture(initialStatus = "active") {
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
       if (name === "@/lib/quiz-scanner") return quizScanner;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };

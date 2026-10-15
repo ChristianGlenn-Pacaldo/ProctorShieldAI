@@ -3,6 +3,9 @@ node_modules
 .next-frontend
 .next-backend
 .data
+.tmp-*
+release-review
+*.tsbuildinfo
 docs
 .git
 .gitignore

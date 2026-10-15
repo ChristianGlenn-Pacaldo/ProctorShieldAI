@@ -1,3 +1,5 @@
+import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { officialBrandModule } from "./brand-image-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -76,6 +78,10 @@ export function sidebarFixture(role: SidebarRole, options: {
       fetch: async (url: string, init?: RequestInit) => { requests.push({ url, method: init?.method ?? "GET" });
         return { ok: true, status: 200, json: async () => ({ success: true, unreadCount: 0, notifications: [] }) }; },
       require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
         if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
         if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");
         if (name === "react") return react;

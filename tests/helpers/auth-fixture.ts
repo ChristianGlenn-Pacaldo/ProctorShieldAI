@@ -1,3 +1,5 @@
+import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../../src/lib/password-update.ts";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
@@ -124,6 +126,10 @@ export function authFixture(shared?: Backend) {
     vm.runInNewContext(code, {
       exports, process: { env: environment }, crypto, Date, URL, Error, Buffer, Response, console: { error() {} },
       require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
         if (name === "next/headers") return { cookies: async () => ({
           get: (name: string) => {
             const context = requests.getStore();

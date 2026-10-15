@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import * as retakeEligibility from "../src/lib/retake-eligibility.ts";
+import * as defenseFeature from "../src/lib/power-arena-feature.ts";
 
 type StudentQuizResponse = {
   quizzes: Array<{
@@ -77,6 +78,7 @@ test("Student quiz list serializes only the teacher name", async () => {
     },
   };
   const dependencies: Record<string, unknown> = {
+    "@/lib/power-arena-feature": defenseFeature,
     "@/lib/retake-eligibility": retakeEligibility,
     "next/server": {
       NextResponse: {

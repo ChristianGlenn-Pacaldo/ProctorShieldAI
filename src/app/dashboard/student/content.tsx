@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useState, useEffect, useTransition, useRef, useCallback } from "react";
 import {
@@ -82,6 +83,7 @@ function getMissionState(enrollment: StudentQuiz) {
 }
 
 export default function StudentDashboardContent() {
+  const arenaEnabled = usePowerArenaEnabled();
   const router = useRouter();
   const [studentQuizzes, setStudentQuizzes] = useState<StudentQuiz[]>([]);
   const [isFetching, setIsFetching] = useState(true);
@@ -187,7 +189,7 @@ export default function StudentDashboardContent() {
 
   // Filter valid student quiz records
   if (loss) return <UserSessionReauthentication status={loss} />;
-  const validQuizzes = studentQuizzes.filter((se) => se && se.quiz);
+  const validQuizzes = studentQuizzes.filter((se) => se && se.quiz && (arenaEnabled || (se.quiz.quizMode !== "arena" && se.attemptMode !== "arena")));
   const completed = validQuizzes.filter((se) => studentResultState(se).isCompleted);
   const upcoming = validQuizzes.filter((se) => se.quizStatus !== "completed");
 
@@ -293,7 +295,7 @@ export default function StudentDashboardContent() {
             {hasLoadedQuizzes ? completedCount : initialLoading ? <MetricValueSkeleton /> : "—"}
           </div>
           <div className="text-xs font-semibold text-[var(--muted)] mt-1">
-            Quizzes Conquered
+            Quizzes Completed
           </div>
         </div>
 
@@ -344,7 +346,7 @@ export default function StudentDashboardContent() {
             </p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${upcoming.length > 1 ? "md:grid-cols-2" : "grid-cols-1"}`}>
             {upcoming.map((se) => {
               if (!se.quiz) return null;
               const missionState = getMissionState(se);
@@ -374,7 +376,7 @@ export default function StudentDashboardContent() {
                     </div>
 
                     <h3 className="break-words text-base font-extrabold text-[var(--ink)] group-hover:text-[var(--ps-accent)]  transition-colors">
-                      {se.quiz.title || "Untitled Quiz Arena"}
+                      {se.quiz.title || "Untitled Quiz"}
                     </h3>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)] mt-2">
@@ -437,7 +439,7 @@ export default function StudentDashboardContent() {
               <DashboardListSkeleton count={3} />
             ) : !hasLoadedQuizzes ? null : completed.length === 0 ? (
               <p className="py-6 text-xs text-[var(--muted)] italic text-center">
-                No completed exams yet. Take your first quiz or enter an arena match!
+                No completed exams yet. Take your first monitored quiz!
               </p>
             ) : (
               <div className="space-y-3">

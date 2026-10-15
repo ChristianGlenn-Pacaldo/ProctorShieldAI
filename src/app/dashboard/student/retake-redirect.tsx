@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useEffect } from "react";
 import PusherClient from "pusher-js";
@@ -7,6 +8,7 @@ import { getApprovedRetakeDestination, getPendingRetakes, type RetakeEnrollment 
 import { useUserSessionWork } from "@/components/user-session-lifecycle";
 
 export default function RetakeRedirect({ userId }: { userId: string }) {
+  const arenaEnabled = usePowerArenaEnabled();
   const { work } = useUserSessionWork();
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export default function RetakeRedirect({ userId }: { userId: string }) {
       navigating = true;
       // A fresh document request carries this consistency guard through the
       // final proxy boundary, even if the preceding identity response is stale.
+      if (!arenaEnabled && destination?.startsWith("/arena/")) return;
       const target = destination || "/dashboard/student";
       window.location.assign(`${target}?_retakeStudent=${encodeURIComponent(userId)}`);
     };
@@ -127,7 +130,7 @@ export default function RetakeRedirect({ userId }: { userId: string }) {
       pusher.unsubscribe(channelName);
       pusher.disconnect();
     });
-  }, [userId, work]);
+  }, [userId, work, arenaEnabled]);
 
   return null;
 }

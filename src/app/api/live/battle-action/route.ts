@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -11,6 +12,7 @@ import { consumeRateLimit } from "@/lib/security";
  * Retained as a legacy compatibility wrapper during Phase 3.
  */
 async function POSTImpl(req: NextRequest) {
+  if (!isPowerArenaEnabled()) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
   try {
     const session = await getSession("student");
     if (!session || session.role !== "student") {

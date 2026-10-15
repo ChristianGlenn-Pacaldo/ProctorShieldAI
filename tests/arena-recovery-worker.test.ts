@@ -109,6 +109,7 @@ test("Edge instrumentation bundle excludes the Node-only recovery dependency", a
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText);
   fs.mkdirSync(path.join(directory, "lib"));
+  fs.writeFileSync(path.join(directory, "lib/power-arena-feature.js"), ts.transpileModule(fs.readFileSync("src/lib/power-arena-feature.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
   // Deliberately fail if the Edge bundler tries to include any Node recovery code.
   fs.writeFileSync(path.join(directory, "lib/arena-recovery.js"), 'import "node:fs"; export function startArenaRecovery() {}');
   const compiler = webpack({ mode: "development", target: "webworker", context: directory,

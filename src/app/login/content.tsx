@@ -9,7 +9,8 @@ import { ArrowLeft, BarChart3, Eye, EyeOff, ScanFace, ShieldCheck } from "lucide
 import { getAuthDestination } from "@/lib/auth-destination";
 import UnifiedGoogleSignIn from "./unified-google-signin";
 
-export default function LoginContent({ sessionUnavailable = false }: { sessionUnavailable?: boolean } = {}) {
+export default function LoginContent({ sessionUnavailable = false, joinCode }: { sessionUnavailable?: boolean; joinCode?: string } = {}) {
+  const joiningQuiz = getAuthDestination("student", joinCode) !== "/dashboard/student";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,9 +46,13 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
         return;
       }
       const destination = data?.success === true && data?.requiresMfa !== true
-        ? getAuthDestination(data?.user?.role) : null;
+        ? getAuthDestination(data?.user?.role, joinCode) : null;
       if (!destination) {
         setError("Unable to confirm your account. Please try signing in again.");
+        return;
+      }
+      if (joiningQuiz && data?.user?.role !== "student") {
+        setError("This quiz requires a Student account. Sign in with your Student credentials.");
         return;
       }
       // A full document request mounts the freshly authenticated account shell.
@@ -90,6 +95,7 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
               <h1 id="login-heading" className="text-3xl font-semibold text-[var(--ps-text)] font-[family-name:var(--font-display)] tracking-tight">Welcome Back</h1>
               <p className="mt-2 text-base leading-6 text-[var(--ps-text-secondary)]">Sign in to your ProctorShieldAI account</p>
             </div>
+            {joiningQuiz && <p className="mb-4 text-sm leading-6 text-[var(--ps-text-secondary)]">Sign in with your Student account to continue joining your quiz. Your code is preserved.</p>}
             {sessionUnavailable && <p role="alert" className="ps-auth-alert ps-auth-warning mb-4 p-3 rounded-xl bg-[var(--ps-warning-soft)] border border-[var(--ps-warning)] text-base text-[var(--ps-warning)]">Sign-in status is temporarily unavailable. Please try again.</p>}
             {error && <p role="alert" className="ps-auth-alert mb-4 p-3 rounded-xl bg-[var(--ps-error-soft)] border border-[var(--ps-error)] text-base text-[var(--ps-error)]">{error}</p>}
             <form method="post" onSubmit={handleLogin} aria-busy={isLoading} aria-labelledby="login-heading" className="space-y-5">
@@ -111,11 +117,11 @@ export default function LoginContent({ sessionUnavailable = false }: { sessionUn
               </div>
               <button type="submit" disabled={isLoading} className="w-full min-h-12 py-3.5 rounded-xl ps-auth-primary bg-[var(--ps-primary)] text-base font-bold text-[var(--ps-text)] hover:from-blue-600 hover:to-blue-500 shadow-lg shadow-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--ps-surface)] disabled:opacity-50 disabled:cursor-not-allowed">{isLoading ? "Signing in..." : "Sign In"}</button>
             </form>
-            {!isLoading && <UnifiedGoogleSignIn />}
+            {!isLoading && <UnifiedGoogleSignIn joinCode={joinCode} />}
             <div className="mt-6 pt-5 border-t border-[var(--ps-border)] text-center text-sm">
               <p className="text-[var(--ps-text-secondary)] mb-4">Don&apos;t have an account?</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Link href="/login/student?tab=register" className="flex min-h-11 items-center justify-center rounded-xl border border-[var(--ps-border-control)] px-3 py-3 font-semibold text-[var(--ps-text-secondary)] hover:border-[var(--ps-focus)] hover:bg-[var(--ps-accent-soft)] hover:text-[var(--ps-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--ps-surface)]">Create Student Account</Link>
+                <Link href={"/login/student?tab=register" + (joiningQuiz ? "&joinCode=" + encodeURIComponent(joinCode!) : "")} className="flex min-h-11 items-center justify-center rounded-xl border border-[var(--ps-border-control)] px-3 py-3 font-semibold text-[var(--ps-text-secondary)] hover:border-[var(--ps-focus)] hover:bg-[var(--ps-accent-soft)] hover:text-[var(--ps-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--ps-surface)]">Create Student Account</Link>
                 <Link href="/login/teacher?tab=register" className="flex min-h-11 items-center justify-center rounded-xl border border-[var(--ps-border-control)] px-3 py-3 font-semibold text-[var(--ps-text-secondary)] hover:border-[var(--ps-focus)] hover:bg-[var(--ps-accent-soft)] hover:text-[var(--ps-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ps-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--ps-surface)]">Create Teacher Account</Link>
               </div>
             </div>

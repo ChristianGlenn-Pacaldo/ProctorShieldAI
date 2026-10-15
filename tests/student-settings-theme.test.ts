@@ -1,3 +1,5 @@
+import * as defenseFeature from "../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../src/lib/password-update.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,6 +27,7 @@ function settingsFixture() {
       return [states[slot], (next: unknown) => { states[slot] = typeof next === "function"
         ? (next as (previous: unknown) => unknown)(states[slot]) : next; }];
     },
+    useRef(initial: unknown) { const slot = index++; if (!(slot in states)) states[slot] = { current: initial }; return states[slot]; },
     useEffect(effect: () => void) { index++; if (collectEffects) effects.push(effect); },
   };
   const jsx = (type: unknown, props: Node["props"]) => ({ type, props });
@@ -34,6 +37,10 @@ function settingsFixture() {
   }).outputText, {
     exports, console, setTimeout() {},
     require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};

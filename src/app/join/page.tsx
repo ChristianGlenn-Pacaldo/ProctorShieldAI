@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -48,6 +48,11 @@ function JoinContent() {
   const searchParams = useSearchParams();
   const initialCode = searchParams.get("code") || "";
 
+  const [authState, setAuthState] = useState<"checking" | "student" | "guest" | "wrong-role" | "unavailable">("checking");
+  const [authRetry, setAuthRetry] = useState(0);
+  const joining = useRef(false);
+  const autoJoined = useRef("");
+  const joinRequest = useRef<AbortController | null>(null);
   const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -59,16 +64,36 @@ function JoinContent() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const timer = window.setTimeout(() => controller.abort(), 8_000);
+    setAuthState("checking");
+    fetch("/api/auth/session?scope=user", { cache: "no-store", signal: controller.signal })
+      .then(async response => {
+        const data = await response.json();
+        if (controller.signal.aborted) return;
+        if (response.status === 401) {
+          setAuthState("guest");
+          if (initialCode) router.replace("/login?joinCode=" + encodeURIComponent(initialCode));
+        } else if (!response.ok || !data.authenticated) setAuthState("unavailable");
+        else setAuthState(data.user?.role === "student" ? "student" : "wrong-role");
+      }).catch(() => { if (active) setAuthState("unavailable"); }).finally(() => window.clearTimeout(timer));
+    return () => { active = false; window.clearTimeout(timer); controller.abort(); joinRequest.current?.abort(); };
+  }, [initialCode, authRetry, router]);
+
+  useEffect(() => {
     setSoundActive(isSoundEnabled());
   }, []);
 
   useEffect(() => {
+    if (authState !== "student") return;
+    const controller = new AbortController();
     async function loadQuickQuizzes() {
       try {
-        const res = await fetch("/api/quizzes");
+        const res = await fetch("/api/quizzes", { signal: controller.signal, cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.quizzes)) {
+          if (!controller.signal.aborted && Array.isArray(data.quizzes)) {
             const live = data.quizzes
               .filter((q: any) => q && q.quiz && q.quizStatus !== "completed" && q.quiz.accessCode)
               .map((q: any) => ({
@@ -84,10 +109,12 @@ function JoinContent() {
         // Non-blocking
       }
     }
-    loadQuickQuizzes();
-  }, []);
+    void loadQuickQuizzes();
+    return () => controller.abort();
+  }, [authState]);
 
   useEffect(() => {
+    if (authState !== "student") return;
     const normalizedCode = normalizeQuizAccessCode(joinCode);
     if (normalizedCode.length < 3) {
       setCodeLookup(null);
@@ -108,6 +135,7 @@ function JoinContent() {
           setCodeLookup(null);
           return;
         }
+        if (controller.signal.aborted) return;
         const lookup = data as JoinLookupResponse;
         setCodeLookup(lookup);
         setMessage(lookup.join.eligible ? "" : lookup.join.message);
@@ -124,7 +152,7 @@ function JoinContent() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [joinCode]);
+  }, [joinCode, authState]);
 
   const handleToggleSound = () => {
     const next = toggleSoundEnabled();
@@ -132,7 +160,8 @@ function JoinContent() {
     if (next) playBloop(640, 0.1);
   };
 
-  const handleJoinQuiz = async (codeToUse?: string) => {
+  const handleJoinQuiz = useCallback(async (codeToUse?: string) => {
+    if (joining.current) return;
     const code = normalizeQuizAccessCode(codeToUse || joinCode);
     if (!code) {
       playErrorBuzz();
@@ -141,6 +170,13 @@ function JoinContent() {
       return;
     }
 
+    if (authState !== "student") {
+      if (authState === "guest") router.replace("/login?joinCode=" + encodeURIComponent(code));
+      else setMessage("Sign in with a Student account before joining.");
+      return;
+    }
+    joining.current = true;
+    const controller = new AbortController(); joinRequest.current = controller;
     setIsLoading(true);
     setMessage("");
 
@@ -149,9 +185,11 @@ function JoinContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessCode: code }),
+        signal: controller.signal,
       });
 
       const data = await res.json();
+      if (controller.signal.aborted) return;
 
       const targetRoute = typeof data.destination === "string" && /^\/(?:arena|quiz)\/\d+$/.test(data.destination)
         ? data.destination
@@ -159,32 +197,30 @@ function JoinContent() {
 
       if (res.ok && data.quiz?.id && targetRoute) {
         playSuccessFanfare();
-        setTimeout(() => {
-          router.push(targetRoute);
-        }, 250);
+        router.push(targetRoute);
       } else if (res.ok) {
         playErrorBuzz();
         setMessage("The server did not return a valid quiz destination. Please try again.");
       } else if (res.status === 401) {
-        localStorage.setItem("pendingJoinCode", code);
-        router.push("/login/student");
+        router.replace("/login?joinCode=" + encodeURIComponent(code));
       } else {
         playErrorBuzz();
         setMessage(data.error || "Quiz not found. Please verify your code.");
       }
     } catch {
-      playErrorBuzz();
-      setMessage("Network connection error. Please try again.");
+      if (!controller.signal.aborted) { playErrorBuzz(); setMessage("Network connection error. Please try again."); }
     } finally {
-      setIsLoading(false);
+      joining.current = false;
+      if (!controller.signal.aborted) setIsLoading(false);
     }
-  };
+  }, [authState, joinCode, router]);
 
   useEffect(() => {
-    if (initialCode) {
-      handleJoinQuiz(initialCode);
+    if (initialCode && authState === "student" && autoJoined.current !== initialCode) {
+      autoJoined.current = initialCode;
+      void handleJoinQuiz(initialCode);
     }
-  }, [initialCode]);
+  }, [initialCode, authState, handleJoinQuiz]);
 
   const handleInputChange = (val: string) => {
     const clean = val.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16);
@@ -203,6 +239,17 @@ function JoinContent() {
   const destinationName = codeLookup?.quiz.isArena || matchedAssignment?.quizMode === "arena" ? "Arena" : "Quiz";
   const isClosedCode = codeLookup?.join.state === "closed";
 
+  if (authState === "checking" || authState === "unavailable" || authState === "wrong-role") {
+    return <main className="auth-shell min-h-svh flex items-center justify-center p-4 text-[var(--ps-text)]">
+      <section className="w-full max-w-md rounded-2xl border border-[var(--ps-border)] bg-[var(--ps-surface)] p-6 space-y-4" aria-labelledby="join-account-heading">
+        <h1 id="join-account-heading" className="text-xl font-bold">{authState === "checking" ? "Checking Student sign-in..." : authState === "wrong-role" ? "Student account required" : "Sign-in check unavailable"}</h1>
+        <p role="status">{authState === "wrong-role" ? "Your current account cannot join as a Student. Your code is preserved." : authState === "unavailable" ? "Retry the sign-in check. No quiz details have been loaded." : "Please wait while we check your account."}</p>
+        {authState === "unavailable" && <button type="button" className="min-h-11 px-4 rounded-lg border" onClick={() => setAuthRetry(value => value + 1)}>Retry sign-in check</button>}
+        {authState === "wrong-role" && <Link className="inline-flex min-h-11 items-center underline" href={"/login?joinCode=" + encodeURIComponent(initialCode || joinCode)}>Sign in with a Student account</Link>}
+        <Link className="inline-flex min-h-11 items-center underline" href="/">Return home</Link>
+      </section>
+    </main>;
+  }
   return (
     <div
       className={`${styles.screen} min-h-screen flex flex-col relative select-none`}

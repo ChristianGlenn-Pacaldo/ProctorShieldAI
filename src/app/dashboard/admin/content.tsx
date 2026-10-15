@@ -329,7 +329,7 @@ export default function AdminDashboardContent() {
     return (
       <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-600 dark:text-rose-400">
         <p>{sessionLost === 401 ? "Your Admin session has expired or changed." : "You no longer have Admin access."} Sign in as an Admin to continue.</p>
-        <Link href="/admin/login" prefetch={false} className="mt-3 inline-block font-semibold underline">Admin Login</Link>
+        <Link href="/login" prefetch={false} className="mt-3 inline-block font-semibold underline">Sign In</Link>
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
 import { getSession } from "@/lib/auth";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
@@ -11,6 +12,7 @@ interface PageProps {
 }
 
 export default async function ArenaHostPage({ params, searchParams }: PageProps) {
+  if (!isPowerArenaEnabled()) notFound();
   const session = await getSession();
   if (!session || session.role !== "teacher") {
     redirect("/login");

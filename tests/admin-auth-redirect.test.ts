@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -34,6 +35,7 @@ function proxyFixture() {
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/auth-destination") return { getAuthDestination };
       if (name === "next/server") return { NextResponse: {
         next: () => response(200),
@@ -65,13 +67,13 @@ function proxyFixture() {
   };
 }
 
-test("anonymous and invalid Admin sessions reach the canonical Admin login page", () => {
+test("anonymous and invalid Admin sessions reach the unified login page", () => {
   const proxy = proxyFixture();
   for (const pathname of ["/dashboard/admin", "/dashboard/admin/users"]) {
     for (const cookie of [undefined, { role: "admin", value: "expired" }, { role: "admin", value: "invalid" }]) {
       const response = proxy(pathname, cookie);
       assert.equal(response.status, 307);
-      assert.equal(new URL(response.headers.get("Location")!).pathname, "/admin/login");
+      assert.equal(new URL(response.headers.get("Location")!).pathname, "/login");
     }
   }
   assert.equal(proxy("/admin/login").status, 200);
@@ -106,6 +108,7 @@ async function layoutRedirect(relativePath: string, session: { role: string; ful
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/auth") return { getAdminSession: async () => session, getUserSession: async () => session };
       if (name === "next/navigation") return { redirect: (destination: string) => {
         redirectedTo = destination;
@@ -124,10 +127,10 @@ async function layoutRedirect(relativePath: string, session: { role: string; ful
   }
 }
 
-test("Admin layout sends missing or revoked sessions to Admin login", async () => {
+test("Admin layout sends missing or revoked sessions to unified login", async () => {
   const layout = "src/app/dashboard/admin/layout.tsx";
-  assert.equal((await layoutRedirect(layout, null)).redirectedTo, "/admin/login");
-  assert.equal((await layoutRedirect(layout, { role: "teacher", fullName: "Wrong Role" })).redirectedTo, "/admin/login");
+  assert.equal((await layoutRedirect(layout, null)).redirectedTo, "/login");
+  assert.equal((await layoutRedirect(layout, { role: "teacher", fullName: "Wrong Role" })).redirectedTo, "/login");
   const valid = await layoutRedirect(layout, { role: "admin", fullName: "QA Admin" });
   assert.equal(valid.redirectedTo, null);
   assert.equal(valid.result?.props.role, "admin");
@@ -163,6 +166,7 @@ function dashboardFixture(role: "admin" | "student" | "teacher") {
   vm.runInNewContext(code, {
     exports,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "react") return { useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}], useEffect: () => {}, useRef: (initial: unknown) => ({ current: initial }) };
       if (name === "./user-session-lifecycle") return {createUserSessionLifecycle:()=>({getLoss:()=>null}),UserSessionLifecycleContext:{Provider:"user-provider"}};
       if (name === "./admin-session-lifecycle") return { createAdminSessionLifecycle: () => ({ getLoss: () => null }), AdminSessionLifecycleContext: { Provider: "provider" } };

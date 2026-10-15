@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS, PowerArenaDisabledError } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(quiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (!isQuizAvailable(quiz.quizStatus)) {
       return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
@@ -182,6 +184,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
 
   } catch (error) {
+    if (error instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     console.error("Get quiz details error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -268,6 +271,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
     if (!existingQuiz || existingQuiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
     }
+    if (isDisabledArenaResource(existingQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (!isQuizAvailable(existingQuiz.quizStatus)) {
       return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
@@ -315,11 +319,13 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
     const shuffleQuestions = typeof body.shuffleQuestions === "boolean" ? body.shuffleQuestions : undefined;
     const isGamified = typeof body.isGamified === "boolean" ? body.isGamified : undefined;
 
+    if (isDisabledArenaResource(body)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     let parsedQuizMode: "proctored" | "arena" | undefined;
     if (body.quizMode !== undefined) {
       try {
         parsedQuizMode = parseQuizMode(body.quizMode);
       } catch (err) {
+    if (err instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
         if (err instanceof InvalidQuizModeError) {
           return NextResponse.json(
             { error: "Invalid quiz mode.", code: "INVALID_QUIZ_MODE" },
@@ -465,6 +471,7 @@ async function PUTImpl(req: NextRequest, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, quiz: updatedQuiz });
   } catch (error) {
+    if (error instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     console.error("Update quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -487,6 +494,7 @@ async function DELETEImpl(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!existingQuiz) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
+    if (isDisabledArenaResource(existingQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (!isQuizAvailable(existingQuiz.quizStatus)) {
       return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
@@ -548,6 +556,7 @@ async function DELETEImpl(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true, message: "Quiz deleted successfully" });
   } catch (error) {
+    if (error instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     console.error("Delete quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

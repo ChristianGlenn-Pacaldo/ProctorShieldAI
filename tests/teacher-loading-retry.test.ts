@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
@@ -79,6 +80,7 @@ function fixture(relativePath: string, replies: Reply[]) {
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/quiz-scanner") return quizScanner;
       if (name === "@/components/dashboard-loading") return dashboardLoadingModule;

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { THEME_BOOTSTRAP } from "@/lib/theme-presentation";
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
+import { PowerArenaFeatureProvider } from "@/components/power-arena-feature";
 
 export const metadata: Metadata = {
   title: "ProctorShieldAI — AI-Powered Online Proctoring",
@@ -18,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head><script id="ps-theme-init" dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} /></head>
-      <body className="antialiased app-motion-scope">{children}</body>
+      <body className="antialiased app-motion-scope"><PowerArenaFeatureProvider enabled={isPowerArenaEnabled()}>{children}</PowerArenaFeatureProvider></body>
     </html>
   );
 }

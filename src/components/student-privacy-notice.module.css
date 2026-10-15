@@ -1,0 +1,18 @@
+.notice { min-width: 0; margin: 0 0 1.5rem; padding: 1.125rem; border: 1px solid #90bda8; border-radius: 1rem; background: #effaf4; color: #163f32; text-align: left; overflow-wrap: anywhere; }
+.notice h2 { display: flex; align-items: center; gap: .5rem; margin: 0 0 .8rem; color: #105b40; font-size: 1.125rem; font-weight: 700; line-height: 1.4; }
+.notice h2 svg { flex-shrink: 0; }
+.notice p { margin: .7rem 0; color: inherit; font-size: .8125rem; line-height: 1.7; }
+.notice summary { cursor: pointer; min-height: 44px; align-content: center; font-size: .8125rem; font-weight: 700; }
+.notice button { width: 100%; min-height: 44px; margin-top: .75rem; padding: .7rem; border: 1px solid #126146; border-radius: .7rem; background: #126146; color: #fff; font-size: .8125rem; font-weight: 700; line-height: 1.5; cursor: pointer; }
+.notice button:disabled { cursor: default; background: #d7e8de; color: #345748; border-color: #789b88; }
+.notice small { display: block; margin-top: .6rem; font-size: .6875rem; line-height: 1.6; }
+.notice .retention { padding-top: .7rem; border-top: 1px solid #b1d2c0; }
+.contact { display: grid; gap: .5rem; font-size: .8125rem; line-height: 1.6; }
+.notice a { color: #105b40; text-decoration: underline; }
+.notice :is(button,summary,a):focus-visible { outline: 3px solid #327658; outline-offset: 3px; }
+:global(html.dark) .notice { background: #0b3329; border-color: #407b64; color: #d1ebdf; }
+:global(html.dark) .notice h2, :global(html.dark) .notice a { color: #9de6ca; }
+:global(html.dark) .notice button { background: #a0e7ce; color: #092e22; border-color: #a0e7ce; }
+:global(html.dark) .notice button:disabled { background: #214e3e; color: #d1ebdf; border-color: #61947f; }
+:global(html.dark) .notice .retention { border-color: #407b64; }
+

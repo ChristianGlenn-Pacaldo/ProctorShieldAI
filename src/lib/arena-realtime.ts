@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "./power-arena-feature.ts";
 import { arenaPusher } from "@/lib/pusher";
 import { computeArenaRankings, getPowerPenalty, type ArenaMutation, type ArenaState, type ArenaParticipant, type PendingAttack } from "./arena.ts";
 
@@ -5,8 +6,10 @@ import { computeArenaRankings, getPowerPenalty, type ArenaMutation, type ArenaSt
 export function arenaRealtime(mutation: ArenaMutation) {
   return {
     trigger(channels: string | string[], event: string, data: object): Promise<void> {
+      if (!isPowerArenaEnabled()) return Promise.resolve();
       const payload = structuredClone(data);
       mutation.afterCommit(async ({ signal }) => {
+        if (!isPowerArenaEnabled()) return;
         await arenaPusher.trigger(channels, event, {
           ...payload,
           quizId: mutation.state?.quizId,

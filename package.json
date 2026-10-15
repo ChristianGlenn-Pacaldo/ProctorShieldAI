@@ -9,7 +9,7 @@
     "prepare:standalone": "node scripts/prepare-standalone.js",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/*.test.ts",
+    "test": "node --import ./tests/helpers/test-feature-policy.ts --test --test-concurrency=4 tests/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:db-check": "node scripts/check-e2e-database.mjs",
     "db:migrate:check": "tsx scripts/check-migration-readiness.ts",

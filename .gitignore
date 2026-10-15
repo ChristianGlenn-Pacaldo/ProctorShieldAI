@@ -62,3 +62,6 @@ cloudflared*.log
 next-env.d.ts
 
 /src/generated/prisma
+
+# Generated local release candidates, QA reports and screenshots
+/release-review/

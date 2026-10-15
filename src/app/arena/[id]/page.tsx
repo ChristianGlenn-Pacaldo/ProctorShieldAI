@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
 import { redirect, notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -11,6 +12,7 @@ interface ArenaPageProps {
 }
 
 export default async function ArenaPage({ params }: ArenaPageProps) {
+  if (!isPowerArenaEnabled()) notFound();
   const { id } = await params;
   const quizId = parseInt(id, 10);
   if (!Number.isInteger(quizId) || quizId <= 0) {

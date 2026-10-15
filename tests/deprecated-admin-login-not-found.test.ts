@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -26,6 +27,7 @@ function load<T>(path: string, dependencies: Record<string, unknown>): T {
   vm.runInNewContext(code, {
     exports, Headers, URL, process: { env: { NODE_ENV: "production" } },
     require(name: string) {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       assert.ok(Object.hasOwn(dependencies, name), `Unexpected route dependency: ${name}`);
       return dependencies[name];
     },

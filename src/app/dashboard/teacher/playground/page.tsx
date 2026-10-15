@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
 import { getSession } from "@/lib/auth";
 import { getTeacherEntitlements } from "@/lib/teacher-entitlements";
 import prisma from "@/lib/prisma";
@@ -6,6 +8,7 @@ import PlaygroundContent from "./content";
 import { redirect } from "next/navigation";
 
 export default async function TeacherPlaygroundPage() {
+  if (!isPowerArenaEnabled()) notFound();
   const session = await getSession();
 
   if (!session || session.role !== "teacher") {

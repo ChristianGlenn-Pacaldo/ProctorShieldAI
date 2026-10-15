@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -39,6 +40,7 @@ function navigationBoundary(auth: ReturnType<typeof authFixture>, initial: Attem
     exports: route, Headers, URL,
     process: { env: { NODE_ENV: "production" } },
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/auth") return auth.auth;
       if (name === "@/lib/auth-destination") return { getAuthDestination };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };

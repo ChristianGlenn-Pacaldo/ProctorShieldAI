@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -26,6 +27,7 @@ function navigation(fixture: Fixture, readerFailure = false) {
   vm.runInNewContext(code, {
     exports, Headers, URL, process: { env: { NODE_ENV: "production" } },
     require(name: string) {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { NextResponse };
       if (name === "@/lib/auth-destination") return { getAuthDestination };
       if (name === "@/lib/auth") return { ...fixture.auth, getSession: (...args: unknown[]) => {

@@ -38,7 +38,7 @@ export const VIOLATION_LABELS: Record<ViolationType, string> = {
   looking_right: "Looking right",
   looking_up: "Looking up",
   looking_down: "Looking down",
-  device_detected: "Unauthorized phone/device detected",
+  device_detected: "Possible unauthorized electronic device",
   audio_anomaly: "Sustained loud audio detected",
   fullscreen_exit: "Fullscreen exited",
   tab_switch: "App/tab switch or window minimized",
@@ -54,12 +54,10 @@ export function getViolationLabel(type: string): string {
 }
 
 const DEVICE_THRESHOLDS = new Map<string, number>([
-  ["cell phone", 0.2],
-  ["mobile phone", 0.2],
-  ["smartphone", 0.2],
-  // A phone held sideways with its display facing the camera is frequently
-  // classified as a remote. Require much stronger evidence for that generic
-  // label because faces, furniture, and wall fixtures produce false matches.
+  ["cell phone", 0.5],
+  ["mobile phone", 0.5],
+  ["smartphone", 0.5],
+  // COCO's remote class is a generic signal; it does not prove a phone is present.
   ["remote", 0.55],
   ["laptop", 0.65],
   // Do not classify a stationary TV/monitor in the room as a handheld phone.
@@ -68,21 +66,35 @@ const DEVICE_THRESHOLDS = new Map<string, number>([
 ]);
 
 export function getUnauthorizedDeviceConfidence(predictions: ObjectPrediction[]): number {
+  return getUnauthorizedDevicePrediction(predictions)?.score ?? 0;
+}
+
+export function getUnauthorizedDevicePrediction(predictions: ObjectPrediction[]): ObjectPrediction | null {
+  let candidate: ObjectPrediction | null = null;
   let confidence = 0;
   for (const prediction of predictions) {
-    const label = prediction.class.toLowerCase();
+    const label = prediction.class.trim().toLowerCase();
     const threshold = DEVICE_THRESHOLDS.get(label);
-    if (threshold !== undefined && prediction.score >= threshold) {
-      confidence = Math.max(confidence, prediction.score);
+    if (threshold !== undefined && Number.isFinite(prediction.score) && prediction.score <= 1 && prediction.score >= threshold && prediction.score > confidence) {
+      confidence = prediction.score;
+      candidate = { class: label, score: prediction.score };
     }
   }
-  return confidence;
+  return candidate;
+}
+
+export function getDevicePredictionLabel(prediction: ObjectPrediction | null): string {
+  if (prediction && ["cell phone", "mobile phone", "smartphone"].includes(prediction.class)) return "Possible phone";
+  if (prediction?.class === "laptop") return "Possible laptop";
+  if (prediction?.class === "remote") return "Possible electronic device (remote)";
+  return "Possible electronic device";
 }
 
 export function isActionableDeviceDetection(confidence: number, mobileFaceMissing: boolean, mobile = false): boolean {
-  if (confidence <= 0) return false;
+  void mobile; // Both browser profiles now use the same minimum device score.
+  if (!Number.isFinite(confidence) || confidence <= 0 || confidence > 1) return false;
   if (mobileFaceMissing) return confidence >= 0.65;
-  return !mobile || confidence >= 0.5;
+  return confidence >= 0.5;
 }
 
 export function getAudioSignalLevel(samples: ArrayLike<number>): number {

@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { after, NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       const quizzes = await prisma.quiz.findMany({
         where: {
           teacherId: session.userId,
+          ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}),
           quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
         },
         include: {
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
       const pendingRetakes = await prisma.studentQuiz.findMany({
         where: {
           quizStatus: "pending_retake",
-          quiz: { teacherId: session.userId },
+          quiz: { teacherId: session.userId, ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}) },
         },
         include: {
           student: { select: { fullName: true } },
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        quizzes: quizzes.map((quiz) => ({
+        quizzes: quizzes.filter(row => !isDisabledArenaResource(row)).map((quiz) => ({
           ...quiz,
           participantCount: participantCounts.get(quiz.id) ?? 0,
           participantLimit: entitlements.studentLimitPerQuiz,
@@ -106,6 +108,7 @@ export async function GET(req: NextRequest) {
       const studentQuizzes = await prisma.studentQuiz.findMany({
         where: {
           studentId: session.userId,
+          ...(!isPowerArenaEnabled() ? { attemptMode: { not: "arena" }, quiz: { quizMode: { not: "arena" } } } : {}),
           quiz: { quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] } },
         },
         include: {
@@ -117,7 +120,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return NextResponse.json({ success: true, quizzes: withRetakeEligibility(studentQuizzes) }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ success: true, quizzes: withRetakeEligibility(studentQuizzes.filter(row => !isDisabledArenaResource(row))) }, { headers: NO_STORE_HEADERS });
     } else if (session.role === "admin") {
       // Admins get all quizzes
       const quizzes = await prisma.quiz.findMany({
@@ -171,6 +174,7 @@ async function POSTImpl(req: NextRequest) {
     }
     const isAiQuiz = aiGenerationReceipt !== undefined;
 
+    if (isDisabledArenaResource({ quizMode: rawQuizMode })) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     let parsedQuizMode: "proctored" | "arena";
     try {
       parsedQuizMode = parseQuizMode(rawQuizMode);

@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -30,6 +31,7 @@ async function POSTImpl(req: NextRequest) {
     if (!studentQuiz || studentQuiz.quiz.teacherId !== session.userId) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (studentQuiz.quizStatus !== "pending_retake" || !studentQuiz.endTime) {
       return NextResponse.json({ error: "This retake request is no longer pending" }, { status: 409 });
     }

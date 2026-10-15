@@ -1,6 +1,7 @@
+import { isPowerArenaEnabled, isArenaPath, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, verifyToken, type TokenPayload } from "@/lib/auth";
-import { getAuthDestination } from "@/lib/auth-destination";
+import { getAuthDestination, getJoinLoginDestination } from "@/lib/auth-destination";
 
 const SESSION_CLASSES = ["admin", "user"] as const;
 
@@ -161,6 +162,9 @@ async function authorizeRootNavigation(request: NextRequest) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (!isPowerArenaEnabled() && isArenaPath(pathname)) {
+    return addSecurityHeaders(NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS }));
+  }
   const retakeNavigation = (pathname === "/dashboard/student" || /^\/(quiz|arena)\/[1-9]\d*$/.test(pathname))
     && request.nextUrl.searchParams.has("_retakeStudent");
 
@@ -230,8 +234,16 @@ export function proxy(request: NextRequest) {
     }
 
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = targetRole === "admin" ? "/admin/login" : "/login";
+    loginUrl.pathname = "/login";
+    if (pathname === "/join") {
+      // Proxy runs before the Join page. Translate its code into login intent,
+      // reject ambiguous codes, and drop unrelated redirect query parameters.
+      const codes = request.nextUrl.searchParams.getAll("code");
+      const destination = new URL(getJoinLoginDestination(codes.length === 1 ? codes[0] : undefined), request.url);
+      loginUrl.search = destination.search;
+    }
     const response = NextResponse.redirect(loginUrl);
+    if (pathname === "/join") response.headers.set("Cache-Control", "private, no-store, max-age=0");
     if (tokenName) response.cookies.delete(tokenName);
     return addSecurityHeaders(response);
   }

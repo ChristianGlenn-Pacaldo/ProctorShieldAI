@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -27,6 +28,7 @@ async function POSTImpl(req: NextRequest, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Quiz not found or unauthorized" }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(quiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (quiz.quizStatus !== "active") {
       return NextResponse.json({ error: "Quiz is not in a startable state" }, { status: 400 });
     }

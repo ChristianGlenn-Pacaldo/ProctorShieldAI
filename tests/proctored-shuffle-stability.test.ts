@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as questionOrder from "../src/lib/quiz-question-order.ts";
 import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
@@ -35,7 +36,8 @@ function load(file: string, db: unknown, role = "student") {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText, {
     exports, Date, console,
-    require: (name: string) => { assert.ok(name in dependencies, name); return dependencies[name]; },
+    require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency; assert.ok(name in dependencies, name); return dependencies[name]; },
   });
   return exports;
 }

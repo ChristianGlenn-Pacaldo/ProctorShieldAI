@@ -216,7 +216,7 @@ function assertSessionLost(setup: ReturnType<typeof fixture>) {
   const view = setup.render(), text = textOf(view);
   assert.match(text, /Admin session has expired or changed|You no longer have Admin access/);
   assert.doesNotMatch(text, /Test Teacher|teacher@example|Private|LIVE|Platform Users|Retry|Could not load/);
-  assert.ok(nodesOf(view, n => n.props.href === "/admin/login" && textOf(n) === "Admin Login").length);
+  assert.ok(nodesOf(view, n => n.props.href === "/login" && textOf(n) === "Sign In").length);
   assert.equal(JSON.stringify(setup.states[0]), JSON.stringify(dashboardBody(0).stats));
   for (const index of [1, 2, 3, 4]) assert.equal(JSON.stringify(setup.states[index]), "[]");
   assert.equal(setup.states[6], null, "editing user cleared");

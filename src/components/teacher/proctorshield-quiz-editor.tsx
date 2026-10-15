@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import "@/styles/assessment-theme.css";
 import AssessmentThemeControl from "@/components/assessment-theme-control";
@@ -144,6 +145,7 @@ export default function ProctorShieldQuizEditor({
   onSaveSuccess,
   onOpenAiGenerator,
 }: ProctorShieldQuizEditorProps) {
+  const arenaEnabled = usePowerArenaEnabled();
   // Main Quiz State
   const initialMode = initialQuiz?.quizMode || (initialQuiz?.isGamified ? "arena" : "proctored");
   const [quizForm, setQuizForm] = useState<QuizFormData>({
@@ -235,6 +237,7 @@ export default function ProctorShieldQuizEditor({
   const isDurationLocked = Boolean(quizForm.id && ["in_progress", "ended"].includes(quizForm.quizStatus || ""));
 
   const handleToggleMode = (targetMode: "proctored" | "arena") => {
+    if (targetMode === "arena" && !arenaEnabled) return;
     if (quizForm.quizMode === targetMode) return;
     if (isModeLocked) {
       setSaveError("Quiz mode cannot be changed after students have joined or attempted this quiz.");
@@ -574,6 +577,7 @@ export default function ProctorShieldQuizEditor({
                 <span>Live Exam</span>
               </button>
 
+{arenaEnabled && <>
               <button
                 type="button"
                 onClick={() => handleToggleMode("arena")}
@@ -588,7 +592,7 @@ export default function ProctorShieldQuizEditor({
                 <Swords className="w-3.5 h-3.5" />
                 <span>Power Arena</span>
                 {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
-              </button>
+              </button></>}
             </div>
 
             {isModeLocked && (
@@ -783,7 +787,7 @@ export default function ProctorShieldQuizEditor({
                       <span className="text-xs text-purple-400">→</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Scan documents, paste text, or snap photos of exams to generate questions automatically.
+                      Upload documents or scan photos of exams to generate questions automatically.
                     </p>
                   </button>
                 )}
@@ -1316,6 +1320,7 @@ export default function ProctorShieldQuizEditor({
                     <ShieldCheck className="w-4 h-4" />
                     <span>Live Monitored Exam</span>
                   </button>
+{arenaEnabled && <>
                   <button
                     type="button"
                     onClick={() => handleToggleMode("arena")}
@@ -1329,7 +1334,7 @@ export default function ProctorShieldQuizEditor({
                     <Swords className="w-4 h-4" />
                     <span>Power Arena</span>
                     {!isSubscribed && <Crown className="w-3 h-3 text-amber-400" />}
-                  </button>
+                  </button></>}
                 </div>
                 {isModeLocked && (
                   <p className="text-[11px] text-amber-400/90 flex items-center gap-1.5 mt-1">

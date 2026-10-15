@@ -39,9 +39,9 @@ test("actual installed component and real Motion SSR render five semantic steps 
   assert.doesNotMatch(html, /investments?|portfolio|financial goals|Verify Identity|Track Growth/i);
 });
 
-test("workflow accurately qualifies monitoring and retains the unproctored Arena boundary", () => {
+test("workflow accurately qualifies monitoring without advertising the disabled Arena", () => {
   assert.match(html, /When enabled for a proctored quiz/);
-  assert.match(html, /Power Arena does not use proctoring/);
+  assert.doesNotMatch(html, /Power Arena|Enter the Arena/i);
   assert.match(html, /flags recorded events for teacher review/);
   assert.doesNotMatch(html, /guaranteed|prevent.*cheating|automatically.*punish/i);
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { ArrowUpRight, Camera, LayoutGrid, Swords, X } from "lucide-react";
+import { ArrowUpRight, Camera, FileSearch, LayoutGrid, X } from "lucide-react";
 import styles from "./product-features.module.css";
 
 const features = [
@@ -12,13 +12,13 @@ const features = [
   { id: "ai-proctoring", index: "02", label: "EVIDENCE WITH CONTEXT", title: "AI-Assisted Proctoring", icon: Camera,
     description: "Face and head-position monitoring helps flag events during enabled proctored attempts. Teachers review live status and supporting evidence.",
     preview: "Teacher Live Monitor", alt: "ProctorShieldAI Live Monitor showing sample student status and camera-pending placeholders, with no real webcam images." },
-  { id: "power-arena", index: "03", label: "MULTIPLAYER QUIZZES", title: "Power Arena", icon: Swords,
-    description: "Turn quizzes into a multiplayer battle with gameplay points, power-ups, and a live leaderboard.",
-    preview: "Student Arena interface", alt: "ProctorShieldAI Battle Arsenal showing sample Meteor Strike, Earthquake and Blizzard Frost controls." },
+  { id: "evidence-review", index: "03", label: "TEACHER REVIEW", title: "Evidence Review", icon: FileSearch,
+    description: "Review recorded incident snapshots and available short clips alongside event details. Replay and download evidence while it remains available under the retention policy. Requires an active Pro plan.",
+    preview: "Teacher Evidence Review", alt: "ProctorShieldAI Teacher Evidence Review showing demo incident details, redacted identity, and an opaque media placeholder." },
 ];
 
 function imageSource(id: string, theme: "light" | "dark", cropped = false) {
-  const assetId = id === "power-arena" ? "power-arena-arsenal" : id;
+  const assetId = id;
   return `/images/features/${assetId}-${theme}${cropped ? "-crop" : ""}.webp`;
 }
 
@@ -51,7 +51,7 @@ export default function ProductFeatures() {
               <span className={styles.previewAction}>View preview <ArrowUpRight size={15} aria-hidden="true" /></span>
             </button>
             <p className={styles.description}>{feature.description}</p>
-            <p className={styles.caption}>{feature.preview} <span aria-hidden="true">·</span> Sample data</p>
+            <p className={styles.caption}>{feature.preview} <span aria-hidden="true">·</span> Sample data{feature.id === "evidence-review" && " · Media redacted"}</p>
           </article>
         ))}
       </div>
@@ -66,12 +66,12 @@ export default function ProductFeatures() {
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
         }}>
         {selected && <>
-          <div className={styles.dialogHeader}><div><h2 id="product-preview-title">{selected.preview}</h2><p>Actual ProctorShieldAI interface with sample data.</p></div>
+          <div className={styles.dialogHeader}><div><h2 id="product-preview-title">{selected.preview}</h2><p>{selected.id === "evidence-review" ? "Actual Teacher interface with demo records. Identities and media are redacted." : "Actual ProctorShieldAI interface with sample data."}</p></div>
             <button type="button" className={styles.close} onClick={close} aria-label="Close interface preview"><X size={22} aria-hidden="true" /></button>
           </div>
           <div className={styles.dialogImage}>
-            <Image className={styles.lightImage} src={imageSource(selected.id, "light")} width={1600} height={1200} alt={selected.alt} sizes="90vw" loading="eager" />
-            <Image className={styles.darkImage} src={imageSource(selected.id, "dark")} width={1600} height={1200} alt={selected.alt} sizes="90vw" loading="eager" />
+            <Image className={styles.lightImage} src={imageSource(selected.id, "light")} width={selected.id === "evidence-review" ? 1408 : 1600} height={selected.id === "evidence-review" ? 880 : 1200} alt={selected.alt} sizes="90vw" loading="eager" />
+            <Image className={styles.darkImage} src={imageSource(selected.id, "dark")} width={1600} height={selected.id === "evidence-review" ? 1000 : 1200} alt={selected.alt} sizes="90vw" loading="eager" />
           </div>
           <div className={styles.dialogFooter}>
             <span>Product preview <span aria-hidden="true">·</span> Sample data</span>

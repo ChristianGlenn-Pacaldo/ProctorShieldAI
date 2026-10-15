@@ -29,7 +29,12 @@ export async function detectDesktopFacesWithFallback<Detection>(
   detectFaces: (inputSize: number, scoreThreshold: number) => Promise<Detection[]>,
 ) {
   const primary = await detectFaces(primaryInputSize, 0.5);
-  if (primary.length > 1 || primaryInputSize >= 320) return primary;
+  if (primary.length > 1) return primary;
+  if (primaryInputSize >= 320) {
+    // Detailed scans are the desktop default. Retry raw pixels only on a miss,
+    // retaining recovery when the brightness transform obscures a real face.
+    return primary.length ? primary : detectFaces(160, 0.5);
+  }
   const detailed = await detectFaces(320, 0.5);
   // Use detailed single-face landmarks for calibration and subsequent tracking.
   // Mixing primary calibration with recovered detailed poses biases pitch deltas.

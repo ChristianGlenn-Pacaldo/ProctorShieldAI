@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, PowerArenaDisabledError } from "./power-arena-feature.ts";
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getRedis, isRedisReady } from "./redis.ts";
@@ -461,9 +462,11 @@ export async function mutateArena<T>(
   const result = await client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`arena-state:${quizId}`}))`;
     const state = await readArenaState(tx, quizId);
+    if (state && !isPowerArenaEnabled()) throw new PowerArenaDisabledError();
     const before = JSON.stringify(state);
     const mutation: ArenaMutation = { tx, state, now: Date.now(), afterCommit: (run, settings) => effects.push({ run, realtime: !!settings?.realtime }) };
     const value = await operation(mutation);
+    if (mutation.state && !isPowerArenaEnabled()) throw new PowerArenaDisabledError();
     if (mutation.state?.players) mutation.state.players = mutation.state.participants;
     changed = JSON.stringify(mutation.state) !== before;
     if (changed) {

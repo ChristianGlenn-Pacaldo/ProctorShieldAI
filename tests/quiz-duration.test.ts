@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
@@ -118,6 +119,7 @@ test("host page reload takes saved duration instead of a URL override", async ()
   }).outputText;
   const page: any = {};
   vm.runInNewContext(code, { exports: page, require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
     assert.ok(name in dependencies, `Unexpected import: ${name}`);
     return dependencies[name];
   } });

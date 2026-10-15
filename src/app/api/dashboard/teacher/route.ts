@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "@/lib/power-arena-feature";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserSession } from "@/lib/auth";
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     // 1. Count total quizzes created by the teacher
     const totalQuizzes = await prisma.quiz.count({
-      where: { teacherId },
+      where: { teacherId, ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}) },
     });
 
     // 2. Fetch all student quiz sessions for the quizzes of this teacher
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       where: {
         quiz: {
           teacherId,
+          ...(!isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}),
         },
       },
       include: {

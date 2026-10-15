@@ -1,6 +1,7 @@
 import { officialBrandModule } from "./helpers/brand-image-fixture.ts";
 import { fetchAuth } from "../src/lib/auth-request.ts";
 import assert from "node:assert/strict";
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import fs from "node:fs";
 import { clsx } from "clsx";
 import test from "node:test";
@@ -39,6 +40,7 @@ function ui(path: string, fetcher: Fetcher, clientId = "fixture-client") {
     window: { location: { origin: "https://app.example.test", assign: (url: string) => destinations.push(url) } },
     fetch: async (url: string, init: RequestInit) => { calls.push({ url, init }); return fetcher(url, init); },
     require: function resolveUiDependency(name: string) {
+      const policy = defenseDependency(name); if (policy !== undefined) return policy;
         if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
       if (name === "@/components/product-features") {
         productFeatures = {};
@@ -279,7 +281,7 @@ test("homepage bottom CTA has one unified sign-in link and preserves surrounding
   assert.equal(text(links[0].props.children), "Sign in to ProctorShieldAI");
   assert.doesNotMatch(text(section), /Enter Room as Student|Launch Quiz as Teacher|Admin/);
   assert.match(String(links[0].props.className), /primaryButton/);
-  assert.match(page.content(), /better learning/);
+  assert.match(page.content(), /teacher review of academic assessments/);
   assert.match(page.content(), /Face and head-position monitoring/);
   assert.equal(page.calls.length, 0); assert.deepEqual(page.destinations, []);
 });

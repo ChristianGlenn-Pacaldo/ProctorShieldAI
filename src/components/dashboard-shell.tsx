@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -127,6 +128,7 @@ export default function DashboardShell({
   userInitials,
   identityColor = "from-blue-600 to-slate-800",
 }: DashboardShellProps) {
+  const arenaEnabled = usePowerArenaEnabled();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const themePreference = useRef<"light" | "dark" | null>(null);
@@ -359,7 +361,7 @@ export default function DashboardShell({
       }
     }
   };
-  const nav = navConfig[role] || navConfig.student;
+  const nav = (navConfig[role] || navConfig.student).map(section => ({ ...section, items: section.items.filter(item => arenaEnabled || !item.href.startsWith("/dashboard/teacher/playground")) }));
   const portal = portalConfig[role];
 
   const applyTheme = (nextTheme: "light" | "dark") => {

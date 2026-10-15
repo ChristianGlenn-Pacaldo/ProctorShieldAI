@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -25,10 +26,12 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Student quiz not found or unauthorized" }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (studentQuiz.quizStatus !== "pending_approval") {
       return NextResponse.json({ error: "This late-join request is no longer pending" }, { status: 409 });
     }
 
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     const newStatus = action === "accept" ? (studentQuiz.quiz.quizMode === "arena" ? "in_progress" : "enrolled") : "rejected";
 
     const claimed = await prisma.studentQuiz.updateMany({

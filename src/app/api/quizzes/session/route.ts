@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -77,6 +78,7 @@ async function POSTImpl(req: NextRequest) {
     if (!isQuizAvailable(quiz.quizStatus)) {
       return NextResponse.json(quizNotAvailableResponse(), { status: 410 });
     }
+    if (isDisabledArenaResource(quiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (quiz.quizMode === "arena") {
       return NextResponse.json(
         {

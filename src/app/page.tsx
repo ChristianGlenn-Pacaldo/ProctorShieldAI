@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -20,11 +21,12 @@ import styles from "./landing.module.css";
 const faqs = [
   { question: "How do students join a quiz?", answer: "Students enter the teacher’s quiz code here or in their Student Dashboard. They sign in and complete the required lobby checks before starting." },
   { question: "Does every head movement count as cheating?", answer: "Detection signals and recorded incidents are different. Proctored sessions use confirmation rules before recording qualifying events. Teachers can review the recorded evidence and AI report in context." },
-  { question: "What is Power Arena?", answer: "Power Arena is a multiplayer quiz battle with points, power-ups, and leaderboards. Arena gameplay points are separate from percentage scores for proctored exams." },
+  { question: "What evidence can teachers review?", answer: "Monitoring can save camera snapshots, short incident clips, and recorded browser events. Teachers review these signals in context; an AI signal alone does not prove misconduct." },
   { question: "Can I use ProctorShieldAI on a phone?", answer: "Students can use a supported mobile browser. Proctored quizzes require camera and microphone permissions and a successful device check before the attempt starts." },
 ];
 
 export default function LandingPage() {
+  const arenaEnabled = usePowerArenaEnabled();
   const router = useRouter();
   const [quickCode, setQuickCode] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,7 +103,7 @@ export default function LandingPage() {
 
         <div className={styles.capabilityStrip}><div className={styles.container}>
           <span className={styles.stripLabel}>THOUGHTFULLY CONNECTED</span>
-          <span><ScanFace size={20} /> AI monitoring</span><span><Camera size={20} /> Evidence replay</span><span><Brain size={20} /> Gemini insights</span><span><Swords size={20} /> Power Arena</span>
+          <span><ScanFace size={20} /> AI monitoring</span><span><Camera size={20} /> Evidence replay</span><span><Brain size={20} /> Gemini insights</span>{arenaEnabled && <span><Swords size={20} /> Power Arena</span>}
         </div></div>
 
         <section id="features" className={`${styles.container} ${styles.section}`} aria-labelledby="features-title">
@@ -112,17 +114,18 @@ export default function LandingPage() {
         <section id="how" className={styles.howSection} aria-labelledby="how-title"><div className={`${styles.container} ${styles.section}`}>
           <div className={styles.centerHeading}><span className={styles.eyebrow}>A SIMPLE FLOW, FROM START TO FINISH</span><h2 id="how-title">Good teaching.<br /><span>Fewer moving parts.</span></h2><p>Five steps. One place to make it happen.</p></div>
           <LandingHowItWorks />
-          <div className={styles.arenaBanner}><div className={styles.arenaBadge}><Swords size={30} /></div><div><span className={styles.eyebrow}>MEET POWER ARENA</span><h3>Make the next quiz a friendly showdown.</h3><p>Gameplay points, power-ups, and a little classroom competition.</p></div><Link href="/join" className={styles.secondaryButton}>Enter the Arena <ArrowUpRight size={17} /></Link></div>
+          {arenaEnabled && <>
+          <div className={styles.arenaBanner}><div className={styles.arenaBadge}><Swords size={30} /></div><div><span className={styles.eyebrow}>MEET POWER ARENA</span><h3>Make the next quiz a friendly showdown.</h3><p>Gameplay points, power-ups, and a little classroom competition.</p></div><Link href="/join" className={styles.secondaryButton}>Enter the Arena <ArrowUpRight size={17} /></Link></div></>}
         </div></section>
 
         <section id="pricing" className={`${styles.container} ${styles.section}`} aria-labelledby="pricing-title">
           <div className={styles.centerHeading}><span className={styles.eyebrow}>START SMALL. GROW WITH YOUR CLASSROOM.</span><h2 id="pricing-title">Clear plans.<span> No guesswork.</span></h2><p>Students join for free. Choose the teaching tools you need.</p></div>
           <div className={styles.pricingGrid}>
             <article className={styles.priceCard}><span className={styles.planLabel}>EDUCATOR STARTER</span><h3>Room to get started.</h3><div className={styles.price}>₱0<small> / forever</small></div><p>Get familiar with secure quizzes and your teaching workspace.</p><ul>
-              {[`${FREE_MANUAL_QUIZ_LIMIT} lifetime manual quizzes`, `Up to ${FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz`, "Real-time face detection and event logs", "Student Arena access"].map(item => <li key={item}><Check size={17} />{item}</li>)}
+              {[`${FREE_MANUAL_QUIZ_LIMIT} lifetime manual quizzes`, `Up to ${FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz`, "Real-time face detection and event logs", ...(arenaEnabled ? ["Student Arena access"] : [])].map(item => <li key={item}><Check size={17} />{item}</li>)}
             </ul><Link href="/login/teacher" className={styles.secondaryButton}>Start free <ArrowRight size={17} /></Link></article>
             <article className={`${styles.priceCard} ${styles.proCard}`}><span className={styles.recommended}><Sparkles size={12} /> MORE ROOM TO TEACH</span><span className={styles.planLabel}>PRO INSTITUTIONAL</span><h3>Your classroom, empowered.</h3><div className={styles.price}>₱{PRO_MONTHLY_PRICE_PHP}<small> / month</small></div><p>AI-assisted creation, deeper insights, and more ways to engage.</p><ul>
-              {["Unlimited AI and manual quizzes", `Up to ${PRO_STUDENT_LIMIT_PER_QUIZ} students per quiz`, "Gemini reports and evidence review", "Live monitoring and timeline replay", "Power Arena battles and power-ups", "Audio and tab-switch monitoring"].map(item => <li key={item}><Check size={17} />{item}</li>)}
+              {["Unlimited AI and manual quizzes", `Up to ${PRO_STUDENT_LIMIT_PER_QUIZ} students per quiz`, "Gemini reports and evidence review", "Live monitoring and timeline replay", ...(arenaEnabled ? ["Power Arena battles and power-ups"] : []), "Audio and tab-switch monitoring"].map(item => <li key={item}><Check size={17} />{item}</li>)}
             </ul><Link href="/login/teacher" className={styles.primaryButton}>Explore Pro <ArrowRight size={17} /></Link></article>
           </div>
         </section>
@@ -140,7 +143,7 @@ export default function LandingPage() {
                 <span>ProctorShield<span className={styles.footerAccent}>AI</span></span>
               </Link>
               <p className={styles.footerTagline}>Smarter Quizzes. Stronger Integrity.</p>
-              <p className={styles.footerDescription}>A connected assessment workspace for creating quizzes, reviewing proctored attempts, and supporting better learning with Power Arena.</p>
+              <p className={styles.footerDescription}>A connected assessment workspace for creating quizzes, reviewing proctored attempts, and supporting teacher review of academic assessments.</p>
             </div>
             <nav className={styles.footerColumn} aria-labelledby="footer-platform-heading">
               <h2 id="footer-platform-heading">Platform</h2>

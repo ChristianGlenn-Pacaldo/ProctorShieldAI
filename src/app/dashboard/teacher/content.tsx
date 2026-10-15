@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FileText, Users, AlertTriangle, Brain, Search, Crown, ArrowRight, Zap } from "lucide-react";
@@ -40,6 +41,7 @@ export default function TeacherDashboardContent({
   isSubscribed: boolean;
   teacherName?: string;
 }) {
+  const arenaEnabled = usePowerArenaEnabled();
   const [stats, setStats] = useState({
     totalQuizzes: 0,
     studentsMonitored: 0,
@@ -269,6 +271,7 @@ export default function TeacherDashboardContent({
         }}
       />
 
+      {arenaEnabled && <>
       {/* Power Arena Quick Action Banner */}
       <div className="ps-teacher-arena-banner ps-teacher-glass-card relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-500/50">
         <div className="flex items-center gap-3.5">
@@ -301,6 +304,7 @@ export default function TeacherDashboardContent({
         </Link>
       </div>
 
+      </>}
       {/* Stats Cards */}
       <div aria-busy={initialLoading} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (

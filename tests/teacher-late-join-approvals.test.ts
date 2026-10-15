@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as quizScanner from "../src/lib/quiz-scanner.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -57,6 +58,7 @@ function fixture(server: { pending: PendingApproval[] }, options: { failAction?:
   vm.runInNewContext(compiled, {
     exports: component,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/quiz-scanner") return quizScanner;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };

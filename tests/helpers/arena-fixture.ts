@@ -8,6 +8,7 @@ import * as sessionTiming from "../../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import * as grading from "../../src/lib/quiz-submission.ts";
 import * as quizMode from "../../src/lib/quiz-mode.ts";
+import * as arenaFeature from "../../src/lib/power-arena-feature.ts";
 
 const compiled = new Map<string, string>();
 export function loadArenaModule(file: string, dependencies: Record<string, unknown>) {
@@ -20,6 +21,7 @@ export function loadArenaModule(file: string, dependencies: Record<string, unkno
     setTimeout, clearTimeout, AbortController, AbortSignal,
     process: dependencies.__process ?? { env: {} }, console: { error(...args: unknown[]) { (dependencies.__diagnostics as unknown[][] | undefined)?.push(args); }, warn(...args: unknown[]) { (dependencies.__warnings as unknown[][] | undefined)?.push(args); }, info() {} },
     require: (name: string) => {
+      if (["@/lib/power-arena-feature", "./power-arena-feature.ts", "./lib/power-arena-feature"].includes(name) && !(name in dependencies)) return arenaFeature;
       if (name === "node:crypto") return crypto;
       if (name === "@/lib/arena-question-work" && !(name in dependencies)) return questionWork;
       if (name === "@/lib/quiz-question-order" && !(name in dependencies)) return questionOrder;

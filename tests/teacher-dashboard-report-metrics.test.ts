@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import { reportAttempt, reportEvent, reportsRoute } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
 import { fixture, find, textOf } from "./helpers/dashboard-lifecycle-fixture.ts";
@@ -20,6 +21,7 @@ function loadRoute(routePath: string, prisma: object) {
   vm.runInNewContext(compiled, {
     exports: route,
     require: (name: string) => {
+      const policy = defenseDependency(name); if (policy !== undefined) return policy;
       if (name === "next/server") return {
         NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
           new Response(JSON.stringify(body), { status: options.status ?? 200 }) },

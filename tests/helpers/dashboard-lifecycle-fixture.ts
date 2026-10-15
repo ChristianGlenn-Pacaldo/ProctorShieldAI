@@ -1,3 +1,5 @@
+import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
 import { officialBrandModule } from "./brand-image-fixture.ts";
 import * as quizScanner from "../../src/lib/quiz-scanner.ts";
@@ -130,6 +132,10 @@ export function fixture(role: "admin" | "teacher" | "student" = "admin", auth?: 
     vm.runInNewContext(compiled, {
       exports,
       require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
         if (name === "./brand-image" || name === "@/components/brand-image") return officialBrandModule;
         if (name === "@/lib/quiz-scanner") return quizScanner;
         if (name === "@/lib/notification-presentation") return load("src/lib/notification-presentation.ts");

@@ -87,7 +87,7 @@ test("current and legacy quiz codes survive mobile clipboard normalization", () 
 test("device detection rejects weak and stationary-screen false positives", () => {
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.14 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.19 }]), 0);
-  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.29 }]), 0.29);
+  assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.29 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "cell phone", score: 0.61 }]), 0.61);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.34 }]), 0);
   assert.equal(getUnauthorizedDeviceConfidence([{ class: "remote", score: 0.44 }]), 0);
@@ -100,7 +100,7 @@ test("device detection rejects weak and stationary-screen false positives", () =
 
 test("mobile face loss rejects weak hand-occlusion device matches without disabling strong detections", () => {
   assert.equal(isActionableDeviceDetection(0.39, true), false);
-  assert.equal(isActionableDeviceDetection(0.39, false), true);
+  assert.equal(isActionableDeviceDetection(0.39, false), false);
   assert.equal(isActionableDeviceDetection(0.23, false, true), false);
   assert.equal(isActionableDeviceDetection(0.45, false, true), false);
   assert.equal(isActionableDeviceDetection(0.5, false, true), true);

@@ -1,6 +1,8 @@
+import { isPowerArenaEnabled } from "./lib/power-arena-feature";
 /** Next compiles this hook for both Edge and Node. Keep the Node dependency
  * inside an explicit runtime branch so Edge compilation can eliminate it. */
 export async function register() {
+  if (!isPowerArenaEnabled()) return;
   if (process.env.NEXT_RUNTIME === "nodejs") {
     if (process.env.NODE_ENV !== "production"
       || (process.env.NEXT_PHASE && process.env.NEXT_PHASE !== "phase-production-server")

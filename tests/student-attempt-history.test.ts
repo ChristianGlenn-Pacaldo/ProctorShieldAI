@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import { reportCard, reportPayload, reportsPage } from "./helpers/ai-reports-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -52,6 +53,7 @@ async function loadResultsApi(role: string | null = "student") {
   vm.runInNewContext(transpile("src/app/api/dashboard/student/results/route.ts"), {
     exports: loadedModule,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: { studentQuiz: { findMany: async () => { queried = true; return attempts; } } } };
       if (name === "@/lib/auth") return { getUserSession: async () => role ? { role, userId: "student-1" } : null };
@@ -85,6 +87,7 @@ function pageFixture(relativePath: string, results: Array<Record<string, unknown
   vm.runInNewContext(transpile(relativePath), {
     exports: loadedModule,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};

@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -38,6 +39,7 @@ function fixture(concurrent = false, owner = "teacher-1") {
   vm.runInNewContext(routeCode, {
     exports: route,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { NextResponse: { json: (body: unknown, options: { status?: number } = {}) =>
         new Response(JSON.stringify(body), { status: options.status ?? 200 }) } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };

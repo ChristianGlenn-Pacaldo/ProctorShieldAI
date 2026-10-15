@@ -42,10 +42,14 @@ export function assessmentFixture(scene: "exam" | "arena", variant = "active", m
   const ArenaPodium = loadChild("src/components/arena/arena-podium.tsx").ArenaPodium;
   const AuthThemeControl = loadArenaModule("src/components/auth-theme-control.tsx", { react: React, "react/jsx-runtime": jsx, "lucide-react": icons, "@/lib/theme-presentation": { syncSystemTheme() {}, togglePresentationTheme() {} } }).default;
   const AssessmentThemeControl = loadArenaModule("src/components/assessment-theme-control.tsx", { "react/jsx-runtime": jsx, "./auth-theme-control": { __esModule: true, default: AuthThemeControl } }).default;
+  const StudentPrivacyNotice = loadArenaModule("src/components/student-privacy-notice.tsx", { react: React, "react/jsx-runtime": jsx, "lucide-react": icons,
+    "./student-privacy-notice.module.css": { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },
+  }).default;
   const exports: Record<string, any> = {};
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, {
     exports, console, Map, Set, Date, Promise, AbortController, process: { env: {} },
     require: (name: string) => {
+      if (name === "@/components/student-privacy-notice") return { __esModule: true, default: StudentPrivacyNotice };
       if (name === "@/components/assessment-theme-control") return { __esModule: true, default: AssessmentThemeControl };
       if (name === "react") return react; if (name === "react/jsx-runtime") return jsx; if (name === "lucide-react") return icons;
       if (name === "next/navigation") return { useRouter: () => ({ push() {} }), useParams: () => ({ id: "77" }) };

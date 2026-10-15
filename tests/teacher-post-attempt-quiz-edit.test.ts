@@ -1,3 +1,5 @@
+import * as defenseFeature from "../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../src/lib/password-update.ts";
 import * as questionOrder from "../src/lib/quiz-question-order.ts";
 import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
@@ -67,6 +69,10 @@ function routeFixture(attemptCount: number, quizStatus = "active") {
   vm.runInNewContext(transpile(routeSource), {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
       if (name === "@/lib/quiz-session-timing") return sessionTiming;
       if (name === "@/lib/quiz-question-order") return questionOrder;
       if (name === "next/server") return { NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };
@@ -255,6 +261,10 @@ function creationFixture() {
   vm.runInNewContext(transpile(creationSource), {
     exports,
     require: (name: string) => {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
       if (name === "@/lib/quiz-session-timing") return sessionTiming;
       if (name === "@/lib/quiz-question-order") return questionOrder;
       if (name === "next/server") return { after: () => {}, NextResponse: { json: (body: Record<string, unknown>, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } };

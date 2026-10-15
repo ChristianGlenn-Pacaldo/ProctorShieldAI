@@ -9,7 +9,7 @@ import { getAuthDestination } from "@/lib/auth-destination";
 type Intent = { intent: string; nonce: string };
 type Pending = { userId: string; email: string; challenge: string };
 
-export default function UnifiedGoogleSignIn() {
+export default function UnifiedGoogleSignIn({ joinCode }: { joinCode?: string } = {}) {
   const [intent, setIntent] = useState<Intent | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [otp, setOtp] = useState("");
@@ -90,8 +90,11 @@ export default function UnifiedGoogleSignIn() {
           : "Invalid, expired, or changed sign-in. Retry the latest code or start again."); return;
       }
       const role = data?.user?.role;
-      const destination = data?.success === true && (role === "student" || role === "teacher") ? getAuthDestination(role) : null;
+      const destination = data?.success === true && (role === "student" || role === "teacher") ? getAuthDestination(role, joinCode) : null;
       if (!destination) { setError("Unable to confirm your account. Please start again."); return; }
+      if (getAuthDestination("student", joinCode) !== "/dashboard/student" && role !== "student") {
+        setError("This quiz requires a Student account. Use your Student sign-in."); return;
+      }
       window.location.assign(new URL(destination, window.location.origin).href);
       navigating = true;
     } catch {

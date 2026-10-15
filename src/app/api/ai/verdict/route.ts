@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -68,6 +69,7 @@ async function POSTImpl(req: NextRequest) {
 
     // Prepare the violation summary for the AI
     const violations = studentQuiz.violations;
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     const violationSummary = violations.map((v: { violationType: string | null; confidenceScore: any; timestamp: Date }) => 
       `- ${v.violationType} (Confidence: ${v.confidenceScore}%) at ${v.timestamp.toISOString()}`
     ).join("\n");

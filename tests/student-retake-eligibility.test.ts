@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import * as sessionTiming from "../src/lib/quiz-session-timing.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -41,6 +42,7 @@ function loadApi(file: string, options: { rows?: Attempt[]; target?: Attempt; ro
   vm.runInNewContext(compile(file), {
     exports: route,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/lib/backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler };
       if (name === "next/server") return { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } };
       if (name === "@/lib/auth") return {
@@ -95,6 +97,7 @@ function modal(initial: Record<string, unknown>, respond: () => Promise<Response
   vm.runInNewContext(compile("src/components/student/ResultModal.tsx"), {
     exports: component,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "react") return { useState: (initialValue: unknown) => {
         const slot = index++;
         if (!(slot in state)) state[slot] = initialValue;

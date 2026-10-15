@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -75,6 +76,7 @@ function creationFixture(subscribed: boolean) {
   vm.runInNewContext(transpile(fs.readFileSync(creationPath, "utf8")), {
     exports,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { after: () => {}, NextResponse: { json: responseJson } };
       if (name === "@/lib/prisma") return { __esModule: true, default: prisma };
       if (name === "@/lib/auth") return { getSession: async () => ({ role: "teacher", userId: "teacher-1", fullName: "QA Teacher" }) };
@@ -103,6 +105,7 @@ test("successful Gemini generation issues a teacher-bound receipt for returned q
   vm.runInNewContext(transpile(fs.readFileSync(generationPath, "utf8")), {
     exports,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "next/server") return { NextResponse: { json: responseJson } };
       if (name === "@google/genai") return { GoogleGenAI: class {
         models = { generateContent: async () => ({ text: JSON.stringify({ questions: generatedQuestions }) }) };

@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { recoverArenaFinalization } from "@/lib/arena-finalization";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
@@ -46,6 +47,7 @@ async function POSTImpl(req: NextRequest) {
         },
         orderBy: { attemptNumber: "desc" },
       });
+      if (isDisabledArenaResource(attempt)) return jsonAfterCommit(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
       if (!attempt?.startTime || (attempt.attemptMode !== "arena" && body.studentQuizId !== attempt.id)) {
         return jsonAfterCommit({ error: "Active quiz session not found" }, { status: 409 });
       }

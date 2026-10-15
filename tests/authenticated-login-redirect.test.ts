@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -28,6 +29,7 @@ function page(fixture: Fixture, readFailure = false) {
   vm.runInNewContext(code, {
     exports,
     require(name: string) {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: unknown) => ({ type, props }) };
       if (name === "next/navigation") return { redirect: (path: string) => { throw new Redirect(path); } };
       if (name === "./content") return { __esModule: true, default: content };

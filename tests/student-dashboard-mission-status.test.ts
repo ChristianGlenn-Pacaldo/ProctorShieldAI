@@ -1,3 +1,4 @@
+import { defenseDependency } from "./helpers/defense-feature-fixture.ts";
 import { dashboardLoadingModule } from "./helpers/dashboard-loading-fixture.ts";
 import { loadUserLifecycleModule } from "./helpers/user-lifecycle-module.ts";
 import assert from "node:assert/strict";
@@ -63,6 +64,7 @@ async function renderDashboard(quizzes: ReturnType<typeof enrollment>[]) {
   vm.runInNewContext(code, {
     exports: component,
     require: (name: string) => {
+      const featureDependency = defenseDependency(name); if (featureDependency !== undefined) return featureDependency;
       if (name === "@/components/user-session-lifecycle") return lifecycle;
       if (name === "@/lib/student-result-summary") return studentResultSummary;
       if (name === "@/components/dashboard-loading") return dashboardLoadingModule;

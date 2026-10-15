@@ -1,5 +1,6 @@
 "use client";
 
+import { getAuthDestination } from "@/lib/auth-destination";
 import { fetchAuth } from "@/lib/auth-request";
 
 import { useState, useEffect } from "react";
@@ -7,6 +8,15 @@ import Link from "next/link";
 import BrandImage from "@/components/brand-image";
 import { Target, Camera, Brain, Lock, UserPlus, LogIn, Eye, EyeOff } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+
+function studentReturnDestination() {
+  let code: string | null = new URLSearchParams(window.location.search).get("joinCode");
+  try {
+    code ??= localStorage.getItem("pendingJoinCode");
+    localStorage.removeItem("pendingJoinCode");
+  } catch { /* A URL-carried intent still works when local storage is disabled. */ }
+  return getAuthDestination("student", code)!;
+}
 
 type Panel = "login" | "register";
 
@@ -76,13 +86,7 @@ export default function StudentLoginPage() {
 
       const role = data.user?.role || data.role;
       if (role === "student") {
-        const pendingCode = localStorage.getItem("pendingJoinCode");
-        if (pendingCode) {
-          localStorage.removeItem("pendingJoinCode");
-          window.location.href = `/join?code=${pendingCode}`;
-        } else {
-          window.location.href = "/dashboard/student";
-        }
+        window.location.href = studentReturnDestination();
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);
@@ -126,13 +130,7 @@ export default function StudentLoginPage() {
 
       const role = data.user?.role || data.role;
       if (role === "student") {
-        const pendingCode = localStorage.getItem("pendingJoinCode");
-        if (pendingCode) {
-          localStorage.removeItem("pendingJoinCode");
-          window.location.href = `/join?code=${pendingCode}`;
-        } else {
-          window.location.href = "/dashboard/student";
-        }
+        window.location.href = studentReturnDestination();
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);
@@ -191,13 +189,7 @@ export default function StudentLoginPage() {
         return;
       }
 
-      const pendingCode = localStorage.getItem("pendingJoinCode");
-      if (pendingCode) {
-        localStorage.removeItem("pendingJoinCode");
-        window.location.href = `/join?code=${pendingCode}`;
-      } else {
-        window.location.href = "/dashboard/student";
-      }
+      window.location.href = studentReturnDestination();
     } catch (err: any) {
       console.error("Registration error:", err);
       setError("Network error during registration. Please try again.");
@@ -230,13 +222,7 @@ export default function StudentLoginPage() {
 
       const role = data.user?.role || data.role;
       if (role === "student") {
-        const pendingCode = localStorage.getItem("pendingJoinCode");
-        if (pendingCode) {
-          localStorage.removeItem("pendingJoinCode");
-          window.location.href = `/join?code=${pendingCode}`;
-        } else {
-          window.location.href = "/dashboard/student";
-        }
+        window.location.href = studentReturnDestination();
       } else {
         setError(`Access Denied: This portal is restricted to students. Your account is registered as ${role?.toUpperCase()}.`);
         setIsLoading(false);

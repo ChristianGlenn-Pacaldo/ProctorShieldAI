@@ -1,5 +1,6 @@
 "use client";
 
+import StudentPrivacyNotice from "@/components/student-privacy-notice";
 import AssessmentThemeControl from "@/components/assessment-theme-control";
 
 import { createDesktopIncidentReporter, createDesktopHeadTracker, detectDesktopFacesWithFallback, getDesktopInferenceDimensions, measureDesktopLandmarkPose, prepareDesktopFaceFrame, requestDesktopCamera } from "@/lib/desktop-head-tracking";
@@ -11,6 +12,8 @@ import {
   getAudioAnomalyThreshold,
   getAudioSignalLevel,
   getUnauthorizedDeviceConfidence,
+  getUnauthorizedDevicePrediction,
+  getDevicePredictionLabel,
   isActionableDeviceDetection,
   isScreenshotShortcut,
 } from "@/lib/proctoring-detection";
@@ -63,16 +66,25 @@ export type SubmissionReason =
 
 // Module-level cached promises to prevent duplicate downloads and allow preloading
 let cachedFaceApiPromise: Promise<any> | null = null;
+let cachedFaceRuntimePromise: Promise<any> | null = null;
 let cachedCocoModelPromise: Promise<any> | null = null;
+// Cached models share one TensorFlow engine, including across effect remounts.
+// Skip overlapping observations instead of queuing old camera frames.
+let proctoringInferenceBusy = false;
 
 function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "lite_mobilenet_v2") {
   if (typeof window === "undefined") return;
-  if (!cachedFaceApiPromise) {
-    cachedFaceApiPromise = (async () => {
+  if (!cachedFaceRuntimePromise) {
+    cachedFaceRuntimePromise = (async () => {
       const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
       const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs-core");
       sharedTf.enableProdMode();
       await sharedTf.ready();
+      return faceapi;
+    })().catch((error) => { cachedFaceRuntimePromise = null; throw error; });
+  }
+  if (!cachedFaceApiPromise) {
+    cachedFaceApiPromise = cachedFaceRuntimePromise.then(async (faceapi) => {
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
         useTinyLandmarks
@@ -80,16 +92,20 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
           : faceapi.nets.faceLandmark68Net.loadFromUri('/models')
       ]);
       return faceapi;
-    })().catch((error) => { cachedFaceApiPromise = null; throw error; });
+    }).catch((error) => { cachedFaceApiPromise = null; throw error; });
   }
   if (!cachedCocoModelPromise) {
-    cachedCocoModelPromise = import("@tensorflow-models/coco-ssd").then((cocoSsd) =>
+    cachedCocoModelPromise = cachedFaceRuntimePromise.then(() => import("@tensorflow-models/coco-ssd")).then((cocoSsd) =>
       cocoSsd.load({
         base: objectModelBase as any,
         modelUrl: COCO_MODEL_BROWSER_URL,
       })
     ).catch((error) => { cachedCocoModelPromise = null; throw error; });
   }
+  // Preflight starts downloads before the monitoring effect awaits them.
+  // Handle early rejection while preserving the promises' failure for callers.
+  void cachedFaceApiPromise.catch(() => {});
+  void cachedCocoModelPromise.catch(() => {});
 }
 
 export default function QuizRoom() {
@@ -101,6 +117,8 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const router = useRouter();
 
   const [hasStarted, setHasStarted] = useState(false);
+  const [privacyNoticeQuiz, setPrivacyNoticeQuiz] = useState<string | null>(null);
+  const privacyNoticeReady = privacyNoticeQuiz === String(quizId);
   const [cameraActive, setCameraActive] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60 * 60);
@@ -444,6 +462,10 @@ function QuizAttempt({ quizId }: { quizId: string }) {
 
   const runDevicePreflight = useCallback(async () => {
     if (isCheckingDevice) return false;
+    if (!privacyNoticeReady) {
+      setDeviceCheckError("Read Your Privacy Matters and continue to the device check first.");
+      return false;
+    }
     if (quiz?.quizMode === "arena") {
       router.replace(`/arena/${quizId}`);
       return false;
@@ -509,7 +531,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
       testStream?.getTracks().forEach((track) => track.stop());
       setIsCheckingDevice(false);
     }
-  }, [isCheckingDevice, quizId, quiz?.quizMode, router]);
+  }, [isCheckingDevice, privacyNoticeReady, quizId, quiz?.quizMode, router]);
 
   useEffect(() => {
     if (hasStarted || quizSubmittedResult) return;
@@ -694,6 +716,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
     setLobbyError("");
 
     try {
+      if (!privacyNoticeReady) { setLobbyError("Continue from Your Privacy Matters before checking your device."); return; }
       if (!preflightPassed && !await runDevicePreflight()) {
         setLobbyError("Complete the device and camera check before starting the quiz.");
         return;
@@ -1259,7 +1282,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
   // ── Camera and Edge AI Tracking Loop ──────────────────
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || !privacyNoticeReady) return;
 
     const performanceProfile = getBrowserProctoringPerformanceProfile(isMobile ? "mobile" : "desktop");
     let snapshotInterval: NodeJS.Timeout | null = null;
@@ -1609,7 +1632,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             if (
               cancelled || document.hidden ||
               document.visibilityState === "hidden" ||
-              detectionBusy ||
+              detectionBusy || proctoringInferenceBusy ||
               !examActiveRef.current ||
               violationCountRef.current >= 3 ||
               submissionInFlightRef.current ||
@@ -1637,6 +1660,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               return;
             }
             detectionBusy = true;
+            proctoringInferenceBusy = true;
+            try {
 
             try {
               drawInferenceFrame(activeVideo);
@@ -1843,9 +1868,11 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               }
             } else {
               try {
-                const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, isMobile ? 0.2 : 0.25);
-                if (cancelled || document.hidden) { detectionBusy = false; return; }
+                const detectionGeneration = trackingGeneration;
+                const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, 0.5);
+                if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) { detectionBusy = false; return; }
                 const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
+                const deviceLabel = getDevicePredictionLabel(getUnauthorizedDevicePrediction(predictions));
 
                 const mobileFaceMissing = isMobile && (mobileMissingSince !== null || mobileNoFaceIncidentRecordedRef.current);
                 if (isActionableDeviceDetection(deviceConfidence, mobileFaceMissing, isMobile)) {
@@ -1853,10 +1880,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   phoneAbsentFrames = 0;
                   setDeviceStatus(
                     phoneDetectedFrames >= 2
-                      ? `Phone ${Math.round(deviceConfidence * 100)}% ✗`
+                      ? `${deviceLabel} ${Math.round(deviceConfidence * 100)}% ✗`
                       : `Confirming ${Math.round(deviceConfidence * 100)}%…`
                   );
-                  if (phoneDetectedFrames === 2) setPreWarning("⚠️ Pre-Warning: Unauthorized device (phone) detected in frame!");
+                  if (phoneDetectedFrames === 2) setPreWarning(`⚠️ Pre-Warning: ${deviceLabel} detected in frame. Remove extra devices; this AI signal requires review.`);
                   if (phoneDetectedFrames >= 2) {
                     if (isMobile) {
                       if (!phoneViolationRecorded) {
@@ -1881,7 +1908,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               }
             }
             tickCounter++;
-            detectionBusy = false;
+            } finally {
+              detectionBusy = false;
+              proctoringInferenceBusy = false;
+            }
           }, performanceProfile.detectionIntervalMs);
 
         } catch (err) {
@@ -1924,7 +1954,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (desktopVideoElement) desktopVideoElement.srcObject = null;
       if (mobileVideoElement) mobileVideoElement.srcObject = null;
     };
-  }, [hasStarted, isMobile, quiz?.teacherId, quiz?.title, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot, mediaGeneration]);
+  }, [hasStarted, privacyNoticeReady, isMobile, quiz?.teacherId, quiz?.title, quizId, studentQuizId, notifyTeacherJoined, captureSnapshot, mediaGeneration]);
 
   // Use an absolute deadline: suspended background intervals cannot extend an exam.
   useEffect(() => {
@@ -2380,6 +2410,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               </div>
             </div>
           )}
+          {!loadingQuiz && !quizError && !["completed", "rejected", "pending_retake"].includes(studentQuizStatus) && <StudentPrivacyNotice key={String(quizId)} quizId={String(quizId)} continued={privacyNoticeReady} onContinue={() => {
+            setPrivacyNoticeQuiz(String(quizId));
+            requestAnimationFrame(() => document.getElementById("quiz-device-check")?.focus());
+          }} />}
           {!loadingQuiz && !quizError && !["completed", "rejected", "pending_retake"].includes(studentQuizStatus) && (
           <div className="mb-6 rounded-xl border border-gray-800 bg-[#171717] p-4 text-left space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -2413,8 +2447,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             {deviceCheckError && <p role="alert" className="text-[11px] font-semibold text-rose-400">{deviceCheckError}</p>}
             <button
               type="button"
+              id="quiz-device-check"
               onClick={() => void runDevicePreflight()}
-              disabled={isCheckingDevice}
+              disabled={isCheckingDevice || !privacyNoticeReady}
               className="w-full py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors disabled:opacity-60"
             >
               {isCheckingDevice ? "Testing camera and microphone..." : preflightPassed ? "Run Device Check Again" : "Test Camera & Device"}
@@ -2460,7 +2495,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               </div>
 
               <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-                {quiz?.description || "This quiz is monitored by ProctorShield AI. Your camera and screen activity will be recorded and analyzed in real-time."}
+                {quiz?.description || "This quiz analyzes live camera and microphone signals and browser activity. Camera snapshots and short incident clips may be saved for instructor review."}
               </p>
               <div className="space-y-2.5 text-left mb-8 bg-[#1a1a1a] p-4 rounded-xl text-xs text-gray-300">
                 <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Do not leave the browser window or switch tabs.</p>
@@ -2533,7 +2568,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                   {lobbyError && <p role="alert" className="text-xs font-semibold text-rose-400">{lobbyError}</p>}
                   <button
                     onClick={handleEnterQuiz}
-                    disabled={isEnteringQuiz}
+                    disabled={isEnteringQuiz || !privacyNoticeReady}
                     className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black text-sm rounded-xl transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer animate-fade-in disabled:opacity-60 disabled:cursor-wait"
                   >
                     {isEnteringQuiz ? (

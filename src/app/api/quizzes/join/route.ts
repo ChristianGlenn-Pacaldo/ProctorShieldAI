@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid access code. Quiz not found." }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(quiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     const quizMode = parseQuizMode(quiz.quizMode);
     const enrollment = await getExistingEnrollment(session.userId, quiz.id);
     return NextResponse.json({
@@ -165,6 +167,7 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Invalid access code. Quiz not found." }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(quiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     const quizMode = parseQuizMode(quiz.quizMode);
     const existingEnrollment = await getExistingEnrollment(session.userId, quiz.id);
     const initialJoinDetails = await buildJoinDetails(quiz, quizMode, Boolean(existingEnrollment));

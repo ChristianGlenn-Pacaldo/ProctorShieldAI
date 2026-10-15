@@ -40,7 +40,7 @@ test("Teacher overview opts in outer cards while verdict content keeps its histo
 
 test("Quiz library and Settings keep dense tables and controls inside their glass surrounds", () => {
   const library = teacherThemeFixture("quizzes").content;
-  assert.match(library, /ps-teacher-glass-dense overflow-x-auto min-h-\[300px\]/);
+  assert.match(library, /ps-teacher-glass-dense min-w-0 max-w-full overflow-x-auto min-h-\[300px\]/);
   assert.match(library, /aria-label="Teacher quiz library"/);
   const settings = teacherThemeFixture("settings").content;
   assert.match(settings, /ps-teacher-settings ps-teacher-glass-canvas/);

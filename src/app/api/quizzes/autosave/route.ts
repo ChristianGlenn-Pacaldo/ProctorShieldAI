@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { recoverArenaFinalization } from "@/lib/arena-finalization";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
@@ -31,9 +32,10 @@ async function POSTImpl(req: NextRequest) {
         quizStatus: "in_progress",
         quiz: { quizStatus: { in: ["in_progress", "ended"] } },
       },
-      select: { id: true, startTime: true, attemptMode: true, quiz: { select: { id: true, duration: true, quizStatus: true } } },
+      select: { id: true, startTime: true, attemptMode: true, quiz: { select: { id: true, duration: true, quizStatus: true, quizMode: true } } },
       orderBy: { attemptNumber: "desc" },
     });
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     if (!studentQuiz || !studentQuiz.startTime || (studentQuiz.attemptMode !== "arena" && body.studentQuizId !== studentQuiz.id)) {
       return NextResponse.json({ error: "Active quiz session not found" }, { status: 409 });
     }

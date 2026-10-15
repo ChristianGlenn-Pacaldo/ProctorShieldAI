@@ -1,3 +1,4 @@
+import { isDisabledArenaResource, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS, PowerArenaDisabledError } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -54,6 +55,7 @@ async function POSTImpl(req: NextRequest) {
       return NextResponse.json({ error: "Quiz session not found" }, { status: 404 });
     }
 
+    if (isDisabledArenaResource(studentQuiz)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     const isArena = studentQuiz.attemptMode === "arena";
     if (isArena) {
       const reply = await mutateArena(studentQuiz.quizId, async (mutation) => {
@@ -322,6 +324,7 @@ Return ONLY the valid JSON object.`;
       // removing redundant reads; keep a bounded budget for atomic writes.
       }, { maxWait: 10_000, timeout: 20_000 });
     } catch (error) {
+    if (error instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
       if (error instanceof InvalidSubmissionError) return NextResponse.json({ error: "Submission reason preconditions not met" }, { status: 409 });
       if (error instanceof SubmissionConflictError) {
         return NextResponse.json({ error: "This quiz is already being submitted or completed" }, { status: 409 });
@@ -380,6 +383,7 @@ Return ONLY the valid JSON object.`;
     });
 
   } catch (error) {
+    if (error instanceof PowerArenaDisabledError) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
     console.error("Submit quiz error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

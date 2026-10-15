@@ -355,7 +355,7 @@ function desktopMonitoringFixture(tracker = calibrated()) {
   const gaze: string[] = [], reports: string[] = [];
   const context: any = {
     ...desktopModule, ...detectionModule, cancelled: false, document: { hidden: false, visibilityState: "visible" },
-    detectionBusy: false, examActiveRef: { current: true }, violationCountRef: { current: 0 },
+    detectionBusy: false, proctoringInferenceBusy: false, examActiveRef: { current: true }, violationCountRef: { current: 0 },
     submissionInFlightRef: { current: false }, isReportingRef: { current: false },
     isMobile: false, videoRef: { current: { paused: false, readyState: 2, videoWidth: 1280, videoHeight: 720 } },
     mediaStreamRef: { current: { active: true } }, drawInferenceFrame() {},
@@ -909,4 +909,41 @@ test("Left correction preserves the verified Right cutoff and centered negative 
   assert.equal(frames(right, -0.32, .5, 10000).at(-1)!.confirmed, true);
   const neutral = calibrated();
   assert.ok(frames(neutral, .28).every(result => result.pose.direction === "Focused ✓" && !result.confirmed), "centered recovery boundary is not a Left incident");
+});
+
+test("a shared-engine busy scan skips a remounted interval without losing its lock", async () => {
+  const f=desktopMonitoringFixture();
+  f.context.proctoringInferenceBusy=true;
+  await f.tick(4000);
+  assert.equal(f.scans,0);
+  assert.equal(f.context.proctoringInferenceBusy,true);
+  f.context.proctoringInferenceBusy=false;
+  await f.tick(5000);
+  assert.equal(f.scans,1);
+  assert.equal(f.context.proctoringInferenceBusy,false);
+});
+
+test("stale COCO results cannot warn or report after a visibility generation change", async () => {
+  const f=desktopMonitoringFixture();
+  let finish!: (value: {class:string;score:number}[]) => void;
+  f.context.loadedCocoModel={detect:()=>new Promise(resolve=>{finish=resolve;})};
+  const statuses:string[]=[];
+  f.context.setDeviceStatus=(value:string)=>statuses.push(value);
+  const scan=f.tick(4000);
+  await new Promise<void>(resolve=>setImmediate(resolve));
+  f.context.trackingGeneration++;
+  finish([{class:"cell phone",score:.95}]);
+  await scan;
+  assert.deepEqual(statuses,[]);
+  assert.deepEqual(f.reports,[]);
+  assert.equal(f.context.proctoringInferenceBusy,false);
+  assert.equal(f.context.detectionBusy,false);
+});
+
+test("a frame draw failure releases both inference locks for recovery", async () => {
+  const f=desktopMonitoringFixture();
+  f.context.drawInferenceFrame=()=>{throw new Error("video frame unavailable");};
+  await f.tick(4000);
+  assert.equal(f.context.proctoringInferenceBusy,false);
+  assert.equal(f.context.detectionBusy,false);
 });

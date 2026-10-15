@@ -1,3 +1,5 @@
+import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,12 +7,13 @@ import vm from "node:vm";
 import ts from "typescript";
 
 type Element = { type: unknown; props: Record<string, any> };
-const quiz = { id: 77, title: "Operating Systems Practice", description: "Classroom practice questions", accessCode: "PS-THEME77",
+const fixtureQuiz = { id: 77, title: "Operating Systems Practice", description: "Classroom practice questions", accessCode: "PS-THEME77",
   duration: 15, passingScore: 70, quizType: "multiple_choice", quizMode: "arena", quizStatus: "draft",
   subjectName: "Computer Science", subjectCode: "CS101", questionsCount: 5, attemptsCount: 0,
   createdAt: "2026-10-07T08:00:00Z", _count: { questions: 5, studentQuizzes: 0 },
   questions: [{ id: 1, questionText: "What does an operating system manage?", points: 1,
     choices: [{ id: 1, choiceText: "Resources", isCorrect: true }, { id: 2, choiceText: "Weather", isCorrect: false }] }] };
+const quiz = fixtureQuiz;
 const evidence = { id: "1", name: "Fixture Student", quizTitle: quiz.title, event: "Looking Away", violationType: "looking_away",
   timestamp: "2026-10-07T08:00:00Z", bg: "bg-rose-500/10", btnClass: "bg-indigo-600 text-white",
   screenshotPath: null, evidenceType: "image/jpeg", durationSeconds: null };
@@ -22,6 +25,7 @@ export type TeacherScene = typeof teacherScenes[number];
 // omitted here; behavior is covered by the existing controller regressions.
 // Portals are serialized separately, preserving their actual body placement.
 export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
+  const quiz = variant.startsWith("defense") ? { ...fixtureQuiz, quizMode: "proctored", isGamified: false, quizStatus: "in_progress" } : fixtureQuiz;
   const portals: Element[] = [];
   const modules = new Map<string, Record<string, any>>();
   const state: Record<string, any> = { isLoading: false, loading: false, hasLoadedDashboard: true, hasLoadedBilling: true,
@@ -35,6 +39,9 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
     monitorCounters: { activeStudents: 1, totalViolations: 1 },
     data: { isSubscribed: true, reports: [], totalReports: 0, totalViolations: 0, page: 1, pageSize: 12, pageCount: 1, types: [], filters: { search: "", type: "" } },
   };
+  if (variant === "defense-editor" || variant === "defense-settings") { state.isEditorOpen=true; state.editingQuizData={ ...quiz, quizStatus: "draft", hasAttempts:false, participantCount:0 }; state.isSettingsOpen=variant === "defense-settings"; }
+  if (variant === "defense-manage") state.manageQuiz={...quiz,totalQuestions:5,enrolledStudents:2,maxStudents:100};
+  if (variant === "defense-upgrade") { state.showBillingModal=true;state.isSubscribed=false;state.upgradeReason="ai"; }
   if (variant === "dialog") {
     if (scene === "playground") state.isModalOpen = true;
     if (scene === "quizzes") { state.isEditorOpen = true; state.editingQuizData = quiz; }
@@ -92,6 +99,10 @@ export function teacherThemeFixture(scene: TeacherScene, variant = "default") {
     vm.runInNewContext(output, { exports, console, process: { env: {} }, URL, URLSearchParams, AbortController,
       window: { location: { search: "", origin: "https://example.test" } }, document: { body: {} },
       require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
         if (name.endsWith(".css")) return {}; // Presentation-only route stylesheet.
         if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
         if (name === "react") return react;

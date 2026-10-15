@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled } from "./power-arena-feature.ts";
 import "server-only";
 import type { PrismaClient } from "@prisma/client";
 import prisma from "./prisma.ts";
@@ -15,7 +16,7 @@ const PREFIX = "arena:state:";
 export function createArenaRecoverySweep(client: PrismaClient = prisma) {
   let cursor: string | undefined;
   return async function sweep(signal?: AbortSignal) {
-    if (signal?.aborted) return { scanned: 0, attempted: 0, finalized: 0, attacksResolved: 0, failed: 0, paused: 0 };
+    if (!isPowerArenaEnabled() || signal?.aborted) return { scanned: 0, attempted: 0, finalized: 0, attacksResolved: 0, failed: 0, paused: 0 };
     const started = Date.now();
     const records = await client.setting.findMany({
       where: { settingKey: { startsWith: PREFIX, ...(cursor ? { gt: cursor } : {}) } },
@@ -77,6 +78,7 @@ const runtime = globalThis as typeof globalThis & { arenaRecoveryWorker?: Recove
 
 /** Called only by the production Node server instrumentation hook. */
 export function startArenaRecovery() {
+  if (!isPowerArenaEnabled()) return;
   if (runtime.arenaRecoveryWorker) return runtime.arenaRecoveryWorker;
   const sweep = createArenaRecoverySweep();
   const worker = createArenaRecoveryWorker(async (signal) => {

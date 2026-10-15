@@ -1,3 +1,5 @@
+import * as defenseFeature from "../../src/lib/power-arena-feature.ts";
+import * as passwordUpdate from "../../src/lib/password-update.ts";
 import { dashboardLoadingModule } from "./dashboard-loading-fixture.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,7 +7,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as scoreSummary from "../../src/lib/student-result-summary.ts";
 
-export type StudentScene = "dashboard" | "settings" | "results";
+export type StudentScene = "dashboard" | "settings" | "results" | "quizzes";
 
 const endedAt = "2026-10-08T10:00:00Z";
 const exam = (id: string, score: number, extra: Record<string, unknown> = {}) => ({
@@ -24,13 +26,14 @@ const attempts = [
 // authenticate against a server, run effects or perform network/database work.
 export function studentThemeFixture(scene: StudentScene, variant = "default") {
   const state: Record<string, any> = {
-    studentQuizzes: attempts, hasLoadedQuizzes: true, isFetching: false, quizLoadError: "",
+    studentQuizzes: variant === "defense" ? [...attempts,exam("Available Exam",0,{quizStatus:"enrolled",endTime:null,quiz:{...attempts[0].quiz,quizStatus:"active"}})] : attempts, hasLoadedQuizzes: true, isFetching: false, quizLoadError: "",
     quickCode: "", joinLoading: false, joinError: "", soundActive: true,
     user: { fullName: "Disposable QA Student", email: "qa@example.invalid" }, fullName: "Disposable QA Student",
-    results: attempts.map(row => ({ ...row, ...scoreSummary.studentResultState(row),
+    allResults: attempts, results: attempts.map(row => ({ ...row, ...scoreSummary.studentResultState(row),
       score: scoreSummary.studentResultState(row).integrityInvalidated ? null : row.score,
       effectiveMode: row.attemptMode === "arena" ? "arena" : "proctored" })),
-    hasLoaded: true, loading: false,
+    quizzes: [...attempts,exam("Available Exam",0,{quizStatus:"enrolled",endTime:null,quiz:{...attempts[0].quiz,quizStatus:"active"}})],
+    hasLoaded: true, loading: false,isLoading:false,
   };
   if (variant === "empty") { state.studentQuizzes = []; state.results = []; }
   if (scene === "results" && (variant === "loading" || variant === "load-error")) {
@@ -60,6 +63,7 @@ export function studentThemeFixture(scene: StudentScene, variant = "default") {
     };
     return ts.visitNode(source, visit) as ts.SourceFile;
   };
+  state.allResults = state.results;
   const file = `src/app/dashboard/student/${scene === "dashboard" ? "" : scene + "/"}content.tsx`;
   const exports: Record<string, any> = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), { fileName: path.resolve(file),
@@ -67,6 +71,10 @@ export function studentThemeFixture(scene: StudentScene, variant = "default") {
       target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, {
     exports, console,
     require(name: string) {
+      if (name === "@/lib/power-arena-feature" || name === "./power-arena-feature.ts") return defenseFeature;
+      if (name === "@/components/power-arena-feature") return { usePowerArenaEnabled: () => process.env.POWER_ARENA_ENABLED === "true" };
+      if (name === "@/lib/password-update") return passwordUpdate;
+
       if (name === "@/components/dashboard-loading") return dashboardLoadingModule;
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };

@@ -1,3 +1,4 @@
+import { isPowerArenaEnabled, ARENA_DISABLED_BODY, ARENA_DISABLED_HEADERS } from "@/lib/power-arena-feature";
 import { withBackupWriteGate } from "@/lib/backup-write-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, getAdminSession, getUserSession, getScopedSession } from "@/lib/auth";
@@ -13,6 +14,7 @@ async function POSTImpl(req: NextRequest) {
   if (typeof socketId !== "string" || typeof channelName !== "string") {
     return NextResponse.json({ error: "Invalid channel request" }, { status: 400 });
   }
+  if (!isPowerArenaEnabled() && /^private-arena-/.test(channelName)) return NextResponse.json(ARENA_DISABLED_BODY, { status: 403, headers: ARENA_DISABLED_HEADERS });
   // Admin and role-specific User channels select strict cookie classes. Shared
   // resource/user channels use the deterministic, conflict-denying resolver.
   const session = new URL(req.url).searchParams.has("scope") ? await getScopedSession(req)
@@ -41,7 +43,7 @@ async function POSTImpl(req: NextRequest) {
           id: quizId,
           teacherId: session.userId,
           quizStatus: { notIn: [...UNAVAILABLE_QUIZ_STATUSES] },
-          ...(channelType === "arena" ? { quizMode: "arena" } : {}),
+          ...(channelType === "arena" ? { quizMode: "arena" } : !isPowerArenaEnabled() ? { quizMode: { not: "arena" } } : {}),
         },
         select: { id: true },
       }));

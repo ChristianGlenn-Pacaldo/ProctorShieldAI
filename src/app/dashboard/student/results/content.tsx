@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, BarChart3 } from "lucide-react";
@@ -6,10 +7,12 @@ import ResultModal from "@/components/student/ResultModal";
 import { averageExamScore } from "@/lib/student-result-summary";
 
 export default function ResultsContent() {
-  const [results, setResults] = useState<any[]>([]);
+  const arenaEnabled = usePowerArenaEnabled();
+  const [allResults, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const results = allResults.filter(result => arenaEnabled || (result.attemptMode !== "arena" && result.effectiveMode !== "arena" && result.quiz?.quizMode !== "arena"));
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
 
   const fetchResults = async () => {
@@ -19,7 +22,7 @@ export default function ResultsContent() {
       if (!res.ok) throw new Error("Could not load your results.");
       const data = await res.json();
       if (data.success !== true || !Array.isArray(data.results)) throw new Error("Could not load your results.");
-      setResults(data.results);
+      setResults(data.results.filter((result: any) => arenaEnabled || (result.attemptMode !== "arena" && result.effectiveMode !== "arena" && result.quiz?.quizMode !== "arena")));
       setHasLoaded(true);
       setLoadError("");
     } catch (error) {

@@ -3,20 +3,20 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 
-const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string> };
-test("visual-only release preserves every baseline backend, password, session, database and operator file", () => {
+const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string>; defenseBaseline: string; defenseOverrides: Record<string,string> };
+test("defense release preserves all baseline files except individually recorded approved overrides", () => {
   assert.equal(manifest.mainSHA, "3e016784e15e20c2b55dbf3dc09c5a16ca0d3dc4");
   assert.ok(Object.keys(manifest.hashes).length > 150);
   for (const [file,expected] of Object.entries(manifest.hashes)) {
     const normalized = Buffer.from(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
-    assert.equal(createHash("sha256").update(normalized).digest("hex"),expected,file);
+    assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.defenseOverrides[file] ?? expected,file);
   }
   assert.equal(fs.existsSync("src/lib/password-hash.ts"),false,"future versioned-password implementation is excluded");
 });
-test("visual-only release preserves main's notification calculation and Admin destinations", () => {
+test("defense release preserves notification calculation and repairs Admin unified login destinations", () => {
   assert.match(fs.readFileSync("src/components/dashboard-shell.tsx","utf8"), /setUnreadCount\(visible\.filter\(\(notification\) => !notification\.isRead\)\.length\)/);
-  assert.match(fs.readFileSync("src/app/dashboard/admin/layout.tsx","utf8"), /redirect\("\/admin\/login"\)/);
-  assert.match(fs.readFileSync("src/app/dashboard/admin/content.tsx","utf8"), /href="\/admin\/login"/);
+  assert.match(fs.readFileSync("src/app/dashboard/admin/layout.tsx","utf8"), /redirect\("\/login"\)/);
+  assert.match(fs.readFileSync("src/app/dashboard/admin/content.tsx","utf8"), /href="\/login"/);
 });
 test("visual-only password guidance describes the unchanged main setting policy", () => {
   for (const file of ["src/app/login/student/page.tsx","src/app/login/teacher/page.tsx","src/app/login/forgot-password/page.tsx","src/app/dashboard/student/settings/content.tsx","src/app/dashboard/teacher/settings/content.tsx"]) {

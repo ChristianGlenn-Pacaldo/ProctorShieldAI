@@ -1,4 +1,5 @@
 "use client";
+import { usePowerArenaEnabled } from "@/components/power-arena-feature";
 
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
@@ -6,6 +7,7 @@ import Link from "next/link";
 import ResultModal from "@/components/student/ResultModal";
 
 export default function QuizzesContent() {
+  const arenaEnabled = usePowerArenaEnabled();
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -20,7 +22,7 @@ export default function QuizzesContent() {
       if (!res.ok) throw new Error("Could not load My Quizzes.");
       const data = await res.json();
       if (data.success !== true || !Array.isArray(data.quizzes)) throw new Error("Could not load My Quizzes.");
-      setQuizzes(data.quizzes);
+      setQuizzes(data.quizzes.filter((quiz: any) => arenaEnabled || (quiz.quizMode !== "arena" && quiz.quiz?.quizMode !== "arena" && quiz.attemptMode !== "arena")));
       setHasLoaded(true);
       setLoadError("");
     } catch (error) {
@@ -35,7 +37,7 @@ export default function QuizzesContent() {
     void fetchQuizzes();
   }, []);
 
-  const filtered = (quizzes || []).filter((e) =>
+  const filtered = (quizzes || []).filter(e => arenaEnabled || (e.quizMode !== "arena" && e.quiz?.quizMode !== "arena" && e.attemptMode !== "arena")).filter((e) =>
     (e?.quiz?.title || "").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -75,11 +77,11 @@ export default function QuizzesContent() {
               <p className="text-sm font-semibold">No enrolled quizzes found</p>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full min-w-[880px]">
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   {["Quiz Title", "Mode", "Subject", "Duration", "Status", "AI Verdict", "Action"].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
+                    <th key={h} className="whitespace-nowrap px-5 py-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>

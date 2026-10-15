@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CheckCircle2, Eye, EyeOff, Lock, Shield, XCircle } from "lucide-react";
+
+import { updateAccountPassword, type PasswordFeedback } from "@/lib/password-update";
 
 export default function SettingsContent() {
   const [user, setUser] = useState<{ fullName: string; email: string } | null>(null);
@@ -14,6 +16,9 @@ export default function SettingsContent() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const passwordBusyRef = useRef(false);
+  const [passwordMessage, setPasswordMessage] = useState<PasswordFeedback | null>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -59,37 +64,19 @@ export default function SettingsContent() {
   };
 
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showToast("All password fields are required.", "error");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showToast("New passwords do not match.", "error");
-      return;
-    }
-    if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      showToast("New password must be at least 10 characters and contain letters and numbers.", "error");
-      return;
-    }
+    if (passwordBusyRef.current) return;
+    passwordBusyRef.current = true;
     setIsChangingPassword(true);
+    setPasswordMessage(null);
     try {
-      const response = await fetch("/api/auth/profile?scope=user&role=student", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        showToast("Password changed successfully!");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        showToast(data.message || "Failed to change password.", "error");
+      const feedback = await updateAccountPassword("student", { currentPassword, newPassword, confirmPassword });
+      setPasswordMessage(feedback);
+      if (feedback.type === "success") {
+        setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+        setShowCurrent(false); setShowNew(false);
       }
-    } catch {
-      showToast("Network error. Please try again.", "error");
     } finally {
+      passwordBusyRef.current = false;
       setIsChangingPassword(false);
     }
   };
@@ -191,6 +178,8 @@ export default function SettingsContent() {
               <div className="relative">
                 <input
                   id="student-current-password"
+                  autoComplete="current-password"
+                  disabled={isChangingPassword}
                   type={showCurrent ? "text" : "password"}
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
@@ -210,6 +199,9 @@ export default function SettingsContent() {
               <div className="relative">
                 <input
                   id="student-new-password"
+                  autoComplete="new-password"
+                  maxLength={128}
+                  disabled={isChangingPassword}
                   type={showNew ? "text" : "password"}
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
@@ -238,9 +230,16 @@ export default function SettingsContent() {
               />
             </div>
 
+            {passwordMessage && (
+              <p role={passwordMessage.type === "error" ? "alert" : "status"} aria-atomic="true"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface2)] p-3 text-sm font-semibold text-[var(--ink)]">
+                {passwordMessage.type === "success" ? "✓ " : "⚠ "}{passwordMessage.text}
+              </p>
+            )}
             <button
               type="button"
               disabled={isChangingPassword || !newPassword}
+              aria-busy={isChangingPassword}
               onClick={handleChangePassword}
               className="ps-student-secondary w-full py-3 text-sm font-bold text-[var(--ps-text)] bg-[var(--ps-surface-inset)] hover:bg-[var(--ps-surface-inset)]   rounded-xl transition-all disabled:opacity-40 flex items-center justify-center gap-2 mt-2 cursor-pointer"
             >

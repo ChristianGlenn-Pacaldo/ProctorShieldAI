@@ -18,7 +18,7 @@ test("Nodemailer ESM MIME composer preserves HTML and file/URL access restrictio
     attachments: [{ path: "package.json" }], disableFileAccess: true,
   }).compile().build(), /File access rejected/);
   await assert.rejects(new MailComposer({
-    attachments: [{ href: "https://example.test/file" }], disableUrlAccess: true,
+    attachments: [{ path: "https://example.test/file" }], disableUrlAccess: true,
   }).compile().build(), /Url access rejected/i);
 });
 
