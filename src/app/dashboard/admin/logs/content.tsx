@@ -7,7 +7,7 @@ interface LogEntry {
   id: string;
   timestamp: string;
   event: string;
-  rowBg: string;
+  severity?: "High" | "Medium" | "Low";
   student: string;
   quiz: string;
   confidence: string;
@@ -57,6 +57,14 @@ export default function LogsContent() {
           <div>
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🧠 Global AI Event Logs</h3>
             <p className="ps-admin-glass-caption text-[10px] text-[var(--muted)] mt-0.5">{total} violation events recorded</p>
+            <div className="ps-ai-log-legend" aria-label="Event review priority">
+              <span>Review priority:</span>
+              {(["High", "Medium", "Low"] as const).map((priority) => (
+                <span key={priority} className="ps-ai-log-badge" data-priority={priority}>
+                  <span className="ps-ai-log-dot" aria-hidden="true" />{priority}
+                </span>
+              ))}
+            </div>
             <p className="ps-ai-log-print-summary hidden">ProctorShieldAI · Page {page} of {Math.max(1, Math.ceil(total / pageSize))} · Displayed records {total === 0 ? 0 : (page - 1) * pageSize + 1}–{(page - 1) * pageSize + logs.length} of {total}</p>
           </div>
           <button
@@ -104,9 +112,13 @@ export default function LogsContent() {
                 </tr>
               ) : (
                 logs.map((l) => (
-                  <tr key={l.id} className={`${l.rowBg} hover:bg-[var(--surface2)]/70 transition-colors`}>
+                  <tr key={l.id} className="ps-ai-log-row transition-colors">
                     <td className="px-5 py-3 text-xs text-[var(--muted)] font-mono whitespace-nowrap">{l.timestamp}</td>
-                    <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]">{l.event}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]">
+                      <span className="ps-ai-log-badge" data-priority={l.severity || "Low"} aria-label={`${l.severity || "Low"} review priority: ${l.event}`}>
+                        <span className="ps-ai-log-dot" aria-hidden="true" />{l.event}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)] font-mono">{l.confidence}</td>
                     <td className="px-5 py-3 text-sm text-[var(--ink)] font-medium">{l.student}</td>
                     <td className="px-5 py-3 text-xs text-[var(--muted)] max-w-[160px] truncate">{l.quiz}</td>

@@ -35,7 +35,7 @@ before(async () => {
     b.onLoad({ filter: /.*/, namespace: "fixture" }, a => ({ contents: stubs[a.path], loader: "js", resolveDir: root }));
   } }] });
   const css = (await postcss([tailwind({ base: root })]).process(fs.readFileSync("src/app/globals.css", "utf8").replace(/^@import url\(.*?\);\s*/m, ""), { from: "src/app/globals.css" })).css;
-  fs.writeFileSync(path.join(temp, "base.css"), css + ["admin.css", "admin-glass.css", "logs/print.css"].map(p => fs.readFileSync("src/app/dashboard/admin/" + p, "utf8")).join("\n"));
+  fs.writeFileSync(path.join(temp, "base.css"), css + ["admin.css", "admin-glass.css", "logs/logs.css", "logs/print.css"].map(p => fs.readFileSync("src/app/dashboard/admin/" + p, "utf8")).join("\n"));
   server = http.createServer((req, res) => {
     const file = req.url === "/base.css" ? "base.css" : req.url === "/bundle.js" ? "bundle.js" : null;
     res.setHeader("Content-Type", file === "base.css" ? "text/css" : file ? "text/javascript" : "text/html");
@@ -43,7 +43,7 @@ before(async () => {
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, args: ["--disable-gpu"] });
 });
 after(async () => {
   await browser?.close(); if (server) await new Promise<void>(resolve => server.close(() => resolve()));
@@ -64,7 +64,11 @@ for (const scene of ["analytics", "logs"]) for (const width of [360, 390, 768, 1
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
       if (url.origin !== origin) return route.abort();
-      if (!url.pathname.startsWith("/api/")) return /\.(png|svg|webp)$/.test(url.pathname) ? route.fulfill({ status: 204 }) : route.continue();
+      if (!url.pathname.startsWith("/api/")) {
+        const asset = path.join(root, "public", url.pathname);
+        if (url.pathname.startsWith("/images/") && fs.existsSync(asset)) return route.fulfill({ path: asset });
+        return /\.(png|svg|webp)$/.test(url.pathname) ? route.fulfill({ status: 204 }) : route.continue();
+      }
       if (route.request().method() !== "GET") writes.push(url.pathname);
       let data: object = { success: true, notifications: [], unreadCount: 0 };
       if (url.pathname === "/api/auth/session") data = { success: true, authenticated: true, user: { userId: "synthetic", role: "admin", fullName: "Synthetic Admin" } };
@@ -76,9 +80,14 @@ for (const scene of ["analytics", "logs"]) for (const width of [360, 390, 768, 1
       if (url.pathname.endsWith("/logs")) {
         if (failLogs) return route.fulfill({ status: 500, json: { success: false } });
         const p = Number(url.searchParams.get("page"));
-        data = { success: true, total: 50, page: p, pageSize: 25, logs: Array.from({ length: 25 }, (_, i) => ({
-          id: String((p - 1) * 25 + i + 1), timestamp: "Oct 16, 2026, 09:30 AM", event: eventLabels[((p - 1) * 25 + i) % eventLabels.length], rowBg: "", confidence: "92%", student: `Synthetic Student ${(p - 1) * 25 + i + 1}`, quiz: "Synthetic Academic Quiz With A Long Title That Must Print In Full",
-        })) };
+        data = { success: true, total: 50, page: p, pageSize: 25, logs: Array.from({ length: 25 }, (_, i) => {
+          const event = eventLabels[((p - 1) * 25 + i) % eventLabels.length];
+          const severity = ["Device Detected", "Multiple Faces"].includes(event) ? "High"
+            : ["Tab Switch", "No Face", "Looking Left", "Looking Right", "Looking Up", "Looking Down", "Audio Anomaly"].includes(event) ? "Medium" : "Low";
+          return { id: String((p - 1) * 25 + i + 1), timestamp: "Oct 16, 2026, 09:30 AM", event, severity,
+            rowBg: severity === "High" ? "bg-rose-50 dark:bg-rose-500/5" : severity === "Medium" ? "bg-amber-50 dark:bg-amber-500/5" : "",
+            confidence: "92%", student: `Synthetic Student ${(p - 1) * 25 + i + 1}`, quiz: "Synthetic Academic Quiz With A Long Title That Must Print In Full" };
+        }) };
       }
       return route.fulfill({ json: data });
     });
@@ -100,6 +109,16 @@ for (const scene of ["analytics", "logs"]) for (const width of [360, 390, 768, 1
         await page.getByText("Showing 26–50 of 50", { exact: true }).waitFor();
         assert.deepEqual(await page.locator("thead th").allTextContents(), ["Timestamp", "Event Type", "Confidence", "Student", "Quiz"]);
         assert.equal(await page.locator("tbody td").count(), 125);
+        const eventStyles = await page.locator("tbody .ps-ai-log-badge").evaluateAll(elements => elements.map(element => {
+          const style = getComputedStyle(element);
+          const rgb = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+          const luminance = (value: string) => rgb(value).map(x => x / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4).reduce((sum, x, i) => sum + x * [.2126, .7152, .0722][i], 0);
+          const fg = luminance(style.color), bg = luminance(style.backgroundColor);
+          return { priority: element.getAttribute("data-priority"), contrast: (Math.max(fg, bg) + .05) / (Math.min(fg, bg) + .05), rowBackground: getComputedStyle(element.closest("tr")!).backgroundColor };
+        }));
+        assert.equal(new Set(eventStyles.map(style => style.priority)).size, 3);
+        assert.ok(eventStyles.every(style => style.contrast >= 4.5), JSON.stringify(eventStyles));
+        assert.ok(eventStyles.every(style => style.rowBackground === "rgba(0, 0, 0, 0)"));
         for (let i = 0; i < 25; i++) {
           const cells = page.locator("tbody tr").nth(i).locator("td");
           assert.equal(await cells.nth(1).innerText(), eventLabels[(25 + i) % eventLabels.length]);
@@ -124,6 +143,7 @@ for (const scene of ["analytics", "logs"]) for (const width of [360, 390, 768, 1
           await page.pdf({ path: path.join(evidence, `synthetic-log-page-2-${theme}.pdf`), format: "A4", margin: { top: "12mm", bottom: "12mm", left: "10mm", right: "10mm" }, printBackground: false });
           await page.emulateMedia({ media: "screen" }); await page.setViewportSize({ width, height: 950 });
         }
+        await page.locator(".dashboard-main").evaluate(element => { element.scrollTop = 0; });
         await page.screenshot({ path: path.join(evidence, `${scene}-${width}-${theme}.png`), fullPage: true });
         failLogs = true;
         await page.getByRole("button", { name: "Previous", exact: true }).click();

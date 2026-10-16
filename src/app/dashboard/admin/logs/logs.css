@@ -1,0 +1,23 @@
+/* Keep event priority local to its label, with a readable neutral table. */
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-row {background:transparent;}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-row:hover {background:var(--ps-surface-inset);}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-legend {
+  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
+  margin-top:.75rem;font-size:.75rem;color:var(--ps-text-secondary);
+}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-badge {
+  --log-priority:var(--ps-info);--log-priority-fill:var(--ps-info-soft);
+  display:inline-flex;align-items:center;gap:.4rem;max-width:100%;
+  padding:.25rem .5rem;border:1px solid color-mix(in srgb,var(--log-priority) 30%,var(--ps-border));
+  border-radius:.5rem;background:var(--log-priority-fill);color:var(--log-priority);
+  font-size:.8125rem;font-weight:600;line-height:1.5;
+}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-badge[data-priority="High"] {
+  --log-priority:var(--ps-error);--log-priority-fill:var(--ps-error-soft);
+}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-badge[data-priority="Medium"] {
+  --log-priority:var(--ps-warning);--log-priority-fill:var(--ps-warning-soft);
+}
+[data-portal="admin"] .ps-ai-log-report .ps-ai-log-dot {
+  width:.375rem;height:.375rem;flex-shrink:0;border-radius:50%;background:currentColor;
+}
