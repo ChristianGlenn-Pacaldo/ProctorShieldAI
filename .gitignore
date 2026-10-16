@@ -65,3 +65,8 @@ next-env.d.ts
 
 # Generated local release candidates, QA reports and screenshots
 /release-review/
+
+# Regenerable video thumbnails and extracted tool download archives
+**/.thumbnails/
+/docs/video-promo/*.tgz
+/docs/video-promo/tools/*.tgz
