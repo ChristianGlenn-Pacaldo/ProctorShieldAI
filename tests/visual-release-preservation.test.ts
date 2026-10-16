@@ -18,9 +18,10 @@ test("defense release preserves baseline files except recorded defense, refactor
   assert.equal(manifest.demoReadinessBaseline, "ceedeae3b6084e0bf9e60634c4c10a6a1f25d989");
   assert.deepEqual(Object.keys(manifest.demoReadinessOverrides).sort(), ["prisma/seed.ts", "scripts/bootstrap.ts", "scripts/create-proctorshield-std-sdd.ps1", "scripts/update-project-docs.ps1", "src/app/api/ai/create/route.ts", "src/app/api/quizzes/route.ts", "src/lib/subscription-rules.ts", "src/lib/teacher-entitlements.ts"]);
   // The approved laptop fix changes only WASM tracing/CSP, camera cadence and
-  // workload selection among protected files. Preserve every other hash.
+  // workload selection and TensorFlow startup order among protected files.
+  // Preserve every other hash.
   assert.equal(manifest.laptopStabilityBaseline, "2937620d3686a0568a6da3f41997fbad269d5841");
-  assert.deepEqual(Object.keys(manifest.laptopStabilityOverrides).sort(), ["next.config.ts", "src/lib/desktop-head-tracking.ts", "src/lib/device-capabilities.ts", "src/proxy.ts"]);
+  assert.deepEqual(Object.keys(manifest.laptopStabilityOverrides).sort(), ["next.config.ts", "src/lib/desktop-head-tracking.ts", "src/lib/device-capabilities.ts", "src/lib/tensorflow-browser.ts", "src/proxy.ts"]);
   for (const [file,expected] of Object.entries(manifest.hashes)) {
     const normalized = Buffer.from(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
     assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.laptopStabilityOverrides[file] ?? manifest.demoReadinessOverrides[file] ?? manifest.localStabilizationOverrides[file] ?? manifest.preDefenseOverrides[file] ?? manifest.mvpOverrides[file] ?? manifest.refactorOverrides[file] ?? manifest.defenseOverrides[file] ?? expected,file);
