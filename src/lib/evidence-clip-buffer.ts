@@ -1,3 +1,5 @@
+import { createEvidenceVideoSource } from "./evidence-video-source.ts";
+
 export type EvidenceClip = {
   blob: Blob;
   durationMs: number;
@@ -8,6 +10,7 @@ export type EvidenceClip = {
 // Keep two overlapping windows so an incident includes the movement before the
 // detector confirms it. Never join arbitrary MediaRecorder chunks from a ring.
 export function createEvidenceClipBuffer(source: MediaStream, options: {
+  video?: HTMLVideoElement;
   createRecorder?: (stream: MediaStream, options: MediaRecorderOptions) => MediaRecorder;
   isTypeSupported?: (type: string) => boolean;
   now?: () => number;
@@ -16,6 +19,8 @@ export function createEvidenceClipBuffer(source: MediaStream, options: {
     typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type));
   const mimeType = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(supported);
   const now = options.now ?? (() => performance.now());
+  const videoSource = mimeType && options.video ? createEvidenceVideoSource(source, options.video) : null;
+  const recordingSource = options.video ? videoSource?.stream : source;
   const windows = new Set<{
     recorder: MediaRecorder;
     startedAt: number;
@@ -26,11 +31,11 @@ export function createEvidenceClipBuffer(source: MediaStream, options: {
   let disposed = false;
 
   const startWindow = () => {
-    if (disposed || !mimeType || !source.getVideoTracks().some(track => track.readyState === "live")) return;
+    if (disposed || !mimeType || !recordingSource?.getVideoTracks().some(track => track.readyState === "live")) return;
     try {
       const recorder = options.createRecorder
-        ? options.createRecorder(source, { mimeType, videoBitsPerSecond: 350_000, audioBitsPerSecond: 32_000 })
-        : new MediaRecorder(source, { mimeType, videoBitsPerSecond: 350_000, audioBitsPerSecond: 32_000 });
+        ? options.createRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 })
+        : new MediaRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 });
       const chunks: BlobPart[] = [];
       let resolve!: (clip: EvidenceClip | null) => void;
       let finished = false;
@@ -95,6 +100,7 @@ export function createEvidenceClipBuffer(source: MediaStream, options: {
       disposed = true;
       clearInterval(rotation);
       for (const entry of windows) entry.finish();
+      videoSource?.dispose();
       // The camera and microphone belong to the caller. Do not stop their tracks.
     },
   };

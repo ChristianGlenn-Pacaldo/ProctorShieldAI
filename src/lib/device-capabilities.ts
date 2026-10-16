@@ -30,6 +30,7 @@ export interface ProctoringPerformanceProfile {
   faceInputSize: 128 | 160 | 320;
   snapshotIntervalMs: number;
   detectionIntervalMs: number;
+  objectDetectionIntervalMs: number;
   audioIntervalMs: number;
   useTinyLandmarks: boolean;
   objectModelBase: "lite_mobilenet_v2" | "mobilenet_v2";
@@ -125,29 +126,29 @@ export function getProctoringPerformanceProfile(
   deviceType: DeviceType,
   hints: ProctoringPerformanceHints = {},
 ): ProctoringPerformanceProfile {
+  const memory = Number(hints.deviceMemory);
+  const cores = Number(hints.hardwareConcurrency);
+  const lowPower = (Number.isFinite(memory) && memory > 0 && memory <= 4)
+    || (Number.isFinite(cores) && cores > 0 && cores <= 4);
   if (deviceType === "desktop") {
     return {
-      lowPower: false,
+      lowPower,
       captureWidth: 640,
       captureHeight: 480,
-      frameRate: 24,
+      frameRate: lowPower ? 12 : 24,
       inferenceWidth: 480,
       inferenceHeight: 360,
       // Use the same detailed landmarks directly; avoid a redundant 160px pass
       // before the 320px verification on every normal desktop observation.
       faceInputSize: 320,
-      snapshotIntervalMs: 2_000,
-      detectionIntervalMs: 500,
-      audioIntervalMs: 500,
+      snapshotIntervalMs: lowPower ? 5_000 : 2_000,
+      detectionIntervalMs: lowPower ? 750 : 500,
+      objectDetectionIntervalMs: lowPower ? 1_500 : 1_000,
+      audioIntervalMs: lowPower ? 700 : 500,
       useTinyLandmarks: false,
       objectModelBase: "lite_mobilenet_v2",
     };
   }
-
-  const memory = Number(hints.deviceMemory);
-  const cores = Number(hints.hardwareConcurrency);
-  const lowPower = (Number.isFinite(memory) && memory > 0 && memory <= 4)
-    || (Number.isFinite(cores) && cores > 0 && cores <= 4);
 
   return {
     lowPower,
@@ -159,6 +160,7 @@ export function getProctoringPerformanceProfile(
     faceInputSize: 128,
     snapshotIntervalMs: lowPower ? 8_000 : 5_000,
     detectionIntervalMs: lowPower ? 1_600 : 1_100,
+    objectDetectionIntervalMs: lowPower ? 1_600 : 1_100,
     audioIntervalMs: lowPower ? 700 : 550,
     useTinyLandmarks: true,
     objectModelBase: "lite_mobilenet_v2",

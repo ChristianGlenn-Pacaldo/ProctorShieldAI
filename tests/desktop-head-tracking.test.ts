@@ -1028,7 +1028,7 @@ test("worker construction failure still establishes the actual face interval",()
   const ast=ts.createSourceFile("page.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   let setup="",faceStatement="";
   const visit=(node:ts.Node)=>{
-    if(ts.isIfStatement(node)&&node.expression.getText(ast)==="!isMobile"&&node.thenStatement.getText(ast).includes("desktopDeviceWorker = createRecoveringDesktopDeviceWorker("))setup=node.getText(ast);
+    if(ts.isIfStatement(node)&&node.expression.getText(ast)==="!isMobile && !performanceProfile.lowPower"&&node.thenStatement.getText(ast).includes("desktopDeviceWorker = createRecoveringDesktopDeviceWorker("))setup=node.getText(ast);
     if(ts.isExpressionStatement(node)&&ts.isBinaryExpression(node.expression)&&node.expression.left.getText(ast)==="faceDetectionInterval")faceStatement=node.getText(ast);
     ts.forEachChild(node,visit);
   };visit(ast);assert.ok(setup);assert.ok(faceStatement);
@@ -1041,4 +1041,21 @@ test("worker construction failure still establishes the actual face interval",()
   });
   assert.equal(timers,1,"face interval must initialize after worker creation fails");
   assert.deepEqual(statuses,["Device AI unavailable ✗"]);
+});
+
+test("low-power desktop executes face and object observations sequentially on the same engine", async () => {
+  const f = desktopMonitoringFixture();
+  f.context.performanceProfile.lowPower = true;
+  let scans = 0;
+  let finish!: (predictions: { class: string; score: number }[]) => void;
+  f.context.loadedCocoModel = { detect() { scans++; return new Promise(resolve => { finish = resolve; }); } };
+  const objectScan = f.tick(4_000);
+  await new Promise(setImmediate);
+  assert.equal(scans, 1); assert.equal(f.scans, 0);
+  await f.tick(4_750);
+  assert.equal(f.scans, 0, "a face scan must not overlap pending object inference");
+  finish([]); await objectScan;
+  await f.tick(5_500); await f.tick(6_250);
+  assert.equal(f.scans, 2); assert.equal(scans, 1);
+  assert.equal(f.context.proctoringInferenceBusy, false);
 });

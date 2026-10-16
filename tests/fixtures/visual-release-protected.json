@@ -243,5 +243,12 @@
     "src/lib/teacher-entitlements.ts": "ef14cb1a8f031e5a49decd87a2915ff17a20f490ac615102bc3d7d0ccd329cd1",
     "scripts/create-proctorshield-std-sdd.ps1": "0dd88fe58987950e8b75c7b97787baf2b3564e23e11bb8b7b0b131d3c79ad7d0",
     "scripts/update-project-docs.ps1": "4755137799301f6711fe018a9b47f8e194090b569bf8fff5ef95098f96e2fb7a"
+  },
+  "laptopStabilityBaseline": "2937620d3686a0568a6da3f41997fbad269d5841",
+  "laptopStabilityOverrides": {
+    "next.config.ts": "d30b253bd1fd45df909a76252d0b48212ab6408dff9dbb062861a739a6adae79",
+    "src/lib/desktop-head-tracking.ts": "28b8221c18b47faf398ae140476b63e98e78d4b060db52d18b84d0cb875ca964",
+    "src/lib/device-capabilities.ts": "4a480d05baadfa45701d234e03d4a73d78e2748b5018934b19dbb92832074fcf",
+    "src/proxy.ts": "3099c0c14e136c7b468581841270e3d5ebdff907268a8b87eaeda9b488bdc250"
   }
 }

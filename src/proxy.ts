@@ -40,7 +40,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   const isDevelopment = process.env.NODE_ENV === "development";
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://accounts.google.com`,
+    `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDevelopment ? " 'unsafe-eval'" : ""} https://accounts.google.com`,
     "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com",
     "font-src 'self' data: https://fonts.gstatic.com",

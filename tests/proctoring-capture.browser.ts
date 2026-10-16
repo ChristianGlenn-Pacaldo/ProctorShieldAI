@@ -99,13 +99,15 @@ test("fresh browser sessions recover a failed model request and evidence replays
     await page.goto(origin);
     const playback = await page.evaluate(async () => {
       const canvas = document.querySelector("canvas")!;
+      canvas.width = 1280; canvas.height = 720;
       const ctx = canvas.getContext("2d")!;
       let turned = true;
-      const draw = () => { ctx.fillStyle = turned ? "rgb(240,10,10)" : "rgb(10,10,240)"; ctx.fillRect(0, 0, 320, 240); };
+      const draw = () => { ctx.fillStyle = turned ? "rgb(240,10,10)" : "rgb(10,10,240)"; ctx.fillRect(0, 0, canvas.width, canvas.height); };
       draw();
       const drawing = setInterval(draw, 33);
       const stream = canvas.captureStream(24);
-      const buffer = window.proctoring.createEvidenceClipBuffer(stream);
+      const input = document.createElement("video"); input.muted = true; input.srcObject = stream; await input.play();
+      const buffer = window.proctoring.createEvidenceClipBuffer(stream, { video: input });
       try {
         await new Promise(resolve => setTimeout(resolve, 2_300));
         const pending = buffer.capture();
@@ -122,15 +124,16 @@ test("fresh browser sessions recover a failed model request and evidence replays
           const before = pixel();
           await new Promise(resolve => setTimeout(resolve, clip.durationMs - 500));
           const after = pixel();
-          return { before, after, durationMs: clip.durationMs, bytes: clip.blob.size, sourceLive: stream.getVideoTracks()[0].readyState };
+          return { before, after, durationMs: clip.durationMs, bytes: clip.blob.size, width: video.videoWidth, height: video.videoHeight, sourceLive: stream.getVideoTracks()[0].readyState };
         } finally { video.pause(); URL.revokeObjectURL(url); }
-      } finally { buffer.dispose(); clearInterval(drawing); stream.getTracks().forEach(track => track.stop()); }
+      } finally { buffer.dispose(); input.pause(); input.srcObject = null; clearInterval(drawing); stream.getTracks().forEach(track => track.stop()); }
     });
     assert.ok(playback.before[0] > 200 && playback.before[2] < 50, "clip starts with the pre-alert turn (red)");
     assert.ok(playback.after[2] > 200 && playback.after[0] < 50, "clip ends with the post-alert return (blue)");
     assert.ok(playback.durationMs >= 3_000 && playback.durationMs <= 5_500);
     assert.ok(playback.bytes >= 1_000);
     assert.equal(playback.sourceLive, "live");
+    assert.equal(playback.width, 480); assert.equal(playback.height, 270);
     console.log(JSON.stringify({ evidencePlayback: playback }));
   } finally {
     await browser.close();

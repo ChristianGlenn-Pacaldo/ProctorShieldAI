@@ -92,9 +92,10 @@ export function getDesktopInferenceDimensions(width: number, height: number, max
 
 export async function requestDesktopCamera(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>, audio: boolean,
+  frameRate = 24,
 ) {
   try {
-    return await getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24 } }, audio });
+    return await getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: frameRate } }, audio });
   } catch (error) {
     if ((error as { name?: string })?.name !== "OverconstrainedError") throw error;
     return getUserMedia({ video: { facingMode: "user" }, audio });

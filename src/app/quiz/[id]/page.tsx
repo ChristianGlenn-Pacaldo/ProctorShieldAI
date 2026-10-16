@@ -2,6 +2,7 @@
 
 import { createRecoveringDesktopDeviceWorker } from "@/lib/desktop-device-worker";
 import { createEvidenceClipBuffer } from "@/lib/evidence-clip-buffer";
+import { initializeProctoringFaceRuntime } from "@/lib/proctoring-face-runtime";
 
 import StudentPrivacyNotice from "@/components/student-privacy-notice";
 import AssessmentThemeControl from "@/components/assessment-theme-control";
@@ -81,8 +82,8 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
     cachedFaceRuntimePromise = (async () => {
       const faceapi = await import("@vladmandic/face-api/dist/face-api.esm-nobundle.js");
       const sharedTf = faceapi.tf as unknown as typeof import("@tensorflow/tfjs-core");
-      sharedTf.enableProdMode();
-      await sharedTf.ready();
+      const profile = getBrowserProctoringPerformanceProfile("desktop");
+      await initializeProctoringFaceRuntime(sharedTf, !useTinyLandmarks && profile.lowPower);
       return faceapi;
     })().catch((error) => { cachedFaceRuntimePromise = null; throw error; });
   }
@@ -519,7 +520,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
       }
 
       const profile = getBrowserProctoringPerformanceProfile(verified.deviceType);
-      preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase, verified.deviceType !== "desktop");
+      preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase, verified.deviceType !== "desktop" || profile.lowPower);
       void cachedFaceApiPromise?.catch(() => {});
       void cachedCocoModelPromise?.catch(() => {});
       setDeviceCapabilities(verified);
@@ -1371,7 +1372,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
       try {
         videoStream = !isMobile
-          ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), true)
+          ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), true, performanceProfile.frameRate)
           : await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
@@ -1385,7 +1386,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       } catch (err) {
         try {
           videoStream = !isMobile
-            ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), false)
+            ? await requestDesktopCamera(navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices), false, performanceProfile.frameRate)
             : await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "user",
@@ -1427,7 +1428,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           return;
         }
         mediaStreamRef.current = stream;
-        evidenceClipBufferRef.current = createEvidenceClipBuffer(stream);
         const activeVideoElement = isMobile ? mobileVideoRef.current : videoRef.current;
         const inactiveVideoElement = isMobile ? videoRef.current : mobileVideoRef.current;
         if (inactiveVideoElement) {
@@ -1437,6 +1437,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         if (activeVideoElement) {
           activeVideoElement.srcObject = stream;
           activeVideoElement.play().catch(() => {});
+          evidenceClipBufferRef.current = createEvidenceClipBuffer(stream, { video: activeVideoElement });
         }
         setCameraActive(true);
         const videoTrack = stream.getVideoTracks()[0];
@@ -1467,7 +1468,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         // Load Edge AI Models
         try {
           setAiStatus("Loading AI detectors...");
-          preloadProctoringModels(performanceProfile.useTinyLandmarks, performanceProfile.objectModelBase, isMobile);
+          preloadProctoringModels(performanceProfile.useTinyLandmarks, performanceProfile.objectModelBase, isMobile || performanceProfile.lowPower);
 
           const faceapi = await cachedFaceApiPromise;
           if (cancelled) {
@@ -1526,7 +1527,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             if (!cancelled && !loadedCocoModel && !desktopDeviceReady) setDeviceStatus("Still loading device AI...");
           }, 10_000);
 
-          if (isMobile && cachedCocoModelPromise) {
+          if ((isMobile || performanceProfile.lowPower) && cachedCocoModelPromise) {
             cachedCocoModelPromise
               .then((cocoModel) => {
                 if (cancelled) return;
@@ -1616,7 +1617,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               }
             }
           };
-          if (!isMobile) {
+          if (!isMobile && !performanceProfile.lowPower) {
             try {
             desktopDeviceWorker = createRecoveringDesktopDeviceWorker({
               onStatus(status) {
@@ -1657,7 +1658,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               } catch {
                 if(!cancelled){desktopDeviceReady=false;setDeviceStatus("Device AI unavailable ✗");setAiStatus("Face active · device unavailable");}
               } finally {deviceBusy=false;}
-            },performanceProfile.detectionIntervalMs);
+            },performanceProfile.objectDetectionIntervalMs);
             } catch {
               if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
               objectModelSlowTimer = null;
@@ -1708,8 +1709,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               return;
             }
 
-            // Mobile alternates the shared engine; desktop face scans run independently.
-            if (!isMobile || tickCounter % 2 === 1 || !loadedCocoModel) {
+            // Older laptops share one WASM engine instead of running a second
+            // GPU-backed runtime. Two face observations per object observation.
+            if ((!isMobile && !performanceProfile.lowPower)
+              || (isMobile ? tickCounter % 2 === 1 : tickCounter % 3 !== 0) || !loadedCocoModel) {
               try {
                 const detectionGeneration = trackingGeneration;
                 const detections = isMobile

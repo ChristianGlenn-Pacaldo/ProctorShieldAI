@@ -10,4 +10,7 @@ const files = new Map<string, string>([
 for (const name of ["vision_wasm_internal", "vision_wasm_nosimd_internal", "vision_wasm_module_internal"]) {
   for (const extension of ["js", "wasm"]) files.set(`${name}.${extension}`, `node_modules/@mediapipe/tasks-vision/wasm/${name}.${extension}`);
 }
+for (const file of ["tfjs-backend-wasm.wasm", "tfjs-backend-wasm-simd.wasm", "tfjs-backend-wasm-threaded-simd.wasm"]) {
+  files.set(file, `node_modules/@tensorflow/tfjs-backend-wasm/dist/${file}`);
+}
 export function getDesktopDeviceAssetPath(file: string) { return files.get(file) ?? null; }
