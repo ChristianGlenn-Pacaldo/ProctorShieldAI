@@ -1,6 +1,7 @@
 "use client";
 
-import { createDesktopDeviceWorker } from "@/lib/desktop-device-worker";
+import { createRecoveringDesktopDeviceWorker } from "@/lib/desktop-device-worker";
+import { createEvidenceClipBuffer } from "@/lib/evidence-clip-buffer";
 
 import StudentPrivacyNotice from "@/components/student-privacy-notice";
 import AssessmentThemeControl from "@/components/assessment-theme-control";
@@ -133,6 +134,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const evidenceClipBufferRef = useRef<ReturnType<typeof createEvidenceClipBuffer> | null>(null);
   const pcMapRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const violationCountRef = useRef(0);
   const feedbackAudioContextRef = useRef<AudioContext | null>(null);
@@ -1092,65 +1094,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
   }, []);
 
-  const captureEvidenceClip = useCallback(async (durationMs = 4_000): Promise<{
-    blob: Blob;
-    durationMs: number;
-    extension: "webm" | "mp4";
-  } | null> => {
-    const sourceStream = mediaStreamRef.current;
-    if (!sourceStream || typeof MediaRecorder === "undefined") return null;
-
-    const liveTracks = sourceStream.getTracks().filter((track) => track.readyState === "live");
-    if (!liveTracks.some((track) => track.kind === "video")) return null;
-
-    const candidates = [
-      "video/webm;codecs=vp9,opus",
-      "video/webm;codecs=vp8,opus",
-      "video/webm",
-      "video/mp4",
-    ];
-    const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
-    if (!mimeType) return null;
-
-    try {
-      const recorder = new MediaRecorder(new MediaStream(liveTracks), {
-        mimeType,
-        videoBitsPerSecond: 350_000,
-        audioBitsPerSecond: 32_000,
-      });
-      const chunks: BlobPart[] = [];
-
-      return await new Promise((resolve) => {
-        let finished = false;
-        const finish = (clip: { blob: Blob; durationMs: number; extension: "webm" | "mp4" } | null) => {
-          if (finished) return;
-          finished = true;
-          resolve(clip);
-        };
-
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) chunks.push(event.data);
-        };
-        recorder.onerror = () => finish(null);
-        recorder.onstop = () => {
-          if (chunks.length === 0) return finish(null);
-          const normalizedType = mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
-          finish({
-            blob: new Blob(chunks, { type: normalizedType }),
-            durationMs,
-            extension: normalizedType === "video/mp4" ? "mp4" : "webm",
-          });
-        };
-
-        recorder.start(500);
-        window.setTimeout(() => {
-          if (recorder.state !== "inactive") recorder.stop();
-        }, durationMs);
-      });
-    } catch (error) {
-      console.warn("Evidence video recording is unavailable:", error);
-      return null;
-    }
+  const captureEvidenceClip = useCallback(() => {
+    return evidenceClipBufferRef.current?.capture() ?? Promise.resolve(null);
   }, []);
 
   // ── Report Violation to Backend ───────────────────────
@@ -1297,7 +1242,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     let audioResumeListener: (() => void) | null = null;
     let cancelled = false;
     let loadedCocoModel: any = null;
-    let desktopDeviceWorker: ReturnType<typeof createDesktopDeviceWorker> | null = null;
+    let desktopDeviceWorker: ReturnType<typeof createRecoveringDesktopDeviceWorker> | null = null;
     let desktopDeviceInterval: ReturnType<typeof setInterval> | null = null;
     let desktopDeviceReady = false;
     let resetDetectorIncidents: (() => void) | null = null;
@@ -1482,6 +1427,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           return;
         }
         mediaStreamRef.current = stream;
+        evidenceClipBufferRef.current = createEvidenceClipBuffer(stream);
         const activeVideoElement = isMobile ? mobileVideoRef.current : videoRef.current;
         const inactiveVideoElement = isMobile ? videoRef.current : mobileVideoRef.current;
         if (inactiveVideoElement) {
@@ -1672,7 +1618,18 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           };
           if (!isMobile) {
             try {
-            desktopDeviceWorker = createDesktopDeviceWorker();
+            desktopDeviceWorker = createRecoveringDesktopDeviceWorker({
+              onStatus(status) {
+                if (cancelled) return;
+                if (status === "retrying") {
+                  setDeviceStatus("Retrying device AI...");
+                  setAiStatus("Face active · device recovering");
+                } else if (status === "ready") {
+                  setDeviceStatus("Scanning ✓");
+                  setAiStatus("Active ✓");
+                }
+              },
+            });
             void desktopDeviceWorker.ready.then(() => {
               if(cancelled)return;
               desktopDeviceReady=true;
@@ -1997,6 +1954,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (audioResumeListener) window.removeEventListener("pointerdown", audioResumeListener);
       if (audioContext) audioContext.close().catch(() => {});
       disposeLoadedModels();
+      evidenceClipBufferRef.current?.dispose();
+      evidenceClipBufferRef.current = null;
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
@@ -2809,7 +2768,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400 font-semibold">Device:</span>
-                <span className={`max-w-[9rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : deviceStatus.includes("Loading") ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`max-w-[9rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : /loading|retrying/i.test(deviceStatus) ? "text-amber-400" : "text-red-400"}`}>
                   {deviceStatus}
                 </span>
               </div>
@@ -2884,7 +2843,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             </div>
             <div className="flex items-center justify-between text-xs gap-2">
               <span className="text-slate-400 font-medium">Object Check</span>
-              <span className={`max-w-[10rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : deviceStatus.includes("Loading") ? "text-amber-400" : "text-red-400"}`}>
+              <span className={`max-w-[10rem] truncate text-right font-bold ${deviceStatus.includes("✓") ? "text-emerald-400" : /loading|retrying/i.test(deviceStatus) ? "text-amber-400" : "text-red-400"}`}>
                 {deviceStatus}
               </span>
             </div>

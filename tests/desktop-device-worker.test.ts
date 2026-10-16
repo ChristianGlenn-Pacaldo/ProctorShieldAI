@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { createDesktopDeviceWorker } from "../src/lib/desktop-device-worker.ts";
+import { createDesktopDeviceWorker, createRecoveringDesktopDeviceWorker } from "../src/lib/desktop-device-worker.ts";
 import { getDesktopDeviceAssetPath } from "../src/lib/desktop-device-model.ts";
 import { getUnauthorizedDevicePrediction } from "../src/lib/proctoring-detection.ts";
 
@@ -12,6 +12,70 @@ function fakeWorker() {
   const worker={onmessage:null as Worker["onmessage"],onerror:null as Worker["onerror"],postMessage:(value:typeof messages[number])=>messages.push(value),terminate:()=>{terminated++;}};
   return {worker,messages,reply:(data:unknown)=>worker.onmessage?.call(worker as unknown as Worker,{data} as MessageEvent),get terminated(){return terminated;}};
 }
+
+test("cold-window load failure retries a fresh worker and then performs real protocol scans", async () => {
+  const workers: ReturnType<typeof fakeWorker>[] = [];
+  const states: string[] = [];
+  const detector = createRecoveringDesktopDeviceWorker({ retryDelayMs: 0, onStatus: status => states.push(status),
+    createDetector: () => {
+      const f = fakeWorker(); workers.push(f);
+      const worker = createDesktopDeviceWorker({ createWorker: () => f.worker, createFrame: async () => ({ close() {} }) as ImageBitmap });
+      queueMicrotask(() => f.reply(workers.length === 1 ? { id: 1, error: true } : { id: 1, loaded: true }));
+      return worker;
+    },
+  });
+  try {
+    await detector.ready;
+    assert.equal(workers.length, 2);
+    assert.equal(workers[0].terminated, 1);
+    assert.deepEqual(states, ["loading", "retrying", "ready"]);
+    const scan = detector.detect({} as HTMLVideoElement); await new Promise(setImmediate);
+    workers[1].reply({ id: 2, predictions: [{ class: "cell phone", score: .8 }] });
+    assert.equal(getUnauthorizedDevicePrediction(await scan)?.score, .8);
+  } finally { detector.dispose(); }
+});
+
+test("a transient inference error replaces the failed runtime and rescans without reporting a false clear", async () => {
+  let created = 0, disposed = 0;
+  const states: string[] = [];
+  const detector = createRecoveringDesktopDeviceWorker({ retryDelayMs: 0, onStatus: status => states.push(status),
+    createDetector: () => {
+      const generation = ++created;
+      return { ready: Promise.resolve([]), dispose() { disposed++; }, async detect() {
+        if (generation === 1) throw new Error("GPU context lost");
+        return [{ class: "cell phone", score: .9 }];
+      } };
+    },
+  });
+  try {
+    await detector.ready;
+    assert.equal(getUnauthorizedDevicePrediction(await detector.detect({} as HTMLVideoElement))?.score, .9);
+    assert.equal(created, 2); assert.equal(disposed, 1);
+    assert.deepEqual(states, ["loading", "ready", "retrying", "ready"]);
+  } finally { detector.dispose(); }
+});
+
+test("persistent load failures stop after three attempts and remain unavailable", async () => {
+  let attempts = 0; const states: string[] = [];
+  const detector = createRecoveringDesktopDeviceWorker({ retryDelayMs: 0, onStatus: status => states.push(status),
+    createDetector: () => { attempts++; throw new Error("Assets offline"); },
+  });
+  try {
+    await assert.rejects(detector.ready, /Assets offline/);
+    assert.equal(attempts, 3);
+    assert.equal(states.at(-1), "unavailable");
+  } finally { detector.dispose(); }
+});
+
+test("cleanup during recovery cancels the retry and creates no replacement worker", async () => {
+  let attempts = 0;
+  const detector = createRecoveringDesktopDeviceWorker({ retryDelayMs: 60_000,
+    createDetector: () => { attempts++; throw new Error("Assets offline"); },
+  });
+  detector.dispose();
+  await assert.rejects(detector.ready, { code: "STOPPED" });
+  assert.equal(attempts, 1);
+});
 test("device assets use a closed manifest; request paths cannot select arbitrary files",()=>{
   assert.equal(getDesktopDeviceAssetPath("worker.js"),"public/desktop-device-worker.js");
   assert.match(getDesktopDeviceAssetPath("vision_wasm_internal.wasm")!,/tasks-vision\/wasm\//);

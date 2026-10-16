@@ -58,7 +58,7 @@ export function createDesktopDeviceWorker(options: Options = {}) {
       const timer = setTimeout(() => stop(new DesktopDeviceError(
         type === "load" ? "LOAD_TIMEOUT" : "SCAN_TIMEOUT",
         "Desktop device AI stopped after timing out",
-      )), type === "load" ? (options.loadTimeoutMs ?? 30_000) : (options.scanTimeoutMs ?? 10_000));
+      )), type === "load" ? (options.loadTimeoutMs ?? 60_000) : (options.scanTimeoutMs ?? 10_000));
       const item = { id, type, resolve, reject, timer };
       pending = item;
       const send = (frame?: ImageBitmap) => {
@@ -106,6 +106,64 @@ export function createDesktopDeviceWorker(options: Options = {}) {
         await ready;
         return await request("detect", video);
       } finally { busy = false; }
+    },
+  };
+}
+
+// A cold private window has no cached WASM/model assets. A single transient
+// download or inference failure must not disable device checks for the exam.
+type DeviceRuntimeStatus = "loading" | "retrying" | "ready" | "unavailable";
+export function createRecoveringDesktopDeviceWorker(options: {
+  createDetector?: () => ReturnType<typeof createDesktopDeviceWorker>;
+  onStatus?: (status: DeviceRuntimeStatus) => void;
+  retryDelayMs?: number;
+} = {}) {
+  let detector: ReturnType<typeof createDesktopDeviceWorker> | null = null;
+  let disposed = false;
+  let cancelDelay: (() => void) | null = null;
+  let lastStatus: DeviceRuntimeStatus | null = null;
+  const status = (value: DeviceRuntimeStatus) => {
+    if (!disposed && lastStatus !== value) {
+      lastStatus = value;
+      options.onStatus?.(value);
+    }
+  };
+  async function recover<T>(operation: (worker: ReturnType<typeof createDesktopDeviceWorker>) => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      if (disposed) throw new DesktopDeviceError("STOPPED", "Desktop device AI stopped");
+      try {
+        detector ??= (options.createDetector ?? createDesktopDeviceWorker)();
+        await detector.ready;
+        const value = await operation(detector);
+        if (disposed) throw new DesktopDeviceError("STOPPED", "Desktop device AI stopped");
+        status("ready");
+        return value;
+      } catch (error) {
+        detector?.dispose(); detector = null;
+        if (disposed) throw new DesktopDeviceError("STOPPED", "Desktop device AI stopped");
+        if (attempt >= 2) { status("unavailable"); throw error; }
+        status("retrying");
+        await new Promise<void>(resolve => {
+          const timer = setTimeout(done, (options.retryDelayMs ?? 2_000) * (attempt + 1));
+          function done() { clearTimeout(timer); cancelDelay = null; resolve(); }
+          cancelDelay = done;
+        });
+      }
+    }
+  }
+  status("loading");
+  const ready = recover(async () => {});
+  void ready.catch(() => {});
+  return {
+    ready,
+    async detect(video: HTMLVideoElement) {
+      await ready;
+      return recover(worker => worker.detect(video));
+    },
+    dispose() {
+      disposed = true;
+      cancelDelay?.();
+      detector?.dispose(); detector = null;
     },
   };
 }

@@ -1028,14 +1028,14 @@ test("worker construction failure still establishes the actual face interval",()
   const ast=ts.createSourceFile("page.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   let setup="",faceStatement="";
   const visit=(node:ts.Node)=>{
-    if(ts.isIfStatement(node)&&node.expression.getText(ast)==="!isMobile"&&node.thenStatement.getText(ast).includes("desktopDeviceWorker = createDesktopDeviceWorker()"))setup=node.getText(ast);
+    if(ts.isIfStatement(node)&&node.expression.getText(ast)==="!isMobile"&&node.thenStatement.getText(ast).includes("desktopDeviceWorker = createRecoveringDesktopDeviceWorker("))setup=node.getText(ast);
     if(ts.isExpressionStatement(node)&&ts.isBinaryExpression(node.expression)&&node.expression.left.getText(ast)==="faceDetectionInterval")faceStatement=node.getText(ast);
     ts.forEachChild(node,visit);
   };visit(ast);assert.ok(setup);assert.ok(faceStatement);
   let timers=0;const statuses:string[]=[];
   vm.runInNewContext(ts.transpile(setup+"\n"+faceStatement),{
     isMobile:false,desktopDeviceWorker:null,objectModelSlowTimer:null,
-    createDesktopDeviceWorker(){throw new Error("Worker disabled by browser");},
+    createRecoveringDesktopDeviceWorker(){throw new Error("Worker disabled by browser");},
     setDeviceStatus(value:string){statuses.push(value);},setAiStatus(){},
     setInterval(){timers++;return 1;},faceDetectionInterval:null,performanceProfile:{detectionIntervalMs:500},
   });
