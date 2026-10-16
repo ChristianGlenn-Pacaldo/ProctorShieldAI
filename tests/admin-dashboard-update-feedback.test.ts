@@ -151,37 +151,13 @@ for (const [initialStatus, action, finalStatus] of [
   });
 }
 
-for (const succeeds of [false, true]) {
-  test(`${succeeds ? "successful" : "failed"} subscription save ${succeeds ? "updates the table" : "keeps the modal open and table unchanged"}`, async () => {
-    const setup = fixture("Active", "Free Tier", succeeds);
-    await setup.ready();
-    setup.button(setup.render(), "Edit").props.onClick();
-    const select = findElement(setup.render(), (element) => element.type === "select")!;
-    select.props.onChange({ target: { value: "Premium" } });
-    const form = findElement(setup.render(), (element) => element.type === "form")!;
-    await form.props.onSubmit({ preventDefault() {} });
-    const view = setup.render();
-
-    assert.equal(setup.getRequests()[0].plan, "Premium");
-    assert.equal(setup.getDashboardFetches(), 2);
-    assert.match(textOf(setup.row(view)), succeeds ? /Premium/ : /Free Tier/);
-    assert.equal(Boolean(findElement(view, (element) => element.type === "form")), !succeeds);
-    if (succeeds) assert.equal(setup.error(view), undefined);
-    else assert.match(textOf(setup.error(view)), /Changes were not saved/);
-    setup.unmount();
-  });
-}
-
-test("unchanged Dashboard subscription Save is disabled and sends no request", async () => {
+test("Dashboard displays the existing subscription without an Edit action", async () => {
   const setup = fixture("Active", "Premium", true);
   await setup.ready();
-  setup.button(setup.render(), "Edit").props.onClick();
   const view = setup.render();
-  const save = setup.button(view, "Save Changes");
-  assert.equal(save.props.disabled, true);
-  const form = findElement(view, (element) => element.type === "form")!;
-  await form.props.onSubmit({ preventDefault() {} });
+  assert.equal(setup.button(view, "Edit"), undefined);
+  assert.equal(findElement(view, element => element.type === "form"), undefined);
+  assert.match(textOf(setup.row(view)), /Premium/);
   assert.deepEqual(setup.getRequests(), []);
-  assert.equal(setup.getDashboardFetches(), 1);
   setup.unmount();
 });

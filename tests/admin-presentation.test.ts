@@ -65,10 +65,10 @@ test("Admin search, dialogs and profile controls have accessible names", () => {
   assert.ok(user.includes('aria-label="Search users"'));
   assert.ok(user.includes('role="dialog" aria-modal="true" aria-labelledby="admin-user-heading"'));
   assert.ok(user.includes('aria-label="Close user details"'));
-  assert.ok(user.includes('aria-label="AI Pro Subscription"'));
+  assert.ok(!user.includes('aria-label="AI Pro Subscription"'));
   const dashboard = fs.readFileSync("src/app/dashboard/admin/content.tsx", "utf8");
-  assert.ok(dashboard.includes('htmlFor="admin-subscription-plan"'));
-  assert.ok(dashboard.includes('id="admin-subscription-plan"'));
+  assert.ok(!dashboard.includes('htmlFor="admin-subscription-plan"'));
+  assert.ok(!dashboard.includes('id="admin-subscription-plan"'));
   const settings = fs.readFileSync("src/app/dashboard/admin/settings/content.tsx", "utf8");
   assert.ok(settings.includes('value="ProctorShieldAI" disabled'));
   assert.match(settings, /<button disabled[\s\S]*?Save Configuration/);

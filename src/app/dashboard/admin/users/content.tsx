@@ -24,10 +24,8 @@ export default function UsersContent() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Edit User Modal State
-  const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [editSubStatus, setEditSubStatus] = useState(false);
+  // Read-only user details
+  const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
@@ -182,10 +180,10 @@ export default function UsersContent() {
                     <td className="px-5 py-3">
                       <div className="flex gap-3 items-center">
                       <button
-                        onClick={() => { setEditUser(u); setEditSubStatus(u.subscription?.includes("PRO") || false); }}
+                        onClick={() => setSelectedUser(u)}
                         className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        {u.role.toLowerCase() === "teacher" ? "Edit" : "View"}
+                        View
                       </button>
                       {u.status === "Suspended" ? (
                         <button
@@ -216,79 +214,30 @@ export default function UsersContent() {
         </div>
       </div>
 
-      {/* EDIT USER MODAL */}
-      {editUser && (
+      {/* USER DETAILS MODAL */}
+      {selectedUser && (
         <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
           <div role="dialog" aria-modal="true" aria-labelledby="admin-user-heading" className="ps-admin-glass-card ps-admin-glass-dialog app-modal-panel min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-xl max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-3 sm:px-6 sm:py-4">
-              <h3 id="admin-user-heading" className="font-bold text-[var(--ink)]">{editUser.role.toLowerCase() === "teacher" ? "Edit User" : "User Details"}</h3>
-              <button aria-label="Close user details" onClick={() => setEditUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>
+              <h3 id="admin-user-heading" className="font-bold text-[var(--ink)]">User Details</h3>
+              <button aria-label="Close user details" onClick={() => setSelectedUser(null)} className="text-[var(--muted)] hover:text-[var(--ink)] transition-colors text-lg">✕</button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Name</label>
-                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.name}</div>
+                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{selectedUser.name}</div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Email</label>
-                <div className="break-all text-sm text-[var(--muted)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.email}</div>
+                <div className="break-all text-sm text-[var(--muted)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{selectedUser.email}</div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Role</label>
-                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{editUser.role}</div>
+                <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{selectedUser.role}</div>
               </div>
-              {editUser.role.toLowerCase() === "teacher" && (
-                <div className="pt-4 border-t border-[var(--border)]">
-                  <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Subscription Status</label>
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface2)] p-4">
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-[var(--ink)]">AI Pro Subscription</h4>
-                      <p className="text-xs text-[var(--muted)] mt-0.5">Manually grant or revoke Pro access</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input aria-label="AI Pro Subscription" type="checkbox" className="sr-only peer" checked={editSubStatus} onChange={(e) => setEditSubStatus(e.target.checked)} />
-                      <div className="w-11 h-6 bg-[var(--border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                    </label>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:justify-end sm:gap-3">
-              <button onClick={() => setEditUser(null)} className="w-full px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all sm:w-auto">{editUser.role.toLowerCase() === "teacher" ? "Cancel" : "Close"}</button>
-              {editUser.role.toLowerCase() === "teacher" && <button
-                disabled={isSaving}
-                onClick={async () => {
-                  const wasSubscribed = editUser.subscription?.includes("PRO") || false;
-                  if (editSubStatus === wasSubscribed) {
-                    setEditUser(null);
-                    return;
-                  }
-                  setIsSaving(true);
-                  try {
-                    const res = await fetch(`/api/dashboard/admin/users/${editUser.id}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ subscriptionStatus: editSubStatus ? "active" : "expired" })
-                    });
-                    if (res.ok) {
-                      setEditUser(null);
-                      showToast("User subscription updated successfully.", "success");
-                      fetchUsers(true);
-                    } else {
-                      const data = await res.json().catch(() => ({}));
-                      showToast("Failed to update: " + (data.error || "Unknown error"), "error");
-                    }
-                  } catch {
-                    showToast("Network error.", "error");
-                  } finally {
-                    setIsSaving(false);
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
-              >
-                {isSaving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                {isSaving ? "Saving..." : "Save Changes"}
-              </button>}
+              <button onClick={() => setSelectedUser(null)} className="w-full px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all sm:w-auto">Close</button>
             </div>
           </div>
         </div>

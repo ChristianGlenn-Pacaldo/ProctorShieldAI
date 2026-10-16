@@ -52,11 +52,8 @@ export default function AdminDashboardContent() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [planError, setPlanError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [sessionLost, setSessionLost] = useState<401 | 403 | null>(null);
@@ -89,11 +86,8 @@ export default function AdminDashboardContent() {
     setActivityBars([]);
     setActivities([]);
     setUsers([]);
-    setEditingUser(null);
     setUpdatingUserId(null);
-    setIsSaving(false);
     setStatusError(null);
-    setPlanError(null);
     setLoadError(null);
     setHasLoaded(false);
     setLastSuccessAt(null);
@@ -138,45 +132,6 @@ export default function AdminDashboardContent() {
     } finally {
       requestsRef.current.delete(request.controller);
       if (requestIsActive(request)) setUpdatingUserId(null);
-    }
-  };
-
-  const handleSavePlan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    if (users.some((user) => user.id === editingUser.id && user.plan === editingUser.plan)) return;
-    const request = beginRequest();
-    if (!request) return;
-    setPlanError(null);
-    setIsSaving(true);
-    try {
-      const response = await fetch(`/api/users/${editingUser.id}`, {
-        method: "PUT",
-        signal: request.controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: editingUser.plan }),
-      });
-      if (!requestIsActive(request)) return;
-      if (response.status === 401 || response.status === 403) { loseAdminSession(response.status); return; }
-      if (!response.ok) {
-        setPlanError("Could not save subscription. Changes were not saved.");
-        await fetchDashboardData(true);
-        return;
-      }
-      setUsers((previous) => previous.map((user) => user.id === editingUser.id ? {
-        ...user,
-        plan: editingUser.plan,
-      } : user));
-      setEditingUser(null);
-      await fetchDashboardData(true);
-    } catch (e) {
-      if (!requestIsActive(request)) return;
-      console.error("Failed to update plan", e);
-      setPlanError("Could not save subscription. Changes were not saved.");
-      await fetchDashboardData(true);
-    } finally {
-      requestsRef.current.delete(request.controller);
-      if (requestIsActive(request)) setIsSaving(false);
     }
   };
 
@@ -552,14 +507,6 @@ export default function AdminDashboardContent() {
                     <td className="whitespace-nowrap px-5 py-3 text-sm text-[var(--muted)]">{u.joined}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                      {u.role === "Teacher" && (
-                        <button 
-                          onClick={() => { setPlanError(null); setEditingUser(u); }}
-                          className="text-xs font-semibold text-[var(--muted)] hover:text-indigo-500 cursor-pointer"
-                        >
-                          Edit
-                        </button>
-                      )}
                       {u.status === "Suspended" ? (
                         <button disabled={updatingUserId === u.id} onClick={() => handleToggleStatus(u.id, u.status)} className="text-xs font-semibold text-emerald-500 hover:text-emerald-600 cursor-pointer disabled:opacity-50">Restore</button>
                       ) : (
@@ -574,48 +521,6 @@ export default function AdminDashboardContent() {
           </table>
         </div>
       </div>
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="app-modal-backdrop bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div role="dialog" aria-modal="true" aria-labelledby="admin-plan-heading" className="ps-admin-glass-card ps-admin-glass-dialog app-modal-panel bg-[var(--surface)] border border-[var(--border)] p-4 rounded-2xl max-w-md shadow-2xl relative overflow-y-auto sm:p-6">
-            <h2 id="admin-plan-heading" className="text-lg font-bold text-[var(--ink)] mb-1">Edit Subscription</h2>
-            <p className="text-xs text-[var(--muted)] mb-5">Change the subscription plan for {editingUser.name}</p>
-            
-            <form onSubmit={handleSavePlan}>
-              <div className="mb-4">
-                <label htmlFor="admin-subscription-plan" className="text-xs font-semibold text-[var(--muted)] block mb-1.5">Subscription Plan</label>
-                <select id="admin-subscription-plan"
-
-                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-sm text-[var(--ink)] focus:outline-none focus:border-indigo-500/50"
-                  value={editingUser.plan}
-                  onChange={(e) => setEditingUser({ ...editingUser, plan: e.target.value })}
-                >
-                  <option value="Premium">💎 Premium</option>
-                  <option value="Free Tier">Free Tier</option>
-                </select>
-              </div>
-              {planError && <p role="alert" className="text-xs font-semibold text-rose-500">{planError}</p>}
-              
-              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setEditingUser(null)}
-                  className="w-full px-4 py-2 rounded-xl text-sm font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] transition-colors sm:w-auto"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSaving || users.some((user) => user.id === editingUser.id && user.plan === editingUser.plan)}
-                  className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 sm:w-auto"
-                >
-                  {isSaving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

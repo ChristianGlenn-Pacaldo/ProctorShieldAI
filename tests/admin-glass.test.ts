@@ -53,7 +53,7 @@ test("Admin analytics and settings preserve readable bodies and existing control
   assert.match(settings, /value="ProctorShieldAI" disabled/);
   for (const file of ["content.tsx", "users/content.tsx"]) {
     const source = fs.readFileSync("src/app/dashboard/admin/" + file, "utf8");
-    assert.match(source, /ps-admin-glass-card ps-admin-glass-dialog app-modal-panel/);
+    if (file === "users/content.tsx") assert.match(source, /ps-admin-glass-card ps-admin-glass-dialog app-modal-panel/);
     assert.match(source, /Suspend/); assert.match(source, /Restore/);
   }
 });

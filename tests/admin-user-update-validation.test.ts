@@ -169,7 +169,7 @@ function findElement(value: unknown, predicate: (node: ElementNode) => boolean):
   return predicate(node) ? node : findElement(node.props.children, predicate);
 }
 
-test("Student user details has no actionable Save while Teacher editing retains one", () => {
+test("Student and Teacher details are read-only with no subscription editing", () => {
   const filename = path.resolve(process.cwd(), "src/app/dashboard/admin/users/content.tsx");
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
@@ -193,11 +193,11 @@ test("Student user details has no actionable Save while Teacher editing retains 
       require: (name: string) => name === "react" ? react : name === "react/jsx-runtime" ? { jsx, jsxs: jsx } : {},
     }, { filename });
     const render = () => { index = 0; return exports.default!(); };
-    const action = findElement(render(), (node) => node.type === "button" && textOf(node) === (role === "Teacher" ? "Edit" : "View"));
+    const action = findElement(render(), (node) => node.type === "button" && textOf(node) === "View");
     assert.ok(action);
     (action.props.onClick as () => void)();
     const modal = render();
-    assert.match(textOf(modal), role === "Teacher" ? /Edit User/ : /User Details/);
-    assert.equal(Boolean(findElement(modal, (node) => node.type === "button" && textOf(node) === "Save Changes")), role === "Teacher");
+    assert.match(textOf(modal), /User Details/);
+    assert.equal(Boolean(findElement(modal, (node) => node.type === "button" && textOf(node) === "Save Changes")), false);
   }
 });

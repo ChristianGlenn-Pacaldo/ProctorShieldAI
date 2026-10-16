@@ -125,9 +125,10 @@ for (const scene of Object.keys(scenes)) for (const theme of ["light", "dark"]) 
         await page.locator(".app-modal-panel").waitFor();
         await page.getByRole("button", { name: "Close", exact: true }).click();
       } else if (scene === "users") {
-        await page.getByRole("button", { name: "Edit", exact: true }).click();
+        assert.equal(await page.getByRole("button", { name: "Edit", exact: true }).count(), 0);
+        await page.getByRole("button", { name: "View", exact: true }).first().click();
         await page.getByRole("dialog").waitFor();
-        await page.getByRole("button", { name: "Cancel", exact: true }).click();
+        await page.getByRole("button", { name: "Close", exact: true }).click();
       } else if (scene === "student") {
         assert.equal(await page.getByRole("link", { name: "Take Quiz" }).getAttribute("href"), "/quiz/8");
         const search = page.getByRole("textbox", { name: "Search enrolled quizzes" });

@@ -219,8 +219,7 @@ function assertSessionLost(setup: ReturnType<typeof fixture>) {
   assert.ok(nodesOf(view, n => n.props.href === "/login" && textOf(n) === "Sign In").length);
   assert.equal(JSON.stringify(setup.states[0]), JSON.stringify(dashboardBody(0).stats));
   for (const index of [1, 2, 3, 4]) assert.equal(JSON.stringify(setup.states[index]), "[]");
-  assert.equal(setup.states[6], null, "editing user cleared");
-  assert.equal(setup.states[14], null, "freshness timestamp cleared");
+  assert.equal(setup.states[11], null, "freshness timestamp cleared");
   assert.deepEqual(setup.resources(), { clearedTimers: 1, disconnected: 1, unbound: 1, unsubscribed: 1 });
 }
 
@@ -231,7 +230,7 @@ for (const status of [401, 403]) {
     setup.render(); await setup.ready();
     assert.match(textOf(setup.render()), /Test Teacher/);
     setup.emit("login"); await setup.ready(); assertSessionLost(setup);
-    assert.equal(setup.states[13], status);
+    assert.equal(setup.states[10], status);
     assert.equal(setup.bodyReads(), 1);
     setup.emit("register"); setup.tickPoll(); await setup.ready();
     assert.equal(setup.requests(), 2); assertSessionLost(setup);
@@ -243,7 +242,7 @@ for (const status of [401, 403]) {
   test(`Initial ${status}, including a revoked Admin session, shows only reauthentication`, async () => {
     const setup = fixture(dashboardPath, [{ ok: false, status, body: { error: "Unauthorized" } }]);
     setup.render(); await setup.ready(); assertSessionLost(setup);
-    assert.equal(setup.states[13], status);
+    assert.equal(setup.states[10], status);
     assert.equal(setup.bodyReads(), 0); setup.unmount();
   });
 }
@@ -306,16 +305,6 @@ test("pending user-status response cannot restore users or errors after dashboar
   setup.render(); await setup.ready();
   const button = nodesOf(setup.render(), n => n.type === "button" && textOf(n) === "Suspend")[0];
   const pending = (button.props.onClick as () => Promise<void>)();
-  setup.tickPoll(); await setup.ready(); assertSessionLost(setup); const writes = setup.writes();
-  action.resolve({ ok: true }); await pending; assertSessionLost(setup); assert.equal(setup.writes(), writes); setup.unmount();
-});
-test("pending subscription response cannot restore modal/users after dashboard authorization loss", async () => {
-  const action = deferred<Reply>(); const setup = fixture(dashboardPath, [{ ok: true, body: privilegedBody() }, action.promise, { ok: false, status: 401 }]);
-  setup.render(); await setup.ready();
-  (nodesOf(setup.render(), n => n.type === "button" && textOf(n) === "Edit")[0].props.onClick as () => void)();
-  (nodesOf(setup.render(), n => n.type === "select")[0].props.onChange as (e: unknown) => void)({ target: { value: "Premium" } });
-  const form = nodesOf(setup.render(), n => n.type === "form")[0];
-  const pending = (form.props.onSubmit as (e: unknown) => Promise<void>)({ preventDefault() {} });
   setup.tickPoll(); await setup.ready(); assertSessionLost(setup); const writes = setup.writes();
   action.resolve({ ok: true }); await pending; assertSessionLost(setup); assert.equal(setup.writes(), writes); setup.unmount();
 });
