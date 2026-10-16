@@ -35,14 +35,19 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
       const stream = canvas.captureStream(12);
       if (constraints?.audio) {
         const audio = new AudioContext(); const destination = audio.createMediaStreamDestination();
+        const oscillator = audio.createOscillator(); const gain = audio.createGain(); gain.gain.value = 0;
+        oscillator.connect(gain); gain.connect(destination); oscillator.start(); await audio.resume();
         stream.addTrack(destination.stream.getAudioTracks()[0]);
       }
       return stream;
     };
   }, sample);
   const errors: string[] = [];
+  const evidenceDiagnostics: string[] = [];
+  let incidents = 0;
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error" && /Proctoring AI|TensorFlow|evaluate flag/.test(message.text())) errors.push(message.text()); });
+  page.on("console", message => { if (/Video evidence|Failed to report violation|Violation API rejected/.test(message.text())) evidenceDiagnostics.push(message.text()); });
   const modelResponses: string[] = [];
   const uploads: Array<{ bytes: string; durationMs: number; type: string }> = [];
   page.on("response", response => { if (response.ok() && /tfjs-backend-wasm.*\.wasm|face_landmark_68_model|tiny_face_detector_model|coco\/model\.json/.test(response.url())) modelResponses.push(response.url()); });
@@ -59,7 +64,7 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
       remainingSeconds: 600, violationCount: 0, savedAnswers: [], quiz: { id: 99, title: "Synthetic AI startup check", duration: 10, totalQuestions: 1, quizStatus: "in_progress", quizMode: "proctored", teacherId: "synthetic-teacher" },
       questions: [{ id: 1, questionText: "Synthetic startup question", questionType: "multiple_choice", points: 1, choices: [{ id: 11, choiceText: "One" }, { id: 12, choiceText: "Two" }] }] });
     if (url.pathname === "/api/quizzes/session") return reply({ success: true, monitoringLevel: "strict", startTime: new Date().toISOString(), remainingSeconds: 600 });
-    if (url.pathname === "/api/live/violation") return reply({ success: true, violation: { id: "1" }, violationCount: 1 });
+    if (url.pathname === "/api/live/violation") { incidents++; return reply({ success: true, violation: { id: "1" }, violationCount: 1 }); }
     if (url.pathname === "/api/live/violation/1/evidence") {
       const request = new Request(url, { method: "POST", headers: route.request().headers(), body: Uint8Array.from(route.request().postDataBuffer()!).buffer });
       const form = await request.formData(); const file = form.get("evidence") as File;
@@ -77,24 +82,18 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
   await expect(page.getByRole("heading", { name: "Synthetic startup question" })).toBeVisible();
   await expect.poll(async () => {
     if (errors.length) throw new Error(errors.join("\n"));
-    return page.locator("body").innerText();
+    return page.getByText("AI Engine:", { exact: true }).locator("..").textContent();
   }, { timeout: 90_000 }).toContain("Active ✓");
   expect(modelResponses.some(url => /tfjs-backend-wasm.*\.wasm/.test(url))).toBe(true);
   expect(modelResponses.some(url => url.includes("face_landmark_68_model"))).toBe(true);
   expect(modelResponses.some(url => url.includes("coco/model.json"))).toBe(true);
-  // Trigger a focus-loss incident after startup grace if the synthetic faces
+  // Trigger a print incident after startup grace if the synthetic faces
   // have not already generated an incident. All posts are intercepted above.
   await page.waitForTimeout(5_100);
   if (uploads.length < 2) {
-    await page.evaluate(() => {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await expect.poll(() => uploads.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
-    await page.evaluate(() => {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+    try { await expect.poll(() => uploads.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2); }
+    catch { throw new Error(JSON.stringify({ incidents, evidenceDiagnostics, uploads: uploads.length })); }
   }
   expect(uploads[0]).toEqual(uploads[1]);
   expect(uploads[1].durationMs).toBeGreaterThanOrEqual(3_000);
