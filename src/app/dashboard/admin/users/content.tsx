@@ -12,9 +12,16 @@ interface UserItem {
   roleClass: string;
   status: string;
   statusClass: string;
+  plan?: string;
   subscription?: string;
   subClass?: string;
   joined: string;
+}
+
+function subscriptionLabel(user: UserItem) {
+  if (user.plan === "Premium" || user.plan === "PRO (Active)" || user.subscription === "PRO (Active)") return "Premium";
+  if (user.plan === "Free Tier" || user.subscription === "Free Plan") return "Free Tier";
+  return "Unavailable";
 }
 
 export default function UsersContent() {
@@ -141,7 +148,7 @@ export default function UsersContent() {
           <table className="ps-dashboard-table w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
-                {["User", "Email", "Role", "Status", "Joined Date", "Actions"].map((h) => (
+                {["User", "Email", "Role", "Subscription", "Status", "Joined Date", "Actions"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -149,15 +156,15 @@ export default function UsersContent() {
             <tbody className="divide-y divide-[var(--border)]">
               {isLoading && users.length === 0 && !loadError ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={7} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : loadError && users.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">User data is unavailable. Use Retry above.</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-xs text-[var(--muted)]">User data is unavailable. Use Retry above.</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-xs text-[var(--muted)]">
+                  <td colSpan={7} className="text-center py-8 text-xs text-[var(--muted)]">
                     No users found matching your search.
                   </td>
                 </tr>
@@ -170,6 +177,13 @@ export default function UsersContent() {
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.roleClass}`}>
                         {u.role}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {u.role.toLowerCase() === "teacher" ? (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${subscriptionLabel(u) === "Premium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-[var(--muted)] border border-[var(--border)]"}`}>
+                          {subscriptionLabel(u)}
+                        </span>
+                      ) : <span className="text-xs text-[var(--muted)]">—</span>}
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${u.statusClass}`}>
@@ -235,6 +249,14 @@ export default function UsersContent() {
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Role</label>
                 <div className="text-sm font-bold text-[var(--ink)] bg-[var(--surface2)] px-3 py-2 rounded-lg border border-[var(--border)]">{selectedUser.role}</div>
               </div>
+              {selectedUser.role.toLowerCase() === "teacher" && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Subscription Status</p>
+                  <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${subscriptionLabel(selectedUser) === "Premium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-[var(--muted)] border border-[var(--border)]"}`}>
+                    {subscriptionLabel(selectedUser)}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface2)] p-4 sm:flex-row sm:justify-end sm:gap-3">
               <button onClick={() => setSelectedUser(null)} className="w-full px-4 py-2 rounded-lg font-semibold text-sm border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface)] transition-all sm:w-auto">Close</button>

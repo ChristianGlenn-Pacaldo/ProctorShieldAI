@@ -174,10 +174,10 @@ test("Student and Teacher details are read-only with no subscription editing", (
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
-  for (const role of ["Student", "Teacher"]) {
+  for (const [role, plan] of [["Student", "N/A"], ["Teacher", "Free Tier"], ["Teacher", "Premium"]]) {
     const states: unknown[] = [];
     let index = 0;
-    const user = { id: "target", name: "QA User", email: "qa@example.invalid", role, roleClass: "", status: "Active", statusClass: "", joined: "Today", subscription: "Free Plan" };
+    const user = { id: "target", name: "QA User", email: "qa@example.invalid", role, plan, roleClass: "", status: "Active", statusClass: "", joined: "Today", subscription: plan === "Premium" ? "PRO (Active)" : "Free Plan" };
     const react = {
       useState: (initial: unknown) => {
         const current = index++;
@@ -193,11 +193,19 @@ test("Student and Teacher details are read-only with no subscription editing", (
       require: (name: string) => name === "react" ? react : name === "react/jsx-runtime" ? { jsx, jsxs: jsx } : {},
     }, { filename });
     const render = () => { index = 0; return exports.default!(); };
-    const action = findElement(render(), (node) => node.type === "button" && textOf(node) === "View");
+    const table = render();
+    if (role === "Teacher") assert.match(textOf(table), new RegExp(plan));
+    assert.equal(findElement(table, (node) => node.type === "button" && textOf(node) === "Edit"), undefined);
+    const action = findElement(table, (node) => node.type === "button" && textOf(node) === "View");
     assert.ok(action);
     (action.props.onClick as () => void)();
     const modal = render();
     assert.match(textOf(modal), /User Details/);
+    if (role === "Teacher") {
+      assert.match(textOf(modal), /Subscription Status/);
+      assert.match(textOf(modal), new RegExp(plan));
+    }
+    assert.equal(findElement(modal, (node) => node.type === "input" && node.props.type === "checkbox"), undefined);
     assert.equal(Boolean(findElement(modal, (node) => node.type === "button" && textOf(node) === "Save Changes")), false);
   }
 });
