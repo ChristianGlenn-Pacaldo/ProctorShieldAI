@@ -8,6 +8,10 @@ const root = process.cwd();
 const review = path.resolve(process.env.MVP_PUBLIC_REVIEW_DIR || "release-review/mvp-2026-10-15/public-e2e");
 const temp = path.resolve(".tmp-mvp-e2e");
 const origin = "http://127.0.0.1:3181";
+// NEXT_PUBLIC values are inlined during the production build. A database
+// rehearsal may build for its separate HTTPS loopback origin.
+const buildOrigin = process.env.MVP_BUILD_APP_ORIGIN || origin;
+if (!["localhost", "127.0.0.1"].includes(new URL(buildOrigin).hostname)) throw Error("Loopback build origin required");
 fs.mkdirSync(review, { recursive: true });
 fs.mkdirSync(temp, { recursive: true });
 try {
@@ -24,12 +28,12 @@ Object.assign(env, {
   PORT: "3181", HOSTNAME: "127.0.0.1", FRONTEND_ONLY: "false", POWER_ARENA_ENABLED: "false",
   DATABASE_URL: "postgresql://local:local@127.0.0.1:1/local", REDIS_URL: "redis://127.0.0.1:1",
   NEXTAUTH_SECRET: "fixture-only-session-signing-secret-at-least-32-characters",
-  NEXT_PUBLIC_APP_URL: origin, E2E_BASE_URL: origin, RUN_AUTHENTICATED_E2E: "false",
+  NEXT_PUBLIC_APP_URL: buildOrigin, E2E_BASE_URL: origin, RUN_AUTHENTICATED_E2E: "false",
   PUSHER_APP_ID: "synthetic", NEXT_PUBLIC_PUSHER_KEY: "synthetic", PUSHER_SECRET: "synthetic", NEXT_PUBLIC_PUSHER_CLUSTER: "ap1",
 });
 execFileSync(process.execPath, ["scripts/prepare-standalone.js"], { stdio: "ignore", env });
 const config = {
-  testDir: path.join(root, "e2e"), testMatch: ["security-flows.spec.ts", "public-entry-themes.spec.ts", "custom-404.spec.ts"],
+  testDir: path.join(root, "e2e"), testMatch: ["security-flows.spec.ts", "public-entry-themes.spec.ts", "custom-404.spec.ts", "free-monthly-pricing.spec.ts"],
   workers: 1, retries: 0, timeout: 45000, expect: { timeout: 10000 }, outputDir: path.join(review, "artifacts"),
   reporter: [["list"], ["json", { outputFile: path.join(review, "results.json") }]],
   use: { baseURL: origin, trace: "retain-on-failure", screenshot: "only-on-failure" },

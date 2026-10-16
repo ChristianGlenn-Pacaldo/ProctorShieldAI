@@ -238,7 +238,7 @@ export default function BillingContent() {
                 <span className="text-sm font-bold text-amber-500">Limited Access</span>
               </div>
               <p className="text-xs text-[var(--muted)] leading-relaxed">
-                The Free plan includes {FREE_MANUAL_QUIZ_LIMIT} lifetime manual quizzes and up to {FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz. AI Quiz Generation, Live Monitoring, Evidence Replay, and AI Reports require Pro.
+                The Free plan includes {FREE_MANUAL_QUIZ_LIMIT} manual quizzes per calendar month and up to {FREE_STUDENT_LIMIT_PER_QUIZ} students per quiz. The quiz allowance resets on the first of each month (UTC+8); deleting a quiz does not restore that month's allowance. AI Quiz Generation, Live Monitoring, Evidence Replay, and AI Reports require Pro.
               </p>
             </div>
           )}

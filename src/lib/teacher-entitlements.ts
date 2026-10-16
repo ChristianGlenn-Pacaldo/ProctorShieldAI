@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {
   FREE_MANUAL_QUIZ_LIMIT,
+  getFreeQuizQuotaWindow,
   getStudentLimitPerQuiz,
   type TeacherEntitlementSummary,
 } from "@/lib/subscription-rules";
@@ -33,6 +34,7 @@ export async function getTeacherEntitlements(
   db: EntitlementClient = prisma,
   now = new Date(),
 ): Promise<TeacherEntitlementSummary> {
+  const { start, end } = getFreeQuizQuotaWindow(now);
   const [subscription, currentManualQuizCount, recordedManualQuizCount] = await Promise.all([
     db.userSubscription.findFirst({
       where: {
@@ -48,11 +50,12 @@ export async function getTeacherEntitlements(
       },
     }),
     db.quiz.count({
-      where: { teacherId: userId, isAiGenerated: false },
+      where: { teacherId: userId, isAiGenerated: false, createdAt: { gte: start, lt: end } },
     }),
     db.activityLog.count({
       where: {
         userId,
+        createdAt: { gte: start, lt: end },
         OR: [
           { activity: { startsWith: "Created quiz:" } },
           { activity: { startsWith: "Created manual quiz:" } },
@@ -62,8 +65,8 @@ export async function getTeacherEntitlements(
   ]);
 
   const isSubscribed = Boolean(subscription);
-  // Activity records preserve the lifetime quota even if a free teacher deletes
-  // a quiz. max() also covers legacy quizzes created before quota logging.
+  // Count this calendar month only. Activity records retain usage after deletion;
+  // max() also covers legacy quizzes created before quota logging.
   const manualQuizCount = Math.max(currentManualQuizCount, recordedManualQuizCount);
   return {
     isSubscribed,

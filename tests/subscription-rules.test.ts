@@ -26,7 +26,7 @@ function entitlements(
   };
 }
 
-test("free teachers can create their first five manual quizzes", () => {
+test("free teachers can create their first five manual quizzes in the current calendar month", () => {
   for (let count = 0; count < FREE_MANUAL_QUIZ_LIMIT; count += 1) {
     assert.deepEqual(
       getQuizCreationDecision(entitlements({ manualQuizCount: count }), false),
@@ -47,7 +47,11 @@ test("free teachers cannot create a sixth manual quiz", () => {
   );
 
   assert.equal(decision.allowed, false);
-  if (!decision.allowed) assert.equal(decision.code, "FREE_QUIZ_LIMIT_REACHED");
+  if (!decision.allowed) {
+    assert.equal(decision.code, "FREE_QUIZ_LIMIT_REACHED");
+    assert.match(decision.message, /per calendar month/);
+    assert.match(decision.message, /first of each month \(UTC\+8\)/);
+  }
 });
 
 test("free teachers cannot save AI-generated quizzes", () => {

@@ -203,7 +203,10 @@ async function POSTImpl(req: NextRequest) {
       // the current transaction.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`quiz-creation:${session.userId}`}))`;
 
-      const entitlements = await getTeacherEntitlements(session.userId, tx);
+      // Use one timestamp after acquiring the lock for both quota checks and
+      // persisted usage, including transactions that wait across a month reset.
+      const creationTime = new Date();
+      const entitlements = await getTeacherEntitlements(session.userId, tx, creationTime);
       const decision = getQuizCreationDecision(entitlements, isAiQuiz);
       if (!decision.allowed) {
         return { quiz: null, entitlements, decision };
@@ -237,6 +240,7 @@ async function POSTImpl(req: NextRequest) {
         data: {
           teacherId: session.userId,
           subjectId: subject.id,
+          createdAt: creationTime,
           title: title.trim(),
           description: description ? description.trim() : null,
           accessCode,
@@ -258,6 +262,7 @@ async function POSTImpl(req: NextRequest) {
         data: {
           userId: session.userId,
           activity: `${isAiQuiz ? "Created AI quiz" : "Created manual quiz"}: ${title.trim()}`,
+          createdAt: creationTime,
           ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
         },
       });

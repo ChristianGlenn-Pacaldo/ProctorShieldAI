@@ -44,7 +44,7 @@ export default function TeacherQuizLibrary({quizzes,filtered,search,setSearch,is
 
             {!isSubscribed && !isCheckingSub && (
               <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)] text-[10px] font-bold text-[var(--muted)]">
-                {manualQuizCount}/{manualQuizLimit} free quizzes
+                {manualQuizCount}/{manualQuizLimit} free quizzes this month
               </span>
             )}
 

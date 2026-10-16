@@ -28,8 +28,8 @@ async function main() {
   await Promise.all([
     prisma.subscriptionPlan.upsert({
       where: { id: 1 },
-      update: { planName: "Free", yearlyPrice: 0, durationDays: null, features: "5 lifetime manual quizzes, Up to 20 students per quiz, Basic proctoring, Email support" },
-      create: { id: 1, planName: "Free", yearlyPrice: 0, durationDays: null, features: "5 lifetime manual quizzes, Up to 20 students per quiz, Basic proctoring, Email support" },
+      update: { planName: "Free", yearlyPrice: 0, durationDays: null, features: "5 manual quizzes per calendar month (resets on the 1st, UTC+8), Up to 20 students per quiz, Basic proctoring, Email support" },
+      create: { id: 1, planName: "Free", yearlyPrice: 0, durationDays: null, features: "5 manual quizzes per calendar month (resets on the 1st, UTC+8), Up to 20 students per quiz, Basic proctoring, Email support" },
     }),
     prisma.subscriptionPlan.upsert({
       where: { id: 2 },

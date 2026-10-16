@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 
-const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string>; defenseBaseline: string; defenseOverrides: Record<string,string>; refactorOverrides: Record<string,string>; mvpOverrides: Record<string,string>; preDefenseRelease: string; preDefenseOverrides: Record<string,string>; localStabilizationBaseline: string; localStabilizationOverrides: Record<string,string> };
+const manifest = JSON.parse(fs.readFileSync("tests/fixtures/visual-release-protected.json", "utf8")) as { mainSHA: string; hashes: Record<string,string>; defenseBaseline: string; defenseOverrides: Record<string,string>; refactorOverrides: Record<string,string>; mvpOverrides: Record<string,string>; preDefenseRelease: string; preDefenseOverrides: Record<string,string>; localStabilizationBaseline: string; localStabilizationOverrides: Record<string,string>; demoReadinessBaseline: string; demoReadinessOverrides: Record<string,string> };
 test("defense release preserves baseline files except recorded defense, refactor, MVP and approved pre-defense fixes", () => {
   assert.equal(manifest.mainSHA, "3e016784e15e20c2b55dbf3dc09c5a16ca0d3dc4");
   assert.ok(Object.keys(manifest.hashes).length > 150);
@@ -15,9 +15,11 @@ test("defense release preserves baseline files except recorded defense, refactor
   // All other protected hashes stay intact.
   assert.equal(manifest.localStabilizationBaseline, "c07b72570384474ada1583afdba738e21ab5f498");
   assert.deepEqual(Object.keys(manifest.localStabilizationOverrides).sort(), ["next.config.ts", "src/lib/desktop-head-tracking.ts", "src/lib/device-capabilities.ts", "src/proxy.ts"]);
+  assert.equal(manifest.demoReadinessBaseline, "ceedeae3b6084e0bf9e60634c4c10a6a1f25d989");
+  assert.deepEqual(Object.keys(manifest.demoReadinessOverrides).sort(), ["prisma/seed.ts", "scripts/bootstrap.ts", "scripts/create-proctorshield-std-sdd.ps1", "scripts/update-project-docs.ps1", "src/app/api/ai/create/route.ts", "src/app/api/quizzes/route.ts", "src/lib/subscription-rules.ts", "src/lib/teacher-entitlements.ts"]);
   for (const [file,expected] of Object.entries(manifest.hashes)) {
     const normalized = Buffer.from(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
-    assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.localStabilizationOverrides[file] ?? manifest.preDefenseOverrides[file] ?? manifest.mvpOverrides[file] ?? manifest.refactorOverrides[file] ?? manifest.defenseOverrides[file] ?? expected,file);
+    assert.equal(createHash("sha256").update(normalized).digest("hex"),manifest.demoReadinessOverrides[file] ?? manifest.localStabilizationOverrides[file] ?? manifest.preDefenseOverrides[file] ?? manifest.mvpOverrides[file] ?? manifest.refactorOverrides[file] ?? manifest.defenseOverrides[file] ?? expected,file);
   }
   assert.equal(fs.existsSync("src/lib/password-hash.ts"),false,"future versioned-password implementation is excluded");
 });

@@ -24,6 +24,47 @@ test("invalid and oversized uploads are rejected before provider work",async()=>
 import { prepareQuizScan, captureQuizScan, quizScanPayload, startQuizScannerCamera } from "../src/lib/quiz-scanner.ts";
 function globals(t:any,values:Record<string,any>) {for(const [name,value]of Object.entries(values)){const previous=Object.getOwnPropertyDescriptor(globalThis,name);Object.defineProperty(globalThis,name,{configurable:true,value});t.after(()=>{if(previous)Object.defineProperty(globalThis,name,previous);else delete(globalThis as any)[name];});}}
 const flush=()=>new Promise<void>(resolve=>setImmediate(resolve));
+
+const paperQuestion = {
+  questionText: "Why should pen names be used during the Spanish time?",
+  choices: [
+    { choiceText: "To be more mysterious", isCorrect: false },
+    { choiceText: "To have safety from the Spaniards", isCorrect: true },
+    { choiceText: "To convince more readers", isCorrect: false },
+  ],
+};
+
+test("questionnaire import preserves wording, source order and three-choice items without padding", async () => {
+  const fixture = aiFixture({ sourceKind: "questionnaire", answerKeyProvided: false, questions: [paperQuestion], sourceWarnings: [] });
+  const response = await fixture.post({ sourceText: "1. Why should pen names be used during the Spanish time? A. To be more mysterious B. To have safety from the Spaniards C. To convince more readers", numQuestions: 5 });
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body.questions)), [paperQuestion]);
+  assert.match(response.body.sourceWarnings.join(" "), /AI inferred the marked answers/);
+  assert.match(response.body.sourceWarnings.join(" "), /Imported 1 of 5/);
+  const prompt = fixture.requests[0].contents.at(-1);
+  assert.match(prompt, /IMPORT the first 5 complete multiple-choice questions in their original order/);
+  assert.match(prompt, /Preserve the original question wording, language, and every answer choice in its original order/);
+  assert.match(prompt, /three choices must keep three choices/);
+  assert.match(prompt, /never pad the result with invented questions/);
+});
+
+test("a supplied answer key avoids an inferred-key warning and oversized output respects the selected count", async () => {
+  const fixture = aiFixture({ answerKeyProvided: true, sourceKind: "questionnaire", questions: [paperQuestion, { ...paperQuestion, questionText: "Extra question" }], sourceWarnings: ["Review a cropped heading"] });
+  const response = await fixture.post({ imageBase64: "QUJD", mimeType: "image/jpeg", numQuestions: 1 });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.questions.length, 1);
+  assert.equal(response.body.questions[0].questionText, paperQuestion.questionText);
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body.sourceWarnings)), ["Review a cropped heading"]);
+});
+
+test("invalid AI metadata is bounded instead of becoming an object rendered in the editor", async () => {
+  const fixture = aiFixture({ questions: [paperQuestion], detectedTitle: { unexpected: true }, detectedSubject: [], detectedDescription: 123, sourceWarnings: [null, { unexpected: true }, "", "A".repeat(600)] });
+  const response = await fixture.post({ sourceText: "Sample questionnaire", numQuestions: 1 });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.detectedTitle, ""); assert.equal(response.body.detectedSubject, ""); assert.equal(response.body.detectedDescription, "");
+  assert.equal(response.body.sourceWarnings.length, 2);
+  assert.equal(response.body.sourceWarnings[1].length, 300);
+});
 test("camera prefers rear lens, uses ideal constraints and stops all tracks on close",async(t)=>{
  let constraints:any,stops=0;const video:any={srcObject:null,play:async()=>{}};
  globals(t,{navigator:{mediaDevices:{getUserMedia:async(c:any)=>{constraints=c;return{getTracks:()=>[{stop:()=>stops++}]};}}}});
