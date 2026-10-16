@@ -277,6 +277,33 @@ test("existing evidence access is enforced for synthetic legacy image, download 
   } finally { await teacher.close(); await other.close(); await admin.close(); }
 });
 
+test("AI paper draft review preserves three choices and shows inferred-answer notice", async ({ context, page }) => {
+  await authenticateAsExistingRole(context, "teacher");
+  await page.route("**/api/ai/create", async route => {
+    const input = route.request().postDataJSON();
+    expect(input.sourceText).toContain("Which number is even?");
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      success: true, aiGenerationReceipt: "synthetic-preview-only-never-save",
+      detectedTitle: "SYNTHETIC AI IMPORT REVIEW", detectedSubject: "Mathematics", detectedDescription: "Disposable preview test",
+      sourceWarnings: ["No explicit answer key was confirmed. AI inferred the marked answers; verify each one against your source before saving."],
+      questions: [{ questionText: "Which number is even?", choices: [
+        { choiceText: "Two", isCorrect: true }, { choiceText: "Three", isCorrect: false }, { choiceText: "Five", isCorrect: false },
+      ] }],
+    }) });
+  });
+  await page.goto("/dashboard/teacher/quizzes");
+  await page.getByRole("button", { name: "AI Create", exact: true }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: "synthetic-paper.txt", mimeType: "text/plain", buffer: Buffer.from("1. Which number is even?\nA. Two\nB. Three\nC. Five") });
+  await page.getByRole("spinbutton", { name: "Number of Questions (1–50)", exact: true }).fill("1");
+  await page.getByRole("button", { name: "Generate Magic", exact: true }).click();
+  await expect(page.getByRole("status", { name: "AI import review" })).toContainText("AI inferred the marked answers");
+  await expect(page.getByText("Which number is even?", { exact: true })).toBeVisible();
+  for (const choice of ["Two", "Three", "Five"]) await expect(page.getByText(choice, { exact: true })).toBeVisible();
+  await page.screenshot({ path: path.join(".tmp-mvp-database", `ai-import-review-${test.info().project.name}.png`), fullPage: true });
+  // Deliberately leave an unsaved preview. The mocked receipt cannot authorize
+  // assessment creation and no academic record is changed by this test.
+});
+
 test("Teacher Studio saves new questions and Manage activates the persisted quiz", async ({ context, page }) => {
   await authenticateAsExistingRole(context, "teacher");
   await page.goto("/dashboard/teacher/quizzes", { waitUntil: "domcontentloaded" });

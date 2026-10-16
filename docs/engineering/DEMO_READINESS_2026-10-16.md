@@ -8,7 +8,7 @@ The live baseline was ceedeae3b6084e0bf9e60634c4c10a6a1f25d989. Release work is 
 
 The custom domain uses Railway project 8007b266-c02c-4c99-ba85-a210b7b3f777, environment staging (0a5835a6-ea32-44f5-848f-63e4536da240), app service 5bdc84f0-91cb-4328-b04c-d67b0d6eb133. Despite its name, staging is the public presentation environment. The separate production environment has no services.
 
-Release status: Local release checks passed. The database metadata and matching test webhook are updated; application deployment and final live verification are in progress.
+Release status: **Deployed successfully and checked live.** Application commit b5ee43b, Railway deployment 5acd02a7-bb39-47e1-b824-c1a2b242ad2c. Final public verification completed October 16 at 22:37 UTC+8. The final report/browser-review test commit adds no application changes. The authoritative release checkout is C:/Users/Admin/.codex/worktrees/demo-readiness-monthly-ai/ProctorShieldAI.
 
 ## Fixed
 
@@ -28,19 +28,24 @@ Release status: Local release checks passed. The database metadata and matching 
 | Candidate production build | Passed with locked Next.js 16.3.8, including TypeScript | Build success does not exercise device permissions or provider availability. |
 | Candidate lint | Zero errors, 857 warnings | Existing typing/hooks/style debt remains; warnings are not 857 observed runtime failures. |
 | Production dependency audit | Zero known advisories in the audited lockfile | Does not establish absence of application vulnerabilities. |
-| Database-backed desktop/mobile browser checks | 34 passed across the full run and corrected monthly-only rerun (32 + 2). The initial reset fixture used local-time raw SQL; corrected to explicit UTC. | Owned loopback PostgreSQL/Redis with synthetic accounts and media. No real-user DB was used. |
+| Database-backed desktop/mobile browser checks | 36 passed across the main run and focused reruns (32 original flows + 2 corrected monthly checks + 2 AI preview checks). The initial reset fixture used local-time raw SQL; corrected to explicit UTC. | Owned loopback PostgreSQL/Redis with synthetic accounts and media. No real-user DB was used. |
 | Public desktop/mobile browser checks | 29 passed, zero failed; one desktop skip for a mobile-only regression. | Local production build; fonts/providers are isolated where appropriate. |
 | PostgreSQL concurrency/integration checks | 95 passed, zero failed or skipped, including independent payment/refund/manual-entitlement concurrency. | Separate disposable databases for billing/Arena transactional behavior. |
 | Live public entry and health | Homepage/login/health HTTP 200; signed-out protected APIs reject access | Health does not prove inbox delivery or an entire checkout. |
 | Live database | Ten prior migrations completed; required evidence/payment/accounting columns present; eleventh metadata migration applied | Root .env points at a different, older database. |
 | Live Google + email OTP | Owner completed sign-in and reached the teacher portal | Owner reported slow verification; no measured delivery SLA is claimed. |
 | Live teacher screens | Dashboard, quizzes, monitor, AI reports, evidence and billing loaded; existing video ready with no player error | Monitor had no active students. No complete cross-device live attempt was performed. |
-| Live AI paper test before release | Primary provider returned busy; no quiz was saved | The fixed route was also tested against real providers separately. The final live UI retry is pending deployment. |
+| Live AI paper test before release | Primary provider returned busy; no quiz was saved | The fixed route was also tested against real providers separately. Updated live upload guidance and teacher-session continuity were verified after deployment. The original uploaded browser tab could not be reattached and automated file selection is blocked by the extension setting, so a new live image-generation UI success is not claimed. The actual uploaded JPEG was tested against real providers through the candidate route; desktop/mobile preview UI was separately tested with a simulated provider response. |
 | Live billing | Existing Pro subscription visible; deployed mode is test; signature checks passed and webhook restored | No complete new sandbox checkout/refund was performed against a live demo account. |
 | Live admin authentication | One attempt with the existing locally configured admin credentials returned 401 | Credentials were not guessed or reset. Synthetic admin login/role tests are separate. |
+| Post-deployment desktop model assets | All nine allowlisted model/worker/JS/WASM HEAD requests returned 200; unknown asset returned 404 | The model route validates its pinned hash before responding. Physical-camera inference remains separate. |
 | Live COCO delivery | Manifest and all five shards HTTP 200, about 18.6 MB | Transfer availability does not prove physical-camera detection accuracy. |
 
+Post-deployment runtime sampling showed one initial Redis readiness retry followed by a shared-cache connection; subsequent public health returned 200. No Prisma/module/port/internal-server failure marker appeared in that short sample. This is a short readiness check, not long-term monitoring.
+
 Nonsecret audit logs are under the original checkout's tmp/mvp-audit-* and tmp/mvp-candidate-* paths. Browser/integration logs are under the release worktree's release-review directory. Local model media tests use synthetic streams and actual downloaded COCO weights; physical-person inference remains a separate acceptance check. The original user-owned FINAL DOCUMENTATION folder was preserved.
+
+Visual proof: [live AI upload guidance](../assets/demo-readiness-2026-10-16/live-ai-upload.png). Desktop/mobile pricing, billing and AI review screenshots are also retained under the release worktree's .tmp-mvp-e2e and .tmp-mvp-database directories.
 
 ## What is unnecessary for the assessment MVP
 
