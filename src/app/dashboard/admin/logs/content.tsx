@@ -1,15 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Download } from "lucide-react";
-import { createAiLogsCsv } from "./csv";
+import { Printer } from "lucide-react";
 
 interface LogEntry {
   id: string;
   timestamp: string;
   event: string;
-  severity: string;
-  severityClass: string;
   rowBg: string;
   student: string;
   quiz: string;
@@ -48,32 +45,29 @@ export default function LogsContent() {
     fetchLogs(1);
   }, []);
 
-  const handleExportCSV = () => {
-    if (logs.length === 0) return;
-    const blob = new Blob([createAiLogsCsv(logs)], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `ai-violation-logs-page-${page}-${new Date().toISOString().split("T")[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handlePrint = () => {
+    if (isLoading || loadError || logs.length === 0) return;
+    window.print();
   };
 
   return (
-    <div className="ps-admin-glass-canvas animate-fade-in">
+    <div className="ps-ai-log-report ps-admin-glass-canvas animate-fade-in">
       <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">🧠 Global AI Event Logs</h3>
             <p className="ps-admin-glass-caption text-[10px] text-[var(--muted)] mt-0.5">{total} violation events recorded</p>
+            <p className="ps-ai-log-print-summary hidden">ProctorShieldAI · Page {page} of {Math.max(1, Math.ceil(total / pageSize))} · Displayed records {total === 0 ? 0 : (page - 1) * pageSize + 1}–{(page - 1) * pageSize + logs.length} of {total}</p>
           </div>
           <button
-            onClick={handleExportCSV}
-            disabled={isLoading || logs.length === 0}
-            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-40"
+            type="button"
+            onClick={handlePrint}
+            disabled={isLoading || !!loadError || logs.length === 0}
+            title="Print the displayed page or choose Save as PDF in the print dialog"
+            className="ps-ai-log-print-controls flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-40"
           >
-            <Download className="w-3.5 h-3.5" />
-            Export This Page CSV
+            <Printer aria-hidden="true" className="w-3.5 h-3.5" />
+            Print / Save as PDF
           </button>
         </div>
         {loadError && (
@@ -88,7 +82,7 @@ export default function LogsContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface2)]/50">
-                {["Timestamp", "Event Type", "Severity", "Confidence", "Student", "Quiz"].map((h) => (
+                {["Timestamp", "Event Type", "Confidence", "Student", "Quiz"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -96,15 +90,15 @@ export default function LogsContent() {
             <tbody className="divide-y divide-[var(--border)]">
               {isLoading && logs.length === 0 && !loadError ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={5} className="text-center py-12">
                     <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : loadError && logs.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 text-sm text-[var(--muted)]">AI Logs are unavailable. Use Retry above.</td></tr>
+                <tr><td colSpan={5} className="text-center py-10 text-sm text-[var(--muted)]">AI Logs are unavailable. Use Retry above.</td></tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-sm text-[var(--muted)]">
+                  <td colSpan={5} className="text-center py-10 text-sm text-[var(--muted)]">
                     No AI violation events recorded yet.
                   </td>
                 </tr>
@@ -113,9 +107,6 @@ export default function LogsContent() {
                   <tr key={l.id} className={`${l.rowBg} hover:bg-[var(--surface2)]/70 transition-colors`}>
                     <td className="px-5 py-3 text-xs text-[var(--muted)] font-mono whitespace-nowrap">{l.timestamp}</td>
                     <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]">{l.event}</td>
-                    <td className="px-5 py-3">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${l.severityClass}`}>{l.severity}</span>
-                    </td>
                     <td className="px-5 py-3 text-sm text-[var(--muted)] font-mono">{l.confidence}</td>
                     <td className="px-5 py-3 text-sm text-[var(--ink)] font-medium">{l.student}</td>
                     <td className="px-5 py-3 text-xs text-[var(--muted)] max-w-[160px] truncate">{l.quiz}</td>

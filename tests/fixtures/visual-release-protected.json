@@ -225,5 +225,12 @@
   "preDefenseOverrides": {
     "src/app/api/ai/create/route.ts": "411553fe6fad2dc72d58562694f0eebba4d2036b66ad2abaa88ee1b9cd017e79",
     "src/app/api/dashboard/admin/route.ts": "cda81f96dcb97be49ffcdbe997e3244c1f7b3ddaad7b5fb0009d779f7e5970d8"
+  },
+  "localStabilizationBaseline": "c07b72570384474ada1583afdba738e21ab5f498",
+  "localStabilizationOverrides": {
+    "next.config.ts": "cbfd52781d80f618bc80ccb190d7e6fbb9e8fc3472538e51109f70bce6250368",
+    "src/lib/device-capabilities.ts": "2d92d0393d8308ee579ba334471338837cc16ce90129c9f13b8ba60ccbf40c67",
+    "src/proxy.ts": "c8eec7a21972c37a3d92c08ba689827aaa91c7324eb652a6b8c306c895193d44",
+    "src/lib/desktop-head-tracking.ts": "cb5fc8bf85e6cd249233a17e48271c16a3e8678d68927dc16c71079841f1058c"
   }
 }

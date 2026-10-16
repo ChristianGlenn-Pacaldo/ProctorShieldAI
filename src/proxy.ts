@@ -28,7 +28,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/internal/backup-write-gate",
 ]);
 
-const PUBLIC_API_PREFIXES = ["/api/models/coco/"];
+const PUBLIC_API_PREFIXES = ["/api/models/coco/", "/api/models/device/"];
 
 const ROLE_PATHS: Record<string, string> = {
   student: "/dashboard/student",

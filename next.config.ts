@@ -27,6 +27,9 @@ const allowedDevOrigins = Array.from(new Set([
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/api/models/device/*": ["./node_modules/@mediapipe/tasks-vision/vision_bundle.js", "./node_modules/@mediapipe/tasks-vision/wasm/**/*", "./public/desktop-device-worker.js"],
+  },
   allowedDevOrigins,
   // Preserve face-api/COCO's single TensorFlow engine with modular packages.
   turbopack: {

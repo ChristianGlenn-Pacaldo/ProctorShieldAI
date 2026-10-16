@@ -1,0 +1,67 @@
+/* Applies only while the AI log report is present, including retained route CSS. */
+@media print {
+  body:has(.ps-ai-log-report),
+  body:has(.ps-ai-log-report) :has(.ps-ai-log-report) {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: white !important;
+    color: #111 !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  body:has(.ps-ai-log-report) [data-portal="admin"]::before,
+  body:has(.ps-ai-log-report) [data-portal="admin"]::after,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report .ps-admin-glass-card::before,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report .ps-admin-glass-card::after,
+  body:has(.ps-ai-log-report) [data-portal="admin"] :is(.dashboard-sidebar,.dashboard-topbar,.ps-ai-log-print-controls,.ps-admin-pagination,[role="alert"],.fixed) {
+    display: none !important;
+  }
+  body:has(.ps-ai-log-report) [data-portal="admin"] .dashboard-main {
+    padding: 0 !important;
+  }
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report *,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report *::before,
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report *::after {
+    background: white !important;
+    background-image: none !important;
+    color: #111 !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+    backdrop-filter: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report .ps-ai-log-print-summary {
+    display: block !important;
+    margin-top: .5rem;
+    font-size: 10pt;
+  }
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report .ps-admin-table-scroll {
+    overflow: visible !important;
+    border-radius: 0;
+  }
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report thead {display: table-header-group !important;}
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report tr {break-inside: avoid;}
+  [data-portal="admin"].ps-admin-glass-shell .ps-admin-page .ps-ai-log-report :is(th,td) {
+    padding: 6pt !important;
+    font-size: 9pt !important;
+    border-bottom: 1px solid #ccc;
+    max-width: none !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-overflow: clip !important;
+  }
+}

@@ -4,7 +4,6 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { createAiLogsCsv } from "../src/app/dashboard/admin/logs/csv.ts";
 
 type ElementNode = { type: string; props: Record<string, unknown> };
 
@@ -36,15 +35,15 @@ function nodesOf(value: unknown, predicate: (node: ElementNode) => boolean): Ele
   return [...(predicate(node) ? [node] : []), ...nodesOf(node.props.children, predicate)];
 }
 
-function apiFixture(count: number) {
+function apiFixture(count: number, eventTypes: Array<string | null> = ["tab_switch"]) {
   const { absolutePath, code } = compile("src/app/api/dashboard/admin/logs/route.ts");
   const timestamp = new Date("2026-09-26T12:00:00.000Z");
   const records = Array.from({ length: count }, (_, index) => ({
     id: BigInt(index + 1),
     timestamp,
-    violationType: "tab_switch",
+    violationType: eventTypes[index % eventTypes.length],
     confidenceScore: 90,
-    studentQuiz: { student: { fullName: `Student ${index + 1}` }, quiz: { title: "Test Quiz" } },
+    studentQuiz: { student: { fullName: `Student ${index + 1}` }, quiz: { title: `Quiz ${index + 1}` } },
   }));
   const queries: Array<{ skip: number; take: number; orderBy: unknown }> = [];
   const prisma = {
@@ -110,6 +109,23 @@ test("AI Logs API clamps out-of-range pages and handles empty and invalid reques
   assert.deepEqual([emptyBody.total, emptyBody.page, emptyBody.pageSize, emptyBody.logs.length], [0, 1, 25, 0]);
 });
 
+test("AI Logs preserves each recorded violation type with its own student and quiz", async () => {
+  const events = ["device_detected", "tab_switch", "no_face", "multiple_faces", "looking_left", "looking_right", "looking_up", "looking_down", "audio_anomaly", "fullscreen_exit", "clipboard_attempt", "attempted_screenshot", "developer_tools", "camera_unavailable", null];
+  const labels = ["Device Detected", "Tab Switch", "No Face", "Multiple Faces", "Looking Left", "Looking Right", "Looking Up", "Looking Down", "Audio Anomaly", "Fullscreen Exit", "Clipboard Attempt", "Attempted Screenshot", "Developer Tools", "Camera Unavailable", "Unknown"];
+  const setup = apiFixture(events.length, events);
+  const response = await setup.get(new Request("http://localhost/api/dashboard/admin/logs?page=1"));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.logs.length, events.length);
+  for (const log of data.logs) {
+    const index = Number(log.id) - 1;
+    assert.equal(log.event, labels[index]);
+    assert.equal(log.student, `Student ${index + 1}`);
+    assert.equal(log.quiz, `Quiz ${index + 1}`);
+  }
+  assert.equal(new Set(data.logs.map((log: {event:string}) => log.event)).size, events.length);
+});
+
 function uiFixture() {
   const { absolutePath, code } = compile("src/app/dashboard/admin/logs/content.tsx", true);
   const allLogs = Array.from({ length: 58 }, (_, index) => ({
@@ -127,8 +143,7 @@ function uiFixture() {
   const states: unknown[] = [];
   let stateIndex = 0;
   let effectStarted = false;
-  let exportedBlob: Blob | undefined;
-  let downloadName = "";
+  let printCount = 0;
   const react = {
     useState: (initial: unknown) => {
       const index = stateIndex++;
@@ -152,7 +167,6 @@ function uiFixture() {
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name === "lucide-react") return {};
-      if (name === "./csv") return { createAiLogsCsv };
       if (name === "@/lib/backup-write-gate" || name === "./backup-write-gate") return { withBackupWriteGate: (handler: unknown) => handler, runBackupWriteOrReject: (work: () => Promise<unknown>) => work(), runIncidentalBackupWrite: (work: () => Promise<unknown>) => work() };
       throw new Error(`Unexpected dependency: ${name}`);
     },
@@ -167,12 +181,7 @@ function uiFixture() {
         pageSize: 25,
       }) };
     },
-    URL: {
-      createObjectURL: (blob: Blob) => { exportedBlob = blob; return "blob:qa"; },
-      revokeObjectURL() {},
-    },
-    Blob,
-    document: { createElement: () => ({ href: "", download: "", click() { downloadName = this.download; } }) },
+    window: { print: () => { printCount++; } },
     console,
   }, { filename: absolutePath });
   const render = () => { stateIndex = 0; return component.default!(); };
@@ -181,10 +190,10 @@ function uiFixture() {
     assert.ok(found, `${label} button exists`);
     return found;
   };
-  return { render, button, requestedPages, exported: () => ({ blob: exportedBlob, name: downloadName }) };
+  return { render, button, requestedPages, printed: () => printCount };
 }
 
-test("AI Logs UI pages through history and exports only its labeled current page safely", async () => {
+test("AI Logs UI pages through history and prints only its labeled current page", async () => {
   const setup = uiFixture();
   setup.render();
   await new Promise(setImmediate);
@@ -199,15 +208,11 @@ test("AI Logs UI pages through history and exports only its labeled current page
   assert.match(textOf(setup.render()), /Event 26/);
   assert.doesNotMatch(textOf(setup.render()), /Event 1\b/);
 
-  (setup.button("Export This Page CSV").props.onClick as () => void)();
-  const exported = setup.exported();
-  assert.match(exported.name, /ai-violation-logs-page-2-/);
-  assert.ok(exported.blob);
-  const csv = await exported.blob.text();
-  assert.equal(csv.split("\r\n").length, 26);
-  assert.match(csv, /"Event 26"/);
-  assert.doesNotMatch(csv, /"Event 1"/);
-  assert.match(csv, /"\t=1\+2"/);
+  assert.equal(setup.button("Print / Save as PDF").props.disabled, false);
+  (setup.button("Print / Save as PDF").props.onClick as () => void)();
+  assert.equal(setup.printed(), 1);
+  assert.match(textOf(setup.render()), /Displayed records 26–50 of 58/);
+  assert.doesNotMatch(textOf(setup.render()), /Export This Page CSV/);
 
   await (setup.button("Next").props.onClick as () => Promise<void>)();
   assert.match(textOf(setup.render()), /Showing 51–58 of 58/);

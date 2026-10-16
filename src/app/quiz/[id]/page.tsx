@@ -1,5 +1,7 @@
 "use client";
 
+import { createDesktopDeviceWorker } from "@/lib/desktop-device-worker";
+
 import StudentPrivacyNotice from "@/components/student-privacy-notice";
 import AssessmentThemeControl from "@/components/assessment-theme-control";
 
@@ -72,7 +74,7 @@ let cachedCocoModelPromise: Promise<any> | null = null;
 // Skip overlapping observations instead of queuing old camera frames.
 let proctoringInferenceBusy = false;
 
-function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "lite_mobilenet_v2") {
+function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "lite_mobilenet_v2", loadObjectModel = true) {
   if (typeof window === "undefined") return;
   if (!cachedFaceRuntimePromise) {
     cachedFaceRuntimePromise = (async () => {
@@ -94,7 +96,7 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
       return faceapi;
     }).catch((error) => { cachedFaceApiPromise = null; throw error; });
   }
-  if (!cachedCocoModelPromise) {
+  if (loadObjectModel && !cachedCocoModelPromise) {
     cachedCocoModelPromise = cachedFaceRuntimePromise.then(() => import("@tensorflow-models/coco-ssd")).then((cocoSsd) =>
       cocoSsd.load({
         base: objectModelBase as any,
@@ -105,7 +107,7 @@ function preloadProctoringModels(useTinyLandmarks = false, objectModelBase = "li
   // Preflight starts downloads before the monitoring effect awaits them.
   // Handle early rejection while preserving the promises' failure for callers.
   void cachedFaceApiPromise.catch(() => {});
-  void cachedCocoModelPromise.catch(() => {});
+  void cachedCocoModelPromise?.catch(() => {});
 }
 
 export default function QuizRoom() {
@@ -515,7 +517,7 @@ function QuizAttempt({ quizId }: { quizId: string }) {
       }
 
       const profile = getBrowserProctoringPerformanceProfile(verified.deviceType);
-      preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase);
+      preloadProctoringModels(profile.useTinyLandmarks, profile.objectModelBase, verified.deviceType !== "desktop");
       void cachedFaceApiPromise?.catch(() => {});
       void cachedCocoModelPromise?.catch(() => {});
       setDeviceCapabilities(verified);
@@ -1295,6 +1297,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
     let audioResumeListener: (() => void) | null = null;
     let cancelled = false;
     let loadedCocoModel: any = null;
+    let desktopDeviceWorker: ReturnType<typeof createDesktopDeviceWorker> | null = null;
+    let desktopDeviceInterval: ReturnType<typeof setInterval> | null = null;
+    let desktopDeviceReady = false;
     let resetDetectorIncidents: (() => void) | null = null;
     let joinedTimer: ReturnType<typeof setTimeout> | null = null;
     const desktopVideoElement = videoRef.current;
@@ -1302,6 +1307,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
 
     const disposeLoadedModels = () => {
       loadedCocoModel = null;
+      desktopDeviceWorker?.dispose();desktopDeviceWorker=null;
+      if(desktopDeviceInterval)clearInterval(desktopDeviceInterval);
 
       // face-api's network objects are module-level singletons shared by every
       // effect instance. Disposing them here lets an earlier React cleanup tear
@@ -1514,7 +1521,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
         // Load Edge AI Models
         try {
           setAiStatus("Loading AI detectors...");
-          preloadProctoringModels(performanceProfile.useTinyLandmarks, performanceProfile.objectModelBase);
+          preloadProctoringModels(performanceProfile.useTinyLandmarks, performanceProfile.objectModelBase, isMobile);
 
           const faceapi = await cachedFaceApiPromise;
           if (cancelled) {
@@ -1570,10 +1577,10 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           if (isMobile) window.addEventListener("orientationchange", resetDetectorIncidents);
 
           objectModelSlowTimer = setTimeout(() => {
-            if (!cancelled && !loadedCocoModel) setDeviceStatus("Still loading device AI...");
+            if (!cancelled && !loadedCocoModel && !desktopDeviceReady) setDeviceStatus("Still loading device AI...");
           }, 10_000);
 
-          if (cachedCocoModelPromise) {
+          if (isMobile && cachedCocoModelPromise) {
             cachedCocoModelPromise
               .then((cocoModel) => {
                 if (cancelled) return;
@@ -1628,6 +1635,80 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             inferenceContext.drawImage(video, 0, 0, inferenceCanvas.width, inferenceCanvas.height);
           };
 
+          // One authorization/incident policy for both object runtimes.
+          const processDevicePredictions = async (predictions: import("@/lib/proctoring-detection").ObjectPrediction[]) => {
+            const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
+            const deviceLabel = getDevicePredictionLabel(getUnauthorizedDevicePrediction(predictions));
+
+            const mobileFaceMissing = isMobile && (mobileMissingSince !== null || mobileNoFaceIncidentRecordedRef.current);
+            if (isActionableDeviceDetection(deviceConfidence, mobileFaceMissing, isMobile)) {
+              phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
+              phoneAbsentFrames = 0;
+              setDeviceStatus(
+                phoneDetectedFrames >= 2
+                  ? `${deviceLabel} ${Math.round(deviceConfidence * 100)}% ✗`
+                  : `Confirming ${Math.round(deviceConfidence * 100)}%…`
+              );
+              if (phoneDetectedFrames === 2) setPreWarning(`⚠️ Pre-Warning: ${deviceLabel} detected in frame. Remove extra devices; this AI signal requires review.`);
+              if (phoneDetectedFrames >= 2) {
+                if (isMobile) {
+                  if (!phoneViolationRecorded) {
+                    phoneViolationRecorded = await reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100));
+                  }
+                } else {
+                  void desktopDeviceReporter.reportIncident(() => reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100)))
+                    .catch((error) => console.warn("Desktop device incident reporting failed:", error));
+                }
+              }
+            } else {
+              phoneDetectedFrames = 0;
+              phoneAbsentFrames++;
+              if (phoneAbsentFrames >= 3) {
+                phoneViolationRecorded = false;
+                if (!isMobile) desktopDeviceReporter.clear();
+                setDeviceStatus("None ✓");
+              }
+            }
+          };
+          if (!isMobile) {
+            try {
+            desktopDeviceWorker = createDesktopDeviceWorker();
+            void desktopDeviceWorker.ready.then(() => {
+              if(cancelled)return;
+              desktopDeviceReady=true;
+              if(objectModelSlowTimer)clearTimeout(objectModelSlowTimer);
+              objectModelSlowTimer=null;
+              setDeviceStatus("Scanning ✓");setAiStatus("Active ✓");
+            }).catch(() => {
+              if(cancelled)return;
+              if(objectModelSlowTimer)clearTimeout(objectModelSlowTimer);
+              objectModelSlowTimer=null;
+              setDeviceStatus("Device AI unavailable ✗");setAiStatus("Face active · device unavailable");
+            });
+            let deviceBusy=false;
+            // Worker inference never holds the shared face/COCO engine lock.
+            // At most one fresh camera frame is in flight, without a queue.
+            desktopDeviceInterval=setInterval(async()=>{
+              if(cancelled||document.hidden||!desktopDeviceReady||deviceBusy||!examActiveRef.current||submissionInFlightRef.current||violationCountRef.current>=3)return;
+              const video=videoRef.current;
+              if(!video||video.readyState<2||video.paused||video.ended)return;
+              const generation=trackingGeneration;deviceBusy=true;
+              try {
+                const predictions=await desktopDeviceWorker!.detect(video);
+                if(cancelled||document.hidden||!examActiveRef.current||submissionInFlightRef.current||generation!==trackingGeneration)return;
+                await processDevicePredictions(predictions);
+              } catch {
+                if(!cancelled){desktopDeviceReady=false;setDeviceStatus("Device AI unavailable ✗");setAiStatus("Face active · device unavailable");}
+              } finally {deviceBusy=false;}
+            },performanceProfile.detectionIntervalMs);
+            } catch {
+              if (objectModelSlowTimer) clearTimeout(objectModelSlowTimer);
+              objectModelSlowTimer = null;
+              setDeviceStatus("Device AI unavailable ✗");
+              setAiStatus("Face active · device unavailable");
+            }
+          }
+
           faceDetectionInterval = setInterval(async () => {
             if (
               cancelled || document.hidden ||
@@ -1670,8 +1751,8 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
               return;
             }
 
-            // Alternate scan: device AI on even ticks, face AI on odd ticks
-            if (tickCounter % 2 === 1 || !loadedCocoModel) {
+            // Mobile alternates the shared engine; desktop face scans run independently.
+            if (!isMobile || tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
                 const detectionGeneration = trackingGeneration;
                 const detections = isMobile
@@ -1871,38 +1952,7 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
                 const detectionGeneration = trackingGeneration;
                 const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, 0.5);
                 if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) { detectionBusy = false; return; }
-                const deviceConfidence = getUnauthorizedDeviceConfidence(predictions);
-                const deviceLabel = getDevicePredictionLabel(getUnauthorizedDevicePrediction(predictions));
-
-                const mobileFaceMissing = isMobile && (mobileMissingSince !== null || mobileNoFaceIncidentRecordedRef.current);
-                if (isActionableDeviceDetection(deviceConfidence, mobileFaceMissing, isMobile)) {
-                  phoneDetectedFrames = Math.min(phoneDetectedFrames + 1, 5);
-                  phoneAbsentFrames = 0;
-                  setDeviceStatus(
-                    phoneDetectedFrames >= 2
-                      ? `${deviceLabel} ${Math.round(deviceConfidence * 100)}% ✗`
-                      : `Confirming ${Math.round(deviceConfidence * 100)}%…`
-                  );
-                  if (phoneDetectedFrames === 2) setPreWarning(`⚠️ Pre-Warning: ${deviceLabel} detected in frame. Remove extra devices; this AI signal requires review.`);
-                  if (phoneDetectedFrames >= 2) {
-                    if (isMobile) {
-                      if (!phoneViolationRecorded) {
-                        phoneViolationRecorded = await reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100));
-                      }
-                    } else {
-                      void desktopDeviceReporter.reportIncident(() => reportViolationRef.current("device_detected", Math.round(deviceConfidence * 100)))
-                        .catch((error) => console.warn("Desktop device incident reporting failed:", error));
-                    }
-                  }
-                } else {
-                  phoneDetectedFrames = 0;
-                  phoneAbsentFrames++;
-                  if (phoneAbsentFrames >= 3) {
-                    phoneViolationRecorded = false;
-                    if (!isMobile) desktopDeviceReporter.clear();
-                    setDeviceStatus("None ✓");
-                  }
-                }
+                await processDevicePredictions(predictions);
               } catch (cocoErr) {
                 console.warn("Object detection frame failed:", cocoErr);
               }

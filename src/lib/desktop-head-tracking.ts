@@ -104,8 +104,14 @@ export async function requestDesktopCamera(
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 // Recorded nose-tip down tilts exceed this delta; confirmation still rejects brief motion.
 // Recorded moderate Left turns have 0.32–0.36 yaw deltas with inflated pitch.
-// Recognize their horizontal movement before vertical classification; Right is unchanged.
+// Recognize their horizontal movement before vertical classification.
 const DESKTOP_LEFT_YAW_DELTA_THRESHOLD = 0.30;
+// Recorded moderate Right turns have 0.22-0.32 yaw deltas with coupled pitch.
+// Require horizontal dominance, then a small hysteresis band during the same
+// turn; strong Right keeps its existing cutoff. Confirmation remains sustained.
+const DESKTOP_RIGHT_YAW_DELTA_THRESHOLD = 0.22;
+const DESKTOP_RIGHT_HOLD_YAW_DELTA_THRESHOLD = 0.20;
+const DESKTOP_RIGHT_HOLD_PITCH_RATIO = 1.15;
 const DESKTOP_DOWN_PITCH_DELTA_THRESHOLD = 0.12;
 const DESKTOP_DOWN_NEUTRAL_DELTA_THRESHOLD = 0.08;
 const focused = (calibrated: boolean): HeadPoseResult => ({ direction: "Focused ✓", violationReason: "", normalizedYaw: 0, normalizedPitch: 0, calibrated });
@@ -161,7 +167,11 @@ export function createDesktopHeadTracker() {
       const yaw = median(samples.map(x => x.yawOffset)) - baseline.yawOffset;
       const pitch = median(samples.map(x => x.pitchRatio)) - baseline.pitchRatio;
       const pose: HeadPoseResult = { ...focused(true), normalizedYaw: yaw, normalizedPitch: pitch };
-      if (yaw < -0.38) { pose.direction = "Looking Right ✗"; pose.violationReason = "looking_right"; }
+      const rightTurn = yaw < -0.38
+        || (yaw < -DESKTOP_RIGHT_YAW_DELTA_THRESHOLD && -yaw >= Math.abs(pitch))
+        || (candidate === "looking_right" && yaw < -DESKTOP_RIGHT_HOLD_YAW_DELTA_THRESHOLD
+          && -yaw * DESKTOP_RIGHT_HOLD_PITCH_RATIO >= Math.abs(pitch));
+      if (rightTurn) { pose.direction = "Looking Right ✗"; pose.violationReason = "looking_right"; }
       else if (yaw > DESKTOP_LEFT_YAW_DELTA_THRESHOLD) { pose.direction = "Looking Left ✗"; pose.violationReason = "looking_left"; }
       else if (pitch < -0.18) { pose.direction = "Looking Up ✗"; pose.violationReason = "looking_up"; }
       else if (pitch > DESKTOP_DOWN_PITCH_DELTA_THRESHOLD) { pose.direction = "Looking Down ✗"; pose.violationReason = "looking_down"; }

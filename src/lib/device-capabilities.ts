@@ -140,7 +140,7 @@ export function getProctoringPerformanceProfile(
       detectionIntervalMs: 500,
       audioIntervalMs: 500,
       useTinyLandmarks: false,
-      objectModelBase: "mobilenet_v2",
+      objectModelBase: "lite_mobilenet_v2",
     };
   }
 

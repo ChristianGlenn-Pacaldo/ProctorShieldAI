@@ -16,6 +16,51 @@ function frames(tracker: ReturnType<typeof calibrated>, yaw: number, pitch = 0.5
   return Array.from({ length: 6 }, (_, i) => tracker.observe({ yawOffset: yaw, pitchRatio: pitch }, start + i * 500));
 }
 
+test("recorded moderate Right is confirmed as Right without false Down, and recorded centered controls stay neutral", () => {
+  // These are already-filtered calibrated feature deltas, not raw webcam poses.
+  // Replay through the production callback with a synthetic reference baseline.
+  const trace = JSON.parse(fs.readFileSync("tests/fixtures/desktop-head-filtered-deltas-20261016.json", "utf8")) as Record<"right" | "left" | "baseline" | "stable", [number, number][]>;
+  const calibration = Array.from({ length: 8 }, () => [0, .5] as const);
+  for (const [name, expected] of [["right", "looking_right"], ["left", "looking_left"], ["baseline", ""], ["stable", ""]] as const) {
+    const results = replayRecordedDesktopPitch(calibration, trace[name].map(([yaw, pitch]) => [yaw, .5 + pitch] as const));
+    assert.deepEqual(results.filter(result => result.confirmed).map(result => result.pose.violationReason), expected ? [expected] : [], name);
+    if (name === "right") assert.ok(results.every(result => result.pose.violationReason !== "looking_down"), "a sideways turn must not become a Down incident");
+  }
+});
+
+test("moderate Right rejects transient movement and preserves pitch-dominant Down", () => {
+  const transient = calibrated();
+  for (const [index, yaw] of [.08, -.19, -.19, .08, .08, .08].entries()) {
+    assert.equal(transient.observe({ yawOffset: yaw, pitchRatio: .65 }, 4000 + index * 500).confirmed, false);
+  }
+  const down = calibrated();
+  const results = frames(down, -.16, .9);
+  assert.equal(results.at(-1)!.pose.violationReason, "looking_down");
+  assert.equal(results.at(-1)!.confirmed, true);
+  const right = calibrated();
+  assert.equal(frames(right, -.19, .65).at(-1)!.pose.violationReason, "looking_right");
+  assert.equal(frames(right, -.19, .65, 7000).at(-1)!.confirmed, true);
+  assert.equal(frames(right, .08, .5, 10000).at(-1)!.pose.violationReason, "");
+});
+
+test("corrected physical feature traces preserve Right, Up, Down, absence, recovery and centered stability", () => {
+  const fixture = JSON.parse(fs.readFileSync("tests/fixtures/desktop-head-filtered-deltas-20261016.json", "utf8")) as {
+    corrected: Record<string, ([number, number] | null)[]>;
+  };
+  const calibration = Array.from({ length: 8 }, () => [0, .5] as const);
+  for (const [phase, expected] of [["right", "looking_right"], ["up", "looking_up"], ["down", "looking_down"], ["no_face", ""], ["recovery", ""], ["stable", ""]] as const) {
+    const observations = fixture.corrected[phase];
+    assert.ok(observations.length > 0);
+    const results = replayRecordedDesktopPitch(calibration, observations.map(value => value ? [value[0], .5 + value[1]] as const : null));
+    assert.deepEqual(results.filter(result => result.confirmed).map(result => result.pose.violationReason), expected ? [expected] : [], phase);
+    if (phase === "no_face") assert.ok(results.every(result => !result.reliable), "absence never becomes a fabricated head pose");
+    if (phase === "stable") {
+      assert.equal(results.length, 120);
+      assert.ok(results.every(result => result.pose.direction === "Focused ✓"));
+    }
+  }
+});
+
 test("desktop neutral calibration requires stable forward samples", () => {
   const t = createDesktopHeadTracker();
   for (let i = 0; i < 12; i++) assert.equal(t.observe({ yawOffset: i % 2 ? 0.22 : -0.22, pitchRatio: 0.5 }, i * 500).pose.calibrated, false);
@@ -343,10 +388,12 @@ test("desktop downward incident stays latched near the cutoff until a centered r
 function desktopMonitoringFixture(tracker = calibrated()) {
   const source = fs.readFileSync("src/app/quiz/[id]/page.tsx", "utf8");
   const ast = ts.createSourceFile("page.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let callback = "";
+  let callback = "", deviceCallback = "", devicePolicy = "";
   const visit = (node: ts.Node) => {
     if (ts.isBinaryExpression(node) && node.left.getText(ast) === "faceDetectionInterval"
       && ts.isCallExpression(node.right)) callback = node.right.arguments[0].getText(ast);
+    if (ts.isBinaryExpression(node) && node.left.getText(ast) === "desktopDeviceInterval" && ts.isCallExpression(node.right)) deviceCallback = node.right.arguments[0].getText(ast);
+    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === "processDevicePredictions") devicePolicy = node.getText(ast);
     ts.forEachChild(node, visit);
   };
   visit(ast);
@@ -355,7 +402,7 @@ function desktopMonitoringFixture(tracker = calibrated()) {
   const gaze: string[] = [], reports: string[] = [];
   const context: any = {
     ...desktopModule, ...detectionModule, cancelled: false, document: { hidden: false, visibilityState: "visible" },
-    detectionBusy: false, proctoringInferenceBusy: false, examActiveRef: { current: true }, violationCountRef: { current: 0 },
+    deviceBusy: false, desktopDeviceReady: true, desktopDeviceWorker: {detect:async()=>[]}, setAiStatus() {}, detectionBusy: false, proctoringInferenceBusy: false, examActiveRef: { current: true }, violationCountRef: { current: 0 },
     submissionInFlightRef: { current: false }, isReportingRef: { current: false },
     isMobile: false, videoRef: { current: { paused: false, readyState: 2, videoWidth: 1280, videoHeight: 720 } },
     mediaStreamRef: { current: { active: true } }, drawInferenceFrame() {},
@@ -385,8 +432,9 @@ function desktopMonitoringFixture(tracker = calibrated()) {
     },
   };
   vm.createContext(context);
-  vm.runInContext(ts.transpile("globalThis.qaTick = " + callback + ";"), context);
+  vm.runInContext(ts.transpile("const " + devicePolicy + "; globalThis.qaTick = " + callback + "; globalThis.qaDeviceTick = " + deviceCallback + ";"), context);
   return { context, gaze, reports, get scans() { return scans; },
+    deviceTick(time: number) {now=time;return context.qaDeviceTick() as Promise<void>;},
     tick(time: number, nextPitch = .5) { now = time; pitch = nextPitch; return context.qaTick() as Promise<void>; } };
 }
 
@@ -731,9 +779,10 @@ function desktopUploadFixture(reason: "multiple_faces" | "device_detected") {
       : await detect().withFaceLandmarks() });
   } else {
     f.context.loadedCocoModel = { detect: async () => present ? [{ class: "cell phone", score: .85 }] : [] };
+    f.context.desktopDeviceWorker = f.context.loadedCocoModel;
   }
   return { ...f, present(value: boolean) { present = value; },
-    incidentTick(time: number) { f.context.tickCounter = reason === "device_detected" ? 0 : 1; return f.tick(time); },
+    incidentTick(time: number) { f.context.tickCounter = reason === "device_detected" ? 0 : 1; return reason === "device_detected" && !f.context.isMobile ? f.deviceTick(time) : f.tick(time); },
     centeredTick(time: number) { f.context.tickCounter = 1; return f.tick(time); } };
 }
 
@@ -902,9 +951,9 @@ test("actual callback rejects Down for recorded moderate Left 2026-10-06T18:41:4
   for (let index = 0; index < movement.length; index++) if (!movement[index]) assert.equal(results[index].reliable, false, "missing faces stay missing, not inferred turns");
 });
 
-test("Left correction preserves the verified Right cutoff and centered negative control", () => {
+test("direction corrections preserve centered negative controls and sustained strong Right", () => {
   const right = calibrated();
-  assert.ok(frames(right, -0.23).every(result => result.pose.direction === "Focused ✓" && !result.confirmed), "Right yaw below the existing cutoff must remain neutral");
+  assert.ok(frames(right, -0.11).every(result => result.pose.direction === "Focused ✓" && !result.confirmed), "yaw within the centered recovery band remains neutral");
   assert.equal(frames(right, -0.32, .5, 7000).at(-1)!.pose.violationReason, "looking_right");
   assert.equal(frames(right, -0.32, .5, 10000).at(-1)!.confirmed, true);
   const neutral = calibrated();
@@ -923,10 +972,11 @@ test("a shared-engine busy scan skips a remounted interval without losing its lo
   assert.equal(f.context.proctoringInferenceBusy,false);
 });
 
-test("stale COCO results cannot warn or report after a visibility generation change", async () => {
+test("stale mobile COCO results cannot warn or report after a visibility generation change", async () => {
   const f=desktopMonitoringFixture();
   let finish!: (value: {class:string;score:number}[]) => void;
   f.context.loadedCocoModel={detect:()=>new Promise(resolve=>{finish=resolve;})};
+  f.context.isMobile=true;f.context.mobileVideoRef=f.context.videoRef;
   const statuses:string[]=[];
   f.context.setDeviceStatus=(value:string)=>statuses.push(value);
   const scan=f.tick(4000);
@@ -946,4 +996,49 @@ test("a frame draw failure releases both inference locks for recovery", async ()
   await f.tick(4000);
   assert.equal(f.context.proctoringInferenceBusy,false);
   assert.equal(f.context.detectionBusy,false);
+});
+
+
+test("actual desktop worker scan does not block face scans and rejects stale results", async()=>{
+  const f=desktopMonitoringFixture();let finish!:(value:{class:string;score:number}[])=>void;
+  f.context.desktopDeviceWorker={detect:()=>new Promise(resolve=>{finish=resolve;})};
+  const statuses:string[]=[];f.context.setDeviceStatus=(value:string)=>statuses.push(value);
+  const scan=f.deviceTick(4000);await new Promise<void>(resolve=>setImmediate(resolve));
+  assert.equal(f.context.deviceBusy,true);assert.equal(f.context.proctoringInferenceBusy,false);
+  await f.tick(4500);assert.equal(f.scans,1);assert.equal(f.gaze.at(-1),"Focused ✓");
+  f.context.trackingGeneration++;finish([{class:"cell phone",score:.95}]);await scan;
+  assert.deepEqual(statuses,[]);assert.deepEqual(f.reports,[]);assert.equal(f.context.deviceBusy,false);
+});
+
+test("actual desktop worker stops scanning when hidden, submitting, completed or unavailable",async()=>{
+  for(const state of ["hidden","submitting","completed","unavailable","limit"]){
+    const f=desktopMonitoringFixture();let scans=0;f.context.desktopDeviceWorker={detect:async()=>{scans++;return [];}};
+    if(state==="hidden")f.context.document.hidden=true;
+    if(state==="submitting")f.context.submissionInFlightRef.current=true;
+    if(state==="completed")f.context.examActiveRef.current=false;
+    if(state==="unavailable")f.context.desktopDeviceReady=false;
+    if(state==="limit")f.context.violationCountRef.current=3;
+    await f.deviceTick(4000);assert.equal(scans,0,state);
+  }
+});
+
+
+test("worker construction failure still establishes the actual face interval",()=>{
+  const source=fs.readFileSync("src/app/quiz/[id]/page.tsx","utf8");
+  const ast=ts.createSourceFile("page.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  let setup="",faceStatement="";
+  const visit=(node:ts.Node)=>{
+    if(ts.isIfStatement(node)&&node.expression.getText(ast)==="!isMobile"&&node.thenStatement.getText(ast).includes("desktopDeviceWorker = createDesktopDeviceWorker()"))setup=node.getText(ast);
+    if(ts.isExpressionStatement(node)&&ts.isBinaryExpression(node.expression)&&node.expression.left.getText(ast)==="faceDetectionInterval")faceStatement=node.getText(ast);
+    ts.forEachChild(node,visit);
+  };visit(ast);assert.ok(setup);assert.ok(faceStatement);
+  let timers=0;const statuses:string[]=[];
+  vm.runInNewContext(ts.transpile(setup+"\n"+faceStatement),{
+    isMobile:false,desktopDeviceWorker:null,objectModelSlowTimer:null,
+    createDesktopDeviceWorker(){throw new Error("Worker disabled by browser");},
+    setDeviceStatus(value:string){statuses.push(value);},setAiStatus(){},
+    setInterval(){timers++;return 1;},faceDetectionInterval:null,performanceProfile:{detectionIntervalMs:500},
+  });
+  assert.equal(timers,1,"face interval must initialize after worker creation fails");
+  assert.deepEqual(statuses,["Device AI unavailable ✗"]);
 });

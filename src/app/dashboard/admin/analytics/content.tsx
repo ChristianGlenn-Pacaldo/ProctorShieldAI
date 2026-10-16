@@ -28,7 +28,7 @@ function Bar({ label, value, pct, color }: { label: string; value: number | stri
     <div className="ps-admin-bar flex items-center gap-3">
       <span className="text-xs text-[var(--muted)] w-36 shrink-0 truncate">{label}</span>
       <div className="flex-1 h-2.5 bg-[var(--surface2)] rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${Math.max(1, pct)}%` }} />
+        <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
       </div>
       <span className="text-xs font-bold text-[var(--ink)] w-10 text-right">{value}</span>
     </div>
@@ -59,7 +59,7 @@ export default function AnalyticsContent() {
     return <div className="animate-fade-in text-center py-10 text-sm text-[var(--muted)]">Failed to load analytics data.</div>;
   }
 
-  const totalUsersSafe = Math.max(1, data.userStats.totalUsers);
+  const classroomUsers = Math.max(1, data.userStats.totalStudents + data.userStats.totalTeachers);
 
   return (
     <div className="ps-admin-glass-canvas animate-fade-in space-y-4">
@@ -100,12 +100,11 @@ export default function AnalyticsContent() {
         <div className="ps-admin-glass-card bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-sm font-bold text-[var(--ink)] font-[family-name:var(--font-display)]">📊 Platform Distribution</h3>
-            <p className="text-xs text-[var(--muted)] mt-0.5">User breakdown by role</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">Student and teacher breakdown</p>
           </div>
           <div className="ps-admin-glass-dense p-5 space-y-4">
-            <Bar label="Students" value={data.userStats.totalStudents} pct={Math.round((data.userStats.totalStudents / totalUsersSafe) * 100)} color="bg-blue-500" />
-            <Bar label="Teachers" value={data.userStats.totalTeachers} pct={Math.round((data.userStats.totalTeachers / totalUsersSafe) * 100)} color="bg-violet-500" />
-            <Bar label="Admins" value={data.userStats.totalAdmins} pct={Math.round((data.userStats.totalAdmins / totalUsersSafe) * 100)} color="bg-rose-500" />
+            <Bar label="Students" value={data.userStats.totalStudents} pct={Math.round((data.userStats.totalStudents / classroomUsers) * 100)} color="bg-blue-500" />
+            <Bar label="Teachers" value={data.userStats.totalTeachers} pct={Math.round((data.userStats.totalTeachers / classroomUsers) * 100)} color="bg-violet-500" />
           </div>
         </div>
 
