@@ -18,6 +18,7 @@ const generatedQuestions = Array.from({ length: 3 }, (_, index) => ({
 // server. This fixture never uses the configured provider or application data.
 async function providerFixture(t: TestContext, statuses: number[], output = JSON.stringify({ questions: generatedQuestions }), retryDelay?: string) {
   const requests: any[] = [];
+  const paths: string[] = [];
   const diagnostics: unknown[][] = [];
   let receipts = 0;
   let retryOptions: any;
@@ -25,6 +26,7 @@ async function providerFixture(t: TestContext, statuses: number[], output = JSON
     let body = "";
     for await (const chunk of request) body += chunk.toString();
     requests.push(JSON.parse(body));
+    paths.push(request.url || "");
     const status = statuses[Math.min(requests.length - 1, statuses.length - 1)];
     if (status === 0) return; // Deliberately stalled provider; cancelled by deadline test.
     response.writeHead(status, { "Content-Type": "application/json" });
@@ -68,7 +70,7 @@ async function providerFixture(t: TestContext, statuses: number[], output = JSON
     "@google/genai": { GoogleGenAI: LocalProviderClient },
   });
   return {
-    requests, diagnostics,
+    requests, diagnostics, paths,
     get receipts() { return receipts; },
     get retryOptions() { return retryOptions; },
     post: (body: unknown) => route.POST({ json: async () => body, headers: { get: () => null } }),
@@ -96,6 +98,9 @@ test("text generation can recover on the final bounded attempt", async (t) => {
   const response = await setup.post({ sourceText: "Plant biology notes", numQuestions: 3 });
   assert.equal(response.status, 200);
   assert.equal(setup.requests.length, 3);
+  assert.match(setup.paths[0], /gemini-3\.6-flash/);
+  assert.equal(setup.paths[1], setup.paths[0]);
+  assert.match(setup.paths[2], /gemini-3\.5-flash/);
   for (const request of setup.requests) {
     assert.match(request.contents[0].parts[0].text, /Plant biology notes/);
     assert.match(request.contents[0].parts[0].text, /Generate 3 multiple-choice/);

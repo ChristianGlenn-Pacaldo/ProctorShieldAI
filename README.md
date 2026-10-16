@@ -23,6 +23,8 @@ Demo data is explicitly opt-in and must be used only with a disposable developme
 
 ## Mobile student testing
 
+For uploaded multiple-choice questionnaires, AI imports the existing wording, choices and order up to the selected question count; it does not pad short papers with invented questions. For notes, it generates questions from the material. Studio shows review notices for inferred answer keys or omitted items. Check the transcription and every marked answer against the source before saving. Temporary provider overload uses a bounded backup-model attempt within the existing 90-second deadline; quota and credential errors retain their explicit messages.
+
 Mobile Compatible Mode requires a public or locally trusted HTTPS URL because phone browsers block camera and microphone access on plain LAN HTTP addresses. Use an HTTPS staging deployment or trusted HTTPS tunnel, then open the same URL on the teacher laptop and student phone.
 
 1. Sign in as a Pro teacher on the laptop and open Live Monitor.
@@ -41,13 +43,15 @@ Authenticated Playwright contracts are opt-in. Point `E2E_DATABASE_URL` at a dis
 
 ## Required production configuration
 
+The Free teacher plan includes five manual quizzes per calendar month, resetting on the first at 00:00 UTC+8. Quizzes created in earlier months do not consume the current allowance. Deleting a quiz does not restore that month's usage. Pro retains unlimited manual and AI quiz creation; student limits remain 20 per Free quiz and 100 per Pro quiz.
+
 - Use a unique `NEXTAUTH_SECRET` of at least 32 characters. Generate one with `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`.
 - Set `NEXT_PUBLIC_APP_URL` to the public HTTPS origin.
 - Configure the database, Gemini, Google OAuth, Pusher, SMTP, and PayMongo variables in `.env.example`.
 - Keep `PAYMONGO_MODE=test` with `sk_test_`/`pk_test_` keys until live payments are explicitly approved. Test mode rejects live keys and live webhook events.
 - Configure Redis for shared rate limits and live-snapshot state. Do not use the process-local fallback for a multi-instance production deployment.
 - Configure a private S3-compatible bucket for evidence. Evidence is returned only through the authenticated `/api/evidence/[id]` endpoint; the bucket must never be public.
-- Create a PayMongo webhook for the production URL `/api/billing/webhook` and set its dedicated signing secret as `PAYMONGO_WEBHOOK_SECRET`. A successful redirect never activates a subscription; only a verified webhook does.
+- Create a PayMongo webhook for the production URL `/api/billing/webhook` and set its dedicated signing secret as `PAYMONGO_WEBHOOK_SECRET`. Activation requires a verified webhook or authenticated server-to-server confirmation of a paid checkout; a success URL alone is insufficient.
 - Do not expose `.env`, commit credentials, or reuse development secrets in production.
 - Back up the database, run `npm run db:migrate:check`, and then use `npm run db:migrate:deploy` for schema changes. Never use `prisma db push` against staging or production.
 
@@ -82,6 +86,8 @@ docker compose up -d --build
 The Docker build does not copy `.env` into the image. Supply production secrets through the deployment platform or Compose runtime environment. The `/api/health` readiness endpoint checks PostgreSQL, Redis, and evidence storage, and the container health check uses it.
 
 The repository also includes a GitHub Actions workflow that runs dependency audit, tests, lint errors, type checking, Prisma validation, and the production build for pushes and pull requests.
+
+`npm run preflight` first verifies that every migration in this checkout has completed on the configured database. Database connectivity alone does not establish schema compatibility. This check is read-only; pending or unfinished migrations stop preflight without applying schema changes.
 
 ## Seeded accounts
 

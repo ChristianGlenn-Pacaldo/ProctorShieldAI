@@ -499,6 +499,7 @@ export default function TeacherQuizzesPage({
         // AI enhancement keeps the open quiz identity and teacher-configured settings.
         ...(isEditorOpen ? previous : {}),
         aiGenerationReceipt: data.aiGenerationReceipt,
+        aiReviewWarnings: data.sourceWarnings,
         title: data.detectedTitle || `AI Assessment - ${displayTopic.slice(0, 30)}`,
         subjectName: data.detectedSubject || "General",
         description:
@@ -681,6 +682,7 @@ export default function TeacherQuizzesPage({
                     </label>}
                   </div>
                   <p className="text-xs text-[var(--muted)]">Images up to 10 MB, PDF up to 4 MB, or plain text up to 60 KB.</p>
+                  <p className="mt-2 text-xs text-[var(--muted)]">For a question paper, AI imports the existing wording and choices. For notes, it creates questions from the material. Review the text and answer key in Studio before saving.</p>
                   {scannerError && <p role="alert" className="text-sm text-rose-500">{scannerError}</p>}
                   {isPreparingScan && <p role="status">Preparing scan…</p>}
                   {cameraOpen && !scanSource && <div className="teacher-media relative rounded-xl overflow-hidden bg-black aspect-video">
@@ -757,7 +759,7 @@ export default function TeacherQuizzesPage({
               </h2>
               <p className="text-sm text-[var(--muted)] leading-relaxed mb-6">
                 {upgradeReason === "quiz_limit"
-                  ? `Your Free plan includes ${manualQuizLimit} lifetime manual quizzes, and all ${manualQuizLimit} have been used. Upgrade for unlimited quizzes.`
+                  ? `Your Free plan includes ${manualQuizLimit} manual quizzes per calendar month, and all ${manualQuizLimit} have been used this month. Your allowance resets on the first of each month (UTC+8). Deleting a quiz does not restore it. Upgrade for unlimited quizzes.`
                   : "AI Quiz Generation is a Pro feature. Upgrade your plan to unlock AI-powered quiz creation, live monitoring, and evidence review."}
               </p>
 

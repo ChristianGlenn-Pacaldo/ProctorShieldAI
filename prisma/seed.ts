@@ -532,7 +532,7 @@ async function main() {
     create: {
       planName: "Free",
       yearlyPrice: 0,
-      features: "5 lifetime manual quizzes, Up to 20 students per quiz, Basic proctoring, Email support",
+      features: "5 manual quizzes per calendar month (resets on the 1st, UTC+8), Up to 20 students per quiz, Basic proctoring, Email support",
       durationDays: null,
     },
   });

@@ -17,7 +17,7 @@
     "db:seed": "npx prisma db seed",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "maintenance": "tsx scripts/maintenance.ts",
-    "preflight": "tsx scripts/preflight.ts",
+    "preflight": "tsx scripts/check-applied-migrations.ts && tsx scripts/preflight.ts",
     "test:refactor": "node --import ./tests/helpers/test-feature-policy.ts --test tests/teacher-quiz-library-refactor.test.ts tests/teacher-quiz-action-feedback.test.ts tests/teacher-late-join-approvals.test.ts tests/teacher-loading-retry.test.ts tests/teacher-ai-edit-flow.test.ts tests/power-arena-disabled.test.ts",
     "test:refactor:browser": "node scripts/build-refactor-browser.mjs && node --test --test-concurrency=1 tests/refactor-teacher.browser.ts"
   },

@@ -232,5 +232,16 @@
     "src/lib/device-capabilities.ts": "2d92d0393d8308ee579ba334471338837cc16ce90129c9f13b8ba60ccbf40c67",
     "src/proxy.ts": "c8eec7a21972c37a3d92c08ba689827aaa91c7324eb652a6b8c306c895193d44",
     "src/lib/desktop-head-tracking.ts": "cb5fc8bf85e6cd249233a17e48271c16a3e8678d68927dc16c71079841f1058c"
+  },
+  "demoReadinessBaseline": "ceedeae3b6084e0bf9e60634c4c10a6a1f25d989",
+  "demoReadinessOverrides": {
+    "prisma/seed.ts": "1c5ea7361254f83747c72b541b6981cb5e37d5664d3ab2d523c3593bc0436749",
+    "scripts/bootstrap.ts": "5fb61a1f50edb4bd17f7cd2d2fab276e2ac49c7c1c4ee0f52351a2f31a934f83",
+    "src/app/api/ai/create/route.ts": "e79b63b3ab7e11360a3335e37316512abd28855d3140e5bd4757cc65c6603ed8",
+    "src/app/api/quizzes/route.ts": "85a160a48b7c1aa111a02386757bbe02d29074f74cacf95116d2175dada7863f",
+    "src/lib/subscription-rules.ts": "a0eeaaea74e7987229d3f7e35c4d09f329af2d74c9066274206febcf72b91842",
+    "src/lib/teacher-entitlements.ts": "ef14cb1a8f031e5a49decd87a2915ff17a20f490ac615102bc3d7d0ccd329cd1",
+    "scripts/create-proctorshield-std-sdd.ps1": "0dd88fe58987950e8b75c7b97787baf2b3564e23e11bb8b7b0b131d3c79ad7d0",
+    "scripts/update-project-docs.ps1": "4755137799301f6711fe018a9b47f8e194090b569bf8fff5ef95098f96e2fb7a"
   }
 }

@@ -55,6 +55,8 @@ export interface QuestionItem {
 export interface QuizFormData {
   id?: number;
   aiGenerationReceipt?: string;
+  /** Draft-only notices; never persisted as assessment content. */
+  aiReviewWarnings?: string[];
   title: string;
   subjectName: string;
   description: string;
@@ -684,6 +686,13 @@ export default function ProctorShieldQuizEditor({
           )}
         </div>
       </header>
+
+      {initialQuiz?.aiGenerationReceipt && (
+        <div role="status" aria-label="AI import review" className="max-h-40 shrink-0 overflow-y-auto border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 sm:px-8">
+          <p className="font-semibold">Review every question, choice, and marked answer against your source before saving.</p>
+          {(initialQuiz.aiReviewWarnings || []).map((warning, index) => <p key={index} className="mt-1">{warning}</p>)}
+        </div>
+      )}
 
       {/* Save Error Notification Banner */}
       {saveError && (

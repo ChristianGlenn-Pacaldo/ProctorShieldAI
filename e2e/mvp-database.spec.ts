@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import Redis from "ioredis";
 import fs from "node:fs";
 import path from "node:path";
+import { getFreeQuizQuotaWindow } from "../src/lib/subscription-rules";
 import { authenticateAsExistingRole, syntheticAccount, type TestRole } from "./helpers/auth";
 
 const enabled = process.env.RUN_AUTHENTICATED_E2E === "true";
@@ -47,16 +48,64 @@ async function teacherContext(browser: Browser, email?: string) {
   await authenticateAsExistingRole(context, "teacher", email);
   return context;
 }
-async function createQuiz(teacher: BrowserContext, title = "SYNTHETIC MVP " + randomUUID().slice(0, 8)) {
-  const created = await ok(await post(teacher, "/api/quizzes", {
+function manualQuizPayload(title: string) {
+  return {
     title, subjectName: "Synthetic MVP Biology", duration: 10, passingScore: 50, isGamified: false, quizMode: "proctored",
     questions: [
       { questionText: "MVP: Which number is even?", questionType: "multiple_choice", points: 1, choices: [{ choiceText: "Two", isCorrect: true }, { choiceText: "Three", isCorrect: false }] },
       { questionText: "MVP: Which shape has three sides?", questionType: "multiple_choice", points: 1, choices: [{ choiceText: "Triangle", isCorrect: true }, { choiceText: "Circle", isCorrect: false }] },
     ],
-  }), 201);
+  };
+}
+async function createQuiz(teacher: BrowserContext, title = "SYNTHETIC MVP " + randomUUID().slice(0, 8)) {
+  const created = await ok(await post(teacher, "/api/quizzes", manualQuizPayload(title)), 201);
   return created.quiz as { id: number; accessCode: string; title: string };
 }
+
+test("Free monthly allowance: concurrent sixth request, deletion, calendar reset and connected UI", async ({ browser }) => {
+  const teacherId = randomUUID(), email = `quota-${randomUUID().slice(0, 8)}@mvp.example.test`;
+  // The beforeAll loopback/database guards above exclude every real account DB.
+  const inserted = await pool.query("INSERT INTO users(id,full_name,email,password,role_id,updated_at) SELECT $1,$2,$3,password,role_id,now() FROM users WHERE email='teacher-free@mvp.example.test'", [teacherId, "SYNTHETIC MONTHLY QUOTA", email]);
+  expect(inserted.rowCount).toBe(1);
+  const teacher = await teacherContext(browser, email);
+  try {
+    const first = await createQuiz(teacher);
+    for (let index = 1; index < 4; index++) await createQuiz(teacher);
+    const raced = await Promise.all([0, 1].map(index => post(teacher, "/api/quizzes", manualQuizPayload(`SYNTHETIC QUOTA RACE ${index}`))));
+    expect(raced.map(response => response.status()).sort()).toEqual([201, 403]);
+    const denied = await raced.find(response => response.status() === 403)!.json();
+    expect(denied.code).toBe("FREE_QUIZ_LIMIT_REACHED");
+    expect(denied.message).toContain("per calendar month");
+    let status = await ok(await teacher.request.get("/api/billing/status"));
+    expect(status.manualQuizCount).toBe(5); expect(status.manualQuizzesRemaining).toBe(0);
+    await ok(await teacher.request.delete(`/api/quizzes/${first.id}`, { headers: { Origin: origin() } }));
+    status = await ok(await teacher.request.get("/api/billing/status"));
+    expect(status.manualQuizCount).toBe(5);
+    expect((await post(teacher, "/api/quizzes", manualQuizPayload("SYNTHETIC DELETE DOES NOT RESET"))).status()).toBe(403);
+
+    const page = await teacher.newPage();
+    await page.goto("/dashboard/teacher/quizzes");
+    await expect(page.getByText("5/5 free quizzes this month", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Manual Quiz", exact: true }).click();
+    await expect(page.getByText(/all 5 have been used this month/)).toBeVisible();
+    await page.goto("/dashboard/teacher/billing");
+    await expect(page.getByText(/5 manual quizzes per calendar month/)).toBeVisible();
+    await page.screenshot({ path: path.join(".tmp-mvp-database", `monthly-billing-${test.info().project.name}.png`), fullPage: true });
+    // PostgreSQL timestamp columns hold UTC values without a timezone. Sending
+    // a JS Date through pg serializes the host's local offset, which PostgreSQL
+    // ignores for this column type; use an explicit UTC string in this fixture.
+    const previousMonth = new Date(getFreeQuizQuotaWindow().start.getTime() - 1).toISOString();
+    await pool.query("UPDATE quizzes SET created_at=$1 WHERE teacher_id=$2", [previousMonth, teacherId]);
+    await pool.query("UPDATE activity_logs SET created_at=$1 WHERE user_id=$2 AND activity LIKE 'Created manual quiz:%'", [previousMonth, teacherId]);
+    status = await ok(await teacher.request.get("/api/billing/status"));
+    expect(status.manualQuizCount).toBe(0); expect(status.manualQuizzesRemaining).toBe(5);
+    await page.goto("/dashboard/teacher/quizzes");
+    await expect(page.getByText("0/5 free quizzes this month", { exact: true })).toBeVisible();
+    await page.screenshot({ path: path.join(".tmp-mvp-database", `monthly-library-${test.info().project.name}.png`), fullPage: true });
+    await createQuiz(teacher);
+    expect((await ok(await teacher.request.get("/api/billing/status"))).manualQuizCount).toBe(1);
+  } finally { await teacher.close(); }
+});
 async function activate(teacher: BrowserContext, id: number) {
   await ok(await teacher.request.put(`/api/quizzes/${id}`, { headers: { Origin: origin() }, data: { quizStatus: "active" } }));
 }
