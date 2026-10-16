@@ -25,7 +25,13 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
     navigator.mediaDevices.getUserMedia = async constraints => {
       const image = new Image(); image.src = sample; await image.decode();
       const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
-      canvas.getContext("2d")!.drawImage(image, 0, 0, 640, 480);
+      const paint = () => {
+        const context = canvas.getContext("2d")!;
+        context.drawImage(image, 0, 0, 640, 480);
+        context.fillStyle = Math.floor(performance.now() / 500) % 2 ? "#ff0000" : "#0000ff";
+        context.fillRect(0, 0, 64, 64);
+      };
+      paint(); setInterval(paint, 125);
       const stream = canvas.captureStream(12);
       if (constraints?.audio) {
         const audio = new AudioContext(); const destination = audio.createMediaStreamDestination();
@@ -38,6 +44,7 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error" && /Proctoring AI|TensorFlow|evaluate flag/.test(message.text())) errors.push(message.text()); });
   const modelResponses: string[] = [];
+  const uploads: Array<{ bytes: string; durationMs: number; type: string }> = [];
   page.on("response", response => { if (response.ok() && /tfjs-backend-wasm.*\.wasm|face_landmark_68_model|tiny_face_detector_model|coco\/model\.json/.test(response.url())) modelResponses.push(response.url()); });
   await context.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -52,6 +59,14 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
       remainingSeconds: 600, violationCount: 0, savedAnswers: [], quiz: { id: 99, title: "Synthetic AI startup check", duration: 10, totalQuestions: 1, quizStatus: "in_progress", quizMode: "proctored", teacherId: "synthetic-teacher" },
       questions: [{ id: 1, questionText: "Synthetic startup question", questionType: "multiple_choice", points: 1, choices: [{ id: 11, choiceText: "One" }, { id: 12, choiceText: "Two" }] }] });
     if (url.pathname === "/api/quizzes/session") return reply({ success: true, monitoringLevel: "strict", startTime: new Date().toISOString(), remainingSeconds: 600 });
+    if (url.pathname === "/api/live/violation") return reply({ success: true, violation: { id: "1" }, violationCount: 1 });
+    if (url.pathname === "/api/live/violation/1/evidence") {
+      const request = new Request(url, { method: "POST", headers: route.request().headers(), body: Uint8Array.from(route.request().postDataBuffer()!).buffer });
+      const form = await request.formData(); const file = form.get("evidence") as File;
+      uploads.push({ bytes: Buffer.from(await file.arrayBuffer()).toString("base64"), durationMs: Number(form.get("durationMs")), type: file.type });
+      if (uploads.length === 1) return route.fulfill({ status: 503, json: { error: "Synthetic temporary storage outage" } });
+      return reply({ success: true });
+    }
     if (url.pathname === "/api/live/warning") return reply({ warning: null });
     return reply({ success: true, signals: [] });
   });
@@ -67,5 +82,40 @@ test("production quiz initializes face and object AI on a four-thread laptop", a
   expect(modelResponses.some(url => /tfjs-backend-wasm.*\.wasm/.test(url))).toBe(true);
   expect(modelResponses.some(url => url.includes("face_landmark_68_model"))).toBe(true);
   expect(modelResponses.some(url => url.includes("coco/model.json"))).toBe(true);
+  // Trigger a focus-loss incident after startup grace if the synthetic faces
+  // have not already generated an incident. All posts are intercepted above.
+  await page.waitForTimeout(5_100);
+  if (uploads.length < 2) {
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect.poll(() => uploads.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  }
+  expect(uploads[0]).toEqual(uploads[1]);
+  expect(uploads[1].durationMs).toBeGreaterThanOrEqual(3_000);
+  expect(uploads[1].durationMs).toBeLessThanOrEqual(5_500);
+  expect(uploads[1].type).toBe("video/webm");
+  const playback = await page.evaluate(async bytes => {
+    const blob = new Blob([Uint8Array.from(atob(bytes), value => value.charCodeAt(0))], { type: "video/webm" });
+    const url = URL.createObjectURL(blob); const video = document.createElement("video"); video.muted = true; video.src = url;
+    try {
+      await video.play(); const samples: number[][] = [];
+      const canvas = document.createElement("canvas"); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      for (let i = 0; i < 8; i++) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        context.drawImage(video, 0, 0); samples.push([...context.getImageData(2, 2, 1, 1).data]);
+      }
+      return { time: video.currentTime, samples };
+    } finally { video.pause(); URL.revokeObjectURL(url); }
+  }, uploads[1].bytes);
+  expect(playback.time).toBeGreaterThan(1);
+  expect(playback.samples.some(pixel => pixel[0] > 180 && pixel[2] < 60)).toBe(true);
+  expect(playback.samples.some(pixel => pixel[2] > 180 && pixel[0] < 60)).toBe(true);
   expect(errors).toEqual([]);
 });

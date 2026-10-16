@@ -18,9 +18,9 @@ function videoForm(options: { type?: string; bytes?: Uint8Array; duration?: stri
   return new Request(`${url}/1/evidence`, { method: "POST", body: form });
 }
 
-function fixture(options: { session?: any; owned?: boolean; stored?: boolean } = {}) {
+function fixture(options: { session?: any; owned?: boolean; stored?: boolean; videoAlreadyStored?: boolean } = {}) {
   let reads = 0, writes = 0, uploads = 0;
-  const violation = { id: BigInt(1), studentQuizId: "attempt-1", violationType: "no_face", timestamp: new Date() };
+  const violation = { id: BigInt(1), studentQuizId: "attempt-1", violationType: "no_face", timestamp: new Date(), evidenceFiles: options.videoAlreadyStored ? [{ id: BigInt(2) }] : [] };
   const db: any = {
     studentQuiz: {
       findFirst: async ({ where }: any) => { reads++; assert.equal(where.studentId, "student"); return options.owned === false ? null : { id: "attempt-1", quizId: 7, quiz: { teacherId: "teacher", title: "Exam", quizMode: "proctored" } }; },
@@ -151,6 +151,15 @@ test("valid video upload and image-bearing violation still store evidence", asyn
 
 test("unavailable production upload storage retains controlled 503", async () => {
   const f = fixture({ stored: false }); assert.equal((await f.video(videoForm())).status, 503); assert.equal(f.counters().writes, 0);
+});
+
+test("a retry after a lost success response does not store a duplicate video", async () => {
+  const f = fixture({ videoAlreadyStored: true });
+  assert.equal((await f.video(videoForm())).status, 200);
+  assert.deepEqual(f.counters(), { reads: 1, writes: 0, uploads: 0 });
+  const otherStudent = fixture({ videoAlreadyStored: true, owned: false });
+  assert.equal((await otherStudent.video(videoForm())).status, 404);
+  assert.equal(otherStudent.counters().uploads, 0);
 });
 
 test("real provider errors remain generic server failures rather than malformed input", async () => {

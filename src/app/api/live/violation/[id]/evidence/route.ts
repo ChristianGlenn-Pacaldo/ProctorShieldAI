@@ -84,11 +84,18 @@ async function POSTImpl(
         studentQuiz: { studentId: session.userId },
         createdAt: { gte: new Date(Date.now() - 2 * 60_000) },
       },
-      select: { id: true, studentQuizId: true },
+      select: { id: true, studentQuizId: true, evidenceFiles: {
+        where: { fileType: { in: ["video/webm", "video/mp4"] }, deletionRequestedAt: null, deletedAt: null },
+        take: 1, select: { id: true },
+      } },
     });
     if (!violation) {
       return NextResponse.json({ error: "Violation is not available for evidence upload" }, { status: 404 });
     }
+
+    // The first response can be lost after storage succeeds. A retry attaches
+    // to the same incident without writing another copy of the clip.
+    if (violation.evidenceFiles?.length) return NextResponse.json({ success: true });
 
     const stored = await uploadEvidenceBytes(bytes, contentType, violation.studentQuizId);
     if (stored) {

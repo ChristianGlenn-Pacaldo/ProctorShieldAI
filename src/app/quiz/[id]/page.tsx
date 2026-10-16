@@ -2,6 +2,7 @@
 
 import { createRecoveringDesktopDeviceWorker } from "@/lib/desktop-device-worker";
 import { createEvidenceClipBuffer } from "@/lib/evidence-clip-buffer";
+import { uploadEvidenceClip } from "@/lib/evidence-clip-upload";
 import { initializeProctoringFaceRuntime } from "@/lib/proctoring-face-runtime";
 
 import StudentPrivacyNotice from "@/components/student-privacy-notice";
@@ -1152,14 +1153,13 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       if (/^\d+$/.test(violationId)) {
         const clip = await evidenceClipPromise;
         if (clip) {
-          const formData = new FormData();
-          formData.append("evidence", clip.blob, `violation-${violationId}.${clip.extension}`);
-          formData.append("durationMs", String(clip.durationMs));
-          await fetch(`/api/live/violation/${violationId}/evidence`, {
-            signal: AbortSignal.timeout(15_000),
-            method: "POST",
-            body: formData,
-          }).catch(() => {});
+          if (!await uploadEvidenceClip(violationId, clip)) {
+            console.warn("Video evidence upload failed after retry; incident remains recorded.");
+            setPreWarning("The incident was recorded, but its video could not upload.");
+          }
+        } else {
+          console.warn("Video evidence recording unavailable; incident remains recorded.");
+          setPreWarning("The incident was recorded, but video recording was unavailable.");
         }
       }
 
