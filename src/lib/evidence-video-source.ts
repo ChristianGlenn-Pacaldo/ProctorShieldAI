@@ -3,7 +3,9 @@ export const EVIDENCE_VIDEO_FPS = 8;
 export function getEvidenceVideoDimensions(width: number, height: number) {
   if (!(width > 0 && height > 0)) return { width: 480, height: 360 };
   const scale = Math.min(1, 480 / width, 360 / height);
-  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  // Android hardware encoders can reject odd portrait widths (e.g. 203x360).
+  const even = (value: number) => Math.max(2, Math.floor(value / 2) * 2);
+  return { width: even(width * scale), height: even(height * scale) };
 }
 
 // Encode the short evidence windows from one small raw-pixel buffer. Encoding

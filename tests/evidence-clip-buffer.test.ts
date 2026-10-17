@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createEvidenceClipBuffer } from "../src/lib/evidence-clip-buffer.ts";
 
-function fixture(options: { stopDelay?: number; startFailures?: number; neverFinalizes?: boolean } = {}) {
+function fixture(options: { stopDelay?: number; startFailures?: number; neverFinalizes?: boolean; rejectMime?: string; video?: HTMLVideoElement } = {}) {
   let stoppedTracks = 0;
   const stream = { getVideoTracks: () => [{ readyState: "live", stop() { stoppedTracks++; } }] } as unknown as MediaStream;
   const recorders: FakeRecorder[] = [];
+  const mimeAttempts: string[] = [];
   class FakeRecorder {
     state = "inactive";
     ondataavailable: ((event: { data: Blob }) => void) | null = null;
@@ -21,13 +22,17 @@ function fixture(options: { stopDelay?: number; startFailures?: number; neverFin
     }
   }
   const buffer = createEvidenceClipBuffer(stream, {
-    now: () => Date.now(), isTypeSupported: type => type === "video/webm",
-    createRecorder: () => {
+    video: options.video,
+    now: () => Date.now(), isTypeSupported: type => type === "video/webm" || Boolean(options.rejectMime && type === options.rejectMime),
+    createRecorder: (input, settings) => {
+      mimeAttempts.push(settings.mimeType!);
+      if (settings.mimeType === options.rejectMime) throw new Error("phone encoder rejects advertised codec");
+      assert.equal(input, stream);
       if ((options.startFailures ?? 0) > 0) { options.startFailures!--; throw new Error("encoder busy"); }
       const recorder = new FakeRecorder(); recorders.push(recorder); return recorder as unknown as MediaRecorder;
     },
   });
-  return { buffer, recorders, get stoppedTracks() { return stoppedTracks; } };
+  return { buffer, recorders, mimeAttempts, get stoppedTracks() { return stoppedTracks; } };
 }
 
 test("evidence contains the turn before confirmation and the return afterward in one playable container", async t => {
@@ -63,12 +68,48 @@ test("delayed native finalization preserves a valid clip and uses its recording 
   } finally { f.buffer.dispose(); t.mock.timers.tick(2_000); }
 });
 
+test("mobile encoder finalization after three seconds retains the incident video", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
+  const f = fixture({ stopDelay: 3_000 });
+  try {
+    const pending = f.buffer.capture();
+    for (let i = 0; i < 62; i++) t.mock.timers.tick(100);
+    const clip = await pending;
+    assert.ok(clip);
+    assert.equal(clip.durationMs, 3_100);
+  } finally { f.buffer.dispose(); t.mock.timers.tick(6_000); }
+});
+
+test("a phone that advertises but cannot start VP8/Opus falls back to native WebM", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
+  const f = fixture({ rejectMime: "video/webm;codecs=vp8,opus" });
+  try {
+    const pending = f.buffer.capture();
+    for (let i = 0; i < 32; i++) t.mock.timers.tick(100);
+    assert.ok(await pending);
+    assert.deepEqual(f.mimeAttempts.slice(0, 2), ["video/webm;codecs=vp8,opus", "video/webm"]);
+    assert.equal(f.stoppedTracks, 0);
+  } finally { f.buffer.dispose(); }
+});
+
+test("camera video remains recordable when canvas capture is unavailable", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
+  // No document/canvas in this environment: createEvidenceVideoSource returns null.
+  const f = fixture({ video: {} as HTMLVideoElement });
+  try {
+    const pending = f.buffer.capture();
+    for (let i = 0; i < 32; i++) t.mock.timers.tick(100);
+    assert.ok(await pending);
+    assert.equal(f.stoppedTracks, 0);
+  } finally { f.buffer.dispose(); }
+});
+
 test("a recorder that never finalizes cannot block submission indefinitely", async t => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
   const f = fixture({ neverFinalizes: true });
   try {
     const pending = f.buffer.capture();
-    for (let i = 0; i < 47; i++) t.mock.timers.tick(100);
+    for (let i = 0; i < 82; i++) t.mock.timers.tick(100);
     assert.equal(await pending, null);
   } finally { f.buffer.dispose(); t.mock.timers.tick(2_000); }
 });

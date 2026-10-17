@@ -438,6 +438,23 @@ function desktopMonitoringFixture(tracker = calibrated()) {
     tick(time: number, nextPitch = .5) { now = time; pitch = nextPitch; return context.qaTick() as Promise<void>; } };
 }
 
+test("mobile object scans use camera detail rather than the reduced face buffer", async () => {
+  const f = desktopMonitoringFixture();
+  f.context.isMobile = true;
+  f.context.mobileVideoRef = f.context.videoRef;
+  f.context.mobileNoFaceIncidentRecordedRef = { current: false };
+  let calls = 0;
+  f.context.loadedCocoModel = { detect: async (input: unknown, max: number, threshold: number) => {
+    calls++;
+    assert.equal(input, f.context.mobileVideoRef.current);
+    assert.equal(max, 10);
+    assert.equal(threshold, 0.5);
+    return [];
+  } };
+  await f.tick(4_000);
+  assert.equal(calls, 1);
+});
+
 test("actual desktop scan updates centered gaze while an audio report is pending", async () => {
   const f = desktopMonitoringFixture();
   f.context.isReportingRef.current = true;
@@ -1055,7 +1072,10 @@ test("low-power desktop executes face and object observations sequentially on th
   await f.tick(4_750);
   assert.equal(f.scans, 0, "a face scan must not overlap pending object inference");
   finish([]); await objectScan;
-  await f.tick(5_500); await f.tick(6_250);
-  assert.equal(f.scans, 2); assert.equal(scans, 1);
+  await f.tick(5_500);
+  assert.equal(f.scans, 1); assert.equal(scans, 1);
+  f.context.loadedCocoModel.detect = async () => { scans++; return []; };
+  await f.tick(6_250);
+  assert.equal(f.scans, 1); assert.equal(scans, 2);
   assert.equal(f.context.proctoringInferenceBusy, false);
 });

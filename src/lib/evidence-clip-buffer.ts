@@ -17,69 +17,95 @@ export function createEvidenceClipBuffer(source: MediaStream, options: {
 } = {}) {
   const supported = options.isTypeSupported ?? ((type: string) =>
     typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type));
-  const mimeType = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(supported);
+  const mimeTypes = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].filter(supported);
   const now = options.now ?? (() => performance.now());
-  const videoSource = mimeType && options.video ? createEvidenceVideoSource(source, options.video) : null;
-  const recordingSource = options.video ? videoSource?.stream : source;
+  const videoSource = mimeTypes.length && options.video ? createEvidenceVideoSource(source, options.video) : null;
+  // captureStream and isTypeSupported are capability hints, not guarantees
+  // that this phone can encode that canvas/codec combination.
+  const sources = videoSource ? [videoSource.stream, source] : [source];
+  const profiles = sources.flatMap(stream => mimeTypes.map(mimeType => ({ stream, mimeType })));
+  let preferredProfile = 0;
   const windows = new Set<{
     recorder: MediaRecorder;
     startedAt: number;
     claimed: boolean;
+    retryable: boolean;
     finish: () => void;
     result: Promise<EvidenceClip | null>;
   }>();
   let disposed = false;
 
   const startWindow = () => {
-    if (disposed || !mimeType || !recordingSource?.getVideoTracks().some(track => track.readyState === "live")) return;
-    try {
-      const recorder = options.createRecorder
-        ? options.createRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 })
-        : new MediaRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 });
-      const chunks: BlobPart[] = [];
-      let resolve!: (clip: EvidenceClip | null) => void;
-      let finished = false;
-      let stoppedAt: number | null = null;
-      let finalizationTimer: ReturnType<typeof setTimeout> | undefined;
-      const result = new Promise<EvidenceClip | null>(done => { resolve = done; });
-      const settle = (clip: EvidenceClip | null) => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(deadline);
-        clearTimeout(finalizationTimer);
-        windows.delete(entry);
-        resolve(clip);
-      };
-      const entry = {
-        recorder, startedAt: now(), claimed: false, result,
-        finish() {
-          if (stoppedAt !== null) return;
-          if (recorder.state !== "inactive") {
-            // Native encoders may deliver their final chunks later. Their
-            // delivery delay is not part of the recorded camera duration.
-            stoppedAt = now();
-            finalizationTimer = setTimeout(() => settle(null), 1_500);
-            try { recorder.stop(); } catch { settle(null); }
-          } else { settle(null); }
-        },
-      };
-      // Bound both recording and the wait for a final onstop event.
-      const deadline = setTimeout(() => entry.finish(), 5_500);
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
-      recorder.onerror = () => { settle(null); entry.finish(); };
-      recorder.onstop = () => {
-        const durationMs = Math.round((stoppedAt ?? now()) - entry.startedAt);
-        const type = mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
-        settle(entry.claimed && durationMs >= 3_000 && durationMs <= 5_500 && chunks.length > 0
-          ? { blob: new Blob(chunks, { type }), durationMs, extension: type === "video/mp4" ? "mp4" : "webm" }
-          : null);
-      };
-      windows.add(entry);
-      recorder.start(500);
-    } catch {
-      // Snapshot evidence still works; a later window can retry recording.
+    if (disposed) return;
+    const firstProfile = preferredProfile;
+    for (let attempt = 0; attempt < profiles.length; attempt++) {
+      const profileIndex = (firstProfile + attempt) % profiles.length;
+      const { stream: recordingSource, mimeType } = profiles[profileIndex];
+      if (!recordingSource.getVideoTracks().some(track => track.readyState === "live")) continue;
+      let abandon: (() => void) | undefined;
+      try {
+        const recorder = options.createRecorder
+          ? options.createRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 })
+          : new MediaRecorder(recordingSource, { mimeType, videoBitsPerSecond: 250_000, audioBitsPerSecond: 32_000 });
+        const chunks: BlobPart[] = [];
+        let resolve!: (clip: EvidenceClip | null) => void;
+        let finished = false;
+        let stoppedAt: number | null = null;
+        let finalizationTimer: ReturnType<typeof setTimeout> | undefined;
+        const result = new Promise<EvidenceClip | null>(done => { resolve = done; });
+        const settle = (clip: EvidenceClip | null) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(deadline);
+          clearTimeout(finalizationTimer);
+          windows.delete(entry);
+          resolve(clip);
+        };
+        const entry = {
+          recorder, startedAt: now(), claimed: false, retryable: false, result,
+          finish() {
+            if (stoppedAt !== null) return;
+            if (recorder.state !== "inactive") {
+              // Native encoders may deliver their final chunks later. Their
+              // delivery delay is not part of the recorded camera duration.
+              stoppedAt = now();
+              // Mobile encoders may need longer to flush while face AI is busy.
+              if (!finished) finalizationTimer = setTimeout(() => settle(null), 5_000);
+              try { recorder.stop(); } catch { settle(null); }
+            } else { settle(null); }
+          },
+        };
+        // Bound both recording and the wait for a final onstop event.
+        const deadline = setTimeout(() => entry.finish(), 5_500);
+        recorder.ondataavailable = event => {
+          if (event.data.size > 0) chunks.push(event.data);
+        };
+        recorder.onerror = () => {
+          entry.retryable = true;
+          preferredProfile = (profileIndex + 1) % profiles.length;
+          settle(null);
+          entry.finish();
+        };
+        recorder.onstop = () => {
+          if (finished) return;
+          const durationMs = Math.round((stoppedAt ?? now()) - entry.startedAt);
+          const type = mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
+          entry.retryable = chunks.length === 0;
+          if (entry.retryable) preferredProfile = (profileIndex + 1) % profiles.length;
+          settle(entry.claimed && durationMs >= 3_000 && durationMs <= 5_500 && chunks.length > 0
+            ? { blob: new Blob(chunks, { type }), durationMs, extension: type === "video/mp4" ? "mp4" : "webm" }
+            : null);
+        };
+        windows.add(entry);
+        abandon = () => { settle(null); entry.finish(); };
+        recorder.start(500);
+        preferredProfile = profileIndex;
+        return;
+      } catch {
+        // Constructor/start can fail even when isTypeSupported returned true.
+        // Do not leave a failed entry or its timers in the rolling buffer.
+        abandon?.();
+    }
     }
   };
 
@@ -93,21 +119,27 @@ export function createEvidenceClipBuffer(source: MediaStream, options: {
   }, 1_500);
 
   return {
-    capture(): Promise<EvidenceClip | null> {
-      if (disposed) return Promise.resolve(null);
-      let entry = [...windows].find(item => !item.claimed && item.recorder.state === "recording");
-      if (!entry) {
-        // Retry a transient recorder-start failure at the incident itself.
-        startWindow();
-        entry = [...windows].find(item => !item.claimed && item.recorder.state === "recording");
+    async capture(): Promise<EvidenceClip | null> {
+      if (disposed) return null;
+      for (let attempt = 0; attempt < 2 && !disposed; attempt++) {
+        let entry = [...windows].find(item => !item.claimed && item.recorder.state === "recording");
+        if (!entry) {
+          // Retry a transient recorder-start failure at the incident itself.
+          startWindow();
+          entry = [...windows].find(item => !item.claimed && item.recorder.state === "recording");
+        }
+        if (!entry) return null;
+        entry.claimed = true;
+        // Preserve 1.5–3 seconds before confirmation and 1.5 seconds after it.
+        const remaining = Math.max(3_050 - (now() - entry.startedAt), 1_500);
+        const stopTimer = setTimeout(() => entry.finish(), remaining);
+        void entry.result.finally(() => clearTimeout(stopTimer));
+        const clip = await entry.result;
+        if (clip || !entry.retryable) return clip;
+        // Retry a failed phone encoder once using another supported profile.
+        // The camera/microphone stay live throughout recovery.
       }
-      if (!entry) return Promise.resolve(null);
-      entry.claimed = true;
-      // Preserve 1.5–3 seconds before confirmation and 1.5 seconds after it.
-      const remaining = Math.max(3_050 - (now() - entry.startedAt), 1_500);
-      const stopTimer = setTimeout(() => entry.finish(), remaining);
-      void entry.result.finally(() => clearTimeout(stopTimer));
-      return entry.result;
+      return null;
     },
     dispose() {
       disposed = true;

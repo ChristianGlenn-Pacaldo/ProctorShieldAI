@@ -54,7 +54,9 @@ test("mobile proctoring uses a bounded low-power workload", () => {
   assert.equal(mobile.lowPower, true);
   assert.equal(mobile.objectModelBase, "lite_mobilenet_v2");
   assert.equal(mobile.useTinyLandmarks, true);
-  assert.ok(mobile.captureWidth < desktop.captureWidth);
+  assert.ok(mobile.captureWidth <= desktop.captureWidth);
+  assert.ok(mobile.inferenceWidth < desktop.inferenceWidth);
+  assert.ok(mobile.frameRate < desktop.frameRate);
   assert.ok(mobile.snapshotIntervalMs > desktop.snapshotIntervalMs);
   assert.ok(mobile.detectionIntervalMs > desktop.detectionIntervalMs);
 });

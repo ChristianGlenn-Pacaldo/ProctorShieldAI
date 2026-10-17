@@ -1149,20 +1149,6 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
       }
 
       pendingIncidentIdsRef.current.delete(type);
-      const violationId = String(data.violation?.id || "");
-      if (/^\d+$/.test(violationId)) {
-        const clip = await evidenceClipPromise;
-        if (clip) {
-          if (!await uploadEvidenceClip(violationId, clip)) {
-            console.warn("Video evidence upload failed after retry; incident remains recorded.");
-            setPreWarning("The incident was recorded, but its video could not upload.");
-          }
-        } else {
-          console.warn("Video evidence recording unavailable; incident remains recorded.");
-          setPreWarning("The incident was recorded, but video recording was unavailable.");
-        }
-      }
-
       const serverCount = Number(data.violationCount);
       const currentCount = Number.isInteger(serverCount) && serverCount > 0
         ? serverCount
@@ -1190,6 +1176,20 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
           isFinal: false,
         });
       }
+      const violationId = String(data.violation?.id || "");
+      if (/^\d+$/.test(violationId)) {
+        const clip = await evidenceClipPromise;
+        if (clip) {
+          if (!await uploadEvidenceClip(violationId, clip)) {
+            console.warn("Video evidence upload failed after retry; incident remains recorded.");
+            setPreWarning("The incident was recorded, but its video could not upload.");
+          }
+        } else {
+          console.warn("Video evidence recording unavailable; incident remains recorded.");
+          setPreWarning("The incident was recorded, but video recording was unavailable.");
+        }
+      }
+
       return true;
     } catch (err) {
       console.error("Failed to report violation:", err);
@@ -1710,9 +1710,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             }
 
             // Older laptops share one WASM engine instead of running a second
-            // GPU-backed runtime. Two face observations per object observation.
+            // GPU-backed runtime. Alternate face and device observations without overlapping them.
             if ((!isMobile && !performanceProfile.lowPower)
-              || (isMobile ? tickCounter % 2 === 1 : tickCounter % 3 !== 0) || !loadedCocoModel) {
+              || tickCounter % 2 === 1 || !loadedCocoModel) {
               try {
                 const detectionGeneration = trackingGeneration;
                 const detections = isMobile
@@ -1910,7 +1910,9 @@ const handleFillBlankSubmit = useCallback(async (e?: React.FormEvent) => {
             } else {
               try {
                 const detectionGeneration = trackingGeneration;
-                const predictions = await loadedCocoModel.detect(inferenceCanvas, 10, 0.5);
+                // COCO resizes internally. Feeding the tiny face buffer first
+                // discards phone edges/details, particularly on portrait phones.
+                const predictions = await loadedCocoModel.detect(isMobile ? activeVideo : inferenceCanvas, 10, 0.5);
                 if (cancelled || document.hidden || detectionGeneration !== trackingGeneration) { detectionBusy = false; return; }
                 await processDevicePredictions(predictions);
               } catch (cocoErr) {

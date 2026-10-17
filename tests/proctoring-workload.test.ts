@@ -29,11 +29,13 @@ test("higher-capacity desktops retain the original face cadence and mobile keeps
   assert.equal(mobile.faceInputSize, 128);
   assert.equal(mobile.detectionIntervalMs, 1_600);
   assert.equal(mobile.useTinyLandmarks, true);
+  assert.equal(mobile.captureWidth, 640);
+  assert.equal(mobile.captureHeight, 480);
 });
 
 test("evidence is bounded in both orientations without stretching or upscaling", () => {
   assert.deepEqual(getEvidenceVideoDimensions(1280, 720), { width: 480, height: 270 });
-  assert.deepEqual(getEvidenceVideoDimensions(720, 1280), { width: 203, height: 360 });
+  assert.deepEqual(getEvidenceVideoDimensions(720, 1280), { width: 202, height: 360 });
   assert.deepEqual(getEvidenceVideoDimensions(640, 480), { width: 480, height: 360 });
   assert.deepEqual(getEvidenceVideoDimensions(320, 240), { width: 320, height: 240 });
 });

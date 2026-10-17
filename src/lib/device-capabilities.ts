@@ -152,8 +152,10 @@ export function getProctoringPerformanceProfile(
 
   return {
     lowPower,
-    captureWidth: 320,
-    captureHeight: 240,
+    // Keep enough source detail for a phone/device in the camera frame. Face
+    // inference still uses its separate small buffer below.
+    captureWidth: 640,
+    captureHeight: 480,
     frameRate: lowPower ? 10 : 12,
     inferenceWidth: lowPower ? 224 : 256,
     inferenceHeight: lowPower ? 168 : 192,
