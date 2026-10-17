@@ -248,10 +248,10 @@
   "laptopStabilityOverrides": {
     "next.config.ts": "d30b253bd1fd45df909a76252d0b48212ab6408dff9dbb062861a739a6adae79",
     "src/lib/desktop-head-tracking.ts": "28b8221c18b47faf398ae140476b63e98e78d4b060db52d18b84d0cb875ca964",
-    "src/lib/device-capabilities.ts": "4a480d05baadfa45701d234e03d4a73d78e2748b5018934b19dbb92832074fcf",
+    "src/lib/device-capabilities.ts": "2ce0134730119b31ac11a19047035531dcf194a62c1e4e6b1072bad4205e7281",
     "src/proxy.ts": "3099c0c14e136c7b468581841270e3d5ebdff907268a8b87eaeda9b488bdc250",
     "src/lib/tensorflow-browser.ts": "7ddb2515875c57461971e85da0ef44b80b5343dac30cafe5ad5e79260128213f",
-    "src/app/quiz/[id]/page.tsx": "967e846927ccff883124c9514859d241028a286e8b8346045b68d2e8e8958479",
+    "src/app/quiz/[id]/page.tsx": "945b7a8821236eb80515c7fdafd98c6964a1b3c461394d39410111f62f41ad49",
     "src/app/api/live/violation/[id]/evidence/route.ts": "3cc9c7f96a5250057ed61f3457da6fca3f80266920bae8567af17f390398be2e"
   }
 }
